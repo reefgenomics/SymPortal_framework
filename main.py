@@ -1,4 +1,4 @@
-#!/usr/bin/env /home/humebc/miniconda3/bin/python3.6
+#!/usr/bin/env python3.6
 
 import argparse
 import subprocess
@@ -18,10 +18,10 @@ application = get_wsgi_application()
 from dbApp.models import symportal_framework, data_set, reference_sequence, data_set_sample_sequence, analysis_type, analysis_group, data_set_sample, data_analysis, clade_collection, clade_collection_type
 ############################################
 
-import dataSubCollectionRun_from_local_production
+import data_sub_collection_run
 
 
-import createDataSubmission_from_local_production
+import create_data_submission
 from collections import defaultdict
 import json
 

@@ -30,7 +30,6 @@ from Bio import SeqIO, Nexus
 from Bio.Alphabet import IUPAC
 from skbio.stats.ordination import pcoa
 import sys
-import dendropy
 import math
 
 
