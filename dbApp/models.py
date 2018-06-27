@@ -125,8 +125,6 @@ class data_analysis(models.Model):
     speciesAssociated = models.BooleanField(default=False)
     name = models.CharField(max_length=100, null=True)
     description = models.CharField(max_length=5000, null=True)
-    # TODO implement a system that looks at which are DB versions and which are againstVersion analyses
-    # Also a system to name the DBVersions.
     dbVersionAnalysis = models.BooleanField(default=False)
     dbVersionToRunAgainstID = models.IntegerField(null=True)
     dSIDToAnalyse = models.IntegerField(null=True)
