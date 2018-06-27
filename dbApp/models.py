@@ -128,6 +128,7 @@ class data_analysis(models.Model):
     dbVersionAnalysis = models.BooleanField(default=False)
     dbVersionToRunAgainstID = models.IntegerField(null=True)
     dSIDToAnalyse = models.IntegerField(null=True)
+    timeStamp = models.CharField(max_length=40, default='None')
     def getCladeCollections(self):
         listOfIds = [int(x) for x in self.listOfDataSubmissions.split(',')]
         cladeCollections = clade_collection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=listOfIds)
