@@ -1108,8 +1108,6 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
 
     return
 
-
-
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload'):
 
