@@ -9205,17 +9205,17 @@ def namingRefSeqsUsedInDefs():
                 else:
                     apples = 'asdf' # We have an issue if we get here because we have a 100% match to a refseq
                     # but that ref seqname has aleady been associated with a different seq
-        # todo we can comment out the below to prevent new names from being created
-        # Now assign names to those that aren't exact matches
-        for bo in blastOutputFile:
-            splitEl=bo.split('\t')
-            refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
-            if not refSeqInQ.hasName:
-                newName = createNewRefSeqName(splitEl[1], listOfSeqNamesThatAlreadyExist, listOfRefSeqDBNames)
-                refSeqInQ.name = newName
-                refSeqInQ.hasName = True
-                refSeqInQ.save()
-                listOfSeqNamesThatAlreadyExist.append(newName)
+        # # we can comment out the below to prevent new names from being created
+        # # Now assign names to those that aren't exact matches
+        # for bo in blastOutputFile:
+        #     splitEl=bo.split('\t')
+        #     refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
+        #     if not refSeqInQ.hasName:
+        #         newName = createNewRefSeqName(splitEl[1], listOfSeqNamesThatAlreadyExist, listOfRefSeqDBNames)
+        #         refSeqInQ.name = newName
+        #         refSeqInQ.hasName = True
+        #         refSeqInQ.save()
+        #         listOfSeqNamesThatAlreadyExist.append(newName)
         #Finally update the type names
         IDs = [att.id for att in at]
         for i in range(len(IDs)):
@@ -9227,8 +9227,23 @@ def namingRefSeqsUsedInDefs():
     path_for_refSeqDB = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa'))
     # make a fasta that is all of the named seqs
     fasta_to_write = []
+
+    # Keep track of which sequences have already been written out so that we can check which of the Arif seqs
+    # need to be put in.
+    seqs_written = []
+
     for rs in reference_sequence.objects.filter(hasName=True):
         fasta_to_write.extend(['>{}'.format(rs.name), '{}'.format(rs.sequence)])
+        seqs_written.append(rs.name)
+
+    # now add those seqs from the arif ITS2 database that have not already been added
+    original_fasta = readDefinedFileToList(
+        os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa')))
+    for i in range(len(original_fasta)):
+        if original_fasta[i][0] == '>':  # Then this is a seq name line
+            if original_fasta[i][1:] not in seqs_written:
+                # then this sequence is not yet found in our output fasta so add it
+                fasta_to_write.extend([original_fasta[i], original_fasta[i + 1]])
 
     # here we have the new fasta in a list. Now write it out
     writeListToDestination(path_for_refSeqDB, fasta_to_write)
