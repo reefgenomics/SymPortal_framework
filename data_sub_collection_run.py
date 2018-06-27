@@ -6247,7 +6247,6 @@ def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_t
 
     return [analysis_type.objects.get(id=x[0]) for x in type_IDs_sorted]
 
-
 def div_output_pre_analysis(datasubstooutput, numProcessors, output_dir, sorted_sample_list=None, analysis_obj_id=None):
     # This function will take in a list of dataSubmissions from which to output the DIV information of the samples
     # it will work very similarly to the second half of normal formatOutput_ord function. I will try to reuse as
@@ -8705,9 +8704,11 @@ def namingRefSeqsUsedInDefs():
                 else:
                     apples = 'asdf' # We have an issue if we get here because we have a 100% match to a refseq
                     # but that ref seqname has aleady been associated with a different seq
-        config = readDefinedFileToList('sp_config')
+
         # Now assign names to those that aren't exact matches
-        if config[0] == 'remote':
+        with open('sp_config') as f:
+            config_dict = json.load(f)
+        if config_dict['system_type'] == 'remote':
             for bo in blastOutputFile:
                 splitEl=bo.split('\t')
                 refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
@@ -8717,6 +8718,7 @@ def namingRefSeqsUsedInDefs():
                     refSeqInQ.hasName = True
                     refSeqInQ.save()
                     listOfSeqNamesThatAlreadyExist.append(newName)
+
         #Finally update the type names
         IDs = [att.id for att in at]
         for i in range(len(IDs)):
