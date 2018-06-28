@@ -1,4 +1,4 @@
-#README
+# README
 Welcome to the SymPortal GitHub repository. SymPortal is an analytical tool used to resolve _Symbiodinium_ spp. taxa using NGS data of the ITS2 marker gene.
 
 Our methodology augments tried-and-tested intragenomic resolution theory with the power of NGS to resolve between symbiont taxa at a level far surpassing alternative methodologies using this marker. 
