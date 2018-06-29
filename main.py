@@ -65,10 +65,10 @@ def main():
                                                                'paired sequencing reads in .fastq.gz '
                                                                'format. Alternatively, the path can point directly to a'
                                                                ' single compressed file containing the '
-                                                               'same paired fastq.gz files. A name can be associated with'
-                                                               'the data_set using the --name flag. The number of'
+                                                               'same paired fastq.gz files. A name must be associated with '
+                                                               'the data_set using the --name flag. The number of '
                                                                'processes to use can also be specified using the '
-                                                               '--cores flag')
+                                                               '--num_proc flag')
 
 
     group.add_argument('--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
