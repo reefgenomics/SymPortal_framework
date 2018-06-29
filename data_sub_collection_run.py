@@ -5551,7 +5551,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         for provided_name in sorted_sample_list_names:
             match_list = []
             for smp in sampleList:
-                if provided_name in smp.name:
+                if provided_name == smp.name:
                     match_list.append(smp.name)
                     provided_name_to_samp_name_dict[provided_name] = smp
             if len(match_list) > 1:
