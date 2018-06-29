@@ -3,6 +3,9 @@ from dbApp.models import data_set, reference_sequence, data_set_sample_sequence,
 # import math
 import itertools
 import numpy as np
+# https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
+import matplotlib as mpl
+mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
 from sklearn import manifold
