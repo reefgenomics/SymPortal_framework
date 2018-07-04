@@ -6669,12 +6669,13 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist, listofrefs
 ###### MAIN ######
 def main(dataanalysistwoobject, cores):
 
+
     ##### CLEAN UP tempData FOLDER ####
-    # Delete the tempDataFolder and contents
-    shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
-    # recreate the tempDataFolder
+    if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
+        shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
+
 
     # Set the dataAnlysisTwoObject in Q as a global object analysisObj for easy reference
     global analysisObj
@@ -6731,9 +6732,9 @@ def main(dataanalysistwoobject, cores):
     ####################################
 
     ##### CLEAN UP tempData FOLDER ####
-    # Delete the tempDataFolder and contents
-    shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
-    # recreate the tempDataFolder
+    ##### CLEAN UP tempData FOLDER ####
+    if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
+        shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
 #################################################
