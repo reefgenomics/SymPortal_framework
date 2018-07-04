@@ -108,11 +108,11 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
     can then be calcualated'''
 
     wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs',
-                                       'ordination','_'.join(data_submission_id_str.split(',')),
+                                       'ordination','_'.join(str(data_submission_id_str).split(',')),
                                        'between_profiles', method))
 
     # get the dataSubmissions
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in data_submission_id_str.split(',')])
+    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
 
     # get the dataAnalysis
     data_analysis_obj = data_analysis.objects.get(id=data_analysis_id)
@@ -172,7 +172,6 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
 
     return PCoA_path_lists
 
-
 def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade):
     unique_fasta = []
     unique_seq_id_list = []
@@ -231,7 +230,6 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
 
     return group_file, name_file, unique_fasta
 
-
 def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors, method, bootstrap_value):
     '''
     This method will generate a distance matrix between samples
@@ -265,7 +263,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     '''
 
 
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in dataSubmission_str.split(',')])
+    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(dataSubmission_str).split(',')])
 
     clade_collection_list_of_dataSubmissions = clade_collection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
 
@@ -416,7 +414,6 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
                 os.remove(os.path.join(clade_wkd, item))
     return PCoA_path_lists
 
-
 def mafft_align_fasta(clade_wkd):
     # now mafft align the fasta
     # now align
@@ -428,51 +425,6 @@ def mafft_align_fasta(clade_wkd):
     # now run mafft including the redirect
     (mafft['--auto', '--thread', '16', in_file] > out_file)()
     return out_file
-
-# delete uni_frac_worker
-def uni_frac_worker(input, output):
-    # We can fix this so that it is more multithreadable.
-    # first we can fix the having to have a a numerical_name_dict, by just having a counter per
-    # process and append the process id to make sure that the sequences are unique
-    # we could have an ouput pipe where we could place individual dictionaries which we could process outside
-    # Because one thread can process more than one cc and therefore can come across the same ref_seq_id
-    # we can't just name them using the range of the abundance as we will end up with sequnce of the same name
-    # we will need to have a dict again for each of the processes that keeps track of the count for each of
-    # the particular ref_seq_ids
-    proc_id = current_process().name
-    ref_seq_to_count_dict = {}
-    test_group = []
-    for cc in iter(input.get, 'STOP'):
-
-        temp_fasta_dict = {}
-        temp_name_dict = {}
-        temp_group_list = []
-        temp_ref_seq_id_list = []
-        print('Processing cc: {} with {}'.format(cc, proc_id))
-        for data_set_sample_seq in data_set_sample_sequence.objects.filter(
-                cladeCollectionTwoFoundIn=cc):
-            ref_seq_id = data_set_sample_seq.referenceSequenceOf.id
-            if ref_seq_id in ref_seq_to_count_dict.keys():
-                count = ref_seq_to_count_dict[ref_seq_id]
-                ref_seq_to_count_dict[ref_seq_id] += data_set_sample_seq.abundance
-                new_count = ref_seq_to_count_dict[ref_seq_id]
-            else:
-                count = 0
-                ref_seq_to_count_dict[ref_seq_id] = data_set_sample_seq.abundance
-                new_count = ref_seq_to_count_dict[ref_seq_id]
-            temp_ref_seq_id_list.append(ref_seq_id)
-            unique_seq_name_base = '{}_{}'.format(ref_seq_id, proc_id)
-
-            smp_name = str(cc).replace('-', '_')
-            temp_fasta_dict['{}_{}'.format(unique_seq_name_base, 0)] = data_set_sample_seq.referenceSequenceOf.sequence
-            temp_name_list = []
-            for i in range(count, new_count):
-                temp_name_list.append('{}_{}'.format(unique_seq_name_base, i))
-                temp_group_list.append('{}\t{}'.format('{}_{}'.format(unique_seq_name_base, i), smp_name))
-
-            temp_name_dict['{}_{}'.format(unique_seq_name_base, 0)] = temp_name_list
-        output.put((temp_fasta_dict, temp_name_dict, temp_group_list, temp_ref_seq_id_list, proc_id, str(cc)))
-    output.put('EXIT')
 
 def uni_frac_worker_two(input, output):
     # We can fix this so that it is more multithreadable.
@@ -1287,11 +1239,11 @@ def profileDiscovery(nProcessors):
     return
 
 def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict, CCToInitialTypeDict, cores):
-    # TODO 08/12/17 13:41 this is where we're at. We have fixed the cc to initial type dict for the other artefact
+    # 08/12/17 13:41 this is where we're at. We have fixed the cc to initial type dict for the other artefact
     # checking but still need to work on that here as well as the other issues noted below.
 
     '''
-    TODO 08/12/17 This is going to cause some problems with the basal comparisons.
+    08/12/17 This is going to cause some problems with the basal comparisons.
     firstly it is assuming that each cct can only associate with  only one type.
     Instead we will just have to make sure to do checks that mean that each cct can only support one type of each
     basal group.
