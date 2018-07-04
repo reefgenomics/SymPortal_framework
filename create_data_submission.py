@@ -1111,9 +1111,9 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload'):
 
-    ### I will hard code in the mothur directory for the
 
-    ##### CLEAN UP tempData FOLDER #### # this will need to be commented out if we are going to be starting from half way through an analysis, e.g. when debugging the MED work. Else the tempdata folder will be empty.
+
+    ##### CLEAN UP tempData FOLDER ####
     # Delete the tempDataFolder and contents
     shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'SymPortal_Data/tempData')))
     # recreate the tempDataFolder
@@ -1126,13 +1126,18 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     if dataSubmissionInQ.initialDataProcessed == False:
         # create directory in which to write process files
-        # wkd = r'{0}/{1}'.format(os.path.dirname(pathToInputFile), dSID)
-        wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'SymPortal_Data/tempData/{}'.format(dSID)))
-
+        if '.' in pathToInputFile.split('/')[-1]:
+            # then this path points to a file rather than a directory and we should pass through the path only
+            wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '{}/tempData/{}'.format(os.path.dirname(pathToInputFile), dSID)))
+        else:
+            # then we assume that we are pointing to a directory and we can directly use that to make the wkd
+            wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
+                                               '{}/tempData/{}'.format(pathToInputFile, dSID)))
         try:
             os.makedirs(wkd)
         except FileExistsError:
             pass
+
 
         # Check to see if the files are already decompressed
         # If so then simply copy the files over to the destination folder
