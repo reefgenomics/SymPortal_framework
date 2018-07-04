@@ -93,7 +93,7 @@ def main():
                                                                                        'comma separate the IDs of the data_set objects, '
                                                                                        'e.g. 44,45,46.'
                                                                                        'Give the ID of the analysis you wish to '
-                                                                                       'output these from using the --db_version '
+                                                                                       'output these from using the --data_analysis_id '
                                                                                        'flag.')
 
 
@@ -104,7 +104,7 @@ def main():
     parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
     parser.add_argument('--name', help='A name for your input or analysis', default='noName')
     parser.add_argument('--description', help='An optional description', default='No description')
-    parser.add_argument('--db_version', type=int, help='The ID of the data_analysis you wish to output from')
+    parser.add_argument('--data_analysis_id', type=int, help='The ID of the data_analysis you wish to output from')
     group.add_argument('--vacuum_database', action='store_true', help='Vacuuming the database will free up memory from '
                                                                      'objects that have been deleted recently')
     args = parser.parse_args()
@@ -167,10 +167,10 @@ def main():
 
 
     elif args.print_output:
-        if args.db_version:
-            data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.db_version), numProcessors=args.num_proc, datasubstooutput=args.print_output)
+        if args.data_analysis_id:
+            data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id), numProcessors=args.num_proc, datasubstooutput=args.print_output)
         else:
-            print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the -db_version '
+            print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses argument.')
 
 

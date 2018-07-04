@@ -5681,7 +5681,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     # List of the paths to the files that have been output
     output_files_list = []
 
-    dataSubmissionsToOutput = [int(a) for a in datasubstooutput.split(',')]
+    dataSubmissionsToOutput = [int(a) for a in str(datasubstooutput).split(',')]
 
     # Get collection of types that are specific for the dataSubmissions we are looking at
     querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
