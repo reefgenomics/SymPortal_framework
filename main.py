@@ -183,7 +183,7 @@ def main():
     elif args.display_analyses:
         # Then print out all of the dataAnalysisTwos with names and IDs in the db
         for da in data_analysis.objects.all():
-            print('{}: {}'.format(da.id, da.name))
+            print('{}: {}\t{}'.format(da.id, da.name, da.timeStamp))
 
 
     elif args.vacuumDatabase:
