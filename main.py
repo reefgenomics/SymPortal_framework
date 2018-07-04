@@ -178,7 +178,7 @@ def main():
     elif args.display_data_sets:
         # Then print out all of the dataSubmissions with names and IDs in the db
         for ds in data_set.objects.all():
-            print('{}: {}'.format(ds.id, ds.name))
+            print('{}: {}\t{}'.format(ds.id, ds.name, ds.timeStamp))
 
 
     elif args.display_analyses:
