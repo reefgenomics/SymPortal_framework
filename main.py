@@ -150,10 +150,9 @@ def main():
         within_clade_cutoff = 0.03
 
         num_proc = args.num_proc
-        custom_data_set_ids = args.mdb
-        if args.mdb == 'all':
+        custom_data_set_ids = args.analyse
+        if args.analyse == 'all':
             tempList = []
-
             for ds in data_set.objects.all():
                 tempList.append(str(ds.id))
             stringList = ','.join(tempList)
