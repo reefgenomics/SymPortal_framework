@@ -203,7 +203,7 @@ def main():
 
     elif args.between_sample_distances:
         data_sub_collection_run.generate_within_clade_UniFrac_distances_samples(
-            dataSubmission_str=args.between_type_distances, num_processors=args.num_proc,
+            dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
             method='mothur', bootstrap_value=args.bootstrap)
 
     elif args.print_output_no_types:
