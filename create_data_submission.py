@@ -1113,13 +1113,6 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
 
 
-    ##### CLEAN UP tempData FOLDER ####
-    # Delete the tempDataFolder and contents
-    shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'SymPortal_Data/tempData')))
-    # recreate the tempDataFolder
-    os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'SymPortal_Data/tempData')),
-                exist_ok=True)
-
     ############### UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE ##################
 
     dataSubmissionInQ = data_set.objects.get(id=dSID)
@@ -1128,15 +1121,14 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         # create directory in which to write process files
         if '.' in pathToInputFile.split('/')[-1]:
             # then this path points to a file rather than a directory and we should pass through the path only
-            wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '{}/tempData/{}'.format(os.path.dirname(pathToInputFile), dSID)))
+            wkd = os.path.abspath('{}/tempData/{}'.format(os.path.dirname(pathToInputFile), dSID))
         else:
             # then we assume that we are pointing to a directory and we can directly use that to make the wkd
-            wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
-                                               '{}/tempData/{}'.format(pathToInputFile, dSID)))
-        try:
-            os.makedirs(wkd)
-        except FileExistsError:
-            pass
+            wkd = os.path.abspath('{}/tempData/{}'.format(pathToInputFile, dSID))
+
+        if os.path.exists(wkd):
+            shutil.rmtree(wkd)
+        os.makedirs(wkd)
 
 
         # Check to see if the files are already decompressed
