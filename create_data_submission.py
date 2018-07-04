@@ -1418,11 +1418,8 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     writeListToDestination(pathToInputFile + '/below_e_cutoff_seqs_{}.fasta'.format(dSID), fasta_out_with_clade)
 
     ##### CLEAN UP tempData FOLDER #####
-    # Delete the tempDataFolder and contents
-    shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'SymPortal_Data/tempData')))
-    # recreate the tempDataFolder
-    os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'SymPortal_Data/tempData')),
-                exist_ok=True)
+    if os.path.exists(wkd):
+        shutil.rmtree(wkd)
 
     # write out whether there were below e value sequences outputted.
     print('WARNING: {} sub_e_value cut-off sequences were output'.format(len(fasta_out_with_clade)/2))
