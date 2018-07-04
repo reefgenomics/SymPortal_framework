@@ -99,6 +99,16 @@ def main():
 
     group.add_argument('--display_analyses', action='store_true', help=' Display data_analysis objects currently '
                                                                        'stored in the framework\'s database')
+    group.add_argument('--between_type_distances',
+                       metavar='data_set IDs, analysis ID',
+                       help='Use this function to output UniFrac pairwise distances '
+                            'between ITS2 type profiles clade separated')
+    group.add_argument('--between_sample_distances',
+                       metavar='data_set IDs',
+                       help='Use this function to output UniFrac pairwise distances '
+                            'between samples clade separated')
+    group.add_argument('--print_output_no_types', metavar='data_set IDs',
+                       help='Use this function to output ITS2 sequence count tables for given data_set instances')
 
     # Additional arguments
     parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
@@ -107,6 +117,7 @@ def main():
     parser.add_argument('--data_analysis_id', type=int, help='The ID of the data_analysis you wish to output from')
     group.add_argument('--vacuum_database', action='store_true', help='Vacuuming the database will free up memory from '
                                                                      'objects that have been deleted recently')
+    parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
     args = parser.parse_args()
 
 
@@ -141,7 +152,6 @@ def main():
 
         create_data_submission.main(input_dir, new_data_set.id, num_proc, screen_sub_evalue=screen_sub_evalue_bool)
 
-
     elif args.analyse:
         if args.name == 'noName':
             print('Please provide a name using the --name flag. e.g. --name wonderful_analysis')
@@ -165,7 +175,6 @@ def main():
         data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc)
         print('return code: 0\nAnalysis complete')
 
-
     elif args.print_output:
         if args.data_analysis_id:
             data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id), numProcessors=args.num_proc, datasubstooutput=args.print_output)
@@ -173,18 +182,33 @@ def main():
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses argument.')
 
-
     elif args.display_data_sets:
         # Then print out all of the dataSubmissions with names and IDs in the db
         for ds in data_set.objects.all():
             print('{}: {}\t{}'.format(ds.id, ds.name, ds.timeStamp))
-
 
     elif args.display_analyses:
         # Then print out all of the dataAnalysisTwos with names and IDs in the db
         for da in data_analysis.objects.all():
             print('{}: {}\t{}'.format(da.id, da.name, da.timeStamp))
 
+    elif args.between_type_distances:
+        if args.data_analysis_id:
+            data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+                data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
+                data_analysis_id=args.data_analysis_id, method='mothur', bootstrap_value=args.bootstrap)
+        else:
+            print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
+                  'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses argument.')
+
+    elif args.between_sample_distances:
+        data_sub_collection_run.generate_within_clade_UniFrac_distances_samples(
+            dataSubmission_str=args.between_type_distances, num_processors=args.num_proc,
+            method='mothur', bootstrap_value=args.bootstrap)
+
+    elif args.print_output_no_types:
+        outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
+        data_sub_collection_run.div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=args.print_output_no_types, numProcessors=args.num_proc, output_dir=outputDir)
 
     elif args.vacuumDatabase:
         print('Vacuuming database')
