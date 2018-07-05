@@ -262,7 +262,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     in the outputs folder.
     '''
 
-
+    output_file_paths = []
     data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(dataSubmission_str).split(',')])
 
     clade_collection_list_of_dataSubmissions = clade_collection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
@@ -375,7 +375,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
             name_file.append('{}\t{}'.format(key, ','.join(value)))
 
 
-
+        output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
         writeListToDestination('{}/unique.fasta'.format(clade_wkd), fasta_file)
         writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
         writeListToDestination('{}/group_file.groups'.format(clade_wkd), master_group_list)
