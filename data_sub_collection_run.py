@@ -107,6 +107,8 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
     The average DIV abundances for each of the ITS2 type profiles should first be calculated from which the distances
     can then be calcualated'''
 
+    output_file_paths = []
+
     wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs',
                                        'ordination','_'.join(str(data_submission_id_str).split(',')),
                                        'between_profiles', method))
@@ -157,6 +159,9 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
 
         PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist)
 
+        output_file_paths.append(PCoA_path)
+        output_file_paths.append(unifrac_dist)
+
         PCoA_path_lists.append(PCoA_path)
         # Delete the tempDataFolder and contents
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
@@ -169,6 +174,10 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
                 os.remove(os.path.join(clade_wkd, item))
     apples = 'asdf'
     # get list
+
+    print('Output files:')
+    for path_of_output_file in output_file_paths:
+        print(path_of_output_file)
 
     return PCoA_path_lists
 
@@ -375,7 +384,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
             name_file.append('{}\t{}'.format(key, ','.join(value)))
 
 
-        output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
+        # output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
         writeListToDestination('{}/unique.fasta'.format(clade_wkd), fasta_file)
         writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
         writeListToDestination('{}/group_file.groups'.format(clade_wkd), master_group_list)
@@ -406,6 +415,9 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         # Delete the tempDataFolder and contents
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
         shutil.rmtree(path=file_to_del)
+
+        output_file_paths.append(PCoA_path)
+        output_file_paths.append(unifrac_dist)
 
         # now delte mothur .logfiles files
         list_of_dir = os.listdir(clade_wkd)
