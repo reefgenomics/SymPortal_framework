@@ -8,10 +8,10 @@ The SymPortal analytical framework consists of two parts:
 the SymPortal analysis and the SQL database with which the analysis is integrated. 
 
 The SymPortal analytical framework may be run either locally, by running the python scripts housed on this GitHub repository 
-or remotely, through submission of data to [SymPortal.org](symportal.org). 
+or remotely, through submission of data to [SymPortal.org](http:symportal.org). 
 Analyses run remotely through SymPortal.org will have access to the latest version of the SymPortal database. 
 This remotely hosted PostgreSQL database will contain sequencing information from all samples previously analysed that were submitted via SymPortal.org. 
-Analyses run via [SymPortal.org](symportal.org) will therefore have access to the greatest possible resolving power and enable comparability to other datasets previously submitted to SymPortal.org. 
+Analyses run via [SymPortal.org](http:symportal.org) will therefore have access to the greatest possible resolving power and enable comparability to other datasets previously submitted to SymPortal.org. 
 If running the SymPortal framework locally, it will be necessary for the user to populate the local database with which the local SymPortal analysis will integrate. 
 As such, the ability to resolve ITS2 type profiles will be contingent on the extent of sequencing information housed in the local database when running analyses locally.
 Further documentation may be found at the SymPortal GitHub repository.
