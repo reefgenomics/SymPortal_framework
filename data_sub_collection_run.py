@@ -412,6 +412,12 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         for item in list_of_dir:
             if item.endswith(".logfile"):
                 os.remove(os.path.join(clade_wkd, item))
+    # Print output files
+    print('Output files:')
+    for path_of_output_file in output_file_paths:
+        print(path_of_output_file)
+
+
     return PCoA_path_lists
 
 def mafft_align_fasta(clade_wkd):
