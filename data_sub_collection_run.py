@@ -541,13 +541,12 @@ def generate_PCoA_coords(clade_wkd, raw_dist_file):
     mapper_dict = {i: j for i, j in enumerate(sample_names_from_dist_matrix)}
     this.samples['sample'] = sample_names_from_dist_matrix
     renamed_dataframe = this.samples.set_index('sample')
-    print(renamed_dataframe)
+
     # now add the variance explained as a final row to the renamed_dataframe
 
     renamed_dataframe = renamed_dataframe.append(this.proportion_explained.rename('proportion_explained'))
 
-    print('writing out coordinates')
-    print(renamed_dataframe)
+
     renamed_dataframe.to_csv(pcoA_full_path, index=True, header=True, sep=',')
     return pcoA_full_path
 
