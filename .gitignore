@@ -4,5 +4,3 @@ db.sqlite3
 /.idea
 /dbApp/__pycache__
 /dbBackup
-/dbApp/migrations/*
-!/dbApp/migrations/__init__.py
