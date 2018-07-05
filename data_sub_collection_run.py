@@ -153,14 +153,14 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
 
 
         if method == 'mothur':
-            unifrac_dist = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
         elif method == 'phylip':
-            unifrac_dist = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
 
         PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist)
 
         output_file_paths.append(PCoA_path)
-        output_file_paths.append(unifrac_dist)
+        output_file_paths.append(unifrac_path)
 
         PCoA_path_lists.append(PCoA_path)
         # Delete the tempDataFolder and contents
@@ -406,9 +406,9 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
 
 
         if method == 'mothur':
-            unifrac_dist = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
         elif method == 'phylip':
-            unifrac_dist = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
 
         PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist)
         PCoA_path_lists.append(PCoA_path)
@@ -417,7 +417,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         shutil.rmtree(path=file_to_del)
 
         output_file_paths.append(PCoA_path)
-        output_file_paths.append(unifrac_dist)
+        output_file_paths.append(unifrac_path)
 
         # now delte mothur .logfiles files
         list_of_dir = os.listdir(clade_wkd)
@@ -825,7 +825,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
                                     tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
 
     raw_dist_file = readDefinedFileToList(dist_file_path)
-    return raw_dist_file
+    return raw_dist_file, dist_file_path
 
 def mothur_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
     ### MOTHUR TRIAL ###
@@ -952,7 +952,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 
     raw_dist_file = readDefinedFileToList(dist_file_path)
 
-    return raw_dist_file
+    return raw_dist_file, dist_file_path
 
 def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
     fdnadist = local["fdnadist"]
