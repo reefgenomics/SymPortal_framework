@@ -1448,9 +1448,11 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         else:
             print('None of the e value discarded sequences returned matches for Symbiodinium when run against '
                   'the nt database.\nHappy days!')
+        print('data_set ID is: {}'.format(dataSubmissionInQ.id))
     else:
         print('To screen these sequences for possible symbiodinium sequences please set screen_sub_evalue '
               'to True and provide a directory that contains the NCBI nt database')
+        print('data_set ID is: {}'.format(dataSubmissionInQ.id))
 
 def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sample_support_cut_off, previous_reference_fasta_name, required_symbiodinium_matches, full_path_to_nt_database_directory):
     # we need to make sure that we are looking at matches that cover > 95%

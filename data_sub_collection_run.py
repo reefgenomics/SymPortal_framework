@@ -6706,5 +6706,7 @@ def main(dataanalysistwoobject, cores):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
+
+    print('data_analysis ID is: {}'.format(analysisObj.id))
 #################################################
 
