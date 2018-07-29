@@ -5450,7 +5450,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     noNameStrings = '\t'.join(['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']])
     qc_stats = '\t'.join(['raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
                           'post_taxa_id_absolute_symbiodinium_seqs', 'post_taxa_id_unique_symbiodinium_seqs',
-                          'size_screening_violation_absolute', 'size_screening_violation_uniue',
+                          'size_screening_violation_absolute', 'size_screening_violation_unique',
                           'post_taxa_id_absolute_non_symbiodinium_seqs',
                           'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique'])
     # append the noName sequences as individual sequence abundances
