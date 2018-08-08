@@ -6437,12 +6437,19 @@ def getMajList(atype):
     name = atype.name
     count = name.count('/')
     majList = []
+    # list of the seqs in order of abundance across the type's samples
     seqsInOrderOfAbunIDs = atype.orderedFootprintList.split(',')
+    # list of the maj seqs in the type
     majSeqsIDs = atype.MajRefSeqSet.split(',')
     for index in range(count + 1):
         for item in range(len(seqsInOrderOfAbunIDs)):
             if seqsInOrderOfAbunIDs[item] in majSeqsIDs:
-                majList.append(reference_sequence.objects.get(id=int(seqsInOrderOfAbunIDs[item])).name)
+                maj_seq_obj = reference_sequence.objects.get(id=int(seqsInOrderOfAbunIDs[item]))
+                maj_seq_obj_name = maj_seq_obj.name
+                if maj_seq_obj_name != 'noName':
+                    majList.append(maj_seq_obj_name)
+                else:
+                    majList.append(str(maj_seq_obj.id))
                 del seqsInOrderOfAbunIDs[item]
                 break
     majStringOutput = '/'.join(majList)
@@ -6545,7 +6552,7 @@ def namingRefSeqsUsedInDefs():
                     # but that ref seqname has aleady been associated with a different seq
 
         # Now assign names to those that aren't exact matches
-        with open('sp_config') as f:
+        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
             config_dict = json.load(f)
         if config_dict['system_type'] == 'remote':
             for bo in blastOutputFile:

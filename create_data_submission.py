@@ -269,11 +269,13 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             lastSummary = readDefinedFileToList('{}{}.trim.contigs.summary'.format(currentDir, rootName))
             number_of_seqs_contig_absolute = len(lastSummary) - 1
             dataSetSampleInstanceInQ.initialTotSeqNum = number_of_seqs_contig_absolute
+            print('Sample: {}; dataSetSampleInstanceInQ.initialTotSeqNum = {}'.format(sampleName, number_of_seqs_contig_absolute))
 
             # Get number of sequences after unique
             lastSummary = readDefinedFileToList('{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(currentDir, rootName))
             number_of_seqs_contig_unique = len(lastSummary) - 1
             dataSetSampleInstanceInQ.initialUniqueSeqNum = number_of_seqs_contig_unique
+            print('Sample: {}; dataSetSampleInstanceInQ.initialUniqueSeqNum = {}'.format(sampleName, number_of_seqs_contig_unique))
 
             # Get absolute number of sequences after after sequence QC
             last_summary = readDefinedFileToList('{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(currentDir, rootName))
@@ -282,6 +284,8 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
                 absolute_count += int(line.split('\t')[6])
             dataSetSampleInstanceInQ.post_seq_qc_absolute_num_seqs = absolute_count
             dataSetSampleInstanceInQ.save()
+            print('Sample: {}; dataSetSampleInstanceInQ.post_seq_qc_absolute_num_seqs = {}'.format(sampleName,
+                                                                                                   absolute_count))
 
             if sampleName == 'P7-F05_P7-F05_N705-S520':
                 apples = 'asdf'
@@ -336,7 +340,9 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             #Add any seqs that did not return a blast match to the throwAwaySeq list
             diff = set(fastaDict.keys()) - set(blastDict.keys())
             throwAwaySeqs.extend(list(diff))
-
+            print(
+                'Sample {}: {} sequences thrown out initially due to being too divergent from reference sequences'.format(
+                    sampleName, len(list(diff))))
             ## 030518 We are starting to throw away Symbiodinium sequences here, especially in the non-coral samples
             # I think we will need to severely relax the e value cut off in order to incorporate more sequences
 
@@ -540,7 +546,9 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             # Now update the data_set_sample instance to set initialProcessingComplete to True
             dataSetSampleInstanceInQ.initialProcessingComplete = True
             dataSetSampleInstanceInQ.save()
-            print('{}: initial processing complete'.format(sampleName))
+            print('{}: initial processing complete\n'
+                  'dataSetSampleInstanceInQ.finalUniqueSeqNum = {}\n'
+                  'dataSetSampleInstanceInQ.finalTotSeqNum = {}'.format(sampleName, len(nameDict), count))
 
             os.chdir(currentDir)
             fileList = [f for f in os.listdir(currentDir) if f.endswith((".names", ".fasta", ".qual", ".summary", ".oligos",
