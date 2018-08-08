@@ -1458,8 +1458,16 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                   'the nt database.\nHappy days!')
         print('data_set ID is: {}'.format(dataSubmissionInQ.id))
     else:
-        print('To screen these sequences for possible symbiodinium sequences please set screen_sub_evalue '
-              'to True and provide a directory that contains the NCBI nt database')
+        print('A .fasta file containing the sub_e_values cut-off sequences was '
+              'output at {}'.format(pathToInputFile + '/below_e_cutoff_seqs_{}.fasta'.format(dSID)))
+        print('These sequences were not submitted to your database as part of your data_set submission as SymPortal '
+              'could not be sure that they were truely Symbiodinium in origin')
+        print('If you wish to include some of these sequences into your data_set submission please add them to '
+              'the ./symbiodiniumDB/symClade.fa fasta file and create a new BLAST datbase from this fasta with the '
+              'same name. Then re-run the submission')
+        print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
+        # print('To screen these sequences for possible symbiodinium sequences please set screen_sub_evalue '
+        #       'to True and provide a directory that contains the NCBI nt database')
         print('data_set ID is: {}'.format(dataSubmissionInQ.id))
 
 def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sample_support_cut_off, previous_reference_fasta_name, required_symbiodinium_matches, full_path_to_nt_database_directory):
@@ -1495,7 +1503,7 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
     screened_fasta = []
     for i in range(len(fasta_file)):
         if fasta_file[i][0] == '>':
-            if int(fasta_file[i].split('_')[4]) >= seq_sample_support_cut_off:
+            if int(fasta_file[i].split('_')[5]) >= seq_sample_support_cut_off:
                 screened_fasta.extend([fasta_file[i], fasta_file[i + 1]])
 
     # write out the screened fasta so that it can be read in to the blast
