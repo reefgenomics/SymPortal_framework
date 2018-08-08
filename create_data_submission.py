@@ -1430,10 +1430,12 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         shutil.rmtree(wkd)
 
     # write out whether there were below e value sequences outputted.
-    print('WARNING: {} sub_e_value cut-off sequences were output'.format(len(fasta_out_with_clade)/2))
+    if fasta_out_with_clade:
+        print('WARNING: {} sub_e_value cut-off sequences were output'.format(int(len(fasta_out_with_clade)/2)))
     if screen_sub_evalue:
-        print('These will now be automatically screened to see if they contain Symbiodinium sequences.')
-        print('Screening sub e value sequences...')
+        if fasta_out_with_clade
+            print('These will now be automatically screened to see if they contain Symbiodinium sequences.')
+            print('Screening sub e value sequences...')
 
         apples = 'pears'
 
@@ -1458,14 +1460,15 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                   'the nt database.\nHappy days!')
         print('data_set ID is: {}'.format(dataSubmissionInQ.id))
     else:
-        print('A .fasta file containing the sub_e_values cut-off sequences was '
-              'output at {}'.format(pathToInputFile + '/below_e_cutoff_seqs_{}.fasta'.format(dSID)))
-        print('These sequences were not submitted to your database as part of your data_set submission as SymPortal '
-              'could not be sure that they were truely Symbiodinium in origin')
-        print('If you wish to include some of these sequences into your data_set submission please add them to '
-              'the ./symbiodiniumDB/symClade.fa fasta file and create a new BLAST datbase from this fasta with the '
-              'same name. Then re-run the submission')
-        print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
+        if fasta_out_with_clade:
+            print('A .fasta file containing the sub_e_values cut-off sequences was '
+                  'output at {}'.format(pathToInputFile + '/below_e_cutoff_seqs_{}.fasta'.format(dSID)))
+            print('These sequences were not submitted to your database as part of your data_set submission as SymPortal '
+                  'could not be sure that they were truely Symbiodinium in origin')
+            print('If you wish to include some of these sequences into your data_set submission please add them to '
+                  'the ./symbiodiniumDB/symClade.fa fasta file and create a new BLAST datbase from this fasta with the '
+                  'same name. Then re-run the submission')
+            print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
         # print('To screen these sequences for possible symbiodinium sequences please set screen_sub_evalue '
         #       'to True and provide a directory that contains the NCBI nt database')
         print('data_set ID is: {}'.format(dataSubmissionInQ.id))
