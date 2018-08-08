@@ -564,8 +564,15 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     out_put_holder = []
     out_put_holder.append(fseqboot_file[0])
     fseqboot_base = '{}/out_seq_boot_reps/fseqboot_rep_'.format(clade_wkd)
+
+    # NB below we used to just look for lines that when split had a length of two but this was not specific enough
+    # this was causing our system to crash. When we had shorted sequences for example clade A sequences some of the
+    # lines only had two groups of 10 bp on them and thus would return a match to line.split() ==2.
+    # to fix this we will implent regular expression solution instead
+    reg_ex = re.compile('[0-9]+$')
     for line in fseqboot_file[1:]:
-        if len(line.split()) == 2:
+        reg_ex_matches_list = reg_ex.findall(line)
+        if len(reg_ex_matches_list) == 1:
             writeListToDestination('{}{}'.format(fseqboot_base, rep_count), out_put_holder)
             out_put_holder = []
             out_put_holder.append(line)
