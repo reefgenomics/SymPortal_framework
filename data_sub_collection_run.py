@@ -167,14 +167,13 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
         shutil.rmtree(path=file_to_del)
 
-        # now delte mothur .logfiles files
+        # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
         list_of_dir = os.listdir(clade_wkd)
         for item in list_of_dir:
-            if item.endswith(".logfile"):
+            if '.csv' not in item and '.dist' not in item:
                 os.remove(os.path.join(clade_wkd, item))
-    apples = 'asdf'
-    # get list
 
+    # output the paths of the new files created
     print('Output files:')
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
@@ -419,11 +418,12 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         output_file_paths.append(PCoA_path)
         output_file_paths.append(unifrac_path)
 
-        # now delte mothur .logfiles files
+        # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
         list_of_dir = os.listdir(clade_wkd)
         for item in list_of_dir:
-            if item.endswith(".logfile"):
+            if '.csv' not in item and '.dist' not in item:
                 os.remove(os.path.join(clade_wkd, item))
+
     # Print output files
     print('Output files:')
     for path_of_output_file in output_file_paths:
