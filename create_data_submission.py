@@ -697,7 +697,9 @@ def deuniqueWorker(input, output):
         except:
             breakPpoint = 'point'
 
-def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict):
+def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict, refSeqIDNameDict):
+    # seqInQ = the MED node sequence in question
+    # refSeqIdDict = dictionary of all current ref_sequences sequences (KEY) to their ID (VALUE).
     # We use this to look to see if there is an equivalent refSeq Sequence for the sequence in question
     # This take into account whether the seqInQ could be a subset or super set of one of the
     # refSeq.sequences
@@ -705,23 +707,28 @@ def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict):
 
     # first check to see if seq is found
     if seqInQ in refSeqIdDict:  # Found actual seq in dict
+        # assign the MED node name to the reference_sequence ID that it matches
         nodeToRefDict[nodeName] = refSeqIdDict[seqInQ]
-        print('Assigning existing reference sequence {} to MED node {}'.format(reference_sequence.objects.get(id=refSeqIdDict[seqInQ]).name, nodeName))
+        print('Assigning MED node {} to existing reference sequence {}'.format(nodeName,
+                                                                               refSeqIDNameDict[refSeqIdDict[seqInQ]]))
         return True
     elif 'A' + seqInQ in refSeqIdDict:  # This was a seq shorter than refseq but we can associate it to this ref seq
+        # assign the MED node name to the reference_sequence ID that it matches
         nodeToRefDict[nodeName] = refSeqIdDict['A' + seqInQ]
-        print('Assigning existing reference sequence {} to MED node {}'.format(reference_sequence.objects.get(id=refSeqIdDict['A' + seqInQ]).name, nodeName))
+        print('Assigning MED node {} to existing reference sequence {}'.format(nodeName, refSeqIDNameDict[
+            refSeqIdDict['A' + seqInQ]]))
         return True
     else:  # This checks if either the seq in question is found in the sequence of a reference_sequence
         # or if the seq in question is bigger than a refseq sequence and is a super set of it
         # In either of these cases we should consider this a match and use the refseq matched to.
         # This might be very coputationally expensive but lets give it a go
 
-        for seqKey in refSeqIdDict.keys():
-            if seqInQ in seqKey or seqKey in seqInQ:
+        for ref_seq_key in refSeqIdDict.keys():
+            if seqInQ in ref_seq_key or ref_seq_key in seqInQ:
                 # Then this is a match
-                nodeToRefDict[nodeName] = refSeqIdDict[seqKey]
-                print('Assigning existing reference sequence {} to MED node {}'.format(reference_sequence.objects.get(id=refSeqIdDict[seqKey]).name, nodeName))
+                nodeToRefDict[nodeName] = refSeqIdDict[ref_seq_key]
+                print('Assigning MED node {} to existing reference sequence {}'.format(
+                    nodeName, refSeqIdDict[refSeqIdDict[ref_seq_key]]))
                 return True
     return False
 
@@ -783,207 +790,51 @@ def runMED(wkd):
 
     return
 
-def processMEDDataDirectCCDefinition(wkd, ID, MEDDirs):
-    # We are going to change this so that we go to each of the MEDDirs, which represent the clades within samples
-    # that have had MED analyses run in them and we are going to use the below code to populate sequences to
-    # the CCs and samples
-    cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
-    for dir in MEDDirs: # For each of the directories where we did MED
-        os.chdir(dir)
-        # Get the sample
-        sampleName = dir.split('/')[-4]
-        sampleObject = data_set_sample.objects.get(dataSubmissionFrom=data_set.objects.get(id=ID), name=sampleName)
-        # Get the clade
-        clade = dir.split('/')[-3]
-        print('Populating {} with clade {} sequences'.format(sampleName, clade))
-        # Read in the node file
-        try:
-            nodeFile = readDefinedFileToList('NODE-REPRESENTATIVES.fasta')
-        except:
-            continue
-        nodeFile = [line.replace('-', '') if line[0] != '>' else line for line in nodeFile]
-
-        # Create nodeToRefDict that will be populated
-        nodeToRefDict = {}
-
-        # This is a dict of key = reference_sequence.sequence value = reference_sequence.id for all refseqs
-        # We will use this to see if the sequence in question has a match , or is found in (this is key
-        # as some of the seqs are one bp smaller than the reference seqs) there reference sequences
-        refSeqDict = {refSeq.sequence: refSeq.id for refSeq in reference_sequence.objects.all()}
-
-        ############ ASSOCIATE MED NODES TO EXISITING REFSEQS OR CREATE NEW REFSEQS #########
-        # Look up seq of each with reference_sequence table
-        # See if the seq in Q matches a reference_sequence, if so, associate
-        listOfRefSeqs = []
-        for i in range(len(nodeFile)):
-            # We were having a problem here where some of the seqs were 1bp shorter than the reference seqs
-            # As such they werent matching to the refernceSequence object e.g. to C3 but when we do the
-            # blast they come up with C3 as their clostest and perfect match
-            # To fix this we will run checkIfSeqInQHadRefSeqMatch
-
-            if nodeFile[i][0] == '>':  # Then this is a def line
-                sequenceInQ = nodeFile[i + 1]
-                nodeNameInQ = nodeFile[i][1:].split('|')[0]
-                # If True then node name will already have been associated to nodeToRefDict
-                # and no need to do anything else
-                found = checkIfSeqInQHadRefSeqMatch(seqInQ=sequenceInQ, refSeqIdDict=refSeqDict, nodeName=nodeNameInQ,
-                                                    nodeToRefDict=nodeToRefDict)
-
-                if found == False:
-                    ####listToBeBlasted.extend([nodeFile[i], sequenceInQ])
-                    newreferenceSequence = reference_sequence(clade=clade, sequence=sequenceInQ)
-                    newreferenceSequence.save()
-                    listOfRefSeqs.append(newreferenceSequence)
-                    refSeqDict[newreferenceSequence.sequence] = newreferenceSequence.id
-                    nodeToRefDict[nodeNameInQ] = newreferenceSequence.id
-
-                    print('Assigning new reference sequence {} to MED node {}'.format(newreferenceSequence.name,
-                                                                                      nodeFile[i][1:].split('|')[0]))
-        ########################################################################################
-
-        # # Here we have a refSeq associated to each of the seqs found and we can now create dataSetSampleSequences that have associated referenceSequences
-        # So at this point we have a reference_sequence associated with each of the nodes
-        # Now it is time to define clade collections
-        # Open count table as list of lists
-        countArray = []
-        nodes = []
-        samples = []
-        # this creates countArray which is a 2D list
-        with open('MATRIX-COUNT.txt') as f:
-            reader = csv.reader(f, delimiter='\t')
-            countArray = list(reader)
-        # get Nodes from first list
-        nodes = countArray[0][1:]
-        # del nodes
-        del countArray[0]
-        # get samples from first item of each list
-        # del samples to leave raw numerical
-        for i in range(len(countArray)):
-            samples.append(countArray[i][0])
-            del countArray[i][0]
-        # convert to np array
-        countArray = np.array(countArray)
-        countArray = countArray.astype(np.int)
-        # for each node in each sample create dataSetSampleSeq with foreign key to referenceSeq and data_set_sample
-        # give it a foreign key to the reference Seq by looking up the seq in the dictionary made earlier and using the value to search for the referenceSeq
-
-
-
-        for i in range(len(samples)):  # For each sample # There should only be one sample
-
-            sampleObject = data_set_sample.objects.get(dataSubmissionFrom=data_set.objects.get(id=ID),
-                                                     name=samples[i])
-            # Add the metadata to the data_set_sample
-            sampleObject.post_med_absolute += sum(countArray[i])
-            sampleObject.post_med_unique += len(countArray[i])
-            sampleObject.save()
-
-            cladalSeqAbundanceCounter = [int(a) for a in json.loads(sampleObject.cladalSeqTotals)]
-            # TODO This is where we need to tackle the issue of making sure we keep track of sequences in samples that
-            # were not above the 200 threshold to be made into cladeCollections
-            # We will simply add a list to the sampleObject that will be a sequence total for each of the clades
-            # in order of cladeList
-            if sum(countArray[i]) > 200:  # Then this sample has enough seqs in this clade to create a cladeCollection
-                # Here we modify the cladalSeqTotals string of the sample object to add the sequence totals
-                # for the given clade
-                cladeIndex = cladeList.index(clade)
-                tempInt = cladalSeqAbundanceCounter[cladeIndex]
-                tempInt += sum(countArray[i])
-                cladalSeqAbundanceCounter[cladeIndex] = tempInt
-                sampleObject.cladalSeqTotals = json.dumps([str(a) for a in cladalSeqAbundanceCounter])
-                sampleObject.save()
-
-
-                dssList = []
-                print('Populating sample {} with clade {} sequences'.format(samples[i], clade))
-                # if > 200 then create the CC
-                # don't
-                newCC = clade_collection(clade=clade, dataSetSampleFrom=sampleObject)
-                newCC.save()
-
-
-                refSeqAbundanceCounter = defaultdict(int)
-                for j in range(len(
-                        nodes)):  # Only process this sample for this clade if there are enough seqs to make a cladeCollection
-                    abundance = countArray[i][j]
-                    if abundance > 0:
-                        # I want to address a problem we are having here. Now that we have thorough checks to
-                        # associate very similar sequences with indels by the primers to the same reference seq
-                        # it means that multiple sequences within the same sample can have the same referenceseqs
-                        # Due to the fact that we will in effect use the sequence of the reference seq rather
-                        # than the dsss seq, we should consolidate all dsss seqs with the same reference seq
-                        # so... we will create a counter that will keep track of the cumulative abundance associated with each reference_sequence
-                        # and then create a dsss for each refSeq
-                        refSeqAbundanceCounter[
-                            reference_sequence.objects.get(id=nodeToRefDict[nodes[j]])] += abundance
-                # > 200 associate a CC to the data_set_sample, else, don't
-                # irrespective, associate a data_set_sample
-                for refSeq in refSeqAbundanceCounter.keys():
-                    dss = data_set_sample_sequence(referenceSequenceOf=refSeq,
-                                                   cladeCollectionTwoFoundIn=newCC,
-                                                   abundance=refSeqAbundanceCounter[refSeq])
-                    dssList.append(dss)
-                # Save all of the newly created dss
-                data_set_sample_sequence.objects.bulk_create(dssList)
-                # Get the ids of each of the dss and add create a string of them and store it as cc.footPrint
-                # This way we can quickly get the footprint of the CC.
-                # Sadly we can't get eh IDs from the list so we will need to re-query
-                # Instead we add the ID of each refseq in the refSeqAbundanceCounter.keys() list
-                newCC.footPrint = ','.join([str(refSeq.id) for refSeq in refSeqAbundanceCounter.keys()])
-                newCC.save()
-            # get rid of this.
-            elif 0 < sum(countArray[i]) < 200:
-                # Then these are sequences that will be outside of a clade Collection
-                # For each sample object in the database we will have a list that will hold the abundances
-                # Of sequences that are outside of cladeCollections
-
-                # NB Bear in mind that we make a reference_sequence object for every node found irrespecitve
-                # of if it is used in a cladeCollection or not which is great!
-                # Latter on in the output we will be able to output all sequences that have been found so far.
-                # Only sequence that are DIVs will have names assocciated to them.
-
-                # Here we modify the cladalSeqTotals string of the sample object to add the sequence totals
-                # for the given clade
-                cladeIndex = cladeList.index(clade)
-                tempInt = cladalSeqAbundanceCounter[cladeIndex]
-                tempInt += sum(countArray[i])
-                cladalSeqAbundanceCounter[cladeIndex] = tempInt
-                sampleObject.cladalSeqTotals = json.dumps([str(a) for a in cladalSeqAbundanceCounter])
-                sampleObject.save()
-
-    return
 
 def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
     ''' Here we have modified the original method processMEDDataDirectCCDefinition'''
     # We are going to change this so that we go to each of the MEDDirs, which represent the clades within samples
     # that have had MED analyses run in them and we are going to use the below code to populate sequences to
     # the CCs and samples
+
+    # in checkIfSeqInQHadRefSeqMatch method below we are currently doing lots of database look ups to
+    # get the names of reference_sequecnes
+    # this is likely quite expensive so I think it will be easier to make a dict for this purpose which is
+    # reference_sequence.id (KEY) reference_sequence.name (VALUE)
+    reference_sequence_ID_to_name_dict = {refSeq.id: refSeq.name for refSeq in reference_sequence.objects.all()}
+
+    # This is a dict of key = reference_sequence.sequence value = reference_sequence.id for all refseqs
+    # currently held in the database
+    # We will use this to see if the sequence in question has a match, or is found in (this is key
+    # as some of the seqs are one bp smaller than the reference seqs) there reference sequences
+    reference_sequence_sequence_to_ID_dict = {refSeq.sequence: refSeq.id for refSeq in reference_sequence.objects.all()}
+
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     for dir in MEDDirs: # For each of the directories where we did MED
         os.chdir(dir)
+
         # Get the sample
         sampleName = dir.split('/')[-4]
-        data_set_sample_object = data_set_sample.objects.get(dataSubmissionFrom=data_set.objects.get(id=ID), name=sampleName)
+
         # Get the clade
         clade = dir.split('/')[-3]
+
         print('Populating {} with clade {} sequences'.format(sampleName, clade))
+
+
         # Read in the node file
         try:
             nodeFile = readDefinedFileToList('NODE-REPRESENTATIVES.fasta')
         except:
+            # if no node file found move on to the next directory
             continue
         nodeFile = [line.replace('-', '') if line[0] != '>' else line for line in nodeFile]
 
         # Create nodeToRefDict that will be populated
         nodeToRefDict = {}
 
-        # This is a dict of key = reference_sequence.sequence value = reference_sequence.id for all refseqs
-        # We will use this to see if the sequence in question has a match , or is found in (this is key
-        # as some of the seqs are one bp smaller than the reference seqs) there reference sequences
-        refSeqDict = {refSeq.sequence: refSeq.id for refSeq in reference_sequence.objects.all()}
-
         ############ ASSOCIATE MED NODES TO EXISITING REFSEQS OR CREATE NEW REFSEQS #########
-        # Look up seq of each with reference_sequence table
+        # Look up seq of each of the MED nodes with reference_sequence table
         # See if the seq in Q matches a reference_sequence, if so, associate
         listOfRefSeqs = []
         for i in range(len(nodeFile)):
@@ -997,19 +848,25 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
                 nodeNameInQ = nodeFile[i][1:].split('|')[0]
                 # If True then node name will already have been associated to nodeToRefDict
                 # and no need to do anything else
-                found = checkIfSeqInQHadRefSeqMatch(seqInQ=sequenceInQ, refSeqIdDict=refSeqDict, nodeName=nodeNameInQ,
-                                                    nodeToRefDict=nodeToRefDict)
+                found = checkIfSeqInQHadRefSeqMatch(seqInQ=sequenceInQ,
+                                                    refSeqIdDict=reference_sequence_sequence_to_ID_dict,
+                                                    nodeName=nodeNameInQ,
+                                                    nodeToRefDict=nodeToRefDict,
+                                                    refSeqIDNameDict=reference_sequence_ID_to_name_dict)
 
                 if found == False:
-                    ####listToBeBlasted.extend([nodeFile[i], sequenceInQ])
+                    # If there is no current match for the MED node in our current reference_sequences
+                    # create a new reference_sequence object and add this to the refSeqDict
+                    # Then assign the MED node to this new reference_sequence using the nodeToRefDict
                     newreferenceSequence = reference_sequence(clade=clade, sequence=sequenceInQ)
                     newreferenceSequence.save()
                     listOfRefSeqs.append(newreferenceSequence)
-                    refSeqDict[newreferenceSequence.sequence] = newreferenceSequence.id
+                    reference_sequence_sequence_to_ID_dict[newreferenceSequence.sequence] = newreferenceSequence.id
                     nodeToRefDict[nodeNameInQ] = newreferenceSequence.id
+                    reference_sequence_ID_to_name_dict[newreferenceSequence.id] = newreferenceSequence.name
 
-                    print('Assigning new reference sequence {} to MED node {}'.format(newreferenceSequence.name,
-                                                                                      nodeFile[i][1:].split('|')[0]))
+                    print('Assigning MED node {} to new reference sequence {}'.format(nodeFile[i][1:].split('|')[0],
+                                                                                      newreferenceSequence.name))
         ########################################################################################
 
         # # Here we have a refSeq associated to each of the seqs found and we can now create dataSetSampleSequences that have associated referenceSequences
