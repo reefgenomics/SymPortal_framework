@@ -872,7 +872,7 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
         # # Here we have a refSeq associated to each of the seqs found and we can now create dataSetSampleSequences that have associated referenceSequences
         # So at this point we have a reference_sequence associated with each of the nodes
         # Now it is time to define clade collections
-        # Open count table as list of lists
+        # Open the MED node count table as list of lists
         countArray = []
         nodes = []
         samples = []
@@ -892,7 +892,7 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
         # convert to np array
         countArray = np.array(countArray)
         countArray = countArray.astype(np.int)
-        # for each node in each sample create dataSetSampleSeq with foreign key to referenceSeq and data_set_sample
+        # for each node in each sample create data_set_sample_sequence with foreign key to referenceSeq and data_set_sample
         # give it a foreign key to the reference Seq by looking up the seq in the dictionary made earlier and using the value to search for the referenceSeq
 
 
@@ -928,22 +928,22 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
                 newCC = clade_collection(clade=clade, dataSetSampleFrom=data_set_sample_object)
                 newCC.save()
 
+            # I want to address a problem we are having here. Now that we have thorough checks to
+            # associate very similar sequences with indels by the primers to the same reference seq
+            # it means that multiple sequences within the same sample can have the same referenceseqs
+            # Due to the fact that we will in effect use the sequence of the reference seq rather
+            # than the dsss seq, we should consolidate all dsss seqs with the same reference seq
+            # so... we will create a counter that will keep track of the cumulative abundance associated with each reference_sequence
+            # and then create a dsss for each refSeq from this.
             refSeqAbundanceCounter = defaultdict(int)
-            for j in range(len(
-                    nodes)):  # Only process this sample for this clade if there are enough seqs to make a cladeCollection
+            for j in range(len(nodes)):
                 abundance = countArray[i][j]
                 if abundance > 0:
-                    # I want to address a problem we are having here. Now that we have thorough checks to
-                    # associate very similar sequences with indels by the primers to the same reference seq
-                    # it means that multiple sequences within the same sample can have the same referenceseqs
-                    # Due to the fact that we will in effect use the sequence of the reference seq rather
-                    # than the dsss seq, we should consolidate all dsss seqs with the same reference seq
-                    # so... we will create a counter that will keep track of the cumulative abundance associated with each reference_sequence
-                    # and then create a dsss for each refSeq
-                    refSeqAbundanceCounter[
-                        reference_sequence.objects.get(id=nodeToRefDict[nodes[j]])] += abundance
+                    refSeqAbundanceCounter[reference_sequence.objects.get(id=nodeToRefDict[nodes[j]])] += abundance
+
+
             # > 200 associate a CC to the data_set_sample, else, don't
-            # irrespective, associate a data_set_sample
+            # irrespective, associate a data_set_sample_sequences to the data_set_sample
             if sum(countArray[i]) > 200:
                 for refSeq in refSeqAbundanceCounter.keys():
                     dss = data_set_sample_sequence(referenceSequenceOf=refSeq,
