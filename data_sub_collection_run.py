@@ -1,10 +1,12 @@
 from __future__ import division
-from dbApp.models import data_set, reference_sequence, data_set_sample_sequence, analysis_type, analysis_group, data_set_sample, data_analysis, clade_collection, clade_collection_type
+from dbApp.models import data_set, reference_sequence, data_set_sample_sequence, analysis_type, analysis_group, \
+    data_set_sample, data_analysis, clade_collection, clade_collection_type
 # import math
 import itertools
 import numpy as np
 # https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
 import matplotlib as mpl
+
 mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 from scipy.stats import gaussian_kde
@@ -24,7 +26,7 @@ import texttable
 import pickle
 from ctypes import c_int
 import shutil
-from colorama import init # Fore, Back, Style,
+from colorama import init  # Fore, Back, Style,
 from django.core.exceptions import ObjectDoesNotExist
 from datetime import datetime
 import pandas as pd
@@ -35,8 +37,6 @@ from skbio.stats.ordination import pcoa
 import sys
 import math
 
-
-
 if 'PYCHARM_HOSTED' in os.environ:
     convert = False  # in PyCharm, we should disable convert
     strip = False
@@ -46,6 +46,7 @@ else:
 
 init(convert=convert, strip=strip, autoreset=True)
 
+
 ###### Generic functions ######
 def readDefinedFileToList(filename):
     temp_list = []
@@ -53,8 +54,9 @@ def readDefinedFileToList(filename):
         temp_list = [line.rstrip() for line in reader]
     return temp_list
 
+
 def writeListToDestination(destination, listToWrite):
-    #print('Writing list to ' + destination)
+    # print('Writing list to ' + destination)
     try:
         os.makedirs(os.path.dirname(destination))
     except FileExistsError:
@@ -63,11 +65,12 @@ def writeListToDestination(destination, listToWrite):
     with open(destination, mode='w') as writer:
         i = 0
         while i < len(listToWrite):
-            if i != len(listToWrite)-1:
+            if i != len(listToWrite) - 1:
                 writer.write(listToWrite[i] + '\n')
-            elif i == len(listToWrite)-1:
+            elif i == len(listToWrite) - 1:
                 writer.write(listToWrite[i])
             i += 1
+
 
 def convert_interleaved_to_sequencial_fasta(fasta_in):
     fasta_dict = {}
@@ -81,13 +84,13 @@ def convert_interleaved_to_sequencial_fasta(fasta_in):
             fasta_cropped.append(line)
 
     for i in range(len(fasta_cropped)):
-            if i < num_seqs:
-                # Then we are on one of the inital lines
-                list_seq_names.append(fasta_cropped[i].split()[0])
-                list_seq_sequences.append(''.join(fasta_cropped[i].split()[1:]))
-            else:
-                index = i%num_seqs
-                list_seq_sequences[index] += ''.join(fasta_cropped[i].split()[1:])
+        if i < num_seqs:
+            # Then we are on one of the inital lines
+            list_seq_names.append(fasta_cropped[i].split()[0])
+            list_seq_sequences.append(''.join(fasta_cropped[i].split()[1:]))
+        else:
+            index = i % num_seqs
+            list_seq_sequences[index] += ''.join(fasta_cropped[i].split()[1:])
 
     out_fasta = []
     for name, seq in zip(list_seq_names, list_seq_sequences):
@@ -95,11 +98,13 @@ def convert_interleaved_to_sequencial_fasta(fasta_in):
 
     return out_fasta
 
+
 ###############################
 
 
 ##### DISTANCE MATRICES #####
-def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_id_str, num_processors, data_analysis_id, method, bootstrap_value):
+def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_id_str, num_processors, data_analysis_id,
+                                                               method, bootstrap_value):
     ''' This will produce distance matrices between ITS2 type profiles of the same clade.
     It will use exactly the same suite of programs as the generate_within_clade_UniFrac_distances_samples method
     The only difference will be that this will be calculated across ITS2 Type Profiles rather than samples.
@@ -110,7 +115,7 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
     output_file_paths = []
 
     wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs',
-                                       'ordination','_'.join(str(data_submission_id_str).split(',')),
+                                       'ordination', '_'.join(str(data_submission_id_str).split(',')),
                                        'between_profiles', method))
 
     # get the dataSubmissions
@@ -130,7 +135,8 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
     PCoA_path_lists = []
     for clade in clade_list:
         # convert query to a list so that we can iterate over twice in exactly the same order
-        ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade = list(ITS2_type_profiles_of_data_subs_and_analysis.filter(clade=clade))
+        ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade = list(
+            ITS2_type_profiles_of_data_subs_and_analysis.filter(clade=clade))
 
         if len(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade) < 2:
             continue
@@ -151,11 +157,12 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
         # Generate random data sets
         fseqboot_base = generate_fseqboot_alignments(clade_wkd, bootstrap_value, out_file)
 
-
         if method == 'mothur':
-            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+                                                                    bootstrap_value, num_processors)
         elif method == 'phylip':
-            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+                                                                    bootstrap_value, num_processors)
 
         PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist)
 
@@ -179,6 +186,7 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
         print(path_of_output_file)
 
     return PCoA_path_lists
+
 
 def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade):
     unique_fasta = []
@@ -209,7 +217,7 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
                 for i in range(normalised_abundance_of_divs_dict[ref_seq_id_key]):
                     integer_seq_name = '{}_id{}_{}'.format(ref_seq_id_key, at.id, i)
                     temp_name_list.append(integer_seq_name)
-                    group_file.append('{}\t{}'.format(integer_seq_name, str(at).replace('-','_').replace('/','_')))
+                    group_file.append('{}\t{}'.format(integer_seq_name, str(at).replace('-', '_').replace('/', '_')))
                 name_file_dict[ref_seq_id_to_name_file_representative[ref_seq_id_key]] += temp_name_list
             else:
                 # then this needs adding to the fasta
@@ -227,7 +235,7 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
                 for i in range(normalised_abundance_of_divs_dict[ref_seq_id_key]):
                     integer_seq_name = '{}_id{}_{}'.format(ref_seq_id_key, at.id, i)
                     temp_name_list.append(integer_seq_name)
-                    group_file.append('{}\t{}'.format(integer_seq_name, str(at).replace('-','_').replace('/','_')))
+                    group_file.append('{}\t{}'.format(integer_seq_name, str(at).replace('-', '_').replace('/', '_')))
                 name_file_dict[zero_seq_name] = temp_name_list
                 ref_seq_id_to_name_file_representative[ref_seq_id_key] = zero_seq_name
 
@@ -237,6 +245,7 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
         name_file.append('{}\t{}'.format(k, ','.join(v)))
 
     return group_file, name_file, unique_fasta
+
 
 def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors, method, bootstrap_value):
     '''
@@ -273,11 +282,14 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     output_file_paths = []
     data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(dataSubmission_str).split(',')])
 
-    clade_collection_list_of_dataSubmissions = clade_collection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
+    clade_collection_list_of_dataSubmissions = clade_collection.objects.filter(
+        dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
 
     clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_dataSubmissions]))
 
-    wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(dataSubmission_str.split(',')), 'between_samples', method ))
+    wkd = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(dataSubmission_str.split(',')),
+                     'between_samples', method))
     # for each clade found in the dataSubmissions' samples
     PCoA_path_lists = []
     for clade_in_question in clades_of_clade_collections:
@@ -291,7 +303,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
             continue
         # directly make a name file and unique fasta file
 
-        #NB the MP that we will be writing below is complex and cannot be completed entirely within the worker
+        # NB the MP that we will be writing below is complex and cannot be completed entirely within the worker
         # we will out put to the output queue live and process this in the main thread to create the master
         # fasta and name file
 
@@ -319,8 +331,6 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
             p = Process(target=uni_frac_worker_two, args=(taskQueue, outputQueue))
             allProcesses.append(p)
             p.start()
-
-
 
         # have an output pipe that gets processed as we go along. I.e. before we call wait.
         master_fasta_dict = {}
@@ -382,7 +392,6 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         for key, value in master_name_dict.items():
             name_file.append('{}\t{}'.format(key, ','.join(value)))
 
-
         # output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
         writeListToDestination('{}/unique.fasta'.format(clade_wkd), fasta_file)
         writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
@@ -398,16 +407,15 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         # Instead I will create an NJ consnsus tree.
         # This will involve using the embassy version of the phylip executables
 
-
-
         # First I will have to create random data sets
         fseqboot_base = generate_fseqboot_alignments(clade_wkd, bootstrap_value, out_file)
 
-
         if method == 'mothur':
-            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+                                                                    bootstrap_value, num_processors)
         elif method == 'phylip':
-            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+                                                                    bootstrap_value, num_processors)
 
         PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist)
         PCoA_path_lists.append(PCoA_path)
@@ -429,8 +437,8 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
-
     return PCoA_path_lists
+
 
 def mafft_align_fasta(clade_wkd):
     # now mafft align the fasta
@@ -443,6 +451,7 @@ def mafft_align_fasta(clade_wkd):
     # now run mafft including the redirect
     (mafft['--auto', '--thread', '16', in_file] > out_file)()
     return out_file
+
 
 def uni_frac_worker_two(input, output):
     # We can fix this so that it is more multithreadable.
@@ -483,6 +492,7 @@ def uni_frac_worker_two(input, output):
         output.put((temp_fasta_dict, temp_name_dict, temp_group_list, temp_ref_seq_id_list, str(cc.id), str(cc)))
     output.put('EXIT')
 
+
 def concatenate_trees(list_of_tree_paths, out_put_path):
     master_tree_file = []
     for i in range(len(list_of_tree_paths)):
@@ -490,6 +500,7 @@ def concatenate_trees(list_of_tree_paths, out_put_path):
         for line in temp_tree_file:
             master_tree_file.append(line)
     writeListToDestination(out_put_path, master_tree_file)
+
 
 def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     # Now create consensus tree using sumtrees.py
@@ -507,7 +518,9 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     # sumtree = local["sumtrees.py"]
     # output = (sumtree['-F', 'newick', in_file_fconsense] > tree_out_file_fconsense_sumtrees)()
 
-    completed_consensus = subprocess.run(['sumtrees.py', '-F', 'newick', '--replace', '-o', tree_out_file_fconsense_sumtrees, in_file_fconsense], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    completed_consensus = subprocess.run(
+        ['sumtrees.py', '-F', 'newick', '--replace', '-o', tree_out_file_fconsense_sumtrees, in_file_fconsense],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if completed_consensus.returncode != 0:
         for line in completed_consensus.stdout.decode('utf-8'):
             print(line)
@@ -522,6 +535,7 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     # Unifrac. This can be part of the rename_tree code
     rename_tree_two(name_file, tree_out_file_fconsense_sumtrees)
     return tree_out_file_fconsense_sumtrees
+
 
 def generate_PCoA_coords(clade_wkd, raw_dist_file):
     # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
@@ -546,9 +560,9 @@ def generate_PCoA_coords(clade_wkd, raw_dist_file):
 
     renamed_dataframe = renamed_dataframe.append(this.proportion_explained.rename('proportion_explained'))
 
-
     renamed_dataframe.to_csv(pcoA_full_path, index=True, header=True, sep=',')
     return pcoA_full_path
+
 
 def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     # setup fseqboot arguments
@@ -582,6 +596,7 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     writeListToDestination('{}{}'.format(fseqboot_base, rep_count), out_put_holder)
     return fseqboot_base
 
+
 def perform_unifrac(clade_wkd, tree_path):
     group_file_path = '{}/group_file.groups'.format(clade_wkd)
     name_file_path = '{}/name_file.names'.format(clade_wkd)
@@ -600,6 +615,7 @@ def perform_unifrac(clade_wkd, tree_path):
     else:
         print('ERROR: {}'.format(completedProcess.sterr.decode('utf-8')))
     return
+
 
 def rename_tree_two(name_file, tree_out_file_fconsense):
     name_file_reps = []
@@ -649,11 +665,11 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
                 found = False
                 match_str_replced_space = match_str.replace(' ', '_')
                 for name_file_rep in name_file_reps:
-                        if name_file_rep.startswith(match_str_replced_space):
-                            new_str = re.sub("'{}'".format(match_str), name_file_rep, new_str)
-                            name_file_rep_match_list.append(name_file_rep)
-                            found = True
-                            break
+                    if name_file_rep.startswith(match_str_replced_space):
+                        new_str = re.sub("'{}'".format(match_str), name_file_rep, new_str)
+                        name_file_rep_match_list.append(name_file_rep)
+                        found = True
+                        break
             else:
                 found = False
                 for name_file_rep in name_file_reps:
@@ -680,8 +696,8 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
     print('writing out tree')
     writeListToDestination(tree_out_file_fconsense, new_tree_file)
 
-def plotPCoA(full_path_to_coords):
 
+def plotPCoA(full_path_to_coords):
     PCoA_coord_array = pd.read_csv(full_path_to_coords)
 
     # I'm going to assume that the sample order is the same in the PCoA output
@@ -704,15 +720,14 @@ def plotPCoA(full_path_to_coords):
     ax.set_xlabel('PC1 {0:.2f}%'.format(PCoA_coord_array['PC1'].iloc[-1]))
     ax.set_ylabel('PC2 {0:.2f}%'.format(PCoA_coord_array['PC2'].iloc[-1]))
 
-
     ax.scatter(PC1_plot_value, PC2_plot_value, color=colours)
     for i, label in enumerate(PCoA_coord_array['sample']):
         ax.annotate(label, (PC1_plot_value[i], PC2_plot_value[i]))
 
     fig.show()
 
-def plotPCoA_types(full_path_to_coords):
 
+def plotPCoA_types(full_path_to_coords):
     PCoA_coord_array = pd.read_csv(full_path_to_coords)
 
     # I'm going to assume that the sample order is the same in the PCoA output
@@ -724,7 +739,7 @@ def plotPCoA_types(full_path_to_coords):
             colours.append('black')
         elif 'C3am' in smp:
             colours.append('green')
-        elif smp =='C3_C3c_C3gulf':
+        elif smp == 'C3_C3c_C3gulf':
             colours.append('grey')
 
     # convert back to numpy array for easy plotting
@@ -737,12 +752,12 @@ def plotPCoA_types(full_path_to_coords):
     ax.set_xlabel('PC1 {0:.2f}%'.format(PCoA_coord_array['PC1'].iloc[-1]))
     ax.set_ylabel('PC2 {0:.2f}%'.format(PCoA_coord_array['PC2'].iloc[-1]))
 
-
     ax.scatter(PC1_plot_value, PC2_plot_value, color=colours)
     for i, label in enumerate(PCoA_coord_array['sample']):
         ax.annotate(label, (PC1_plot_value[i], PC2_plot_value[i]))
 
     fig.show()
+
 
 # mothur method
 def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
@@ -781,6 +796,7 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
         output.put(input.replace('.dist', '.tre'))
     output.put('kill')
 
+
 def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc):
     # setup MP
     # Create the queues that will hold the cc information
@@ -804,8 +820,6 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
         allProcesses.append(p)
         p.start()
 
-
-
     # Get list of tree paths from the output queue
     kill_num = 0
     list_of_tree_paths = []
@@ -821,7 +835,6 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     for p in allProcesses:
         p.join()
 
-
     # Create consensus
     tree_out_file_fconsense_sumtrees = create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file)
     # Perform UniFrac
@@ -832,6 +845,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 
     raw_dist_file = readDefinedFileToList(dist_file_path)
     return raw_dist_file, dist_file_path
+
 
 def mothur_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
     ### MOTHUR TRIAL ###
@@ -898,18 +912,20 @@ def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
         fneighbor_out_file_rep = '{}.fneighbor_{}'.format(fneighbor_in_file_rep, p)
         out_tree_file = '{}.nj_tree_{}'.format(fneighbor_in_file_rep, p)
         (fneighbor[
-             '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep, '-jumble', 'Y', '-outtreefile', out_tree_file])()
+            '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep, '-jumble', 'Y', '-outtreefile', out_tree_file])()
         list_of_tree_paths.append(out_tree_file)
 
     tree_out_file_fconsense_sumtrees = create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file)
 
     perform_unifrac(clade_wkd, tree_out_file_fconsense_sumtrees)
 
-    dist_file_path = '{}/{}'.format(clade_wkd, tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
+    dist_file_path = '{}/{}'.format(clade_wkd,
+                                    tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
 
     raw_dist_file = readDefinedFileToList(dist_file_path)
 
     return raw_dist_file
+
 
 def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc):
     # setup MP
@@ -960,6 +976,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 
     return raw_dist_file, dist_file_path
 
+
 def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
     fdnadist = local["fdnadist"]
     fneighbor = local["fneighbor"]
@@ -975,29 +992,27 @@ def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
         fneighbor_out_file_rep = '{}.fneighbor_{}'.format(fneighbor_in_file_rep, p)
         out_tree_file = '{}.nj_tree_{}'.format(fneighbor_in_file_rep, p)
         (fneighbor[
-             '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep, '-jumble', 'Y', '-outtreefile', out_tree_file])()
+            '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep, '-jumble', 'Y', '-outtreefile', out_tree_file])()
         output.put(out_tree_file)
     output.put('kill')
+
+
 #############################
 
 
 ###### Profile Discovery functions ######
 def profileDiscovery(nProcessors):
-
-
     if not analysisObj.initialTypeDiscoComplete:
-    ############# FIND RAW FOOTPRINTS ###############
+        ############# FIND RAW FOOTPRINTS ###############
         cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
         # Get the cladeCollections that are found in the listof datasubmissions that are found in the analysisObj
         cladeCollectionsOfAnalysis = analysisObj.getCladeCollections()
 
-
         # List that will hold a dictionary for each clade
         # Each dictionary will hold key = footprint (set of sequences) value = [[] []] where []0 = list of cladeCollections containing given footprint
         # and []1 = list of majority sequence for given sample
         masterCladalListOfFootprintDicts = [{} for clade in cladeList]
-
 
         # For each clade Collection add its footprint to the count dict
         # by associating the majority sequence and sample to the corect cladal dict
@@ -1011,7 +1026,6 @@ def profileDiscovery(nProcessors):
 
         for cladecollection in cladeCollectionsOfAnalysis:
             taskQueue.put(cladecollection)
-
 
         numProcessors = nProcessors
         for N in range(numProcessors):
@@ -1074,11 +1088,10 @@ def profileDiscovery(nProcessors):
             p.join()
         ################################################
 
-
         ########### CHECK RAW FOOTPRINTS FOR SUPPORT AND GENERATE SUPPORTED TYPE PROFILES ###############
-        #Now work clade by clade
+        # Now work clade by clade
         for footPrintDict in masterCladalListOfFootprintDicts:
-            if footPrintDict: # If there are some clade collections for the given clade
+            if footPrintDict:  # If there are some clade collections for the given clade
                 # The fact that there are this few cladecollections of a clade
                 # will be very rare, and in this rare case the Majs will simply be associated to the footprints
                 ccCount = sum(len(footPrintDict[akey][0]) for akey in footPrintDict.keys())
@@ -1094,7 +1107,9 @@ def profileDiscovery(nProcessors):
                 # if masterCladalListOfFootprintDicts.index(footPrintDict) == 2:
                 #     foo = 'bar'
                 # ### DEBUG ###
-                collapsedFootPrintDict = collapsePotentialProfiles_initType_objects(footprintList=footPrintDict, reqsupport=4, nprocessors=nProcessors)
+                collapsedFootPrintDict = collapsePotentialProfiles_initType_objects(footprintList=footPrintDict,
+                                                                                    reqsupport=4,
+                                                                                    nprocessors=nProcessors)
 
                 # collapsedFootPrintDict = collapsePotentialProfiles_initType_objects(footprintList=masterCladalListOfFootprintDicts[2],
                 #                                                                     reqsupport=4,
@@ -1106,36 +1121,29 @@ def profileDiscovery(nProcessors):
                     # this is Cs
                     apple = 'asdf'
 
-
                 ## DEBUG
                 for initT in collapsedFootPrintDict:
                     print(str(initT.profile))
                     print(','.join([str(cc) for cc in initT.cladeCollection_list]))
                     for cc in initT.cladeCollection_list:
-                        if str(cc) in ['July2016-113poc-R1','July2016-59poc-R1','March2016-125poc-R1','March2016-57poc-R1','May2016-113poc-R1','May2016-135poc-R1','May2016-294por-R1','March2016-294poc-R1','May2016-59poc-R1','May2016-125poc-R1']:
+                        if str(cc) in ['July2016-113poc-R1', 'July2016-59poc-R1', 'March2016-125poc-R1',
+                                       'March2016-57poc-R1', 'May2016-113poc-R1', 'May2016-135poc-R1',
+                                       'May2016-294por-R1', 'March2016-294poc-R1', 'May2016-59poc-R1',
+                                       'May2016-125poc-R1']:
                             apples = 'pwers'
                             # thi is a cct that ends up as the C1
-                        if str(cc) in ['July2016-159poc-R1','May2016-159poc-R1','March2016-55poc-R1','May2016-55poc-R1','March2016-135poc-R1','July2016-55poc-R1','July2016-135poc-R1','May2016-235poc-R1']:
+                        if str(cc) in ['July2016-159poc-R1', 'May2016-159poc-R1', 'March2016-55poc-R1',
+                                       'May2016-55poc-R1', 'March2016-135poc-R1', 'July2016-55poc-R1',
+                                       'July2016-135poc-R1', 'May2016-235poc-R1']:
                             apples = 'asdf'
                             # then this is the C1k types
-
-
-
-
-
-
-
-
 
                 ## DEBUG
                 ##################################
 
-        ############################################################################################
+                ############################################################################################
 
-
-
-
-        ############ CREATE ANALYSIS TYPES BASED ON DISCOVRED FOOTPRINTS ############################
+                ############ CREATE ANALYSIS TYPES BASED ON DISCOVRED FOOTPRINTS ############################
                 # TODO 08/12/17 we need to be careful here when we initiate the types as the types we were previously
                 ''' generating would represent essentially the majoirty of the ccts sequences. but now some of the types
                 will be smaller proportions of the ccts so we should check to see how the initial abundnace of the types
@@ -1155,7 +1163,8 @@ def profileDiscovery(nProcessors):
                 # for every footprint that will become an analysis_type
                 timeOne = 0
                 timeTwo = 0
-                print('\n\nCreating analysis types clade {}'.format(cladeList[masterCladalListOfFootprintDicts.index(footPrintDict)]))
+                print('\n\nCreating analysis types clade {}'.format(
+                    cladeList[masterCladalListOfFootprintDicts.index(footPrintDict)]))
                 for initialType in collapsedFootPrintDict:
                     footPrintNameString = ','.join([str(refseq) for refseq in initialType.profile])
 
@@ -1165,18 +1174,17 @@ def profileDiscovery(nProcessors):
                     timeitone = timeit.default_timer()
                     listOfSampSeqs = []
 
-
-
                     # setOfMajSeqs = set(listOfSampSeqs)
                     timeOne += timeit.default_timer() - timeitone
                     timeittwo = timeit.default_timer()
 
-                    if len(initialType.set_of_maj_ref_seqs) > 1: # Then this is a coDom
+                    if len(initialType.set_of_maj_ref_seqs) > 1:  # Then this is a coDom
                         coDom = True
 
                         # the Counter class (from collections import Counter) may be useful
                         # http://stackoverflow.com/questions/2600191/how-can-i-count-the-occurrences-of-a-list-item-in-python
-                        newAnalysisType = analysis_type(coDom=True, dataAnalysisFrom=analysisObj, clade=cladeList[masterCladalListOfFootprintDicts.index(footPrintDict)])
+                        newAnalysisType = analysis_type(coDom=True, dataAnalysisFrom=analysisObj, clade=cladeList[
+                            masterCladalListOfFootprintDicts.index(footPrintDict)])
 
                         newAnalysisType.setMajRefSeqSet(initialType.set_of_maj_ref_seqs)
                         newAnalysisType.initTypeAttributes(initialType.cladeCollection_list, initialType.profile)
@@ -1186,7 +1194,8 @@ def profileDiscovery(nProcessors):
                     else:
                         coDom = False
                         newAnalysisType = analysis_type(coDom=False, dataAnalysisFrom=analysisObj,
-                                           clade=cladeList[masterCladalListOfFootprintDicts.index(footPrintDict)])
+                                                        clade=cladeList[
+                                                            masterCladalListOfFootprintDicts.index(footPrintDict)])
                         newAnalysisType.setMajRefSeqSet(initialType.set_of_maj_ref_seqs)
                         newAnalysisType.initTypeAttributes(initialType.cladeCollection_list, initialType.profile)
                         newAnalysisType.save()
@@ -1208,11 +1217,10 @@ def profileDiscovery(nProcessors):
 
         ############ CHECK FOR ADDITIONAL TYPES NOT FOUND DUE TO INTRAS SPANNING THE WITHINCLADECUTOFF BOUNDARY #########
 
-
-
         print('\n\nChecking for additional artefact types')
         ### CREATION OF SUPER TYPES DUE TO WITHINCLADECOLLECTIONCUTOFF ARTEFACTS ###
-        CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict, CCToInitialTypeDict = checkForAdditionalArtefactTypes(nProcessors)
+        CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict, CCToInitialTypeDict = checkForAdditionalArtefactTypes(
+            nProcessors)
         ############################################################################
         testDirPath = os.path.join(os.path.dirname(__file__), 'temp/{}'.format(analysisObj.id))
         os.makedirs(testDirPath, exist_ok=True)
@@ -1224,7 +1232,8 @@ def profileDiscovery(nProcessors):
         pickle.dump(CCToTotalSeqsDictToDump, open("CCToTotalSeqsDict_{}".format(analysisObj.id), "wb"))
 
         CCToRefSeqListAndAbundancesToDump = dict(CCToRefSeqListAndAbundances)
-        pickle.dump(CCToRefSeqListAndAbundancesToDump, open("CCToRefSeqListAndAbundances_{}".format(analysisObj.id), "wb"))
+        pickle.dump(CCToRefSeqListAndAbundancesToDump,
+                    open("CCToRefSeqListAndAbundances_{}".format(analysisObj.id), "wb"))
 
         typeFootPrintDictToDump = dict(typeFootPrintDict)
         pickle.dump(typeFootPrintDictToDump, open("typeFootPrintDict_{}".format(analysisObj.id), "wb"))
@@ -1235,7 +1244,8 @@ def profileDiscovery(nProcessors):
         analysisObj.initialTypeDiscoComplete = True
         analysisObj.save()
 
-        reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict, CCToInitialTypeDict, nProcessors)
+        reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict,
+                                                    CCToInitialTypeDict, nProcessors)
 
     else:
         # print('Checking for additional artefact types')
@@ -1243,12 +1253,15 @@ def profileDiscovery(nProcessors):
         testDirPath = os.path.join(os.path.dirname(__file__), 'temp/{}'.format(analysisObj.id))
         os.chdir(testDirPath)
 
-        CCToTotalSeqsDict = Manager().dict(pickle.load(open("{}/CCToTotalSeqsDict_{}".format(testDirPath, analysisObj.id), "rb")))
-        CCToRefSeqListAndAbundances = Manager().dict(pickle.load(open("CCToRefSeqListAndAbundances_{}".format(analysisObj.id), "rb")))
+        CCToTotalSeqsDict = Manager().dict(
+            pickle.load(open("{}/CCToTotalSeqsDict_{}".format(testDirPath, analysisObj.id), "rb")))
+        CCToRefSeqListAndAbundances = Manager().dict(
+            pickle.load(open("CCToRefSeqListAndAbundances_{}".format(analysisObj.id), "rb")))
         typeFootPrintDict = Manager().dict(pickle.load(open("typeFootPrintDict_{}".format(analysisObj.id), "rb")))
         CCToInitialTypeDict = Manager().dict(pickle.load(open("CCToInitialTypeDict_{}".format(analysisObj.id), "rb")))
 
-        reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict, CCToInitialTypeDict, nProcessors)
+        reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict,
+                                                    CCToInitialTypeDict, nProcessors)
 
     # # Now print a list of the types
     # allTypesFromDataAnalysis = analysis_type.objects.filter(dataAnalysisFrom=analysisObj)
@@ -1262,7 +1275,9 @@ def profileDiscovery(nProcessors):
     analysisObj.save()
     return
 
-def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict, CCToInitialTypeDict, cores):
+
+def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict,
+                                                CCToInitialTypeDict, cores):
     # 08/12/17 13:41 this is where we're at. We have fixed the cc to initial type dict for the other artefact
     # checking but still need to work on that here as well as the other issues noted below.
 
@@ -1314,7 +1329,7 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
             for typeToCheckID in cladalTypesIDs:
                 # if this type has not already been checked
                 if typeToCheckID not in checked:
-                    print('\n\nChecking {}'.format(analysis_type.objects.get(id = typeToCheckID)))
+                    print('\n\nChecking {}'.format(analysis_type.objects.get(id=typeToCheckID)))
                     # If this type contains artefact DIVs
                     if typeFootPrintDict[typeToCheckID][2]:
                         # Then this is a type we need to check
@@ -1331,7 +1346,8 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                         # For each type generate a requirements dict
                         # Dict will be DIV:RequiredRelAbund
                         # Otherwise known as pnt
-                        requirementDict = {refSeqObj: (0.03 if refSeqObj.id in nonArtefactDIVIDs else unlockedAbund) for refSeqObj in refSeqObjsOfTypeList}
+                        requirementDict = {refSeqObj: (0.03 if refSeqObj.id in nonArtefactDIVIDs else unlockedAbund) for
+                                           refSeqObj in refSeqObjsOfTypeList}
 
                         listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections() if cc.clade == currentClade]
 
@@ -1357,16 +1373,15 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                         # yep this is what was causing the problem so we will need to find some way of defining the location of the database relatively.
                         # DONE. I have changed the settings.py file so that the DB location is now relative to the position of the settings.py file
 
-
                         for N in range(cores):
-                            p = Process(target=workerArtefactTwo, args=(taskQueue, supportList, CCToInitialTypeDict, typeToCheckID, CCToRefSeqListAndAbundances, refSeqObjsOfTypeList, requirementDict  ))
+                            p = Process(target=workerArtefactTwo, args=(
+                            taskQueue, supportList, CCToInitialTypeDict, typeToCheckID, CCToRefSeqListAndAbundances,
+                            refSeqObjsOfTypeList, requirementDict))
                             allProcesses.append(p)
                             p.start()
 
                         for p in allProcesses:
                             p.join()
-
-
 
                         if supportList:
                             restart = True
@@ -1379,7 +1394,8 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                             # So first get a list of the types that have been effected
                             setOfTypesAffected = set()
                             # at the same time create a dict that tracks which CCs need to be remvoed from each type
-                            typeToCCToBeRemovedDict = defaultdict(list)  # we may have to do this manually instead of defaultdict
+                            typeToCCToBeRemovedDict = defaultdict(
+                                list)  # we may have to do this manually instead of defaultdict
                             # for CC in supportList:
                             #     if CC.id in CCToInitialTypeDict.keys():
                             #         initialTypeID = CCToInitialTypeDict[CC.id]
@@ -1388,7 +1404,6 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                             #     else:
                             #         # we don't need to remove this CC from any type but we should add it to the CCToInitialTypeDict
                             #         CCToInitialTypeDict[CC.id] = typeToCheckID
-
 
                             for CC in supportList:
                                 if CC.id in CCToInitialTypeDict.keys():
@@ -1399,19 +1414,16 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                                         typeToCCToBeRemovedDict[initialTypeID].append(CC)
                                     else:
                                         initialTypeID = find_which_type_is_same_basal_type_as_pnt(
-                                            requirementDict, analysis_type.objects.filter(id__in=CCToInitialTypeDict[CC.id])).id
+                                            requirementDict,
+                                            analysis_type.objects.filter(id__in=CCToInitialTypeDict[CC.id])).id
                                         ### DEBUG ###
                                         if not initialTypeID:
                                             foo = 'bar'
                                         ### DEBUG ###
                                         setOfTypesAffected.add(initialTypeID)
                                         typeToCCToBeRemovedDict[initialTypeID].append(CC)
-                                else:# we don't need to remove this CC from any type but we should add it to the CCToInitialTypeDict
+                                else:  # we don't need to remove this CC from any type but we should add it to the CCToInitialTypeDict
                                     CCToInitialTypeDict[CC.id] = [typeToCheckID]
-
-
-
-
 
                             # Here we have a set of the type IDs for the types affected and a dict associating the CCs to these types
                             # Now go through the types and remove the CCs from the type, change the dict association
@@ -1442,28 +1454,35 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                                 # As some of these will not have 4 to start with
                                 ################ IF SUPPORTED ##################
 
-
-                                listOfCCsInType = [cc for cc in clade_collection.objects.filter(id__in=[int(x) for x in anTypeInQ.listOfCladeCollectionsFoundInInitially.split(',') if x != ''])]
+                                listOfCCsInType = [cc for cc in clade_collection.objects.filter(
+                                    id__in=[int(x) for x in anTypeInQ.listOfCladeCollectionsFoundInInitially.split(',')
+                                            if x != ''])]
                                 if listOfCCsInType and len(anTypeInQ.getOrderedFootprintList()) == 1:
                                     print('Short Type {} supported by {} CCs. Reinitiating.'.format(anTypeInQ.name,
-                                                                                              len(listOfCCsInType)))
+                                                                                                    len(
+                                                                                                        listOfCCsInType)))
                                     # Then this still has suffiecient support
                                     # reinitiate the type
                                     # listOfCCs = [cc for cc in clade_collection.objects.filter(id__in=[int(x) for x in anTypeInQ.listOfCladeCollectionsFoundInInitially.split(',')])]
                                     anTypeInQ.initTypeAttributes(listOfCC=listOfCCsInType,
                                                                  footprintlistofrefseqs=anTypeInQ.getOrderedFootprintList())
                                 elif len(listOfCCsInType) >= 4:
-                                    print('Type {} supported by {} CCs. Reinitiating.'.format(anTypeInQ.name, len(listOfCCsInType)))
+                                    print('Type {} supported by {} CCs. Reinitiating.'.format(anTypeInQ.name,
+                                                                                              len(listOfCCsInType)))
                                     # Then this still has suffiecient support
                                     # reinitiate the type
                                     # listOfCCs = [cc for cc in clade_collection.objects.filter(id__in=[int(x) for x in anTypeInQ.listOfCladeCollectionsFoundInInitially.split(',')])]
-                                    anTypeInQ.initTypeAttributes(listOfCC=listOfCCsInType, footprintlistofrefseqs=anTypeInQ.getOrderedFootprintList())
+                                    anTypeInQ.initTypeAttributes(listOfCC=listOfCCsInType,
+                                                                 footprintlistofrefseqs=anTypeInQ.getOrderedFootprintList())
                                 ################ IF UNSUPPORTED #################
                                 else:
                                     # THen this antype no longer has sufficient support
                                     # put the CCs into the stranded list and delete this type
                                     # also remove the CCs from the dict of types they are associated to
-                                    print('Type {} no longer supported. Deleting. {} CCs stranded.'.format(anTypeInQ.name, str(len(listOfCCsInType))))
+                                    print(
+                                        'Type {} no longer supported. Deleting. {} CCs stranded.'.format(anTypeInQ.name,
+                                                                                                         str(len(
+                                                                                                             listOfCCsInType))))
                                     del typeFootPrintDict[anTypeInQ.id]
                                     anTypeInQ.delete()
 
@@ -1478,8 +1497,6 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                                             del CCToInitialTypeDict[cc.id]
                                             # strandedCCs.extend(listOfCCsInType)
                                             strandedCCs.append(cc)
-
-
 
                             #################### ATTEMPT TO HOME STRANDED TYPES ######################
                             ################### GET COMMON INTRAS #################
@@ -1504,8 +1521,8 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
 
                                 exists = False
                                 if intrasInCommonList:
-                                ############ CHECK IF POTENTIAL NEW TYPE FOOTPRINT ALREADY EXISTS ############
-                                # Check to see if the potential newtypes footprint already exists
+                                    ############ CHECK IF POTENTIAL NEW TYPE FOOTPRINT ALREADY EXISTS ############
+                                    # Check to see if the potential newtypes footprint already exists
                                     pntFootprint = set([refSeq.id for refSeq in intrasInCommonList])
 
                                     typeThatExistsID = 0
@@ -1523,7 +1540,9 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                                     # if this footprint already exists then we should associate these CCs to the type that has this footprint
                                     # so do this in the dictionary but also add these CCs to the cladeCollectionFoundInInitially list and
                                     # reinitiate the type
-                                    associateCCsToExistingTypeAndUpdateDicts(cctocurrentinitialtypedict = CCToInitialTypeDict, strandedCCs = strandedCCs, typeThatExistsID=typeThatExistsID, typefootprintdict=typeFootPrintDict)
+                                    associateCCsToExistingTypeAndUpdateDicts(
+                                        cctocurrentinitialtypedict=CCToInitialTypeDict, strandedCCs=strandedCCs,
+                                        typeThatExistsID=typeThatExistsID, typefootprintdict=typeFootPrintDict)
 
 
                                 ############ IF DOESN'T EXIST; MAKE NEW TYPE AND ASSOCIATED CCs ###########
@@ -1534,21 +1553,29 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
                                     if not check_if_intrasInCommonList_contains_multiple_basal_seqs(intrasInCommonList):
                                         # He we should create a new type based on the CC collection and footprint above
                                         # and house the CCs in it
-                                        makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict = CCToInitialTypeDict, clade = currentClade, intrasInCommonList = intrasInCommonList, strandedCCs = strandedCCs, typefootprintdict = typeFootPrintDict)
+                                        makeNewTypeAndAssociateCCsAndUpdateDicts(
+                                            cctocurrentinitialtypedict=CCToInitialTypeDict, clade=currentClade,
+                                            intrasInCommonList=intrasInCommonList, strandedCCs=strandedCCs,
+                                            typefootprintdict=typeFootPrintDict)
                                 ############# FIND A NEW HOME IN EXISTING TYPES IF INSUFFICIENT SUPPORT FOR NEW TYPE ##################
                             else:
-                                reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict = CCToInitialTypeDict, cctorefabunddict = CCToRefSeqListAndAbundances, clade = currentClade, strandedCCs = strandedCCs, typefootprintdict = typeFootPrintDict)
-
+                                reassociateCCsToExistingTypesAndUpdateDicts(
+                                    cctocurrentinitialtypedict=CCToInitialTypeDict,
+                                    cctorefabunddict=CCToRefSeqListAndAbundances, clade=currentClade,
+                                    strandedCCs=strandedCCs, typefootprintdict=typeFootPrintDict)
 
                             ############# FINALLY, ADD CCs TO TYPEINQ AND REINITIATE ##############
                             # N.B. The CCs have already had their CCToInitialTypeDict adjusted
                             typeToCheckObj = analysis_type.objects.get(id=typeToCheckID)
-                            currentListOfCCsInType = [cc for cc in clade_collection.objects.filter(id__in=[int(x) for x in typeToCheckObj.listOfCladeCollectionsFoundInInitially.split(',') if x != ''])]
+                            currentListOfCCsInType = [cc for cc in clade_collection.objects.filter(
+                                id__in=[int(x) for x in typeToCheckObj.listOfCladeCollectionsFoundInInitially.split(',')
+                                        if x != ''])]
                             updatedListOfCCsInType = []
                             updatedListOfCCsInType.extend(currentListOfCCsInType)
                             updatedListOfCCsInType.extend(supportList)
 
-                            typeToCheckObj.initTypeAttributes(listOfCC=updatedListOfCCsInType, footprintlistofrefseqs=typeToCheckObj.getOrderedFootprintList())
+                            typeToCheckObj.initTypeAttributes(listOfCC=updatedListOfCCsInType,
+                                                              footprintlistofrefseqs=typeToCheckObj.getOrderedFootprintList())
                             print('Added {} CCs to {}'.format(len(supportList), typeToCheckObj))
                         checked.append(typeToCheckID)
                         if restart:
@@ -1568,6 +1595,7 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
         # #############
     return
 
+
 def check_if_intrasInCommonList_contains_multiple_basal_seqs(intras_in_common_list):
     basalCount = 0
     C15Found = False
@@ -1583,7 +1611,8 @@ def check_if_intrasInCommonList_contains_multiple_basal_seqs(intras_in_common_li
         return True
     return False
 
-def check_whether_pnt_needs_comparing_to_current_type(requirementDict ,list_of_analysis_types):
+
+def check_whether_pnt_needs_comparing_to_current_type(requirementDict, list_of_analysis_types):
     '''This should return the typeobject that has the same basal sequence as the pnt
             either C3, C15, C1 or None'''
     # first get the basal of the pnt
@@ -1599,9 +1628,6 @@ def check_whether_pnt_needs_comparing_to_current_type(requirementDict ,list_of_a
         elif 'C15' in rs.name:
             basalpnt = 'C15'
             break
-
-
-
 
     # for each at check to see if the result is informative
     for at in list_of_analysis_types:
@@ -1623,7 +1649,8 @@ def check_whether_pnt_needs_comparing_to_current_type(requirementDict ,list_of_a
     # we will not let CC support types e.g. pnt's that arent the same basal as a type that is already found in the CC's types
     return False
 
-def find_which_type_is_same_basal_type_as_pnt(requirementDict ,list_of_analysis_types):
+
+def find_which_type_is_same_basal_type_as_pnt(requirementDict, list_of_analysis_types):
     '''This should return the typeobject that has the same basal sequence as the pnt
         either C3, C15, C1 or None'''
     # first get the basal of the pnt
@@ -1660,7 +1687,9 @@ def find_which_type_is_same_basal_type_as_pnt(requirementDict ,list_of_analysis_
             return at
     return False
 
-def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CCToRefSeqListAndAbundances, refSeqObjsOfTypeList, requirementDict):
+
+def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CCToRefSeqListAndAbundances,
+                      refSeqObjsOfTypeList, requirementDict):
     # Now that we have created all of the type this analysis is going to have, i.e. by doing the artefact checks
     # we now need to check to see if any of the CCs want to support these new types
     # hence here we go through each of the types and each of the CCs in turn for each of these types
@@ -1672,8 +1701,8 @@ def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CC
         # We will be able to pass in the managed dicts
 
         # if str(CC) in ['January2016-148poc', 'January2017-148poc', 'January2017-81poc']:
-            # if str(analysis_type.objects.get(id=typeToCheckID)) == 'C42g-C42a-C42.2-C42h-C1-C42b':
-            #     apples = 'pears'
+        # if str(analysis_type.objects.get(id=typeToCheckID)) == 'C42g-C42a-C42.2-C42h-C1-C42b':
+        #     apples = 'pears'
 
         # TODO DEBUG it seems that some of the CCs' ID are not being found in the CCToInitialTypeDict
         # TODO The dict is created earlier on  line 1609. It is created by going through every type
@@ -1682,7 +1711,7 @@ def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CC
         # So it is quite possible that if we are going through each CC in the analysis and if a CC didn't have
         # an initial type associated to it then we will have a key error here as the CC would not be incorporated into
         # the CCToInitialTypeDict
-        #TODO check to see if we are going through all CCs in this MP
+        # TODO check to see if we are going through all CCs in this MP
         # It turns out that we are going through the 'list of CCs to check'
         # @ line 609: listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections() if cc.clade == currentClade]
         # So as you can see it is entirely possible that some of the CCs did not have initial types assigned to them
@@ -1705,7 +1734,7 @@ def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CC
         # Check to see that each of the types DIVs are found in the CC
         CCRelAbundDict = CCToRefSeqListAndAbundances[CC.id]
         refSeqsInCC = CCRelAbundDict.keys()
-        #We don't need to do a maj seq check in here because of the check_whether_pnt_needs_comparing_to_current_type
+        # We don't need to do a maj seq check in here because of the check_whether_pnt_needs_comparing_to_current_type
         # function below that will only allow a CC to support a type if it already contains a type of the same basal
         # sequence. This way it is very unlikely that a new pnt will be able to represent more seqs than the current
         # type unless it has the maj seq in it. And even if it does, fair enough, it covers more seqs.
@@ -1733,7 +1762,10 @@ def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CC
             if CC.id in CCToInitialTypeDict.keys():
                 # this will also check to make sure that the maj of pnt's basal type is found in the CC
                 # if it is not then we should not let the CC associate with the potential new type
-                currentInitialType = check_whether_pnt_needs_comparing_to_current_type(requirementDict ,analysis_type.objects.filter(id__in=CCToInitialTypeDict[CC.id]))
+                currentInitialType = check_whether_pnt_needs_comparing_to_current_type(requirementDict,
+                                                                                       analysis_type.objects.filter(
+                                                                                           id__in=CCToInitialTypeDict[
+                                                                                               CC.id]))
                 # we will only allow a CC to support a potential new type if the pnt is of the same basal as one of the CCs current types
                 # This is because we run into trouble in knowing which type to compare the pnt to if they are not the same basal type
                 if currentInitialType:
@@ -1770,24 +1802,21 @@ def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CC
                 # else do not allow CC to support potential new type
     return
 
-def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, cctocurrentinitialtypedict, cctototdict, cctorefabunddict, cores):
-    # NB that the cctocurrentinitialtypedict is based on IDs rather than actual db objects
 
+def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, cctocurrentinitialtypedict, cctototdict,
+                                    cctorefabunddict, cores):
+    # NB that the cctocurrentinitialtypedict is based on IDs rather than actual db objects
 
     ################## CREATE POTENTIAL NEW TYPE PROGRAMATICALLY ###############
     # Create the potential new type that will be tested. This will be made up of all of the combined intras of the two
     # types in question. The abundance requriement for those intras that are not artefact effected will still
     # be 0.03 but for those that are potentially artefact effected it will be lowered to 0.005
 
-
-
     totalListOfIntraIDs = set(typefootprintdict[typeA.id][1])
     totalListOfIntraIDs.update(typefootprintdict[typeB.id][1])
 
-
     totalListOfArtefactIntras = set(typefootprintdict[typeA.id][2])
     totalListOfArtefactIntras.update(typefootprintdict[typeB.id][2])
-
 
     # We will programatically represent the potential new type (pnt) as a list of tuples, one for each intra
     # first item in tuple will be the refseq of the intra and second item the required abundance for that intra
@@ -1816,13 +1845,10 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
         print('Potential new type already exists')
         return False
 
-
     # Go through each of the CCs and see if the relative intra abundances meet the requirements of the pnt
     # if they do then add the id of the CC to the supportList
     # This will be used to count if there is sufficient support and to add the CCs to the new type once it is created
     # and to remove these CCs from the old types
-
-
 
     # this is causing a problem as some CCs are not being considered even though they would fit into this type
     # This is because they were not found in either of types A or B initially.
@@ -1847,28 +1873,26 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
     # also the CC to type dict will need to be kept uptodate.
 
     # Get list of CCs in this analysis that are also of the clade in Q
-    #TODO This still needs doing vvvv
+    # TODO This still needs doing vvvv
     # This is currently a huge ammount of work to do going through all of these CCs
     # Would be good to cut this down
 
-
-
-    #I'm making a change. We can include all CCs here and simply modify the workerOne code so that if a CC doesn't have an itnitial type
+    # I'm making a change. We can include all CCs here and simply modify the workerOne code so that if a CC doesn't have an itnitial type
     # currently it can give support to the PNT if the PNT's DIVs are found in the CC.
 
-    listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections() if cc.clade == typeA.clade if cc.id in cctocurrentinitialtypedict.keys()]
+    listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections() if cc.clade == typeA.clade if
+                        cc.id in cctocurrentinitialtypedict.keys()]
 
     # listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections() if cc.clade == typeA.clade if cc.id in cctocurrentinitialtypedict.keys()]
 
     supportList = []
-    print('Assessing support for potential new type:{}'.format([reference_sequence.objects.get(id=refSeqID).name for refSeqID in pntFootprint]))
-
+    print('Assessing support for potential new type:{}'.format(
+        [reference_sequence.objects.get(id=refSeqID).name for refSeqID in pntFootprint]))
 
     ######################### CHECK EVERY CC OF THE ANALYSISOBJ ################################
     # To see whether the CC supports the pnt
-    #TODO multiprocess this. Would need a managed list
+    # TODO multiprocess this. Would need a managed list
     # Support list would be the the managed list
-
 
     ############# NEW MP CODE #############
 
@@ -1876,7 +1900,6 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
     supportListManager = Manager()
     supportList = supportListManager.list()
     # outputQueue = Queue()
-
 
     for CC in listOfCCsToCheck:
         taskQueue.put(CC)
@@ -1886,21 +1909,18 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
 
     allProcesses = []
 
-
     db.connections.close_all()
 
     for N in range(cores):
-        p = Process(target=workerArtefactOne, args=(taskQueue, supportList, cctorefabunddict, pnt, cctocurrentinitialtypedict))
+        p = Process(target=workerArtefactOne,
+                    args=(taskQueue, supportList, cctorefabunddict, pnt, cctocurrentinitialtypedict))
         allProcesses.append(p)
         p.start()
 
     for p in allProcesses:
         p.join()
 
-
     #######################################
-
-
 
     ####################### IF PNT SUPPORTED CREATE PNT AND REDISTRIBUTE SUPPORTING CCs ############
     # Once the list of CCs that support has been made, then check to see if support is great enough. If it is then
@@ -1925,7 +1945,6 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
         footprint = newAnalysisType.getOrderedFootprintList()
         typefootprintdict[newAnalysisType.id] = [nonArtefactIDs, refSeqIDs, artefactIntraIDs, footprint]
 
-
         ################# REDISTRIBUTE SUPPORTING TYPES ###############
         # Now remove the CCs from the types they were previously associated to and update the
         # cctocurrentinitialtypedict accordingly. # We will also likely need to reinitiate each of the types
@@ -1934,7 +1953,7 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
         # So first get a list of the types that have been effected
         setOfTypesAffected = set()
         # at the same time create a dict that tracks which CCs need to be remvoed from each type
-        typeToCCToBeRemovedDict = defaultdict(list) # we may have to do this manually instead of defaultdict
+        typeToCCToBeRemovedDict = defaultdict(list)  # we may have to do this manually instead of defaultdict
         for CC in supportList:
             if CC.id in cctocurrentinitialtypedict.keys():
                 # TODO 08/12/17 again we need to work out which of the types if there are multiples, was effected: DONE but check the new method check_which_type...
@@ -1943,7 +1962,8 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
                     initialTypeID = cctocurrentinitialtypedict[CC.id][0]
                 else:
                     # this will return the analysis_type from the list of analysis types that matches the pnt
-                    initial_type = check_which_type_has_same_basal_seq(pnt, analysis_type.objects.filter(id__in=cctocurrentinitialtypedict[CC.id]))
+                    initial_type = check_which_type_has_same_basal_seq(pnt, analysis_type.objects.filter(
+                        id__in=cctocurrentinitialtypedict[CC.id]))
                     if initial_type:
                         initialTypeID = initial_type.id
                     else:
@@ -1959,7 +1979,6 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
             else:
                 # we don't need to remove this CC from any type but we should add it to the cctocurrentinitialtypedict
                 cctocurrentinitialtypedict[CC.id] = [newAnalysisType.id]
-
 
         # Here we have a set of the type IDs for the types affected and a dict associating the CCs to these types
         # Now go through the types and remove the CCs from the type, change the dict association
@@ -1979,7 +1998,7 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
             anTypeInQ.removeCCListFromInitialCladeCollectionList(listOfCCsToBeRemovedStrID)
 
             # Change the CC associations in the cctocurrent... dict
-            #TODO 08/12/17 remove and add to list DONE.
+            # TODO 08/12/17 remove and add to list DONE.
             for ccstrid in listOfCCsToBeRemovedStrID:
                 cctocurrentinitialtypedict[int(ccstrid)].remove(anType)
                 cctocurrentinitialtypedict[int(ccstrid)].append(newAnalysisType.id)
@@ -1989,20 +2008,22 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
             # If it does then reinitiate it
             ################ IF SUPPORTED ##################
 
-
-            listOfCCsInType = [cc for cc in clade_collection.objects.filter(id__in=[int(x) for x in anTypeInQ.listOfCladeCollectionsFoundInInitially.split(',') if x != ''])]
+            listOfCCsInType = [cc for cc in clade_collection.objects.filter(
+                id__in=[int(x) for x in anTypeInQ.listOfCladeCollectionsFoundInInitially.split(',') if x != ''])]
             if len(listOfCCsInType) >= 4:
                 print('Type {} supported by {} CCs. Reinitiating.'.format(anTypeInQ.name, len(listOfCCsInType)))
                 # Then this still has suffiecient support
                 # reinitiate the type
                 # listOfCCs = [cc for cc in clade_collection.objects.filter(id__in=[int(x) for x in anTypeInQ.listOfCladeCollectionsFoundInInitially.split(',')])]
-                anTypeInQ.initTypeAttributes(listOfCC=listOfCCsInType, footprintlistofrefseqs=anTypeInQ.getOrderedFootprintList())
+                anTypeInQ.initTypeAttributes(listOfCC=listOfCCsInType,
+                                             footprintlistofrefseqs=anTypeInQ.getOrderedFootprintList())
             ################ IF UNSUPPORTED #################
             else:
                 # THen this antype no longer has sufficient support
                 # put the CCs into the stranded list and delete this type
                 # also remove the CCs from the dict of types they are associated to
-                print('Type {} no longer supported. Deleting. {} CCs stranded.'.format(anTypeInQ.name, str(len(listOfCCsInType))))
+                print('Type {} no longer supported. Deleting. {} CCs stranded.'.format(anTypeInQ.name,
+                                                                                       str(len(listOfCCsInType))))
 
                 del typefootprintdict[anTypeInQ.id]
                 anTypeInQ.delete()
@@ -2071,7 +2092,8 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
                 # if this footprint already exists then we should associate these CCs to the type that has this footprint
                 # so do this in the dictionary but also add these CCs to the cladeCollectionFoundInInitially list and
                 # reinitiate the type
-                associateCCsToExistingTypeAndUpdateDicts(cctocurrentinitialtypedict, strandedCCs, typeThatExistsID, typefootprintdict=typefootprintdict)
+                associateCCsToExistingTypeAndUpdateDicts(cctocurrentinitialtypedict, strandedCCs, typeThatExistsID,
+                                                         typefootprintdict=typefootprintdict)
 
 
 
@@ -2082,11 +2104,13 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
                 # He we should create a new type based on the CC collection and footprint above
                 # Create new type
                 if not check_if_intrasInCommonList_contains_multiple_basal_seqs(intrasInCommonList):
-                    makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict, clade, intrasInCommonList, strandedCCs,
-                                               typefootprintdict)
+                    makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict, clade, intrasInCommonList,
+                                                             strandedCCs,
+                                                             typefootprintdict)
         else:
-            reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict, cctorefabunddict, clade, strandedCCs,
-                                          typefootprintdict)
+            reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict, cctorefabunddict, clade,
+                                                        strandedCCs,
+                                                        typefootprintdict)
         return True
 
     ############## IF PNT INSUFFICIENT SUPPORT RETURN FALSE ################
@@ -2094,6 +2118,7 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
         print('\nInsufficient support for potential new type')
         return False
     return
+
 
 def check_which_type_has_same_basal_seq(pnt, list_of_type_objects):
     '''This should return the typeobject that has the same basal sequence as the pnt
@@ -2131,6 +2156,7 @@ def check_which_type_has_same_basal_seq(pnt, list_of_type_objects):
             return at
     return False
 
+
 def workerArtefactOne(input, supportList, cctorefabunddict, pnt, cctocurrentinitialtypedict):
     # pnt is a list of tuples, where 0 is a references sequence and 1 is the required relative abundance
 
@@ -2148,8 +2174,6 @@ def workerArtefactOne(input, supportList, cctorefabunddict, pnt, cctocurrentinit
 
         # listOfRefSeqsInCC = [dsss.referenceSequenceOf for dsss in data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=CC)]
 
-
-
         # Keep track of what proportion of the CCs sequences this type makes up
         pntSeqRelAbundForCC = []
         for intraReq in pnt:
@@ -2166,10 +2190,8 @@ def workerArtefactOne(input, supportList, cctorefabunddict, pnt, cctocurrentinit
                 break
         # met = were all requirements met
 
-
-
         ############# IF REQUIREMENTS MET CHECK TO SEE IF PNT SEQS REPRESENT MORE THAN CURRENT TYPE FOR CC #########
-        if met: #PNT divs are found in CC
+        if met:  # PNT divs are found in CC
             # The proportion of the CC that the pnt under consideration represents
             pntSeqTotRelAbundForCC = sum(pntSeqRelAbundForCC)
 
@@ -2229,7 +2251,9 @@ def workerArtefactOne(input, supportList, cctorefabunddict, pnt, cctocurrentinit
                 supportList.append(CC)
     return
 
-def associateCCsToExistingTypeAndUpdateDicts(cctocurrentinitialtypedict, strandedCCs, typeThatExistsID, typefootprintdict):
+
+def associateCCsToExistingTypeAndUpdateDicts(cctocurrentinitialtypedict, strandedCCs, typeThatExistsID,
+                                             typefootprintdict):
     for CC in strandedCCs:
         cctocurrentinitialtypedict[CC.id] = [typeThatExistsID]
     try:
@@ -2254,7 +2278,9 @@ def associateCCsToExistingTypeAndUpdateDicts(cctocurrentinitialtypedict, strande
     footprint = typeThatExists.getOrderedFootprintList()
     typefootprintdict[typeThatExists.id] = [nonArtefactIDs, refSeqIDs, artefactIntraIDs, footprint]
 
-def makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict, clade, intrasInCommonList, strandedCCs, typefootprintdict):
+
+def makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict, clade, intrasInCommonList, strandedCCs,
+                                             typefootprintdict):
     newAnalysisType = analysis_type(dataAnalysisFrom=analysisObj, clade=clade)
     listOfCCs = list(strandedCCs)
     listOfRefSeqs = intrasInCommonList
@@ -2273,8 +2299,9 @@ def makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict, clade, 
         cctocurrentinitialtypedict[CC.id] = [newAnalysisType.id]
     return newAnalysisType.name
 
-def reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict, cctorefabunddict, clade, strandedCCs, typefootprintdict):
 
+def reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict, cctorefabunddict, clade, strandedCCs,
+                                                typefootprintdict):
     # Here we have a number of CCs in the stranded list < 4. We need to work out what to do with them
     # I think at this point we don't want to make any inference with them
     # We will make sure that when we are getting the list of CCs to look for support in that we will not
@@ -2285,7 +2312,7 @@ def reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict, ccto
     # We need to reassociate them to the best possible types
     # For each CC we are going to do a sort of mini type assignment
 
-    #DONE because a lot of the single intra types will have been gotten rid of at this point
+    # DONE because a lot of the single intra types will have been gotten rid of at this point
     # there is a possibility that there will not be a type for the CCs to fit into
     # Also it may be that the CCs now fit into a lesser intra single intra type. e.g. B5c if original type was B5-B5s-B5c.
     # In this case we would obviously rather have the type B5 associated with the CC.
@@ -2295,7 +2322,6 @@ def reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict, ccto
     # In this case we will also need to make the Maj intra the type.
     if strandedCCs:
         print('Insufficient stranded CCs ({}) to support a new type. Reassociating...'.format(len(strandedCCs)))
-
 
         for CC in strandedCCs:
             # Get new list of an types for each CC in case types are made
@@ -2370,16 +2396,18 @@ def reassociateCCsToExistingTypesAndUpdateDicts(cctocurrentinitialtypedict, ccto
                 footprint = matchType.getOrderedFootprintList()
                 typefootprintdict[matchType.id] = [nonArtefactIDs, refSeqIDs, artefactIntraIDs, footprint]
 
-
                 print('Stranded CC {} reassociated to {}'.format(CC, matchType.name))
             else:
                 # Here we need to create a new type that is simply the Maj intra and associate the CC to it
-                newAnalysisTypeName = makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict=cctocurrentinitialtypedict, clade=clade, intrasInCommonList=[refSeq], strandedCCs=[CC], typefootprintdict=typefootprintdict)
+                newAnalysisTypeName = makeNewTypeAndAssociateCCsAndUpdateDicts(
+                    cctocurrentinitialtypedict=cctocurrentinitialtypedict, clade=clade, intrasInCommonList=[refSeq],
+                    strandedCCs=[CC], typefootprintdict=typefootprintdict)
                 # print('Stranded CC {} associated to new type {}'.format(CC, newAnalysisTypeName))
 
             #### DELETE ME #####
             # print('Stranded CC {} reassociated to {}'.format(CC, matchType.name))
     return
+
 
 def createTotalSeqsDictForAllCCs(cores):
     # Generate a dict that simply holds the total number of seqs per CC
@@ -2403,17 +2431,15 @@ def createTotalSeqsDictForAllCCs(cores):
 
         listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections()]
 
-
         taskQueue = Queue()
         CCToTotalSeqstManager = Manager()
         CCToTotalSeqsDict = CCToTotalSeqstManager.dict()
-        #outputQueue = Queue()
-
+        # outputQueue = Queue()
 
         for CC in listOfCCsToCheck:
             taskQueue.put(CC)
 
-        for N in range(cores): # TODO Change back to cores
+        for N in range(cores):  # TODO Change back to cores
             taskQueue.put('STOP')
 
         allProcesses = []
@@ -2427,7 +2453,6 @@ def createTotalSeqsDictForAllCCs(cores):
         # yep this is what was causing the problem so we will need to find some way of defining the location of the database relatively.
         # DONE. I have changed the settings.py file so that the DB location is now relative to the position of the settings.py file
 
-
         for N in range(cores):
             p = Process(target=workerCCToTotalSeqsDict, args=(taskQueue, CCToTotalSeqsDict))
             allProcesses.append(p)
@@ -2439,6 +2464,7 @@ def createTotalSeqsDictForAllCCs(cores):
         # pickle.dump(CCToTotalSeqsDict, open("CCToTotalSeqsDict_{}".format(analysisObj.id), "wb"))
 
         return CCToTotalSeqsDict
+
 
 def createRefSeqRelAbundsForAllCCsDict(CCToTotalSeqsDict, cores):
     # Generate dict per cc for listof reference sequences and their abundances in the CC
@@ -2464,13 +2490,11 @@ def createRefSeqRelAbundsForAllCCsDict(CCToTotalSeqsDict, cores):
         #         innerDict[listOfRefSeqsInCC[i]] = listOfAbundances[i]
         #     CCToRefSeqListAndAbundances[CC.id] = innerDict
 
-        #Start the multithreading
+        # Start the multithreading
 
         taskQueue = Queue()
         CCToRefSeqListAndAbundancesManager = Manager()
         CCToRefSeqListAndAbundancesDict = CCToRefSeqListAndAbundancesManager.dict()
-
-
 
         for CC in listOfCCsToCheck:
             taskQueue.put(CC)
@@ -2480,12 +2504,11 @@ def createRefSeqRelAbundsForAllCCsDict(CCToTotalSeqsDict, cores):
 
         allProcesses = []
 
-
         db.connections.close_all()
 
-
         for N in range(cores):
-            p = Process(target=workerCCToRefSeqListAndAbundances, args=(taskQueue, CCToTotalSeqsDict, CCToRefSeqListAndAbundancesDict))
+            p = Process(target=workerCCToRefSeqListAndAbundances,
+                        args=(taskQueue, CCToTotalSeqsDict, CCToRefSeqListAndAbundancesDict))
             allProcesses.append(p)
             p.start()
 
@@ -2495,6 +2518,7 @@ def createRefSeqRelAbundsForAllCCsDict(CCToTotalSeqsDict, cores):
         # pickle.dump(CCToRefSeqListAndAbundancesDict, open("CCToRefSeqListAndAbundances_{}".format(analysisObj.id), "wb"))
 
         return CCToRefSeqListAndAbundancesDict
+
 
 def workerCCToRefSeqListAndAbundances(input, CCToTotalSeqsDict, CCToRefSeqListAndAbundances):
     for CC in iter(input.get, 'STOP'):
@@ -2506,6 +2530,7 @@ def workerCCToRefSeqListAndAbundances(input, CCToTotalSeqsDict, CCToRefSeqListAn
         for i in range(len(listOfDSSSInCC)):
             innerDict[listOfRefSeqsInCC[i]] = listOfAbundances[i]
         CCToRefSeqListAndAbundances[CC.id] = innerDict
+
 
 def createTypeArtefactDivInfoDict(allTypesFromDataAnalysis, cores):
     # Create dict for each type of refSeqs, artefact and non-artefact DIVs, and footprint
@@ -2526,6 +2551,7 @@ def createTypeArtefactDivInfoDict(allTypesFromDataAnalysis, cores):
 
     return typeFootPrintDict
 
+
 def createCCtoInitialTypeDict(allTypesFromDataAnalysis):
     CCToInitialTypeDict = defaultdict(list)
     CCtoTypeTupleList = []
@@ -2540,6 +2566,7 @@ def createCCtoInitialTypeDict(allTypesFromDataAnalysis):
         CCToInitialTypeDict[ccid].append(atid)
     return dict(CCToInitialTypeDict)
 
+
 def check_if_type_pairs_contain_incompatible_basal_seqs(typea, typeb):
     '''The aim of this function is simply to identify whether types contain seqs that are
     incombpatible basals, ie. if a contins C3 and then b contains either c1 or c15 then we don't want
@@ -2549,7 +2576,7 @@ def check_if_type_pairs_contain_incompatible_basal_seqs(typea, typeb):
     refSeqsA = typea.getOrderedFootprintList()
     refSeqsB = typeb.getOrderedFootprintList()
 
-    #first check to see if we have a basal seq in a.
+    # first check to see if we have a basal seq in a.
     # If we don't then we can't have an compataility
     basalInA = []
     foundC15A = False
@@ -2582,12 +2609,12 @@ def check_if_type_pairs_contain_incompatible_basal_seqs(typea, typeb):
         return True
     return False
 
+
 def checkForAdditionalArtefactTypes(cores):
     # Generate a dict that simply holds the total number of seqs per CC
     # This will be used when working out relative proportions of seqs in the CC
 
     CCToTotalSeqsDict = createTotalSeqsDictForAllCCs(cores)
-
 
     # Generate dict per cc for listof reference sequences and their abundances in the CC
     CCToRefSeqListAndAbundances = createRefSeqRelAbundsForAllCCsDict(CCToTotalSeqsDict, cores)
@@ -2608,7 +2635,7 @@ def checkForAdditionalArtefactTypes(cores):
     CCToInitialTypeDict = createCCtoInitialTypeDict(allTypesFromDataAnalysis)
 
     # Do pairwise comparison of types within clades
-    #TODO 08/12/17
+    # TODO 08/12/17
     # I have gone through all of the remaining code in this function and fixed the cc to initial type dict
     # so that it is compatible with ccts having multiple types.
     # we still need to do the other artefact checking
@@ -2619,8 +2646,6 @@ def checkForAdditionalArtefactTypes(cores):
         doneList = []
         while 1:
             restart = False
-
-
 
             # Pairwise comparison of types within clade
 
@@ -2635,7 +2660,6 @@ def checkForAdditionalArtefactTypes(cores):
                 # Check to see if the pairs have already been done as we will be running through this process several
                 # times in all likelihood
 
-
                 if (a.id, b.id) not in doneList:
                     listOfNonArtefactIntrasA = typeFootPrintDict[a.id][0]
                     listOfNonArtefactIntrasB = typeFootPrintDict[b.id][0]
@@ -2649,7 +2673,8 @@ def checkForAdditionalArtefactTypes(cores):
                         # If all of the nonArtefact intras of A are found in the footprint of B
                         # and if all of the nonArtefact intras of B are found in footprint of A.
                         # i.e. if only artefact intras differentiate the types
-                        if set(listOfNonArtefactIntrasA).issubset(typeFootPrintDict[b.id][1]) and set(listOfNonArtefactIntrasB).issubset(typeFootPrintDict[a.id][1]):
+                        if set(listOfNonArtefactIntrasA).issubset(typeFootPrintDict[b.id][1]) and set(
+                                listOfNonArtefactIntrasB).issubset(typeFootPrintDict[a.id][1]):
                             # Check to see whether either a or b are subsets of each other
                             aSubsetB = typeFootPrintDict[a.id][1].issubset(typeFootPrintDict[b.id][1])
                             bSubsetA = typeFootPrintDict[b.id][1].issubset(typeFootPrintDict[a.id][1])
@@ -2660,7 +2685,9 @@ def checkForAdditionalArtefactTypes(cores):
                                 if listOfArtefactIntrasInBothTypes:
                                     # Here we have finally found a type pairing that needs to be checked
                                     print('\nChecking {} and {} for additional artefactual profiles'.format(a, b))
-                                    if checkTypePairingForArtefactType(a, b, typeFootPrintDict, clade, CCToInitialTypeDict, CCToTotalSeqsDict, CCToRefSeqListAndAbundances, cores):
+                                    if checkTypePairingForArtefactType(a, b, typeFootPrintDict, clade,
+                                                                       CCToInitialTypeDict, CCToTotalSeqsDict,
+                                                                       CCToRefSeqListAndAbundances, cores):
                                         # If we did find a new type then we need to start the a,b comparison again
                                         # It should be quick though due to the doneList
                                         restart = True
@@ -2671,7 +2698,8 @@ def checkForAdditionalArtefactTypes(cores):
                                         # that are found in common between the original types list and an
                                         # updated types list. This way no newly added types will be analysed.
                                         # and we should avoid a run away situation
-                                        allTypesFromDataAnalysis = analysis_type.objects.filter(dataAnalysisFrom=analysisObj, clade=clade)
+                                        allTypesFromDataAnalysis = analysis_type.objects.filter(
+                                            dataAnalysisFrom=analysisObj, clade=clade)
                                         break
                                     else:
                                         doneList.extend([(a.id, b.id), (b.id, a.id)])
@@ -2702,11 +2730,14 @@ def checkForAdditionalArtefactTypes(cores):
 
     return CCToTotalSeqsDict, CCToRefSeqListAndAbundances, typeFootPrintDict, CCToInitialTypeDict
 
+
 def workerCCToTotalSeqsDict(input, cctototalseqsdict):
     for CC in iter(input.get, 'STOP'):
         print('\r{} {}'.format(CC, current_process().name), end='')
-        totSeqsInCC = sum([dsss.abundance for dsss in data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=CC)])
+        totSeqsInCC = sum(
+            [dsss.abundance for dsss in data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=CC)])
         cctototalseqsdict[CC.id] = totSeqsInCC
+
 
 def workerDiscoveryTwoWorker(input, output, withncladecutoff):
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
@@ -2721,6 +2752,7 @@ def workerDiscoveryTwoWorker(input, output, withncladecutoff):
         print('\rFound footprint {}'.format(footPrintInQ), end='')
         # print('Found footprint {}'.format(footPrintInQ))
     output.put('kill')
+
 
 def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
     ''' The object of this function is to check a given set of referncesequence objects and see if it contains multiple
@@ -2742,9 +2774,10 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
             # Here we need to check that for each of the CCs we have a C3 dsss in the list of maj seqs
             cctList = footprintdict[keyname][0]
             for i in range(len(cctList)):
-                c3dsss = data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=cctList[i], referenceSequenceOf=rs)
+                c3dsss = data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=cctList[i],
+                                                              referenceSequenceOf=rs)
 
-                #TODO check that whether it is a list that we are adding to
+                # TODO check that whether it is a list that we are adding to
                 # this will probably fail because maj list is currently just a list.
                 # we need to change this to be a 2Dlist we will need to update this when we are first forming the dict
                 if c3dsss not in footprintdict[keyname][1][i]:
@@ -2761,7 +2794,7 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
                 # we need to change this to be a 2Dlist we will need to update this when we are first forming the dict
                 if c1dsss not in footprintdict[keyname][1][i]:
                     footprintdict[keyname][1][i].append(c1dsss)
-        elif 'C15' in rs.name and C15Found == False: # we don't want this to fail just cause we found multiple C15s
+        elif 'C15' in rs.name and C15Found == False:  # we don't want this to fail just cause we found multiple C15s
             # so only count a C15 once
             count += 1
             C15Found = True
@@ -2769,7 +2802,9 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
             cctList = footprintdict[keyname][0]
             for i in range(len(cctList)):
                 # for each cct we need to find the most abundant C15X seq and add this as the majsequence
-                listOfSeqsInCCT = list(data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=cctList[i]).order_by('-abundance'))
+                listOfSeqsInCCT = list(
+                    data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=cctList[i]).order_by(
+                        '-abundance'))
                 for dsss in listOfSeqsInCCT:
                     if 'C15' in dsss.referenceSequenceOf.name:
                         # then this is the seq we want and we want to break after
@@ -2781,15 +2816,16 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
     else:
         return True
 
+
 def check_if_contains_multiple_basal_majs(set_of_maj_ref_seqs_large):
     count = 0
     extract = False
     foundC15 = False
     for rs in set_of_maj_ref_seqs_large:
         if rs.name == 'C3':
-            count +=1
+            count += 1
         elif rs.name == 'C1':
-            count +=1
+            count += 1
         elif 'C15' in rs.name and not foundC15:
             count += 1
             foundC15 = True
@@ -2797,6 +2833,7 @@ def check_if_contains_multiple_basal_majs(set_of_maj_ref_seqs_large):
         extract = True
 
     return extract
+
 
 class initalType():
     # when we collapse an initialType profile we should be careful to remove the maj seqs that are of a reference
@@ -2810,7 +2847,8 @@ class initalType():
         self.support = len(self.cladeCollection_list)
         # We may move away from using the dsss but for the time being we will use it
         if maj_dsss_list:
-            self.majority_sequence_list, self.set_of_maj_ref_seqs = self.create_majority_sequence_list_for_initialType(maj_dsss_list)
+            self.majority_sequence_list, self.set_of_maj_ref_seqs = self.create_majority_sequence_list_for_initialType(
+                maj_dsss_list)
         else:
             self.majority_sequence_list, self.set_of_maj_ref_seqs = self.create_majority_sequence_list_for_initalType_from_scratch()
 
@@ -2860,11 +2898,13 @@ class initalType():
         if self.contains_multiple_basal_sequences:
             for clade_collection_obj in self.cladeCollection_list:
                 temp_dsss_list = []
-                dssstList = list(data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by('-abundance'))
+                dssstList = list(
+                    data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
+                        '-abundance'))
                 # for each of the basal seqs in the basal seqs list, find the dsss representative
                 for basal_seq in self.basalSequence_list:
                     if basal_seq == 'C15':
-                    # Then we just need to find the most abundnant dsss that's name contains the C15
+                        # Then we just need to find the most abundnant dsss that's name contains the C15
 
                         for dsss in dssstList:
                             if 'C15' in dsss.referenceSequenceOf.name:
@@ -2892,25 +2932,26 @@ class initalType():
                 master_dsss_list.append(maj_dsss_list[i])
                 setOfMajRefSeqs.add(maj_dsss_list[i][0].referenceSequenceOf)
 
-
         return master_dsss_list, setOfMajRefSeqs
 
     def create_majority_sequence_list_for_initalType_from_scratch(self):
         # This will be like above but will not start with the maj_dsss_list
         # we will go through each of the cladeCollections of the type and get the maj sequence for the type
 
-        #if the init type has multiple basal sequences then we will have to find the actual maj and the basal seq dsss
+        # if the init type has multiple basal sequences then we will have to find the actual maj and the basal seq dsss
         setOfMajRefSeqs = set()
         master_dsss_list = []
         if self.contains_multiple_basal_sequences:
             for clade_collection_obj in self.cladeCollection_list:
                 temp_dsss_list = []
-                dsss_in_cc = list(data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by('-abundance'))
+                dsss_in_cc = list(
+                    data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
+                        '-abundance'))
                 dsss_in_cc_in_profile = [dsss for dsss in dsss_in_cc if dsss.referenceSequenceOf in self.profile]
                 # first find the dsss that are the representatives of the basal types
                 for basal_seq in self.basalSequence_list:
                     if basal_seq == 'C15':
-                    # Then we just need to find the most abundnant dsss that's name contains the C15
+                        # Then we just need to find the most abundnant dsss that's name contains the C15
 
                         for dsss in dsss_in_cc_in_profile:
                             if 'C15' in dsss.referenceSequenceOf.name:
@@ -2947,7 +2988,6 @@ class initalType():
 
         return master_dsss_list, setOfMajRefSeqs
 
-
     def absorb_large_init_type(self, large_init_type):
         '''The aim of this function is simply to add the infomation of the large init type to that of the small init
         type'''
@@ -2960,7 +3000,7 @@ class initalType():
         '''The aim of this function differs from above. We are extracting support for this small init_type from
         the large_init type. Once we have extracted the support then we will need to reinitialise the bigtype'''
 
-        #1 - create the list of maj dss lists that will be added to the small init type from the large init type
+        # 1 - create the list of maj dss lists that will be added to the small init type from the large init type
         # do this by sending over any dss from the big type that is a refseq of the refseqs that the small and
         # large init types have in common
         large_init_type_ref_seqs = large_init_type.set_of_maj_ref_seqs
@@ -2979,7 +3019,7 @@ class initalType():
                     # Then this is one of the dsss that we should remove from the CC in the big init type and
                     # add to the small init type
                     temp_dss_list.append(large_init_type.majority_sequence_list[i][j])
-                    #NB important to add the referenceSequenceOf before removing the dsss from the large type
+                    # NB important to add the referenceSequenceOf before removing the dsss from the large type
                     new_maj_seq_set.add(large_init_type.majority_sequence_list[i][j].referenceSequenceOf)
                     list_of_dsss_to_remove_from_large_init_type.append(large_init_type.majority_sequence_list[i][j])
             for dsss in list_of_dsss_to_remove_from_large_init_type:
@@ -2989,12 +3029,12 @@ class initalType():
         # At this point we should have a list of maj dss lists that we can extend the small init type with
         # we have also removed the dss in question from the large init type
 
-        #2 Now extract into the small init type
+        # 2 Now extract into the small init type
         self.cladeCollection_list.extend(large_init_type.cladeCollection_list)
         self.majority_sequence_list.extend(temp_majdss_list_list)
         self.set_of_maj_ref_seqs.update(new_maj_seq_set)
 
-        #3 Now modify the large init_type
+        # 3 Now modify the large init_type
         # we have already removed the maj seqs from the large init_type
         # need to change, profile, profile length
         # clade_collection_list should not change
@@ -3019,8 +3059,8 @@ class initalType():
         # remove refSeq from set_of_maj_ref_seqs
         if profRefSeq in self.set_of_maj_ref_seqs:
             self.set_of_maj_ref_seqs.remove(profRefSeq)
-        for i in range(len(small_init_type.cladeCollection_list)): #For each list of dsss
-            for j in small_init_type.cladeCollection_list[i]: # for each dsss
+        for i in range(len(small_init_type.cladeCollection_list)):  # For each list of dsss
+            for j in small_init_type.cladeCollection_list[i]:  # for each dsss
                 if j.referenceSequenceOf == profRefSeq:
                     del small_init_type.cladeCollection_list[i][j]
 
@@ -3029,22 +3069,23 @@ class initalType():
     def __str__(self):
         return str(self.profile)
 
+
 def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nprocessors):
-    #10/12/17 I have just thought of something else we will have to consider. When you have a profile that
+    # 10/12/17 I have just thought of something else we will have to consider. When you have a profile that
     # has a genuine codom type so there are e.g. MAJs of C3 and C3a, what will happen in this cricumstances.
     # For the time being we will not think too much about this and in the initialType profile classes that we are
     # creating, if we find a multiple basal type situation we will be sure to add the maj type to each of the
     # dsss lists.
-    #10/12/17, I also think we can take the opportunity to move away from working with dataSetSampleSequences
+    # 10/12/17, I also think we can take the opportunity to move away from working with dataSetSampleSequences
     # and move towards working with referenceSequences, as it seems that we are always converting them to
     # reference sequences any way. Maybe for the time being we will work with dsss and get things up and running
     # before converting to working with referenceSequences.
-    #09/12/17 I want to make sure that the subsets collapsing is still working and taking into account the
+    # 09/12/17 I want to make sure that the subsets collapsing is still working and taking into account the
     # basal types compatabilites. Actually the subset collapsing is not taking into account basal sequences
     # but this is not a problem. We are essentially just consolidating the larger types into the smaller ones
     # the smaller ones still then have to found as supported using the basal sequences information.
 
-    #09/12/17 This has become unbarably slow. We have an awful lot of redundancy in here that I would like to fix
+    # 09/12/17 This has become unbarably slow. We have an awful lot of redundancy in here that I would like to fix
     # especially when it comes to checking for basal types. So I am going to create some clases which will only be
     # held in RAM. ie. not in the database.
     # class will be initialType. will contain, profile, profile length, contains_multiple_basal_sequences,
@@ -3088,11 +3129,9 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
     # if not supported move to the non-supporetd list
     # next n...
 
-
     # Lists that will hold the footprints that have and do not have support throughout the collapse
     supportedList = []
     unsupportedList = []
-
 
     # convert the footprintList to initalTypes
     initial_types_list = []
@@ -3129,7 +3168,6 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
             if initTThis.profile_length <= n:
                 Seomthing = 'asdf'
 
-
         if n == 9:
             foo = 'bar'
         #
@@ -3151,10 +3189,9 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
             #         foo = 'bar'
             # ### DEBUG ###
 
-
-            if initT.support >= reqsupport and not initT.contains_multiple_basal_sequences: # supported
+            if initT.support >= reqsupport and not initT.contains_multiple_basal_sequences:  # supported
                 supportedList.append(initT)
-            else: # above support threshold
+            else:  # above support threshold
                 unsupportedList.append(initT)
 
         ############# TRY TO COLLAPSE SIZE n FOOTPRINTS INTO SIZE n-1 FOOTPRINTS ################
@@ -3166,11 +3203,10 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
         while repeat:
             collapseDict = {}
             repeat = False
-            nMinusOneList = [initT for initT in initial_types_list if initT.profile_length == n-1]
+            nMinusOneList = [initT for initT in initial_types_list if initT.profile_length == n - 1]
             if nMinusOneList:
 
-
-                for bigFootprint in unsupportedList: # For each big check if small will fit in
+                for bigFootprint in unsupportedList:  # For each big check if small will fit in
 
                     # ### DEBUG ###
                     # debug = False
@@ -3181,8 +3217,8 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     #         foo = 'bar'
                     # ### DEBUG ###
 
-
-                    print('Assessing discovered footprint {} for supported type'.format('-'.join(str(refseq) for refseq in bigFootprint.profile)), end='\r')
+                    print('Assessing discovered footprint {} for supported type'.format(
+                        '-'.join(str(refseq) for refseq in bigFootprint.profile)), end='\r')
                     # These three are so that we only collapse into footprints that have the maj seqs of the bigfootprints
                     # see code futher down
                     # TODO 07/12/17 this is going to cause some problems for our basal checks as we only have one maj listed
@@ -3238,8 +3274,9 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                             # we should put this decision into a new function
 
                             if bigFootprint.contains_multiple_basal_sequences:
-                                if does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(bigFootprint, smallerFootprint):
-                                # if len(bigFootprint.set_of_maj_ref_seqs.intersection(smallerFootprint.profile)) >= 1:
+                                if does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(
+                                        bigFootprint, smallerFootprint):
+                                    # if len(bigFootprint.set_of_maj_ref_seqs.intersection(smallerFootprint.profile)) >= 1:
                                     # score = number of samples big was found in plus num samples small was found in
                                     score = bigFootprint.support + smallerFootprint.support
                                     if score > topScore:
@@ -3287,7 +3324,6 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     count += 1
             print('{} number of keys not found in unsupported list'.format(count))
 
-
             # The collapseDict footprint is now key=large initial type and value = small initial type
 
             # for footPrintToCollapse in collapseDict.keys():
@@ -3312,12 +3348,11 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                 if collapse_dict_keys_list[q] in unsupportedList:
                     appes = 'asdf'
 
-
-
                 #### DEBUG
                 # returns bool representing whether to extract. If false, delete rather than extract
 
-                if collapse_dict_keys_list[q].support >= reqsupport and not collapse_dict_keys_list[q].contains_multiple_basal_sequences:
+                if collapse_dict_keys_list[q].support >= reqsupport and not collapse_dict_keys_list[
+                    q].contains_multiple_basal_sequences:
                     # Then this type has already had some other leftovers put into it so that it now has the required
                     # support. In this case we can remove the type from the unsupported list and continue to the next
                     unsupportedList.remove(collapse_dict_keys_list[q])
@@ -3347,8 +3382,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     # remember that we are simply listing ccts for support and the Majs found in those CCts. We can remove
                     # the subsetted sequences from the footprint of the big and put it back in the dict
 
-
-                    #TODO 171217 consolidating thoughts
+                    # TODO 171217 consolidating thoughts
                     # so below we want to extend the clade collection list of the small with that of the large
                     # this is not a problem to do and very straight forwards
                     # what will cause us more of an issue is the dsss, that we extend with
@@ -3363,13 +3397,9 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     small_init_type = collapseDict[collapse_dict_keys_list[q]]
                     small_init_type.extract_support_from_large_initType(collapse_dict_keys_list[q])
 
+                    # TODO the large init type should remain in the init_type_list
 
-                    #TODO the large init type should remain in the init_type_list
-
-
-
-
-                    #TODO need to check if the new profile created from the original footPrintToCollapse
+                    # TODO need to check if the new profile created from the original footPrintToCollapse
                     #  that has now had the small)init_type extracted from it is already shared with another init_type
                     # If so then we need to combine the init_types.
                     # else then we don't need to do anything
@@ -3378,7 +3408,8 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     # There should only be a maximum of one initT that has the same
                     match = False
                     for p in range(len(initial_types_list)):
-                        if initial_types_list[p].profile == collapse_dict_keys_list[q].profile and initial_types_list[p] != collapse_dict_keys_list[q]:
+                        if initial_types_list[p].profile == collapse_dict_keys_list[q].profile and initial_types_list[
+                            p] != collapse_dict_keys_list[q]:
                             ### DEBUG ###
                             if p == 63:
                                 apples = 'asdf'
@@ -3398,11 +3429,11 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
 
                             # Should this just be the same as when a small initT absorbs a large initT?
                             # I think so but lets check
-                            #TODO check to see that this is appropriate
+                            # TODO check to see that this is appropriate
                             # we need to check specifically if the initial_types[p] is found in the types that
                             # still need to be collapsed. so we need to slice here.
                             match = True
-                            if initial_types_list[p] in collapse_dict_keys_list[q+1:]:
+                            if initial_types_list[p] in collapse_dict_keys_list[q + 1:]:
                                 # then we need to collapse into the found type
                                 # because this collapsing can cause the matching type that is also in the collapse
                                 # dict to gain support we will also check to if each of the types in the collapse dict
@@ -3414,7 +3445,6 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                 break
                             else:
                                 collapse_dict_keys_list[q].absorb_large_init_type(initial_types_list[p])
-
 
                                 # The initT will also need removing from the unsupportedList if it is in there
                                 # This is causing a problem
@@ -3441,7 +3471,8 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                     # now we need to check to see if the collapse_dict_keys_list[q] type has support bigger then
                                     # the required. If it does, then it should also be removed from the unsupported list
 
-                                    if collapse_dict_keys_list[q].support >= reqsupport and not collapse_dict_keys_list[q].contains_multiple_basal_sequences:
+                                    if collapse_dict_keys_list[q].support >= reqsupport and not collapse_dict_keys_list[
+                                        q].contains_multiple_basal_sequences:
                                         unsupportedList.remove(collapse_dict_keys_list[q])
                                     else:
                                         # if it doesn't have support then we simply leave it in the unsupportedlist
@@ -3456,15 +3487,10 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                             except:
                                 apples = 'wer'
 
-
-
-
-                    #TODO the large init_type does not need removing from the initial type list.
+                    # TODO the large init_type does not need removing from the initial type list.
                     # but we still need to do the check to see if the profile length is SMALLER than n. If it is smaller
                     # then n then we should remove it from the unsupported list else we should leave it in the
                     # unsupported list.
-
-
 
         if n > 2:
 
@@ -3512,7 +3538,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     taskQueue = Queue()
                     collapseNMerDictManager = Manager()
                     collapseNMerDict = collapseNMerDictManager.dict()
-                    #outputQueue = Queue()
+                    # outputQueue = Queue()
 
                     for nLengthType in listOfTypesOfLengthN:
                         taskQueue.put(nLengthType.profile)
@@ -3544,8 +3570,8 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     #     # nLengthType should be a frozen set so we will take the refSeqs it contains and add them to the setOfRefSeqs...
                     #     setOfRefSeqsOfSmpSeqsFoundInCCsOfLengthN.update([refSeq for refSeq in nLengthType])
 
-                    #Now go through each of the (n-1)mer footprints and see if they fit into a footprint in the unsuported list
-                    #This dict value = the synthetic footprint of length n-1, value, a list of unsupported types that are mastersets of the synthetic footprint
+                    # Now go through each of the (n-1)mer footprints and see if they fit into a footprint in the unsuported list
+                    # This dict value = the synthetic footprint of length n-1, value, a list of unsupported types that are mastersets of the synthetic footprint
 
                     # collapseNMerDict = {frozenset(tup): [] for tup in itertools.combinations(setOfRefSeqsOfSmpSeqsFoundInCCsOfLengthN, n-1)}
                     print('\rGenerated {} Synthetic footprints'.format(len(collapseNMerDict)), end='')
@@ -3555,7 +3581,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     # This info is used to make sure that when collapsing types the maj sequences are shared between the
                     # larger and smaller types
 
-                    #TODO 231217 we should no longer need this
+                    # TODO 231217 we should no longer need this
                     # majRefSeqsDict = {}
                     # for nLengthType in unsupportedList:
                     #     listOfAnalysesSampleSequencesLarge = []
@@ -3567,27 +3593,26 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     #     majRefSeqsDict[nLengthType] = setOfMajRefSeqsLarge
 
                     ## Items for printing out our progress
-                    total = len(collapseNMerDict)*len(unsupportedList)
+                    total = len(collapseNMerDict) * len(unsupportedList)
                     count = 0
                     printVal = 0.01
                     print('\rChecking new set of synthetic types', end='')
 
-
-                    for frTupKey in collapseNMerDict.keys(): # for each of the synthetic footprints
+                    for frTupKey in collapseNMerDict.keys():  # for each of the synthetic footprints
                         # TODO 10/01/18 we need to check that each of the frTupKeys contains multiple basal seqs
                         # If it does then we can't collapse into it.
                         if does_set_of_ref_seqs_contain_multiple_basal_types(frTupKey):
                             continue
-                        for nLengthType in unsupportedList: # for each of the unsupported init_types
+                        for nLengthType in unsupportedList:  # for each of the unsupported init_types
                             ## Items for printing out progress
                             count += 1
-                            percentComplete = count/total
+                            percentComplete = count / total
                             if percentComplete > printVal:
                                 print("\r%.2f" % percentComplete, end='')
                                 printVal = max([printVal + 0.01, percentComplete + 0.01])
 
-                        #For each of the N-1mers see if they fit within the unsupported types
-                        # if so then add the footprint into the n-1mers list
+                            # For each of the N-1mers see if they fit within the unsupported types
+                            # if so then add the footprint into the n-1mers list
                             # we should check for the maj rule again. I.e. we should want all of the Majs of the footprint in Q to be in the kmer footprint
                             # maybe recycle code for this
                             if frTupKey.issubset(nLengthType.profile):
@@ -3605,50 +3630,54 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     ## DEBUG TO INSPECT collapseNMERDICT ##
                     apples = dict(collapseNMerDict)
 
-                    listOfnKmersWithCollapsableFootprints = [kmer for kmer in collapseNMerDict.keys() if len(collapseNMerDict[kmer]) > 1]
+                    listOfnKmersWithCollapsableFootprints = [kmer for kmer in collapseNMerDict.keys() if
+                                                             len(collapseNMerDict[kmer]) > 1]
                     # No need to continue if there are no footprints that match the nKmers
                     if listOfnKmersWithCollapsableFootprints:
                         # We now go through the kmers according to the number of footprints they were found in
-                        orderedListOfPopulatedKmers = sorted(listOfnKmersWithCollapsableFootprints, key=lambda x: len(collapseNMerDict[x]), reverse=True)
+                        orderedListOfPopulatedKmers = sorted(listOfnKmersWithCollapsableFootprints,
+                                                             key=lambda x: len(collapseNMerDict[x]), reverse=True)
 
                         for kmer in orderedListOfPopulatedKmers:
-                            #for each initType in the kmer lists
+                            # for each initType in the kmer lists
 
-                        #     ###DEBUG
-                        #     for bigFootprintToCollapse in collapseNMerDict[kmer]:
-                        #         for cc in bigFootprintToCollapse.cladeCollection_list:
-                        #             if cc.dataSetSampleFrom.name == 'FS1PC9-FS1PC9-N708' and cc.clade == 'C' and n == 4:
-                        #                 apples = 'asdf'
-                        #
-                        #
-                        #
-                        #
-                        #
-                        # for kmer in orderedListOfPopulatedKmers:
-                        #     #for each initType in the kmer lists
-                        #     for initT_check in initial_types_list:
-                        #         for cc in initT_check.cladeCollection_list:
-                        #             if cc.dataSetSampleFrom.name in ['FS1PC9-FS1PC9-N708', 'ZB49'] and cc.clade == 'C' and len(initT_check.profile) > 2:
-                        #                 debug = True
-                        #                 print('profile = {}, KMER = {}'.format(initT_check.profile, kmer))
-                        #
-                        #     for bigFootprintToCollapse in collapseNMerDict[kmer]:
-                        #         for cc in bigFootprintToCollapse.cladeCollection_list:
-                        #             if cc.dataSetSampleFrom.name == 'FS1PC9-FS1PC9-N708' and cc.clade == 'C' and n == 4:
-                        #                 apples = 'asdf'
-                        #
-                        #     ##### DEBUG
+                            #     ###DEBUG
+                            #     for bigFootprintToCollapse in collapseNMerDict[kmer]:
+                            #         for cc in bigFootprintToCollapse.cladeCollection_list:
+                            #             if cc.dataSetSampleFrom.name == 'FS1PC9-FS1PC9-N708' and cc.clade == 'C' and n == 4:
+                            #                 apples = 'asdf'
+                            #
+                            #
+                            #
+                            #
+                            #
+                            # for kmer in orderedListOfPopulatedKmers:
+                            #     #for each initType in the kmer lists
+                            #     for initT_check in initial_types_list:
+                            #         for cc in initT_check.cladeCollection_list:
+                            #             if cc.dataSetSampleFrom.name in ['FS1PC9-FS1PC9-N708', 'ZB49'] and cc.clade == 'C' and len(initT_check.profile) > 2:
+                            #                 debug = True
+                            #                 print('profile = {}, KMER = {}'.format(initT_check.profile, kmer))
+                            #
+                            #     for bigFootprintToCollapse in collapseNMerDict[kmer]:
+                            #         for cc in bigFootprintToCollapse.cladeCollection_list:
+                            #             if cc.dataSetSampleFrom.name == 'FS1PC9-FS1PC9-N708' and cc.clade == 'C' and n == 4:
+                            #                 apples = 'asdf'
+                            #
+                            #     ##### DEBUG
                             for k in range(len(collapseNMerDict[kmer])):
                                 # chek to see if the footprint is still in the unsupportedlist #TODO!! 11/01/18 also need to check that the bigFootprint hasn't already been collapsed
                                 # if it isn't then it has already been associated to a new footprint
                                 #   pass it over
-                                if collapseNMerDict[kmer][k] in unsupportedList and kmer.issubset(collapseNMerDict[kmer][k].profile): # Then this footprint hasn't been collapsed anywhere yet. Here we also check to make sure that the profile hasn't been changed
+                                if collapseNMerDict[kmer][k] in unsupportedList and kmer.issubset(
+                                        collapseNMerDict[kmer][
+                                            k].profile):  # Then this footprint hasn't been collapsed anywhere yet. Here we also check to make sure that the profile hasn't been changed
                                     # if an init_type already exists with the profile (kmer) in question then add the big init_type to it
-                                    #TODO 231217 we will have to check whether the big init_type is a multiple basal seqs
+                                    # TODO 231217 we will have to check whether the big init_type is a multiple basal seqs
                                     # and therefore whether this is an extraction or a absorption
                                     exists = False
                                     for i in range(len(initial_types_list)):
-                                    # for initT_one in initial_types_list:
+                                        # for initT_one in initial_types_list:
                                         if initial_types_list[i].profile == kmer:
                                             exists = True
                                             # TODO 231217 we will have to check whether the big init_type is a multiple basal seqs
@@ -3659,23 +3688,26 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                             if collapseNMerDict[kmer][k].contains_multiple_basal_sequences:
                                                 # TODO 231317 this still needs writing
                                                 # Then we need to extract
-                                                initial_types_list[i].extract_support_from_large_initType(collapseNMerDict[kmer][k])
+                                                initial_types_list[i].extract_support_from_large_initType(
+                                                    collapseNMerDict[kmer][k])
 
                                                 # Once we have extracted into the smaller type
                                                 # check to see if the big init Type still contains set_of_maj_ref_seqs
                                                 if collapseNMerDict[kmer][k].set_of_maj_ref_seqs:
-                                                    #TODO!!!! 10/01/18 we first need to check if the new profile already exists and if it does we need to do as we do above and add it to the similar one
+                                                    # TODO!!!! 10/01/18 we first need to check if the new profile already exists and if it does we need to do as we do above and add it to the similar one
                                                     # if the big init type still exists with maj containing profiles
                                                     # then remove from unsupported list
                                                     for j in range(len(initial_types_list)):
-                                                    # for initT_two in initial_types_list:
-                                                        #DEBUG
-                                                        if j == 22 and k ==2 and i == 553:
+                                                        # for initT_two in initial_types_list:
+                                                        # DEBUG
+                                                        if j == 22 and k == 2 and i == 553:
                                                             appelse = 'pears'
                                                             if collapseNMerDict[kmer][k] in unsupportedList:
                                                                 apples = 'peras'
                                                         wewerehere = False
-                                                        if initial_types_list[j].profile == collapseNMerDict[kmer][k].profile and initial_types_list[j] != collapseNMerDict[kmer][k]:
+                                                        if initial_types_list[j].profile == collapseNMerDict[kmer][
+                                                            k].profile and initial_types_list[j] != \
+                                                                collapseNMerDict[kmer][k]:
                                                             wewerehere = True
                                                             # Then we have found an initT that has an exact match for the large initT in Q
                                                             # In this case we need to create a single initType that is a combination of the two
@@ -3689,7 +3721,8 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                                             # Should this just be the same as when a small initT absorbs a large initT?
                                                             # I think so but lets check
                                                             # TODO check to see that this is appropriate
-                                                            collapseNMerDict[kmer][k].absorb_large_init_type(initial_types_list[j])
+                                                            collapseNMerDict[kmer][k].absorb_large_init_type(
+                                                                initial_types_list[j])
 
                                                             # the initT will need removing from the inital_types_list and the unsupportedList as it no longer exists.
                                                             if initial_types_list[j] in unsupportedList:
@@ -3719,26 +3752,30 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                                 initial_types_list.remove(collapseNMerDict[kmer][k])
                                                 unsupportedList.remove(collapseNMerDict[kmer][k])
                                             break
-                                    if not exists: # then the kmer was not already represented by an existing initT
-                                        #TODO 270118 We need to check to see if the big type is contains mutiple
+                                    if not exists:  # then the kmer was not already represented by an existing initT
+                                        # TODO 270118 We need to check to see if the big type is contains mutiple
                                         # basal if it does then we should extract as above. This should be exactly the
                                         # same code as above but extracting into a new type rather than an existing one
-                                        #Try to create a blank type
+                                        # Try to create a blank type
                                         ########## NEW ###########
                                         if collapseNMerDict[kmer][k].contains_multiple_basal_sequences:
-                                            new_blank_initial_type = initalType(refSeq_set=kmer, cladeCollection_list=list(collapseNMerDict[kmer][k].cladeCollection_list))
+                                            new_blank_initial_type = initalType(refSeq_set=kmer,
+                                                                                cladeCollection_list=list(
+                                                                                    collapseNMerDict[kmer][
+                                                                                        k].cladeCollection_list))
                                             initial_types_list.append(new_blank_initial_type)
 
                                             # now remove the above new type's worth of info from the current big footprint
-                                            collapseNMerDict[kmer][k].substract_init_type_from_other_init_type(new_blank_initial_type)
-
+                                            collapseNMerDict[kmer][k].substract_init_type_from_other_init_type(
+                                                new_blank_initial_type)
 
                                             if collapseNMerDict[kmer][k].set_of_maj_ref_seqs:
                                                 # we first need to check if the new profile already exists and if it does we need to do as we do above and add it to the similar one
                                                 # if the big init type is still exists with maj containing profiles
                                                 # then remove from unsupported list
                                                 for initT in initial_types_list:
-                                                    if initT.profile == collapseNMerDict[kmer][k].profile and initT != collapseNMerDict[kmer][k]:
+                                                    if initT.profile == collapseNMerDict[kmer][k].profile and initT != \
+                                                            collapseNMerDict[kmer][k]:
                                                         # Then we have found an initT that has an exact match for the large initT in Q
                                                         # In this case we need to create a single initType that is a combination of the two
                                                         # Let's add the existing initT to the footPinrtToCollapse
@@ -3782,9 +3819,11 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                         # NB i have made it so that if initalType() doesn't get a majdsss list then it will create one from scratch
                                         ######## ALSO CHANGED ########
                                         else:
-                                            new_initial_type = initalType(refSeq_set=kmer, cladeCollection_list=collapseNMerDict[kmer][k].cladeCollection_list)
+                                            new_initial_type = initalType(refSeq_set=kmer,
+                                                                          cladeCollection_list=collapseNMerDict[kmer][
+                                                                              k].cladeCollection_list)
                                             initial_types_list.append(new_initial_type)
-                                        #
+                                            #
                                             # now delete the big init_type from the intial types list and from the unsupportedList
                                             initial_types_list.remove(collapseNMerDict[kmer][k])
                                             if collapseNMerDict[kmer][k] in unsupportedList:
@@ -3819,14 +3858,14 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
             # be able to return the footprint list
             while unsupportedList:
                 unsupFp = unsupportedList[0]
-                
+
                 # For each clade collection
-                #TODO 241217 we need to do each cladeCollection individually here bear in mind.
+                # TODO 241217 we need to do each cladeCollection individually here bear in mind.
                 for i in range(len(unsupFp.cladeCollection_list)):
                     # check each maj dsss
                     for maj_dss in unsupFp.majority_sequence_list[i]:
                         # Check to see if an initial type with profile of that maj_dss refseq already exists
-                        #TODO 241217 it may be worth having a dictionary of the profiles and init types to speed this up.
+                        # TODO 241217 it may be worth having a dictionary of the profiles and init types to speed this up.
                         # Let's see how slow it is.
                         found = False
                         for initT in [init for init in initial_types_list if init.profile_length == 1]:
@@ -3851,7 +3890,8 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                 break
                         if not found:
                             # If the type init_type doesn't already exist we must create one.
-                            new_initial_type = initalType(refSeq_set=frozenset([maj_dss.referenceSequenceOf]), cladeCollection_list=[unsupFp.cladeCollection_list[i]])
+                            new_initial_type = initalType(refSeq_set=frozenset([maj_dss.referenceSequenceOf]),
+                                                          cladeCollection_list=[unsupFp.cladeCollection_list[i]])
                             initial_types_list.append(new_initial_type)
                             # We must then alter the big_init_type
                             # Actually I don't think we do need to alter the big type
@@ -3864,11 +3904,12 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                 # Here we have completed collapsing one big_init_type and we can now get rid of the type
                 unsupportedList.remove(unsupFp)
                 initial_types_list.remove(unsupFp)
-                    
+
             # All unsupported footprints have been associated to their maj and deleted from the footprintList
             return initial_types_list
 
     return False
+
 
 def does_set_of_ref_seqs_contain_multiple_basal_types(frozen_set_of_ref_seqs):
     basal_count = 0
@@ -3889,8 +3930,8 @@ def does_set_of_ref_seqs_contain_multiple_basal_types(frozen_set_of_ref_seqs):
     else:
         return False
 
-def does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(big_init_type, small_init_type):
 
+def does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(big_init_type, small_init_type):
     if small_init_type.basalSequence_list:
         if 'C15' in small_init_type.basalSequence_list[0]:
             # then this is a C15x basal type and we will need to find all sequences that are not C1 or C3
@@ -3958,22 +3999,23 @@ def does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(bi
         else:
             return False
 
+
 def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
-    #TODO 10/12/17 I have just thought of something else we will have to consider. When you have a profile that
+    # TODO 10/12/17 I have just thought of something else we will have to consider. When you have a profile that
     # has a genuine codom type so there are e.g. MAJs of C3 and C3a, what will happen in this cricumstances.
     # For the time being we will not think too much about this and in the initialType profile classes that we are
     # creating, if we find a multiple basal type situation we will be sure to add the maj type to each of the
     # dsss lists.
-    #TODO 10/12/17, I also think we can take the opportunity to move away from working with dataSetSampleSequences
+    # TODO 10/12/17, I also think we can take the opportunity to move away from working with dataSetSampleSequences
     # and move towards working with referenceSequences, as it seems that we are always converting them to
     # reference sequences any way. Maybe for the time being we will work with dsss and get things up and running
     # before converting to working with referenceSequences.
-    #TODO 09/12/17 I want to make sure that the subsets collapsing is still working and taking into account the
+    # TODO 09/12/17 I want to make sure that the subsets collapsing is still working and taking into account the
     # basal types compatabilites. Actually the subset collapsing is not taking into account basal sequences
     # but this is not a problem. We are essentially just consolidating the larger types into the smaller ones
     # the smaller ones still then have to found as supported using the basal sequences information.
 
-    #TODO 09/12/17 This has become unbarably slow. We have an awful lot of redundancy in here that I would like to fix
+    # TODO 09/12/17 This has become unbarably slow. We have an awful lot of redundancy in here that I would like to fix
     # especially when it comes to checking for basal types. So I am going to create some clases which will only be
     # held in RAM. ie. not in the database.
     # class will be initialType. will contain, profile, profile length, contains_multiple_basal_sequences,
@@ -4017,13 +4059,9 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
     # if not supported move to the non-supporetd list
     # next n...
 
-
     # Lists that will hold the footprints that have and do not have support throughout the collapse
     supportedList = []
     unsupportedList = []
-
-
-
 
     # start with n at the largest footprint in the footprintlist
     # the lowest n that we will work with is 2
@@ -4048,9 +4086,9 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
             # it may not run if we have it as an additional conditional in the if as the first part of the if will
             # be evaluated first
             check = check_if_contains_multiple_basal_seqs(footprintList, keyName)
-            if len(footprintList[keyName][0]) >= reqsupport and check: # supported
+            if len(footprintList[keyName][0]) >= reqsupport and check:  # supported
                 supportedList.append(keyName)
-            else: # above support threshold
+            else:  # above support threshold
                 unsupportedList.append(keyName)
 
         ############# TRY TO COLLAPSE SIZE n FOOTPRINTS INTO SIZE n-1 FOOTPRINTS ################
@@ -4062,12 +4100,12 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
         while repeat:
             collapseDict = {}
             repeat = False
-            nMinusOneList = [keyName for keyName in footprintList.keys() if len(keyName) == n-1]
+            nMinusOneList = [keyName for keyName in footprintList.keys() if len(keyName) == n - 1]
             if nMinusOneList:
 
-
-                for bigFootprint in unsupportedList: # For each big check if small will fit in
-                    print('\nAssessing discovered footprint {} for supported type'.format('-'.join(str(refseq) for refseq in bigFootprint)))
+                for bigFootprint in unsupportedList:  # For each big check if small will fit in
+                    print('\nAssessing discovered footprint {} for supported type'.format(
+                        '-'.join(str(refseq) for refseq in bigFootprint)))
                     # These three are so that we only collapse into footprints that have the maj seqs of the bigfootprints
                     # see code futher down
                     # TODO 07/12/17 this is going to cause some problems for our basal checks as we only have one maj listed
@@ -4111,7 +4149,6 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                                     repeat = True
                                     collapseDict[bigFootprint] = smallerFootprint
 
-
             # Once here we have tried to collapse all of the large seq into all of the smaller footprinst
             # now if there is a collapse do the collapse and then remove it from the unsupported list
             # (we will see if the smaller footprint we added it to is supported next round of n)
@@ -4129,7 +4166,9 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                 extraction_deletion = check_if_contains_multiple_basal_majs(footPrintToCollapse)
                 if not extraction_deletion:
                     # below = smaller footprint data = [[smallerCCs += bigger CCs], [smallerMajSeqsForCCs += largerMajSeqsForCCs]]
-                    footprintList[collapseDict[footPrintToCollapse]] = [footprintList[collapseDict[footPrintToCollapse]][0] + footprintList[footPrintToCollapse][0], footprintList[collapseDict[footPrintToCollapse]][1] + footprintList[footPrintToCollapse][1]]
+                    footprintList[collapseDict[footPrintToCollapse]] = [
+                        footprintList[collapseDict[footPrintToCollapse]][0] + footprintList[footPrintToCollapse][0],
+                        footprintList[collapseDict[footPrintToCollapse]][1] + footprintList[footPrintToCollapse][1]]
                     del footprintList[footPrintToCollapse]
                     unsupportedList.remove(footPrintToCollapse)
                 else:
@@ -4139,7 +4178,6 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                     # Actually I think it is OK to just send over the Majs that the small and big have in commmon. We need to
                     # remember that we are simply listing ccts for support and the Majs found in those CCts. We can remove
                     # the subsetted sequences from the footprint of the big and put it back in the dict
-
 
                     # 1 - Collapse big to small
                     # Here we have to make a new list of lists for the majSeqs for each cct with only the maj seqs
@@ -4181,7 +4219,9 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
 
                     # Now perform the collapse using the extractedMajSeqs list as the 2D list of maj dsss
                     # below = smaller footprint data = [[smallerCCs += bigger CCs], [smallerMajSeqsForCCs += largerMajSeqsForCCs]]
-                    footprintList[collapseDict[footPrintToCollapse]] = [footprintList[collapseDict[footPrintToCollapse]][0] + footprintList[footPrintToCollapse][0], footprintList[collapseDict[footPrintToCollapse]][1] + extractedMajSeqs]
+                    footprintList[collapseDict[footPrintToCollapse]] = [
+                        footprintList[collapseDict[footPrintToCollapse]][0] + footprintList[footPrintToCollapse][0],
+                        footprintList[collapseDict[footPrintToCollapse]][1] + extractedMajSeqs]
 
                     # NB if this was an extraction case, then there should still be a maj dss for each of the ccts lef.
 
@@ -4199,7 +4239,9 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                     if updatedKey in footprintList.keys():
                         # then this already exists and we need to add support to the already existant profile
                         # we should just be able to do simple additions here
-                        footprintList[updatedKey] = [footprintList[updatedKey][0] + footprintList[footPrintToCollapse][0], footprintList[updatedKey][1] + footprintList[footPrintToCollapse][1]]
+                        footprintList[updatedKey] = [
+                            footprintList[updatedKey][0] + footprintList[footPrintToCollapse][0],
+                            footprintList[updatedKey][1] + footprintList[footPrintToCollapse][1]]
 
                     else:
                         footprintList[updatedKey] = footprintList[footPrintToCollapse]
@@ -4219,7 +4261,6 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
             if unsupportedList:
                 # Now we are left with the footprints that are still in the unsupported list
                 # Get all the seqs that are found in the footprints that are of length n
-
 
                 # we are going to change this.
                 # Currently we are generating an enormous generator in the itertools.combinations
@@ -4245,7 +4286,7 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                     taskQueue = Queue()
                     collapseNMerDictManager = Manager()
                     collapseNMerDict = collapseNMerDictManager.dict()
-                    #outputQueue = Queue()
+                    # outputQueue = Queue()
 
                     for nLengthType in listOfTypesOfLengthN:
                         taskQueue.put(nLengthType)
@@ -4274,8 +4315,8 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                     #     # nLengthType should be a frozen set so we will take the refSeqs it contains and add them to the setOfRefSeqs...
                     #     setOfRefSeqsOfSmpSeqsFoundInCCsOfLengthN.update([refSeq for refSeq in nLengthType])
 
-                    #Now go through each of the (n-1)mer footprints and see if they fit into a footprint in the unsuported list
-                    #This dict value = the synthetic footprint of length n-1, value, a list of unsupported types that are mastersets of the synthetic footprint
+                    # Now go through each of the (n-1)mer footprints and see if they fit into a footprint in the unsuported list
+                    # This dict value = the synthetic footprint of length n-1, value, a list of unsupported types that are mastersets of the synthetic footprint
 
                     # collapseNMerDict = {frozenset(tup): [] for tup in itertools.combinations(setOfRefSeqsOfSmpSeqsFoundInCCsOfLengthN, n-1)}
                     print('Generated {} Synthetic footprints'.format(len(collapseNMerDict)))
@@ -4290,29 +4331,29 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                         for majdssslist in footprintList[nLengthType][1]:
                             for dss in majdssslist:
                                 listOfAnalysesSampleSequencesLarge.append(dss)
-                        listOfMajRefSeqsLarge = [smpl.referenceSequenceOf for smpl in listOfAnalysesSampleSequencesLarge]
+                        listOfMajRefSeqsLarge = [smpl.referenceSequenceOf for smpl in
+                                                 listOfAnalysesSampleSequencesLarge]
                         setOfMajRefSeqsLarge = set(listOfMajRefSeqsLarge)
                         majRefSeqsDict[nLengthType] = setOfMajRefSeqsLarge
 
                     ## Items for printing out our progress
-                    total = len(collapseNMerDict)*len(unsupportedList)
+                    total = len(collapseNMerDict) * len(unsupportedList)
                     count = 0
                     printVal = 0.01
                     print('Checking new set of synthetic types')
 
-
-                    for frTupKey in collapseNMerDict.keys(): # for each of the synthetic footprints
+                    for frTupKey in collapseNMerDict.keys():  # for each of the synthetic footprints
 
                         for nLengthType in unsupportedList:
                             ## Items for printing out progress
                             count += 1
-                            percentComplete = count/total
+                            percentComplete = count / total
                             if percentComplete > printVal:
                                 print("%.2f" % percentComplete)
                                 printVal = max([printVal + 0.01, percentComplete + 0.01])
 
-                        #For each of the N-1mers see if they fit within the unsupported types
-                        # if so then add the footprint into the n-1mers list
+                            # For each of the N-1mers see if they fit within the unsupported types
+                            # if so then add the footprint into the n-1mers list
                             # we should check for the maj rule again. I.e. we should want all of the Majs of the footprint in Q to be in the kmer footprint
                             # maybe recycle code for this
                             if frTupKey.issubset(nLengthType):
@@ -4324,23 +4365,26 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                     # Because alot of the kmers will be found in the sequences they originated from
                     # require the kmer to be associated with more than 1 cladecollection
                     # I am not able to express my logic here perfectly but I am sure that this makes sense
-                    listOfnKmersWithCollapsableFootprints = [kmer for kmer in collapseNMerDict.keys() if len(collapseNMerDict[kmer]) > 1]
+                    listOfnKmersWithCollapsableFootprints = [kmer for kmer in collapseNMerDict.keys() if
+                                                             len(collapseNMerDict[kmer]) > 1]
                     # No need to continue if there are no footprints that match the nKmers
                     if listOfnKmersWithCollapsableFootprints:
                         # We now go through the kmers according to the number of footprints they were found in
-                        orderedListOfPopulatedKmers = sorted(listOfnKmersWithCollapsableFootprints, key=lambda x: len(collapseNMerDict[x]), reverse=True)
+                        orderedListOfPopulatedKmers = sorted(listOfnKmersWithCollapsableFootprints,
+                                                             key=lambda x: len(collapseNMerDict[x]), reverse=True)
 
                         for kmer in orderedListOfPopulatedKmers:
-                            #for each footprint in their lists
+                            # for each footprint in their lists
                             for bigFootprintToCollapse in collapseNMerDict[kmer]:
                                 # chek to see if the footprint is still in the unsupportedlist
                                 # if it isn't then it has already been associated to a new footprint
                                 #   pass it over
-                                if bigFootprintToCollapse in unsupportedList: # Then this footprint hasn't been collapsed anywhere yet
+                                if bigFootprintToCollapse in unsupportedList:  # Then this footprint hasn't been collapsed anywhere yet
                                     # if the footprint exists in footprintlist then add the CC details to it
                                     if kmer in footprintList.keys():
-                                        footprintList[kmer] = [footprintList[kmer][0] + footprintList[bigFootprintToCollapse][0],
-                                                               footprintList[kmer][1] + footprintList[bigFootprintToCollapse][1]]
+                                        footprintList[kmer] = [
+                                            footprintList[kmer][0] + footprintList[bigFootprintToCollapse][0],
+                                            footprintList[kmer][1] + footprintList[bigFootprintToCollapse][1]]
                                         # then remove the footprint from the unsupported type
                                         # Also remove the bigFootprintprintToCollapse from the footprintList as its details are not in another key
                                         unsupportedList.remove(bigFootprintToCollapse)
@@ -4350,7 +4394,8 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                                         # CC details to it.
                                         # remove the footprint from the unsupported type list
                                         # Also remove the bigFootprintprintToCollapse from the footprintList as its details are not in another key
-                                        footprintList[kmer] = [footprintList[bigFootprintToCollapse][0], footprintList[bigFootprintToCollapse][1]]
+                                        footprintList[kmer] = [footprintList[bigFootprintToCollapse][0],
+                                                               footprintList[bigFootprintToCollapse][1]]
                                         unsupportedList.remove(bigFootprintToCollapse)
                                         del footprintList[bigFootprintToCollapse]
                             # each unsupportedfootprint in the nmer has been collapsed
@@ -4378,10 +4423,12 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
                         if singleDivProfileInQ in footprintList.keys():
                             # then we need to add the support to the existant single maj div profile
                             # current single Div in q info = [[current list of CCts] + [cct in question], [current list of dsss lists] + [[majdssofcct]]
-                            footprintList[singleDivProfileInQ] = [footprintList[singleDivProfileInQ][0] + [footprintList[unsupFp][0][i]], footprintList[singleDivProfileInQ][1] + [[majdss]]]
-                    # if frozenset([footprintList[unsupFp][1][i].referenceSequenceOf]) in footprintList.keys():
-                    #     footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])] = [footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])][0] + [footprintList[unsupFp][0][i]], footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])][1] + [footprintList[unsupFp][1][i]] ]
-                        else: # create new footprintList entry
+                            footprintList[singleDivProfileInQ] = [
+                                footprintList[singleDivProfileInQ][0] + [footprintList[unsupFp][0][i]],
+                                footprintList[singleDivProfileInQ][1] + [[majdss]]]
+                        # if frozenset([footprintList[unsupFp][1][i].referenceSequenceOf]) in footprintList.keys():
+                        #     footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])] = [footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])][0] + [footprintList[unsupFp][0][i]], footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])][1] + [footprintList[unsupFp][1][i]] ]
+                        else:  # create new footprintList entry
                             footprintList[singleDivProfileInQ] = [[footprintList[unsupFp][0][i]], [[majdss]]]
                 # remove the unsupportedType from the footprintList
                 del footprintList[unsupFp]
@@ -4390,11 +4437,14 @@ def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
 
     return False
 
+
 def workerDiscoveryOne(input, collapsenmerdict, n):
     for refSeqFrozenSet in iter(input.get, 'STOP'):
         tempDict = {frozenset(tup): [] for tup in itertools.combinations(refSeqFrozenSet, n - 1)}
         collapsenmerdict.update(tempDict)
         print('\rGenerated iterCombos using {}'.format(current_process().name), end='')
+
+
 #########################################
 
 
@@ -4407,10 +4457,8 @@ def profileAssignment(nProcessors):
     sequences is assigned to the cladeCollection. We use DIV proportions are considered in relation to the total
     abundance of the DIV sequences in the CC rather than all seqs in the CC'''
 
-
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     print('Running inferFinalSymbiodiniumTypes()')
-
 
     # Get a list of all of the analysisTypes that have been discovered in the type discovery
     querySetOfAnalysisTypes = list(analysis_type.objects.filter(dataAnalysisFrom=analysisObj))
@@ -4419,8 +4467,6 @@ def profileAssignment(nProcessors):
     # Get a list of the CCs to check for types within
     querySetOfCCs = analysisObj.getCladeCollections()
     # Get dict of the CC footprint and Type footprints so that we don't have to look them up each time
-
-
 
     ################# FOOTPRINT DICT FOR EACH CC MP #################
     # Make a footprint dict for the CCs
@@ -4459,12 +4505,6 @@ def profileAssignment(nProcessors):
 
     #################################################################
 
-
-
-
-
-
-
     ############# INTRA ABUND DICT FOR EACH CC MP ################
     # Make dict of intraAbundances for each CC #
     managerTwo = Manager()
@@ -4496,9 +4536,6 @@ def profileAssignment(nProcessors):
     apples = 'pausePoint'
     ##############################################################
 
-
-
-
     ################ TYPE ASSIGNMENT ################
     # TODO  I believe that this is causing problems due to the MP access of the database.
     # This actually makes sense. We go clade collection by cladeCollection,
@@ -4520,8 +4557,8 @@ def profileAssignment(nProcessors):
     # Make a footprint dict for the profiles
 
     antypefootManager = Manager()
-    anTypeFootprintDict = antypefootManager.dict({anType.id: frozenset(anType.getOrderedFootprintList()) for anType in querySetOfAnalysisTypes})
-
+    anTypeFootprintDict = antypefootManager.dict(
+        {anType.id: frozenset(anType.getOrderedFootprintList()) for anType in querySetOfAnalysisTypes})
 
     # Two manager objects that will be used in the multiprocessing as outputs
 
@@ -4552,20 +4589,22 @@ def profileAssignment(nProcessors):
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
     db.connections.close_all()
     for pro in range(nProcessors):
-        p = Process(target=workerAssignmentThree, args=(profileAssignmentInputQueue, CCRefSeqAbundDict, CCfootprintDict, bulkCreateList, analysisTypesIDs, anTypeFootprintDict))
+        p = Process(target=workerAssignmentThree, args=(
+        profileAssignmentInputQueue, CCRefSeqAbundDict, CCfootprintDict, bulkCreateList, analysisTypesIDs,
+        anTypeFootprintDict))
         allProcesses.append(p)
         p.start()
 
     for p in allProcesses:
         p.join()
 
-
     ######################################################
     print('\n\nCreating cladeCollectionTypes in bulk...')
     # Create cladeCollectionTypes in bulk
     cctList = []
     for cct in bulkCreateList:
-        cctList.append(clade_collection_type(analysisTypeOf=analysis_type.objects.get(id=cct[0]), cladeCollectionFoundIn=clade_collection.objects.get(id=cct[1])))
+        cctList.append(clade_collection_type(analysisTypeOf=analysis_type.objects.get(id=cct[0]),
+                                             cladeCollectionFoundIn=clade_collection.objects.get(id=cct[1])))
     clade_collection_type.objects.bulk_create(cctList)
 
     # The info in here is the a list of tuples with 0 being the id of the analysis type and 1 the cladeCollection id
@@ -4595,29 +4634,26 @@ def profileAssignment(nProcessors):
     # Update the types' counts and ratios from the up-to-date CC lists
     # See the updateTypeAttributes comment for more details of the use
 
-
-
     for antype in analysis_type.objects.filter(id__in=analysisTypesIDs):
         if antype.listOfCladeCollections:
             antype.updateTypeAttributes()
             antype.save()
             print('\rUpdating type {}'.format(antype.name), end='')
 
-
     # TODO this might be parallelable
     multiModalDetection(False)
-
 
     analysisObj.analysisTypesAssigned = True
     analysisObj.save()
 
-
     return
+
 
 def workerAssignmentOne(input, dict):
     for CC in iter(input.get, 'STOP'):
         print('\rfootprintdict {}\t{}'.format(CC, current_process()), end='')
         dict[CC] = CC.footprint()
+
 
 def workerAssignmentTwo(input, dict):
     for CC in iter(input.get, 'STOP'):
@@ -4630,12 +4666,13 @@ def workerAssignmentTwo(input, dict):
             tempDict[dsss.referenceSequenceOf] = dsss.abundance
         dict[CC] = tempDict
 
-def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateList, analysisTypesIDs, anTypeFootprintDict):
+
+def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateList, analysisTypesIDs,
+                          anTypeFootprintDict):
     # This is the main assignment process that checks each CC for which types fit within it.
     for CC in iter(input.get, 'STOP'):
         # if str(CC) == 'January2017-280por':
         #     apples = 'pears'
-
 
         print('\rProfile assignment {} by process {}'.format(CC, current_process().name), end='')
         # return the dictionaries for this CC for use later on
@@ -4674,7 +4711,7 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
 
 
 
-                else: # If Type is only one DIV # TODO can't we just look this up with the CCRedSeqAbundDict?
+                else:  # If Type is only one DIV # TODO can't we just look this up with the CCRedSeqAbundDict?
                     # ensure that the seq is found at above 0.05 of the CC
                     seqsInCC = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=CC)
                     abundanceOfSeqsInCC = sum(aSS.abundance for aSS in seqsInCC)
@@ -4683,15 +4720,12 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
                     if abundanceOfTypeSeqInQ / abundanceOfSeqsInCC < 0.05:
                         continue
 
-
                 # Here is a type that meets criteria for being included in a sample
                 # Previously we were checking to see if [1] the current final types were subsets of the new type,
                 # or [2] if the new footprint was a subset of any of the current types
                 # However, we have implemented a new control here. The new control is that if two profiles share DIVs,
                 # the profile which uses up the most of the samples sequences will be accepted.
                 # This new control does away for the need of [1] or [2].
-
-
 
                 # List of types to be deleted
                 typeToDel = []
@@ -4732,7 +4766,6 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
         # Successful type candidates will be associated with the CC by creating a cladeColletionType that associates
         # between the analysis_type and the cladeCollection
 
-
         # To speed up the creation of cladeCollectionTypes, they will be created in bulk. To store the information of
         # which cladeCollectionTypes should be created I will create a tuple which will be the IDs of the analysisTypeOf
         # and cladeCollectionFoundIn paramerters. These will be exported via the bulkCreateList which is a manged list.
@@ -4749,7 +4782,6 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
             # newCladeCollectionType = clade_collection_type(analysisTypeOf=successfulCandidate, cladeCollectionFoundIn=CC)
             bulkCreateList.append((successfulCandidateID, CC.id))
 
-
             # I used to have a manager dict here that I would have a typeID as key and list of CCIDs as value
             # But this really wasn't stable and was causing issues no mater what I tried.
             # I have left the code and comments in below VVVVVVVV
@@ -4757,7 +4789,7 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
             # temp_list = typeCladeColDict[successfulCandidateID]
             # temp_list.append(CC.id)
             # typeCladeColDict[successfulCandidateID] = temp_list
-            #NB This was/is causing all sorts of problems
+            # NB This was/is causing all sorts of problems
             # The work around i was using was also not working (commented out above).
             # https://stackoverflow.com/questions/8640367/python-manager-dict-in-multiprocessing
             # I will try implementing this
@@ -4765,11 +4797,12 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
             # This was causing problems and I don't want to have to adjust Manager to include default dict
             # so I am going around the problem with the above, inellegant code.
             # https://stackoverflow.com/questions/26367812/appending-to-list-in-python-dictionary
-            #typeCladeColDict[successfulCandidateID].append(CC.id)
+            # typeCladeColDict[successfulCandidateID].append(CC.id)
 
     return
 
-def ratioCheck(CC, antype):# allowance of 0.00 and no update
+
+def ratioCheck(CC, antype):  # allowance of 0.00 and no update
     '''
     This method will assess the type that is currently about to be associated with the cladeCollection to see if the
     abundances in which the type's intras are found make sense.
@@ -4797,9 +4830,10 @@ def ratioCheck(CC, antype):# allowance of 0.00 and no update
     sampleSeqAbundances = []
     for refSeq in orderedFootprintListOfType:
         # Get the abundance of the current refSeq in Q
-        sampleSeqAbundances.append(data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=CC, referenceSequenceOf=refSeq).abundance)
+        sampleSeqAbundances.append(
+            data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=CC, referenceSequenceOf=refSeq).abundance)
     total = sum(sampleSeqAbundances)
-    footprintInQRatiosList = [x/total for x in sampleSeqAbundances]
+    footprintInQRatiosList = [x / total for x in sampleSeqAbundances]
 
     # for each sequence abundance
     # so we now know that for the CC in question we are working out the seq abundanes relative to the total seqs
@@ -4818,15 +4852,13 @@ def ratioCheck(CC, antype):# allowance of 0.00 and no update
 
         ratioInQ = footprintInQRatiosList[orderedFootprintListOfType.index(refSeq)]
 
-
         if ratioInQ < minRatioCutoff or ratioInQ > maxRatioCutoff:
             return False
 
     return True
 
+
 def multiModalDetection(initialRun):
-
-
     # If initialRun = True, then this is the first time we are running multiModal Detection and we have not been
     # through the first iteration of assigning types yet. As such we should still be working with the
     # listOfCladeCollectionsFoundInInitially rather than the later listOfCladeCollections
@@ -4834,10 +4866,11 @@ def multiModalDetection(initialRun):
     # Here we identify if there is a bionomial distribution in coDom types between the two most abundant intras
     # If we find a binomial distribution which meets our parameters for clearly being two separate distributions
     # then we separate the type into two new types
-    if not initialRun: # We only want types that have a cladeCollectionList
+    if not initialRun:  # We only want types that have a cladeCollectionList
         # both empty string and None return False so this is types that have CCs associated to them only
-        listOfAllAnalysisTypes = [anObj for anObj in analysis_type.objects.filter(dataAnalysisFrom=analysisObj) if anObj.listOfCladeCollections]
-    else: # No need to check if initial run as all types have initial clade collections
+        listOfAllAnalysisTypes = [anObj for anObj in analysis_type.objects.filter(dataAnalysisFrom=analysisObj) if
+                                  anObj.listOfCladeCollections]
+    else:  # No need to check if initial run as all types have initial clade collections
         listOfAllAnalysisTypes = [anObj for anObj in analysis_type.objects.all().filter(dataAnalysisFrom=analysisObj)]
     analysisTypesToBeDeleted = []
     # This is a list of the types that have already been successfuly split
@@ -4846,7 +4879,7 @@ def multiModalDetection(initialRun):
     typesSplit = []
     numTypesSplit = 1
     listOfTypesToAnalyse = []
-    while numTypesSplit > 0: # Only continue this while we are finding types to split
+    while numTypesSplit > 0:  # Only continue this while we are finding types to split
         numTypesSplit = 0
         if typesSplit:
             listOfTypesToAnalyse = typesSplit
@@ -4884,7 +4917,7 @@ def multiModalDetection(initialRun):
                     # These are the values that will be plotted virtually in the histogram
                     listOfRatios = [ratioVal[index] for ratioVal in seqRatiosForType]
                     # linspace (start, stop, numvalues)
-                    x_grid = np.linspace(min(listOfRatios)-1, max(listOfRatios)+1, 2000)
+                    x_grid = np.linspace(min(listOfRatios) - 1, max(listOfRatios) + 1, 2000)
                     try:
                         # This was causing errors when we were trying to calculate it for a list of 0s.
                         # As such I have put in a harmless continue as we be sure that the ref_seq in question is
@@ -4959,9 +4992,6 @@ def multiModalDetection(initialRun):
                             # We should probably do a try: except: to try to delete cladeCollectionTypes that were
                             # associated with the analysis types to make sure that they are deleted
 
-
-
-
                             if len(CCsForTypeA) >= 3 and len(CCsForTypeB) >= 3:
                                 if listOfTypesToAnalyse[k].name == '21899/21901/21905-21916-21934':
                                     apples = 'asdf'
@@ -4970,7 +5000,7 @@ def multiModalDetection(initialRun):
                                 # (we will need to claculate the setofMajSeqs inorder to initiate the new analysis type)
                                 # Get set of representative ref seqs of the maj seqs from each cc collection
 
-                                #TODO check my logic here but,  the maj in the clade collection is not necessarily in the type
+                                # TODO check my logic here but,  the maj in the clade collection is not necessarily in the type
                                 # so therefore it won't count towards whether a type is codom or not.
                                 # we need to find the most abundant refseq of the CC that is in the type
                                 # for each of the CCsForTypeX lists, go through ordered list generated and if found in the initial types footprint then add
@@ -4984,7 +5014,7 @@ def multiModalDetection(initialRun):
                                 # do this first then if needs be search all
                                 all = False
                                 majSeqRefSeqSetA = set()
-                                for i in range(2):# Do twice, once with only top 10, second if needed, with all
+                                for i in range(2):  # Do twice, once with only top 10, second if needed, with all
                                     for cc in CCsForTypeA:
                                         orderedFootprintOfRefSeqsByAbundance = cc.orderedListOfRefSeqs(all)
                                         for refSequence in orderedFootprintOfRefSeqsByAbundance:
@@ -4994,7 +5024,7 @@ def multiModalDetection(initialRun):
                                                 break
                                             else:
                                                 all = True
-                                    if all == False: #we found all the refseqs we need
+                                    if all == False:  # we found all the refseqs we need
                                         break
 
                                 all = False
@@ -5012,16 +5042,17 @@ def multiModalDetection(initialRun):
                                     if all == False:  # we found all the refseqs we need
                                         break
 
-                                #majSeqRefSeqSetA = frozenset([smpSeq.referenceSequenceOf for smpSeq in [cc.maj() for cc in CCsForTypeA]])
-                                #majSeqRefSeqSetB = frozenset([smpSeq.referenceSequenceOf for smpSeq in [cc.maj() for cc in CCsForTypeB]])
-
+                                # majSeqRefSeqSetA = frozenset([smpSeq.referenceSequenceOf for smpSeq in [cc.maj() for cc in CCsForTypeA]])
+                                # majSeqRefSeqSetB = frozenset([smpSeq.referenceSequenceOf for smpSeq in [cc.maj() for cc in CCsForTypeB]])
 
                                 # Initiate analysisTypeA first
-                                if len(majSeqRefSeqSetA) > 1: # Then coDom = True
-                                    newAnalysisTypeA = analysis_type(dataAnalysisFrom=analysisObj, coDom=True, clade=CCsForTypeA[0].clade)
+                                if len(majSeqRefSeqSetA) > 1:  # Then coDom = True
+                                    newAnalysisTypeA = analysis_type(dataAnalysisFrom=analysisObj, coDom=True,
+                                                                     clade=CCsForTypeA[0].clade)
                                     newAnalysisTypeA.save()
                                 else:
-                                    newAnalysisTypeA = analysis_type(dataAnalysisFrom=analysisObj, coDom=False, clade=CCsForTypeA[0].clade)
+                                    newAnalysisTypeA = analysis_type(dataAnalysisFrom=analysisObj, coDom=False,
+                                                                     clade=CCsForTypeA[0].clade)
                                     newAnalysisTypeA.save()
                                 newAnalysisTypeA.setMajRefSeqSet(majSeqRefSeqSetA)
                                 # If this is the first run of the multiModal detection then we are still
@@ -5029,12 +5060,15 @@ def multiModalDetection(initialRun):
                                 # equally we will be calling initTypeAtttributes rather than updateTypeAttributes
 
                                 if initialRun:
-                                    newAnalysisTypeA.initTypeAttributes(listOfCC=CCsForTypeA, footprintlistofrefseqs=orderedFootprintList)
+                                    newAnalysisTypeA.initTypeAttributes(listOfCC=CCsForTypeA,
+                                                                        footprintlistofrefseqs=orderedFootprintList)
                                 else:
                                     # before calling updateTypeAttributes we must set self.listOfCladeCollections and self.orderedFootprintList
                                     # NB that self.orderedFootprintList does not have to be ordered
-                                    newAnalysisTypeA.listOfCladeCollections = ','.join([str(cc.id) for cc in CCsForTypeA])
-                                    newAnalysisTypeA.orderedFootprintList = ','.join([str(refSeq.id) for refSeq in orderedFootprintList])
+                                    newAnalysisTypeA.listOfCladeCollections = ','.join(
+                                        [str(cc.id) for cc in CCsForTypeA])
+                                    newAnalysisTypeA.orderedFootprintList = ','.join(
+                                        [str(refSeq.id) for refSeq in orderedFootprintList])
 
                                     newAnalysisTypeA.save()
                                     if newAnalysisTypeA.orderedFootprintList == '':
@@ -5050,30 +5084,35 @@ def multiModalDetection(initialRun):
                                 if not initialRun:
                                     listOfCladeCollectionTypes = []
                                     for CC in CCsForTypeA:
-                                        newcladeCollectionType = clade_collection_type(analysisTypeOf=newAnalysisTypeA, cladeCollectionFoundIn = CC)
+                                        newcladeCollectionType = clade_collection_type(analysisTypeOf=newAnalysisTypeA,
+                                                                                       cladeCollectionFoundIn=CC)
                                         listOfCladeCollectionTypes.append(newcladeCollectionType)
                                     clade_collection_type.objects.bulk_create(listOfCladeCollectionTypes)
 
-
                                 # Initiate analysisTypeB second
                                 if len(majSeqRefSeqSetB) > 1:  # Then coDom = True
-                                    newAnalysisTypeB = analysis_type(dataAnalysisFrom=analysisObj, coDom=True, clade=CCsForTypeB[0].clade)
+                                    newAnalysisTypeB = analysis_type(dataAnalysisFrom=analysisObj, coDom=True,
+                                                                     clade=CCsForTypeB[0].clade)
                                     newAnalysisTypeB.save()
                                 else:
-                                    newAnalysisTypeB = analysis_type(dataAnalysisFrom=analysisObj, coDom=False, clade=CCsForTypeB[0].clade)
+                                    newAnalysisTypeB = analysis_type(dataAnalysisFrom=analysisObj, coDom=False,
+                                                                     clade=CCsForTypeB[0].clade)
                                     newAnalysisTypeB.save()
                                 newAnalysisTypeB.setMajRefSeqSet(majSeqRefSeqSetB)
                                 if initialRun:
-                                    newAnalysisTypeB.initTypeAttributes(listOfCC=CCsForTypeB, footprintlistofrefseqs=orderedFootprintList)
+                                    newAnalysisTypeB.initTypeAttributes(listOfCC=CCsForTypeB,
+                                                                        footprintlistofrefseqs=orderedFootprintList)
 
                                 else:
-                                # before calling updateTypeAttributes we must set self.listOfCladeCollections and self.orderedFootprintList
-                                # NB that self.orderedFootprintList does not have to be ordered
-                                # If this is the first run of the multiModal detection then we are still
-                                # working with the listOfCladeCollectionsFoundInInitially rather than the later listOfCladeCollections
-                                # equally we will be calling initTypeAtttributes rather than updateTypeAttributes
-                                    newAnalysisTypeB.listOfCladeCollections = ','.join([str(cc.id) for cc in CCsForTypeB])
-                                    newAnalysisTypeB.orderedFootprintList = ','.join([str(refSeq.id) for refSeq in orderedFootprintList])
+                                    # before calling updateTypeAttributes we must set self.listOfCladeCollections and self.orderedFootprintList
+                                    # NB that self.orderedFootprintList does not have to be ordered
+                                    # If this is the first run of the multiModal detection then we are still
+                                    # working with the listOfCladeCollectionsFoundInInitially rather than the later listOfCladeCollections
+                                    # equally we will be calling initTypeAtttributes rather than updateTypeAttributes
+                                    newAnalysisTypeB.listOfCladeCollections = ','.join(
+                                        [str(cc.id) for cc in CCsForTypeB])
+                                    newAnalysisTypeB.orderedFootprintList = ','.join(
+                                        [str(refSeq.id) for refSeq in orderedFootprintList])
                                     newAnalysisTypeB.save()
                                     if newAnalysisTypeB.orderedFootprintList == '':
                                         apples = 'adsf'
@@ -5084,7 +5123,8 @@ def multiModalDetection(initialRun):
                                 if not initialRun:
                                     listOfCladeCollectionTypes = []
                                     for CC in CCsForTypeB:
-                                        newcladeCollectionType = clade_collection_type(analysisTypeOf=newAnalysisTypeB, cladeCollectionFoundIn=CC)
+                                        newcladeCollectionType = clade_collection_type(analysisTypeOf=newAnalysisTypeB,
+                                                                                       cladeCollectionFoundIn=CC)
                                         listOfCladeCollectionTypes.append(newcladeCollectionType)
                                     clade_collection_type.objects.bulk_create(listOfCladeCollectionTypes)
                                 # Both analysis types are initialized here
@@ -5094,7 +5134,7 @@ def multiModalDetection(initialRun):
                                 analysisTypesToBeDeleted.append(listOfTypesToAnalyse[k])
                                 typesSplit.extend([newAnalysisTypeA, newAnalysisTypeB])
                                 numTypesSplit += 1
-                                #when we are looking at doing more than just the first intra
+                                # when we are looking at doing more than just the first intra
                                 # we should break from the for loop passing through all of the intras as we have already
                                 # found a type that should be split
                                 break
@@ -5106,20 +5146,20 @@ def multiModalDetection(initialRun):
     # else just do all types.
 
     # Delete the redundant analysisTypes
-    #cladeCollectionsFirst
+    # cladeCollectionsFirst
     cctToDelete = clade_collection_type.objects.all().filter(analysisTypeOf__in=analysisTypesToBeDeleted)
     for cc in cctToDelete:
         cc.delete()
     for anlType in analysisTypesToBeDeleted:
         anlType.delete()
 
-
-    #NB We will need to be careful of the potential for two types to now have the same name.
+    # NB We will need to be careful of the potential for two types to now have the same name.
     # I am not going to fix this now but we will need to fix this before we do the user
     # output as this is likely what they will use as their unique identifier
     # For the sake of the code though we will deal with the type instance or the
     # id so they will always be unique
     return
+
 
 def plotHists(pdf, x_grid, newlist, typename):
     plt.interactive(False)
@@ -5130,6 +5170,8 @@ def plotHists(pdf, x_grid, newlist, typename):
     ax[1].plot(x_grid, pdf, color='blue', alpha=0.5, lw=3)
     plt.show()
     return
+
+
 ###############################
 
 
@@ -5150,9 +5192,8 @@ def assignProfilesToGroups():
     # groupnames are the Maj types found in types
     # but if coDom types exist the groups contain all types that have majs that are found in the codoms
     # Get list of all types that have cladeCollections associated with them
-    listOfAnalysisTypes = [anlType for anlType in analysis_type.objects.filter(dataAnalysisFrom=analysisObj) if anlType.listOfCladeCollections]
-
-
+    listOfAnalysisTypes = [anlType for anlType in analysis_type.objects.filter(dataAnalysisFrom=analysisObj) if
+                           anlType.listOfCladeCollections]
 
     # Create groupings of Types that have majs in common
     # groupNamesList contains one list per group. Each group list contains multiple types that share majs
@@ -5173,11 +5214,11 @@ def assignProfilesToGroups():
     # for each group link the types it contains to the analysis_group instance
     for group in groupNamesList:
         print('Creating new group without name')
-        newAnalysisGroup = analysis_group(dataAnalysisFrom = analysisObj)
+        newAnalysisGroup = analysis_group(dataAnalysisFrom=analysisObj)
         # Name each of the groups that were just created
         # newAnalysisGroup.generateName()
         newAnalysisGroup.save()
-        for anlType in group: # for each of the analysisTypes in the group
+        for anlType in group:  # for each of the analysisTypes in the group
             anlType.analysisGroupOf = newAnalysisGroup
             anlType.save()
 
@@ -5186,13 +5227,14 @@ def assignProfilesToGroups():
 
     return
 
+
 def createGroups(groupNamesList, newAnlType):
-    #Identify if there is a group that already contains Majs that are found in the anltype in question
+    # Identify if there is a group that already contains Majs that are found in the anltype in question
     # If identified add the anlType to this grouping else make a new grouping
 
     groupList = groupNamesList
     indexMatch = set()
-    for tempGroup in groupList: # for each grouping of anlTypes which is a list
+    for tempGroup in groupList:  # for each grouping of anlTypes which is a list
         listOfMajRefSeqsFoundInTypesInTempGroup = []
         for aType in tempGroup:
             listOfMajRefSeqsFoundInTypesInTempGroup.extend(list(aType.getMajRefSeqSet()))
@@ -5233,12 +5275,13 @@ def createGroups(groupNamesList, newAnlType):
         return groupList
 
     return
+
+
 ###########################
 
 
 ###### OUTPUT FORMAT FUNCTIONS ######
 def assignSpecies():
-
     at = analysis_type.objects.filter(dataAnalysisFrom=analysisObj)
     IDs = [att.id for att in at]
 
@@ -5257,11 +5300,11 @@ def assignSpecies():
         averageAbundanceList = [0 for refSeq in refSeqIDsList]
         for j in range(len(footprintAbunInfo)):
             for i in range(len(refSeqIDsList)):
-                averageAbundanceList[i] += int(footprintAbunInfo[j][i])/sum([int(a) for a in footprintAbunInfo[j]])
+                averageAbundanceList[i] += int(footprintAbunInfo[j][i]) / sum([int(a) for a in footprintAbunInfo[j]])
         # Here we have the abundances summated for each seq in the averageAbundanceList
         # Just have to divide by the num cladeCollections to get averages
         for i in range(len(averageAbundanceList)):
-            averageAbundanceList[i] = averageAbundanceList[i]/len(footprintAbunInfo)
+            averageAbundanceList[i] = averageAbundanceList[i] / len(footprintAbunInfo)
         # Now we have the averge abundance proportions we make dict to the refseq name
         listOfRefSeqs = []
 
@@ -5305,7 +5348,7 @@ def assignSpecies():
             if 'D1' in majSeqs:
                 if 'D4' not in listOfAllDefSeqNames:
                     assignedSpecies.append('S. glynnii')
-                else:# There is a significant abundance of D4
+                else:  # There is a significant abundance of D4
                     if 'D6' in listOfAllDefSeqNames:
                         # Then there is a significant amount of D6
                         assignedSpecies.extend(['S. glynnii', 'S. trenchii'])
@@ -5328,7 +5371,7 @@ def assignSpecies():
         elif clade == 'I':
             pass
 
-        if not assignedSpecies:#If no suggested species have been associated
+        if not assignedSpecies:  # If no suggested species have been associated
             att.species = 'None'
             att.save()
         else:
@@ -5339,31 +5382,36 @@ def assignSpecies():
     analysisObj.save()
     return
 
-def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_types, clade_collection_types_in_current_output):
-    # create a list of tupples that is the type ID and the number of this outputs CCs that it was found in.
+
+def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_types,
+                                                              clade_collection_types_in_current_output):
+    # create a list of tupples that is the type ID and the number of this output's CCs that it was found in.
 
     tuple_list = []
-    clade_collections_in_current_output = [clade_collection_type_obj.cladeCollectionFoundIn.id for clade_collection_type_obj in clade_collection_types_in_current_output]
+    clade_collections_in_current_output = [clade_collection_type_obj.cladeCollectionFoundIn.id for
+                                           clade_collection_type_obj in clade_collection_types_in_current_output]
     for at in list_of_analysis_types:
         list_of_clade_collections_found_in = [int(x) for x in at.listOfCladeCollections.split(',')]
-        num_clade_collections_of_output = list(set(clade_collections_in_current_output).intersection(list_of_clade_collections_found_in))
+        num_clade_collections_of_output = list(
+            set(clade_collections_in_current_output).intersection(list_of_clade_collections_found_in))
         tuple_list.append((at.id, len(num_clade_collections_of_output)))
 
     type_IDs_sorted = sorted(tuple_list, key=lambda x: x[1], reverse=True)
 
     return [analysis_type.objects.get(id=x[0]) for x in type_IDs_sorted]
 
-def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir, sorted_sample_list=None, analysis_obj_id=None):
+
+def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir,
+                                                           sorted_sample_list=None, analysis_obj_id=None):
     # This function will take in a list of dataSubmissions from which to output the DIV information of the samples
-    # it will work very similarly to the second half of normal formatOutput_ord function. I will try to reuse as
-    # much code as possible
+    #
+    #
 
     ########################## ITS2 INTRA ABUND COUNT TABLE ################################
     # This is where we're going to have to work with the sequences that aren't part of a type.
     # Esentially we want to end up with the noName sequences divieded up cladally.
     # So at the moment this will mean that we will divide up the current no names but also
     # add information about the other cladal sequences that didn't make it into a cladeCollection
-
 
     # Now we need to output the ITS2 intragenomic abundances that the types are based on for each CC
     # Already have querySetOfDataSubmissions and cladeCollectionsFromDSs
@@ -5376,12 +5424,12 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     dataSubmissionsToOutput = [int(a) for a in datasubstooutput.split(',')]
 
-    # outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
+    #
     # Get collection of types that are specific for the dataSubmissions we are looking at
     querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
 
-    # cladeCollectionsFromDSs = clade_collection.objects.filter(
-    #     dataSetSampleFrom__dataSubmissionFrom__in=querySetOfDataSubmissions)
+    #
+    #
 
     cladeAbundanceOrderedRefSeqList = []
     refSeqsInDSs = reference_sequence.objects.filter(
@@ -5391,21 +5439,23 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     cladeSet = set()
     for refSeq in refSeqsInDSs:
         cladeSet.add(refSeq.clade)
+
     # Order the list of clades alphabetically
     sub_clade_list = [a for a in clade_list if a in cladeSet]
 
+    sys.stdout.write('\n')
     for i in range(len(sub_clade_list)):
-        intraCounter = defaultdict(int)
 
         # refSeqs of clade
         refSeqsOfClade = refSeqsInDSs.filter(clade=sub_clade_list[i])
 
         # dataSetSampleSequencesOfClade
         dataSetSampleSequencesOfClade = data_set_sample_sequence.objects.filter(
-            data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions, referenceSequenceOf__in=refSeqsOfClade)
+            data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions,
+            referenceSequenceOf__in=refSeqsOfClade)
 
-        # Popualate the counter dict
-
+        # This counter dict will have key = sequence name (either the sequence name, if named, or 'id_clade' if not)
+        # value = the abundnace of the reference sequence across all of the samples in the output
         intraCounterManager = Manager()
         intraCounter = intraCounterManager.dict()
 
@@ -5423,27 +5473,20 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
 
-        print('Creating refSeq counts for clade {}'.format(sub_clade_list[i]))
+        print('\nCreating refSeq counts for clade {}'.format(sub_clade_list[i]))
         for N in range(numProcessors):
-            p = Process(target=outputWorkerTwo_pre_analysis, args=(dsssQueue, intraCounter))
+            p = Process(target=outputWorkerTwo, args=(dsssQueue, intraCounter))
             allProcesses.append(p)
             p.start()
 
         for p in allProcesses:
             p.join()
 
-        # for dsss in dataSetSampleSequencesOfClade:
-        #     intraCounter[dsss.referenceSequenceOf.name] += dsss.abundance
-
         # Sort counter dict by abundance
         sortedIntraCounter = sorted(intraCounter.items(), key=operator.itemgetter(1), reverse=True)
 
         # Add the refSeqNames to the master cladeAbundanceOrderedRefSeqList
-        # Do not add the noName items. These will be summed across the clades and entered into the list
-        # once their final abundances have been calculated
-        cladeAbundanceOrderedRefSeqList.extend([a[0] for a in sortedIntraCounter if a[0] != 'noName'])
-
-
+        cladeAbundanceOrderedRefSeqList.extend([a[0] for a in sortedIntraCounter])
 
     # Create the two output tables as lists
     intraAbundCountTable = []
@@ -5453,6 +5496,9 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # do not add them to the cladeAbundanceOrderedRefSeqList so that we don't append 0s to them
     # we will add the abundances in the outputWorkerThree method below
 
+    # we will put together the headers piece by piece
+
+    # 1 - the sample header and the named sequence headers
     headerPre = 'Samples\t{}'.format('\t'.join([a for a in cladeAbundanceOrderedRefSeqList if '_' not in a]))
     noNameStrings = '\t'.join(['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']])
     qc_stats = '\t'.join(['raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
@@ -5498,9 +5544,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
     db.connections.close_all()
 
+    sys.stdout.write('\n\nOutputting DIV data\n')
     for N in range(numProcessors):
         p = Process(target=outputWorkerThree_pre_analysis_new_dss_structure, args=(
-        dssQueue, managedSampleOutputDict, cladeAbundanceOrderedRefSeqList, querySetOfDataSubmissions))
+            dssQueue, managedSampleOutputDict, cladeAbundanceOrderedRefSeqList, querySetOfDataSubmissions))
         allProcesses.append(p)
         p.start()
 
@@ -5531,11 +5578,12 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
                     match_list.append(smp.name)
                     provided_name_to_samp_name_dict[provided_name] = smp
             if len(match_list) > 1:
-                sys.exit('Sample name {} matches more than one output sample ({}).'.format(provided_name, '\t'.join(match_list)))
+                sys.exit('Sample name {} matches more than one output sample ({}).'.format(provided_name,
+                                                                                           '\t'.join(match_list)))
             if len(match_list) == 0:
                 sys.exit('Sample name {} does not match any output sample.'.format(provided_name))
 
-        # if we got to hear then the sorted_sample_list looks good
+        # if we got to here then the sorted_sample_list looks good
 
         for provided_name in sorted_sample_list_names:
             dss = provided_name_to_samp_name_dict[provided_name]
@@ -5577,18 +5625,19 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # Here we have the tables populated and ready to output
     if analysis_obj_id:
         path_to_div_absolute = '{}/{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
-                                                                '_'.join([str(a) for a in dataSubmissionsToOutput]))
+                                                                   '_'.join([str(a) for a in dataSubmissionsToOutput]))
     else:
         path_to_div_absolute = '{}/{}.DIVs.absolute.txt'.format(output_dir,
-                                                                   '_'.join([str(a) for a in dataSubmissionsToOutput]))
+                                                                '_'.join([str(a) for a in dataSubmissionsToOutput]))
     writeListToDestination(path_to_div_absolute, intraAbundCountTable)
     output_path_list.append(path_to_div_absolute)
 
     if analysis_obj_id:
         path_to_div_relative = '{}/{}_{}.DIVs.relative.txt'.format(output_dir, analysis_obj_id,
-                                                                '_'.join([str(a) for a in dataSubmissionsToOutput]))
+                                                                   '_'.join([str(a) for a in dataSubmissionsToOutput]))
     else:
-        path_to_div_relative = '{}/{}.DIVs.relative.txt'.format(output_dir, '_'.join([str(a) for a in dataSubmissionsToOutput]))
+        path_to_div_relative = '{}/{}.DIVs.relative.txt'.format(output_dir,
+                                                                '_'.join([str(a) for a in dataSubmissionsToOutput]))
 
     writeListToDestination(path_to_div_relative, intraAbundPropTable)
     output_path_list.append(path_to_div_relative)
@@ -5605,7 +5654,8 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         fasta_output_list.append(ref_seq.sequence)
 
     if analysis_obj_id:
-        fasta_path = '{}/{}_{}.DIVs.fasta'.format(output_dir, analysis_obj_id, '_'.join([str(a) for a in dataSubmissionsToOutput]))
+        fasta_path = '{}/{}_{}.DIVs.fasta'.format(output_dir, analysis_obj_id,
+                                                  '_'.join([str(a) for a in dataSubmissionsToOutput]))
     else:
         fasta_path = '{}/{}.DIVs.fasta'.format(output_dir, '_'.join([str(a) for a in dataSubmissionsToOutput]))
     writeListToDestination(fasta_path, fasta_output_list)
@@ -5617,8 +5667,8 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     return
 
-def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
 
+def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1):
     analysisObj = analysisobj
     # This is one of the last things to do before we can use our first dataset
     # The table will have types as columns and rows as samples
@@ -5627,32 +5677,12 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     # It will produce four output files, for DIV abundances and proportions and Type abundances and proportions.
     # found in the given clade collection.
     # Types will be listed first by clade and then by the number of clade collections the types were found in
-    # The species groups will be numbered consecutively as they appear
+
     # Each type's ID will also be given as a UID.
     # The date the database was accessed and the version should also be noted
     # The formal species descriptions which correspond to the found ITS2 type will be noted for each type
     # Finally the AccessionNumber of each of the defining reference species will also be noted
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
-
-    '''
-    32: VoolstraSet
-    40: EmilyData
-    47: EdData
-    51: ed_24_07_17_singapore
-    52: UTS_ONE_25_07_17
-    53: UTS_TWO_25_07_17
-    54: 20171008_jitErn
-    55: 20171009_roberto
-    56: 20171016_alejandro
-    57: 20171016_Pappas
-    58: 20171017_roberto
-    59: 20171017_tullia
-    60: 20170719_alejandro
-    61: 20170713_alejandro
-    62: 20170506_roberto
-    63: ryan_first
-    '''
-
 
     # List of the paths to the files that have been output
     output_files_list = []
@@ -5662,11 +5692,10 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     # Get collection of types that are specific for the dataSubmissions we are looking at
     querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
 
-    cladeCollectionsFromDSs = clade_collection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=querySetOfDataSubmissions)
-    cladeCollectionTypesFromThisAnalysisObjAndDataSubmission = clade_collection_type.objects.filter(cladeCollectionFoundIn__in=cladeCollectionsFromDSs, analysisTypeOf__dataAnalysisFrom=analysisObj).distinct()
-
-    # cladeCollectionsFromDSs = list(clade_collection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=dataSubmissionsToOutput))
-    # cladeCollectionTypesFromThisAnalysisObjAndDataSubmission = list(clade_collection_type.objects.filter(cladeCollectionFoundIn__in=cladeCollectionsFromDSs, analysisTypeOf__dataAnalysisFrom=analysisObj).distinct())
+    cladeCollectionsFromDSs = clade_collection.objects.filter(
+        dataSetSampleFrom__dataSubmissionFrom__in=querySetOfDataSubmissions)
+    cladeCollectionTypesFromThisAnalysisObjAndDataSubmission = clade_collection_type.objects.filter(
+        cladeCollectionFoundIn__in=cladeCollectionsFromDSs, analysisTypeOf__dataAnalysisFrom=analysisObj).distinct()
 
     at = set()
     for cct in cladeCollectionTypesFromThisAnalysisObjAndDataSubmission:
@@ -5678,8 +5707,9 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     outputTableOne = []
     outputTableTwo = []
     # Need to get a list of Samples that are part of the dataAnalysis
-    #listOfDataSetSamples = list(data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=[int(a) for a in analysisObj.listOfDataSubmissions.split(',')])))
-    listOfDataSetSamples = list(data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=dataSubmissionsToOutput)))
+    # listOfDataSetSamples = list(data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=[int(a) for a in analysisObj.listOfDataSubmissions.split(',')])))
+    listOfDataSetSamples = list(
+        data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=dataSubmissionsToOutput)))
     # The header row for the table
     # outputTableOne.append('ITS2 type profile UID\tClade\tSpeciesGrp\tType_Profile\tMajority ITS2 Seq\tAssociated Species\tType abund local\tType abund DB\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
     # outputTableTwo.append('ITS2 type profile UID\tClade\tSpeciesGrp\tType_Profile\tMajority ITS2 Seq\tAssociated Species\tType abund local\tType abund DB\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
@@ -5687,8 +5717,6 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     # I am making some changes to the output format for the SP manuscript
     # outputTableOne.append('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
     # outputTableTwo.append('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
-
-
 
     # Now go through the types, firstly by clade and then by the number of cladeCollections they were found in
     # Populate a 2D list of types with a list per clade
@@ -5699,7 +5727,6 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
                 typesCladalList[cladeList.index(att.clade)].append(att)
         except:
             pass
-
 
     # Items for for creating the new samples sorted output
     across_clade_type_sample_abund_dict = dict()
@@ -5723,19 +5750,10 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
             # groupDict = {}
             ###################################################
 
-            # This is currently being sorted according to the number of listOfCladeCollections the type was found in
-            # which translates to the number of clade collections across the whole data analysis, i.e. samples from this
-            #  out put also from any other samples inlcuded in the dataanalysis we want to try to output according to
-            # the number of samples of the output it was found in instead
-            # get a sorted list of the types by most commonly found first
-            sortedListOfTypes = sorted(typesCladalList[i], key=lambda x: len(x.listOfCladeCollections.split(',')), reverse=True)
-
-            # We need to produce a list of analysisTypes according to the number of cladecollections of the output
-            # they are found in. This shouldn't be too tricky.
-            # We will pass in typesCladalList[i] and we will simply look to see which of the .listOfCladeCollections
-            # of each type are found in the cladeCollectionTypesFromThisAnalysisObjAndDataSubmission
-
-            sortedListOfTypes = sort_list_of_types_by_clade_collections_in_current_output(typesCladalList[i], cladeCollectionTypesFromThisAnalysisObjAndDataSubmission)
+            # sort types by the number of samples they were found in for this output (not across whole analysis)
+            # returns list of tuples, [0] = analysis_type object, [1] number of ccs found in for this output
+            sortedListOfTypes = sort_list_of_types_by_clade_collections_in_current_output(typesCladalList[i],
+                                                                                          cladeCollectionTypesFromThisAnalysisObjAndDataSubmission)
 
             # Here we will MP at the type level
             # i.e. each type will be processed on a differnt core. In order for this to work we should have a managed
@@ -5746,12 +5764,6 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
             # This dict will hold all of the output rows that the MPing has created.
             typeOutputManager = Manager()
             typeOutputManagedDict = typeOutputManager.dict({type: None for type in sortedListOfTypes})
-            # This dict will hold details of which groups have already been written
-            groupDictManager = Manager()
-            groupDictManagedDict = groupDictManager.dict()
-
-            groupCountManager = Manager()
-            groupCountManagedInt = groupCountManager.Value(c_int, 0)
 
             listOfDataSetSamplesManager = Manager()
             listOfDataSetSamplesManagedList = listOfDataSetSamplesManager.list(listOfDataSetSamples)
@@ -5760,7 +5772,6 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
 
             for anType in sortedListOfTypes:
                 typeInputQueue.put(anType)
-
 
             for N in range(numProcessors):
                 typeInputQueue.put('STOP')
@@ -5771,21 +5782,16 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
             # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
             db.connections.close_all()
 
+            sys.stdout.write('\nCalculating ITS2 type profile abundances clade {}\n'.format(cladeList[i]))
             for N in range(numProcessors):
-                p = Process(target=outputWorkerOne, args=(typeInputQueue, groupDictManagedDict, groupCountManagedInt, listOfDataSetSamplesManagedList, cladeList[i], typeOutputManagedDict))
+                p = Process(target=outputWorkerOne,
+                            args=(typeInputQueue, listOfDataSetSamplesManagedList, typeOutputManagedDict))
                 allProcesses.append(p)
                 p.start()
 
             for p in allProcesses:
                 p.join()
 
-
-
-
-            # Here the MP is completed and we now need to add the lists that are held in the managed dict to
-            # the outputTableOne and outputTableTwo
-
-            #### Development ####
             # So we have the current list of samples stored in a mangaed list that is the listOfDataSetSamplesManaged
             # the dictionary that we have below is key = analysis_type and the value is two lists
             # the first list is the raw counts and the second is the prop counts
@@ -5800,13 +5806,11 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
             typeOutputManagedDict_dict = dict(typeOutputManagedDict)
             #####################
 
-
             # for antype in sortedListOfTypes:
             #     outputTableOne.append(typeOutputManagedDict[antype][0])
             #     outputTableTwo.append(typeOutputManagedDict[antype][1])
 
-
-   # At this stage we have the across_clade_type_sample_abund_dict that contains the type to row values
+    # At this stage we have the across_clade_type_sample_abund_dict that contains the type to row values
     # Below is the pseudo code for getting the sorted list of samples
     # get a list of the types for the output
     # Ideally we want to have this list of types sorted according to the most abundant in the output first
@@ -5814,7 +5818,8 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     # We can get this from the dict though
     type_to_abund_list = []
     for analysis_type_obj in across_clade_type_sample_abund_dict.keys():
-        type_to_abund_list.append((analysis_type_obj, int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[4])))
+        type_to_abund_list.append(
+            (analysis_type_obj, int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[4])))
 
     # now we can sort this list according to the abundance and this will give us the order of types that we want
     sorted_analysis_type_abundance_list = [a[0] for a in sorted(type_to_abund_list, key=lambda x: x[1], reverse=True)]
@@ -5837,8 +5842,9 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     samples_that_have_been_sorted = []
 
     # for each analysis type in order of the most abundant types first
+    sys.stdout.write('\n\nSorting samples according to ITS2 type profile abundances\n')
     for j in range(len(sorted_analysis_type_abundance_list)):
-        print('Sorting {}'.format(sorted_analysis_type_abundance_list[j]))
+        sys.stdout.write('\rSorting {}'.format(sorted_analysis_type_abundance_list[j]))
         # go through all of the samples and if a sample has the type as its most abundant type
         # then add it and its relative abundance of the type to to the below list
         list_of_samples_containing_analysis_type = []
@@ -5852,12 +5858,14 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
                     if all(i <= abundance_of_type_in_sample for i in list_of_abundances):
                         # then this type is the most abundant type in the sample and it should be added to the
                         # list_of_samples_containing_analysis_type
-                        list_of_samples_containing_analysis_type.append((data_set_sample_obj, abundance_of_type_in_sample/sum(list_of_abundances)))
+                        list_of_samples_containing_analysis_type.append(
+                            (data_set_sample_obj, abundance_of_type_in_sample / sum(list_of_abundances)))
         # now that we've been through all of the samples for the given type
         # we need to sort the list_of_samples_containing_analysis_type by the second value of the tuple
         # we then need to add the samples in this order to the sample_that_have_been_sorted and remove them
         # from the samples_still_to_be_sorted
-        sorted_list_of_samples_containing_analysis_type = sorted(list_of_samples_containing_analysis_type, key=lambda x: x[1], reverse=True)
+        sorted_list_of_samples_containing_analysis_type = sorted(list_of_samples_containing_analysis_type,
+                                                                 key=lambda x: x[1], reverse=True)
         sorted_list_of_samples_for_this_type = [a[0] for a in sorted_list_of_samples_containing_analysis_type]
 
         for data_set_sample_obj in sorted_list_of_samples_for_this_type:
@@ -5879,7 +5887,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
     outputTableTwo.append(
         'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
             '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted])))
-    
+
     # at this point we need to rearrange the data that is held in the current row strings
     for analysis_type_obj in across_clade_sorted_type_order:
         current_abundance_list_counts = across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1]
@@ -5890,15 +5898,17 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
             new_abundance_list_counts.append(current_abundance_list_counts[listOfDataSetSamples.index(new_sample)])
             new_abundance_list_props.append(current_abundance_list_props[listOfDataSetSamples.index(new_sample)])
 
-        new_string_counts = '{}\t{}\t{}'.format('\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[:7]), '\t'.join(new_abundance_list_counts), across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[-1])
-        new_sting_props = '{}\t{}\t{}'.format('\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[:7]), '\t'.join(new_abundance_list_props), across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[-1])
+        new_string_counts = '{}\t{}\t{}'.format(
+            '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[:7]),
+            '\t'.join(new_abundance_list_counts),
+            across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[-1])
+        new_sting_props = '{}\t{}\t{}'.format(
+            '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[:7]),
+            '\t'.join(new_abundance_list_props),
+            across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[-1])
 
         outputTableOne.append(new_string_counts)
         outputTableTwo.append(new_sting_props)
-
-
-
-
 
     # At this point we should have gone through each of the clades in order and for each clade we should have
     # created an analysis_type row in order of the sortedListOfTypes.
@@ -5925,76 +5935,76 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
 
     # Finally append the species references to the tables
     species_ref_dict = {
-        'S. microadriaticum' : 'Freudenthal, H. D. (1962). Symbiodinium gen. nov. and Symbiodinium microadriaticum '
-                               'sp. nov., a Zooxanthella: Taxonomy, Life Cycle, and Morphology. The Journal of '
-                               'Protozoology 9(1): 45-52',
-        'S. pilosum' : 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
-                       'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
-                       'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
-                       'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
-                       'Journal of Phycology 23(3): 469-481.',
-        'S. natans' : 'Hansen, G. and N. Daugbjerg (2009). Symbiodinium natans sp. nob.: A free-living '
-                      'dinoflagellate from Tenerife (northeast Atlantic Ocean). Journal of Phycology 45(1): 251-263.',
-        'S. tridacnidorum' : 'Lee, S. Y., H. J. Jeong, N. S. Kang, T. Y. Jang, S. H. Jang and T. C. Lajeunesse (2015). '
-                             'Symbiodinium tridacnidorum sp. nov., a dinoflagellate common to Indo-Pacific giant clams,'
-                             ' and a revised morphological description of Symbiodinium microadriaticum Freudenthal, '
-                             'emended Trench & Blank. European Journal of Phycology 50(2): 155-172.',
-        'S. linucheae' : 'Trench, R. K. and L.-v. Thinh (1995). Gymnodinium linucheae sp. nov.: The dinoflagellate '
-                         'symbiont of the jellyfish Linuche unguiculata. European Journal of Phycology 30(2): 149-154.',
-        'S. minutum' : 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). A genetics-based description of '
-                       'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), two dinoflagellates '
-                       'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
-        'S. antillogorgium' : 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
-                              'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
-                              'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
-                              'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
-        'S. pseudominutum' : 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
-                              'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
-                              'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
-                              'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
-        'S. psygmophilum' : 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). A genetics-based description of '
-                       'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), two dinoflagellates '
-                       'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
-        'S. muscatinei' : 'No reference available',
-        'S. endomadracis' : 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
-                              'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
-                              'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
-                              'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
-        'S. aenigmaticum' : 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
-                              'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
-                              'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
-                              'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
-        'S. goreaui' : 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
-                       'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
-                       'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
-                       'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
-                       'Journal of Phycology 23(3): 469-481.',
-        'S. thermophilum' : 'Hume, B. C. C., C. D`Angelo, E. G. Smith, J. R. Stevens, J. Burt and J. Wiedenmann (2015).'
-                            ' Symbiodinium thermophilum sp. nov., a thermotolerant symbiotic alga prevalent in corals '
-                            'of the world`s hottest sea, the Persian/Arabian Gulf. Sci. Rep. 5.',
-        'S. glynnii' : 'LaJeunesse, T. C., D. T. Pettay, E. M. Sampayo, N. Phongsuwan, B. Brown, D. O. Obura, O. '
-                       'Hoegh-Guldberg and W. K. Fitt (2010). Long-standing environmental conditions, geographic '
-                       'isolation and host-symbiont specificity influence the relative ecological dominance and '
-                       'genetic diversification of coral endosymbionts in the genus Symbiodinium. Journal of '
-                       'Biogeography 37(5): 785-800.',
-        'S. trenchii' : 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
-                        '(2014). Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
-                        ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
-        'S. eurythalpos' : 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
-                        '(2014). Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
-                        ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
-        'S. boreum' : 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
-                        '(2014). "Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
-                        ' Symbiodinium (Dinophyceae) Clade D are different species." Phycologia 53(4): 305-319.',
-        'S. voratum' : 'Jeong, H. J., S. Y. Lee, N. S. Kang, Y. D. Yoo, A. S. Lim, M. J. Lee, H. S. Kim, W. Yih, H. '
-                       'Yamashita and T. C. LaJeunesse (2014). Genetics and Morphology Characterize the Dinoflagellate'
-                       ' Symbiodinium voratum, n. sp., (Dinophyceae) as the Sole Representative of Symbiodinium Clade E'
-                       '. Journal of Eukaryotic Microbiology 61(1): 75-94.',
-        'S. kawagutii' : 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
-                       'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
-                       'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
-                       'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
-                       'Journal of Phycology 23(3): 469-481.'
+        'S. microadriaticum': 'Freudenthal, H. D. (1962). Symbiodinium gen. nov. and Symbiodinium microadriaticum '
+                              'sp. nov., a Zooxanthella: Taxonomy, Life Cycle, and Morphology. The Journal of '
+                              'Protozoology 9(1): 45-52',
+        'S. pilosum': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                      'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                      'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                      'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                      'Journal of Phycology 23(3): 469-481.',
+        'S. natans': 'Hansen, G. and N. Daugbjerg (2009). Symbiodinium natans sp. nob.: A free-living '
+                     'dinoflagellate from Tenerife (northeast Atlantic Ocean). Journal of Phycology 45(1): 251-263.',
+        'S. tridacnidorum': 'Lee, S. Y., H. J. Jeong, N. S. Kang, T. Y. Jang, S. H. Jang and T. C. Lajeunesse (2015). '
+                            'Symbiodinium tridacnidorum sp. nov., a dinoflagellate common to Indo-Pacific giant clams,'
+                            ' and a revised morphological description of Symbiodinium microadriaticum Freudenthal, '
+                            'emended Trench & Blank. European Journal of Phycology 50(2): 155-172.',
+        'S. linucheae': 'Trench, R. K. and L.-v. Thinh (1995). Gymnodinium linucheae sp. nov.: The dinoflagellate '
+                        'symbiont of the jellyfish Linuche unguiculata. European Journal of Phycology 30(2): 149-154.',
+        'S. minutum': 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). A genetics-based description of '
+                      'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), two dinoflagellates '
+                      'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
+        'S. antillogorgium': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                             'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                             'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                             'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. pseudominutum': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                            'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                            'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                            'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. psygmophilum': 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). A genetics-based description of '
+                           'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), two dinoflagellates '
+                           'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
+        'S. muscatinei': 'No reference available',
+        'S. endomadracis': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                           'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                           'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                           'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. aenigmaticum': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                           'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                           'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                           'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. goreaui': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                      'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                      'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                      'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                      'Journal of Phycology 23(3): 469-481.',
+        'S. thermophilum': 'Hume, B. C. C., C. D`Angelo, E. G. Smith, J. R. Stevens, J. Burt and J. Wiedenmann (2015).'
+                           ' Symbiodinium thermophilum sp. nov., a thermotolerant symbiotic alga prevalent in corals '
+                           'of the world`s hottest sea, the Persian/Arabian Gulf. Sci. Rep. 5.',
+        'S. glynnii': 'LaJeunesse, T. C., D. T. Pettay, E. M. Sampayo, N. Phongsuwan, B. Brown, D. O. Obura, O. '
+                      'Hoegh-Guldberg and W. K. Fitt (2010). Long-standing environmental conditions, geographic '
+                      'isolation and host-symbiont specificity influence the relative ecological dominance and '
+                      'genetic diversification of coral endosymbionts in the genus Symbiodinium. Journal of '
+                      'Biogeography 37(5): 785-800.',
+        'S. trenchii': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
+                       '(2014). Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
+                       ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
+        'S. eurythalpos': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
+                          '(2014). Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
+                          ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
+        'S. boreum': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
+                     '(2014). "Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
+                     ' Symbiodinium (Dinophyceae) Clade D are different species." Phycologia 53(4): 305-319.',
+        'S. voratum': 'Jeong, H. J., S. Y. Lee, N. S. Kang, Y. D. Yoo, A. S. Lim, M. J. Lee, H. S. Kim, W. Yih, H. '
+                      'Yamashita and T. C. LaJeunesse (2014). Genetics and Morphology Characterize the Dinoflagellate'
+                      ' Symbiodinium voratum, n. sp., (Dinophyceae) as the Sole Representative of Symbiodinium Clade E'
+                      '. Journal of Eukaryotic Microbiology 61(1): 75-94.',
+        'S. kawagutii': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                        'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                        'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                        'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                        'Journal of Phycology 23(3): 469-481.'
     }
 
     species_set = set()
@@ -6012,30 +6022,35 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1 ):
             outputTableOne.append(species + '\t' + species_ref_dict[species])
             outputTableTwo.append(species + '\t' + species_ref_dict[species])
 
-
-    path_to_profiles_absolute = '{}/{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, '_'.join([str(a) for a in dataSubmissionsToOutput]))
+    path_to_profiles_absolute = '{}/{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, '_'.join(
+        [str(a) for a in dataSubmissionsToOutput]))
     writeListToDestination(path_to_profiles_absolute, outputTableOne)
     output_files_list.append(path_to_profiles_absolute)
 
-    path_to_profiles_rel = '{}/{}_{}.profiles.relative.txt'.format(outputDir, analysisObj.id, '_'.join([str(a) for a in dataSubmissionsToOutput]))
+    path_to_profiles_rel = '{}/{}_{}.profiles.relative.txt'.format(outputDir, analysisObj.id,
+                                                                   '_'.join([str(a) for a in dataSubmissionsToOutput]))
     writeListToDestination(path_to_profiles_rel, outputTableTwo)
     output_files_list.append(path_to_profiles_rel)
 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
-    div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput, numProcessors=numProcessors, output_dir=outputDir, sorted_sample_list=samples_that_have_been_sorted, analysis_obj_id=analysisobj.id)
+    div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
+                                                           numProcessors=numProcessors, output_dir=outputDir,
+                                                           sorted_sample_list=samples_that_have_been_sorted,
+                                                           analysis_obj_id=analysisobj.id)
 
     print('ITS2 type profile output files:')
     for output_file in output_files_list:
         print(output_file)
 
-
     return
 
-def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList, querySetOfDataSubmissions):
+
+def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList,
+                                                     querySetOfDataSubmissions):
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     for dss in iter(input.get, 'STOP'):
 
-        print('Outputting DIV data for {} with {}'.format(dss.name, current_process().name))
+        sys.stdout.write('\rOutputting DIV data for {}'.format(dss.name))
         # List that will hold the row
         sampleRowDataCounts = []
         sampleRowDataProps = []
@@ -6156,17 +6171,8 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
             outDict[dss] = [countData, propData]
             continue
 
-        # CCs of sample
-        # cladeCollectionsFromDSs = clade_collection.objects.filter(
-        #     dataSetSampleFrom__dataSubmissionFrom__in=querySetOfDataSubmissions)
-        # sampleCCs = cladeCollectionsFromDSs.filter(dataSetSampleFrom=dss)
-
         # Get number of seqs found in Sample
         dsssInSample = data_set_sample_sequence.objects.filter(data_set_sample_from=dss)
-
-        # sampleSeqTot = sum([dsss.abundance for dsss in dsssInSample])
-
-        # create dataSetSampleSeqDict for sample
 
         dataSetSampleSeqDict = defaultdict(int)
         # this dict will hold noName seqs abundances separated by clade.
@@ -6180,14 +6186,13 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
             ref_seq_obj = dsss.referenceSequenceOf
             ref_seq_obj_name = ref_seq_obj.name
             ref_seq_obj_clade = ref_seq_obj.clade
-            if ref_seq_obj_name != 'noName':
+            if ref_seq_obj.hasName:
                 dataSetSampleSeqDict[ref_seq_obj_name] += dsss.abundance
-            elif ref_seq_obj_name == 'noName':
+            else:
                 noNameCladalHolder[ref_seq_obj_clade] += dsss.abundance
                 no_name_break_down_dict[str(ref_seq_obj.id) + '_{}'.format(
                     ref_seq_obj_clade)] += dsss.abundance  # populate row in order of the master sorted intras
         # Do not populate any of the noName categories
-
 
         for name in [a for a in cladeAbundanceOrderedRefSeqList if '_' not in a]:
             if name in dataSetSampleSeqDict.keys():
@@ -6198,12 +6203,7 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
                 sampleRowDataCounts.append(0)
                 sampleRowDataProps.append(0)
 
-        # here we can make the data for the noName cladal divisions
-        # We were having a problem here
-
-        # for each clade in cladeList, just look to see if there is a noName.
-        # sample_CCs = clade_collection.objects.filter(dataSetSampleFrom=dss)
-        # list_of_clades_in_CCs = [a.clade for a in sample_CCs]
+        # for each clade in cladeList, just look to see if there is data.
         for clade in cladeList:
             if clade in noNameCladalHolder.keys():
                 sampleRowDataCounts.append(noNameCladalHolder[clade])
@@ -6212,27 +6212,10 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
                 # then there were no no_names of this clade
                 sampleRowDataCounts.append(0)
                 sampleRowDataProps.append(0)
-            # if clade in noNameCladalHolder.keys():
-            #     # then there was a cladeCollection of this clade AND there was noName seqs
-            #     # so we can add this info
-            #     sampleRowDataCounts.append(noNameCladalHolder[clade])
-            #     sampleRowDataProps.append(noNameCladalHolder[clade] / sampleSeqTot)
-            # elif clade not in list_of_clades_in_CCs:
-            #     # then there were no cladeCollections of this clade. There may be no sequences of this clade found
-            #     # in the sample. Either way the seqs of this clade found will be in the cladalSeqTotals parameter
-            #     # of the sample
-            #     sampleRowDataCounts.append(cladalAbundances[cladeList.index(clade)])
-            #     sampleRowDataProps.append(cladalAbundances[cladeList.index(clade)] / sampleSeqTot)
-            # elif clade in list_of_clades_in_CCs:
-            #     # we need this eventuality for when we have a clade collection but no 'noName' seqs. Only
-            #     # seqs that are named. In this case we will not enter either of the above ifs and we will need
-            #     # to enter a 0 here.
-            #     sampleRowDataCounts.append(0)
-            #     sampleRowDataProps.append(0)
 
         # Here we add in the post qc and post-taxa id counts
         # For the absolute counts we will report the absolute seq number
-        # For the realteive counts we will report these as proportions of the sampleSeqTot.
+        # For the relative counts we will report these as proportions of the sampleSeqTot.
         # I.e. we will have numbers larger than 1 for many of the values and the symbiodinium seqs should be 1
 
         # CONTIGS
@@ -6301,9 +6284,10 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
         propData = '{}\t{}'.format(dss.name, '\t'.join("{:.3f}".format(x) for x in sampleRowDataProps))
         outDict[dss] = [countData, propData]
 
-def outputWorkerTwo_pre_analysis(input, outDict):
+
+def outputWorkerTwo(input, outDict):
     for dsss in iter(input.get, 'STOP'):
-        if dsss.referenceSequenceOf.name == 'noName':
+        if not dsss.referenceSequenceOf.hasName:
             name_unit = str(dsss.referenceSequenceOf.id) + '_{}'.format(dsss.referenceSequenceOf.clade)
         else:
             name_unit = dsss.referenceSequenceOf.name
@@ -6311,10 +6295,13 @@ def outputWorkerTwo_pre_analysis(input, outDict):
             outDict[name_unit] = outDict[name_unit] + dsss.abundance
         else:
             outDict[name_unit] = dsss.abundance
+        sys.stdout.write('\rCounting seqs for {}'.format(name_unit))
 
-def outputWorkerOne(input, groupDict, groupCount, listOfDataSetSamples, clade, outputDict):
+
+def outputWorkerOne(input, listOfDataSetSamples, outputDict):
     for anType in iter(input.get, 'STOP'):  # Within each type go through each of the samples
-        print('Outputing data for\ttype: {} with {}'.format(anType, current_process().name))
+
+        sys.stdout.write('\rprocessing ITS2 type profile: {}'.format(anType))
 
         ###### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
         # For each type we want to calculate the average proportions of the defining seqs in that type
@@ -6323,6 +6310,7 @@ def outputWorkerOne(input, groupDict, groupCount, listOfDataSetSamples, clade, o
         # and orderedFoorprintList attributes of each type
         footprintAbundances = json.loads(anType.footprintSeqAbundances)
         orderedFootPrintlist = anType.orderedFootprintList.split(',')
+
         # We have to make a decision as to whether this average should represent all the findings of this type
         # or whether we should only represent the averages of samples found in this dataset.
         # I think it needs to be a global average. Because the type is defined based on all samples in the
@@ -6347,24 +6335,12 @@ def outputWorkerOne(input, groupDict, groupCount, listOfDataSetSamples, clade, o
         # The SDList now contains the SDs for each of the def seqs proportions
         ###########################################################################
 
-
-
         # Counter that will increment with every sample type is found in
         # This is counter will end up being the type abund local value
         abundanceCount = 0
 
         typeInQ = anType
         clade = typeInQ.clade
-
-        ###### GET GROUP NAME INFO ########
-        groupID = typeInQ.analysisGroupOf.id
-        if groupID not in groupDict.keys():
-            # with groupCount.get_lock():
-            groupCount.value += 1
-
-            groupDict[groupID] = groupCount.value
-        ###################################
-
 
         # For each type create a holder that will hold 0s for each sample until populated below
         dataRowRaw = [0 for smpl in listOfDataSetSamples]
@@ -6387,8 +6363,10 @@ def outputWorkerOne(input, groupDict, groupCount, listOfDataSetSamples, clade, o
                 # Need to work out how many seqs were found from the sample for this type
                 # Also need to work this out as a proportion of all of the Symbiodinium seqs found in the sample
                 ccInQ = clade_collection.objects.get(id=IDsInCommon[0])
+
                 # The number of sequences that were returned for the sample in question
                 totSeqNum = data_set_sample.objects.get(clade_collection=ccInQ).finalTotSeqNum
+
                 # The number of sequences that make up the type in q
                 # The index of the CC in the type's listOfCladeCollections
                 CCindexInType = typeCCIDs.index(ccInQ.id)
@@ -6404,7 +6382,7 @@ def outputWorkerOne(input, groupDict, groupCount, listOfDataSetSamples, clade, o
 
         # Type Profile
         typeID = anType.id
-        speciesGrp = '{}_Grp_{}'.format(clade, groupDict[groupID])
+
         typeProfile = typeInQ.name
         species = typeInQ.species
         typeAbundance = abundanceCount
@@ -6415,30 +6393,28 @@ def outputWorkerOne(input, groupDict, groupCount, listOfDataSetSamples, clade, o
         typeAbundAndSDString = getAbundStr(TotList, SDList, majList)
 
         sequenceAccession = typeInQ.generateName(accession=True)
-        rowOne = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade,  majITS2,
-                                                                     species, str(typeAbundance), str(globalCount), typeProfile,
-                                                                     '\t'.join([str(a) for a in dataRowRaw]),
-                                                                     sequenceAccession, typeAbundAndSDString)
+        rowOne = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
+                                                             species, str(typeAbundance), str(globalCount), typeProfile,
+                                                             '\t'.join([str(a) for a in dataRowRaw]),
+                                                             sequenceAccession, typeAbundAndSDString)
         rowTwo = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
-                                                                     species, str(typeAbundance), str(globalCount), typeProfile,
-                                                                     '\t'.join(["{:.3f}".format(prop) for prop in
-                                                                                dataRowProp]), sequenceAccession,
-                                                                     typeAbundAndSDString)
+                                                             species, str(typeAbundance), str(globalCount), typeProfile,
+                                                             '\t'.join(["{:.3f}".format(prop) for prop in
+                                                                        dataRowProp]), sequenceAccession,
+                                                             typeAbundAndSDString)
         # Here we will use the outputDict instead of adding it to the outputTableOne
         # We will then get these elements in the dict into the right order with the types we will then
         # write out each of the type elements in the order of the orderedTypeLists
 
-        outputDict[anType]  = [rowOne, rowTwo]
+        outputDict[anType] = [rowOne, rowTwo]
 
-        # outputTableOne.append(rowOne)
-        # outputTableTwo.append(rowTwo)
 
 def getMajList(atype):
     if str(atype) in ['D1/D2-D4', 'D1/D6/D2.2-D4', 'B5/B5e-B5a-B5b']:
         apples = 'asdf'
     # This is a little tricky. Have to take into account that the Maj seqs are not always more abundant
     # than the non-Maj seqs.
-    #e.g. type B5/B5e-B5a-B5b, B5e is acutally the least abundant of the seqs
+    # e.g. type B5/B5e-B5a-B5b, B5e is acutally the least abundant of the seqs
     # Therefore we cannot simply grab the orderedFooprintList seqs in order assuming they are the Majs
 
     name = atype.name
@@ -6462,6 +6438,7 @@ def getMajList(atype):
     majStringOutput = '/'.join(majList)
     return majStringOutput, majList
 
+
 def getAbundStr(totlist, sdlist, majlist):
     majComp = []
     lessComp = []
@@ -6480,19 +6457,14 @@ def getAbundStr(totlist, sdlist, majlist):
         abundOutputStr = majCompStr
     return abundOutputStr
 
+
 def namingRefSeqsUsedInDefs():
-    #TODO we now have all of the arif sequences entered into our database. This means that we can dispense of havng a
-    # refSeqDB written out in our directory. Instead we can simply create a fasta from all of the named
-    # reference_sequences that we currently have in the database and use this to blast against and generate names.
-    # infact, for the local instance of SP we don't need to do any blasting as if a sequence already matched
-    # one of the named reference sequences it would already have been given that name
-
-
     listOfSeqNamesThatAlreadyExist = [refSeq.name for refSeq in reference_sequence.objects.filter(hasName=True)]
     listOfSeqNamesThatAlreadyExist.append('D1a')
 
     # The full path of the refSeqDB.fa
-    refFasta = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB/referenceSeqDB')) + '/refSeqDB.fa'
+    refFasta = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), 'symbiodiniumDB/referenceSeqDB')) + '/refSeqDB.fa'
 
     # List of the reference sequence names
     listOfRefSeqDBNames = [a[1:] for a in refFasta if a[0] == '>']
@@ -6513,7 +6485,7 @@ def namingRefSeqsUsedInDefs():
 
     ### DEBUG ###
     # Perform sanity check to see that all of the seqs are independent of each other e.g. none are subsets or super sets
-    for a, b in itertools.combinations(listOfDefiningRefSeqs,2):
+    for a, b in itertools.combinations(listOfDefiningRefSeqs, 2):
         if a.sequence in b.sequence:
             apples = 'asdf'
         elif b.sequence in a.sequence:
@@ -6549,8 +6521,6 @@ def namingRefSeqsUsedInDefs():
         # Read in blast output
         blastOutputFile = readDefinedFileToList(blastOutputPath)
 
-        #TODO This was only when we had Arif seqs in the refSeqDB that weren't in the data base already
-        # once we have added the arif seqs to the db then this code will be redundant.
         # First go through and assign names to the 100% coverage and matches
         for bo in blastOutputFile:
             splitEl = bo.split('\t')
@@ -6564,16 +6534,15 @@ def namingRefSeqsUsedInDefs():
                     refSeqInQ.save()
                     listOfSeqNamesThatAlreadyExist.append(potentialName)
                 else:
-                    apples = 'asdf' # We have an issue if we get here because we have a 100% match to a refseq
+                    apples = 'asdf'  # We have an issue if we get here because we have a 100% match to a refseq
                     # but that ref seqname has aleady been associated with a different seq
 
-        #TODO this is now the only purpose of the naming.
         # Now assign names to those that aren't exact matches
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
             config_dict = json.load(f)
         if config_dict['system_type'] == 'remote':
             for bo in blastOutputFile:
-                splitEl=bo.split('\t')
+                splitEl = bo.split('\t')
                 refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
                 if not refSeqInQ.hasName:
                     newName = createNewRefSeqName(splitEl[1], listOfSeqNamesThatAlreadyExist, listOfRefSeqDBNames)
@@ -6582,7 +6551,7 @@ def namingRefSeqsUsedInDefs():
                     refSeqInQ.save()
                     listOfSeqNamesThatAlreadyExist.append(newName)
 
-        #Finally update the type names
+        # Finally update the type names
         IDs = [att.id for att in at]
         for i in range(len(IDs)):
             typeInQ = analysis_type.objects.get(id=IDs[i])
@@ -6623,6 +6592,7 @@ def namingRefSeqsUsedInDefs():
     analysisObj.save()
     return
 
+
 def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist, listofrefseqdbnames):
     # This code happens when we have a seq that needs a name
     # We know the seq is not an exact match so we make a derivative name
@@ -6631,7 +6601,6 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist, listofrefs
     # closetsMatch[2] = coverage
     matchObj = re.match("^[A-I]{1}[0-9]{1,3}", closestMatch)
     baseName = matchObj.group(0)
-
 
     # If we have got here then it is time to derive a name
     # This will be the base name plus the next available alpha concatenation
@@ -6655,30 +6624,27 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist, listofrefs
                     return baseName + alpha + alphaTwo + alphaThree
 
     return False
-#####################################
 
+
+#####################################
 
 
 ###### MAIN ######
 def main(dataanalysistwoobject, cores):
-
-
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
 
-
     # Set the dataAnlysisTwoObject in Q as a global object analysisObj for easy reference
     global analysisObj
     analysisObj = dataanalysistwoobject
     global nProcessors
     nProcessors = cores
-    #TODO eventually I would like to attach this parameter to the data_set object
+    # TODO eventually I would like to attach this parameter to the data_set object
     global unlockedAbund
     unlockedAbund = 0.0001
-
 
     start_time = timeit.default_timer()
     ####### PROFILE DISCOVERY ##########
@@ -6699,7 +6665,6 @@ def main(dataanalysistwoobject, cores):
     elapsed_time = timeit.default_timer() - start_time
     print('PROFILE ASSIGNMENT {}'.format(elapsed_time))
 
-
     ####### PROFILE COLLAPSE #########
     start_time = timeit.default_timer()
     print('GROUP ASSIGNMENT')
@@ -6710,13 +6675,11 @@ def main(dataanalysistwoobject, cores):
     print('PROFILE COLLAPSE {}'.format(elapsed_time))
     ####################################
 
-
     ####### SEQUENCE NAMING #########
     print('Naming defining reference Sequences')
     if not analysisObj.refSeqsNamed:
         namingRefSeqsUsedInDefs()
     ####################################
-
 
     ####### SPECIES ASSIGNMENT #########
     print('Assigning Species')
