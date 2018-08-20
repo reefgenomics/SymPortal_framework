@@ -1124,7 +1124,9 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         # we should create the bast dictionary from the .fa
         list_of_binaries = [dataSubmissionInQ.reference_fasta_database_used + extension for extension in
                             ['.nhr', '.nin', '.nsq']]
-        list_of_dir = os.listdir(wkd)
+        sym_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
+        os.chdir(sym_dir)
+        list_of_dir = os.listdir(sym_dir)
         binary_count = 0
         for item in list_of_dir:
             if item in list_of_binaries:
