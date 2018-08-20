@@ -6481,6 +6481,13 @@ def getAbundStr(totlist, sdlist, majlist):
     return abundOutputStr
 
 def namingRefSeqsUsedInDefs():
+    #TODO we now have all of the arif sequences entered into our database. This means that we can dispense of havng a
+    # refSeqDB written out in our directory. Instead we can simply create a fasta from all of the named
+    # reference_sequences that we currently have in the database and use this to blast against and generate names.
+    # infact, for the local instance of SP we don't need to do any blasting as if a sequence already matched
+    # one of the named reference sequences it would already have been given that name
+
+
     listOfSeqNamesThatAlreadyExist = [refSeq.name for refSeq in reference_sequence.objects.filter(hasName=True)]
     listOfSeqNamesThatAlreadyExist.append('D1a')
 
@@ -6542,6 +6549,8 @@ def namingRefSeqsUsedInDefs():
         # Read in blast output
         blastOutputFile = readDefinedFileToList(blastOutputPath)
 
+        #TODO This was only when we had Arif seqs in the refSeqDB that weren't in the data base already
+        # once we have added the arif seqs to the db then this code will be redundant.
         # First go through and assign names to the 100% coverage and matches
         for bo in blastOutputFile:
             splitEl = bo.split('\t')
@@ -6558,6 +6567,7 @@ def namingRefSeqsUsedInDefs():
                     apples = 'asdf' # We have an issue if we get here because we have a 100% match to a refseq
                     # but that ref seqname has aleady been associated with a different seq
 
+        #TODO this is now the only purpose of the naming.
         # Now assign names to those that aren't exact matches
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
             config_dict = json.load(f)
