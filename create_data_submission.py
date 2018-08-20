@@ -728,7 +728,7 @@ def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict, r
                 # Then this is a match
                 nodeToRefDict[nodeName] = refSeqIdDict[ref_seq_key]
                 print('Assigning MED node {} to existing reference sequence {}'.format(
-                    nodeName, refSeqIDNameDict[refSeqIdDict[ref_seq_key]]))
+                    nodeName, refSeqIdDict[refSeqIdDict[ref_seq_key]]))
                 return True
     return False
 
