@@ -6459,15 +6459,15 @@ def getAbundStr(totlist, sdlist, majlist):
 
 
 def namingRefSeqsUsedInDefs():
+    # TODO we now have all of the arif sequences entered into our database. This means that we can dispense of havng a
+    # refSeqDB written out in our directory. Instead we can simply create a fasta from all of the named
+    # reference_sequences that we currently have in the database and use this to blast against and generate names.
+    # in fact, for the local instance of SP we don't need to do any blasting as if a sequence already matched
+    # one of the named reference sequences it would already have been given that name
+
     listOfSeqNamesThatAlreadyExist = [refSeq.name for refSeq in reference_sequence.objects.filter(hasName=True)]
     listOfSeqNamesThatAlreadyExist.append('D1a')
 
-    # The full path of the refSeqDB.fa
-    refFasta = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), 'symbiodiniumDB/referenceSeqDB')) + '/refSeqDB.fa'
-
-    # List of the reference sequence names
-    listOfRefSeqDBNames = [a[1:] for a in refFasta if a[0] == '>']
 
     # Get list of referenceSeqs that are found in the analysis and are used in the type descriptions
     # Get list of analysisTypes
@@ -6483,14 +6483,14 @@ def namingRefSeqsUsedInDefs():
     # we only need to name the refSeqs that don't already have a name
     listOfDefiningRefSeqs = list(reference_sequence.objects.filter(id__in=listOfDefiningRefSeqIDs, hasName=False))
 
-    ### DEBUG ###
-    # Perform sanity check to see that all of the seqs are independent of each other e.g. none are subsets or super sets
-    for a, b in itertools.combinations(listOfDefiningRefSeqs, 2):
-        if a.sequence in b.sequence:
-            apples = 'asdf'
-        elif b.sequence in a.sequence:
-            apples = 'asdf'
-    ### DEBUG ###
+    # ### DEBUG ###
+    # # Perform sanity check to see that all of the seqs are independent of each other e.g. none are subsets or super sets
+    # for a, b in itertools.combinations(listOfDefiningRefSeqs, 2):
+    #     if a.sequence in b.sequence:
+    #         apples = 'asdf'
+    #     elif b.sequence in a.sequence:
+    #         apples = 'asdf'
+    # ### DEBUG ###
 
     # When we made the code to assign sequences to refseqs or create new refseqs we were smart in that
     # if we had a new sequence that was bigger than a refseq we collapsed the big seq to the refseq.
@@ -6512,88 +6512,86 @@ def namingRefSeqsUsedInDefs():
 
         os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')))
 
+        # TODO generate a fasta, and make a blast dict that above unamed DIV sequence can be blasted again for
+        # sequence name generation.
+        # This fasta should simply be the named sequences already in the SP database
+        # lets call the fasta 'named_seqs_in_SP_remote_db.fa'
+
+        # create the fasta
+        named_seqs_in_SP_remote_db_fasta_list = []
+        for rs in reference_sequence.objects.filter(hasName=True):
+            named_seqs_in_SP_remote_db_fasta_list.extend(['>{}'.format(rs.name), rs.sequence])
+
+        named_seqs_in_SP_remote_db_fasta_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/named_seqs_in_SP_remote_db.fa'
+
+        # and write out
+        writeListToDestination(destination=named_seqs_in_SP_remote_db_fasta_path, listToWrite=named_seqs_in_SP_remote_db_fasta_list)
+
+        # now create blast db from the fasta
+        completed_process = subprocess.run(
+            ['makeblastdb', '-in', named_seqs_in_SP_remote_db_fasta_path, '-dbtype', 'nucl', '-title',
+             'named_seqs_in_SP_remote_db'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
         # Run local blast
         # completedProcess = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
         completedProcess = subprocess.run(
-            ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'refSeqDB.fa',
+            ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'named_seqs_in_SP_remote_db.fa',
              '-max_target_seqs', '1', '-num_threads', '3'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Read in blast output
         blastOutputFile = readDefinedFileToList(blastOutputPath)
 
-        # First go through and assign names to the 100% coverage and matches
+        # Now assign names to those that aren't exact matches
         for bo in blastOutputFile:
             splitEl = bo.split('\t')
-            if int(float(splitEl[3])) == 100 and int(splitEl[4]) == 100:
-                potentialName = splitEl[1]
-                if potentialName not in listOfSeqNamesThatAlreadyExist:
-                    # Then we can assign this name to the refSeq
-                    refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
-                    refSeqInQ.name = potentialName
-                    refSeqInQ.hasName = True
-                    refSeqInQ.save()
-                    listOfSeqNamesThatAlreadyExist.append(potentialName)
-                else:
-                    apples = 'asdf'  # We have an issue if we get here because we have a 100% match to a refseq
-                    # but that ref seqname has aleady been associated with a different seq
-
-        # Now assign names to those that aren't exact matches
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        if config_dict['system_type'] == 'remote':
-            for bo in blastOutputFile:
-                splitEl = bo.split('\t')
-                refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
-                if not refSeqInQ.hasName:
-                    newName = createNewRefSeqName(splitEl[1], listOfSeqNamesThatAlreadyExist, listOfRefSeqDBNames)
-                    refSeqInQ.name = newName
-                    refSeqInQ.hasName = True
-                    refSeqInQ.save()
-                    listOfSeqNamesThatAlreadyExist.append(newName)
+            refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
+            if not refSeqInQ.hasName:
+                newName = createNewRefSeqName(splitEl[1], listOfSeqNamesThatAlreadyExist)
+                refSeqInQ.name = newName
+                refSeqInQ.hasName = True
+                refSeqInQ.save()
+                listOfSeqNamesThatAlreadyExist.append(newName)
 
         # Finally update the type names
+        # This only needs to be done if the sequence names have been changed
+        # The sequence names will only have been changed if new sequence names were generated
+        # new names will only be generated if we are system_type remote
         IDs = [att.id for att in at]
         for i in range(len(IDs)):
             typeInQ = analysis_type.objects.get(id=IDs[i])
             typeInQ.name = typeInQ.generateName()
             typeInQ.save()
 
-    # update the refSeqDB blast database so that it holds all named sequences
-    path_for_refSeqDB = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa'))
-    # make a fasta that is all of the named seqs
-    fasta_to_write = []
+        # TODO now clean up the binary files from the blast dict creation
+        # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
+        sym_db_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
+        list_of_dir = os.listdir(sym_db_dir)
+        for item in list_of_dir:
+            if 'named_seqs_in_SP_remote_db.fa' in item:
+                os.remove(os.path.join(sym_db_dir, item))
 
-    # Keep track of which sequences have already been written out so that we can check which of the Arif seqs
-    # need to be put in.
-    seqs_written = []
+        # TODO remake the fasta and write out.
+        # create the fasta
+        named_seqs_in_SP_remote_db_fasta_list = []
+        for rs in reference_sequence.objects.filter(hasName=True):
+            named_seqs_in_SP_remote_db_fasta_list.extend(['>{}'.format(rs.name), rs.sequence])
 
-    for rs in reference_sequence.objects.filter(hasName=True):
-        fasta_to_write.extend(['>{}'.format(rs.name), '{}'.format(rs.sequence)])
-        seqs_written.append(rs.name)
+        named_seqs_in_SP_remote_db_fasta_path = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/named_seqs_in_SP_remote_db.fa'
 
-    # now add those seqs from the arif ITS2 database that have not already been added
-    original_fasta = readDefinedFileToList(
-        os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa')))
-    for i in range(len(original_fasta)):
-        if original_fasta[i][0] == '>':  # Then this is a seq name line
-            if original_fasta[i][1:] not in seqs_written:
-                # then this sequence is not yet found in our output fasta so add it
-                fasta_to_write.extend([original_fasta[i], original_fasta[i + 1]])
+        # and write out
+        writeListToDestination(destination=named_seqs_in_SP_remote_db_fasta_path,
+                               listToWrite=named_seqs_in_SP_remote_db_fasta_list)
 
-    # here we have the new fasta in a list. Now write it out
-    writeListToDestination(path_for_refSeqDB, fasta_to_write)
 
-    # now create blast db from the fasta
-    completed_process = subprocess.run(
-        ['makeblastdb', '-in', path_for_refSeqDB, '-dbtype', 'nucl', '-title',
-         'refSeqDB'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
 
     analysisObj.refSeqsNamed = True
     analysisObj.save()
     return
 
 
-def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist, listofrefseqdbnames):
+def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
     # This code happens when we have a seq that needs a name
     # We know the seq is not an exact match so we make a derivative name
     # closestMatch[0] = closestMatch name
@@ -6608,19 +6606,16 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist, listofrefs
     # Then two sets and then three, i.e. aab aac aad ... aba abb abc etc.
     alphaList = string.ascii_letters[0:26]
     for alpha in alphaList:
-        if baseName + alpha not in listofseqnamesthatalreadyexist and baseName + alpha not in listofrefseqdbnames:
-            # TODO we also need to check if the new name is already in the reference database.
-            # if it is we can't associate to this name as later on we might find a seq that does
-            # have a 100% coverage and match ot that name
+        if baseName + alpha not in listofseqnamesthatalreadyexist:
             return baseName + alpha
     for alpha in alphaList:
         for alphaTwo in alphaList:
-            if baseName + alpha + alphaTwo not in listofseqnamesthatalreadyexist and baseName + alpha + alphaTwo not in listofrefseqdbnames:
+            if baseName + alpha + alphaTwo not in listofseqnamesthatalreadyexist:
                 return baseName + alpha + alphaTwo
     for alpha in alphaList:
         for alphaTwo in alphaList:
             for alphaThree in alphaList:
-                if baseName + alpha + alphaTwo + alphaThree not in listofseqnamesthatalreadyexist and baseName + alpha + alphaTwo + alphaThree not in listofrefseqdbnames:
+                if baseName + alpha + alphaTwo + alphaThree not in listofseqnamesthatalreadyexist:
                     return baseName + alpha + alphaTwo + alphaThree
 
     return False
@@ -6676,9 +6671,17 @@ def main(dataanalysistwoobject, cores):
     ####################################
 
     ####### SEQUENCE NAMING #########
-    print('Naming defining reference Sequences')
-    if not analysisObj.refSeqsNamed:
-        namingRefSeqsUsedInDefs()
+    # Name generation of sequence will only occur for the local instance of SP
+    with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
+        config_dict = json.load(f)
+    if config_dict['system_type'] == 'remote':
+        print('Naming defining reference Sequences')
+        if not analysisObj.refSeqsNamed:
+            namingRefSeqsUsedInDefs()
+    else:
+        print('Automatic sequence name generation is currently disabled for local instances of SymPortal.\n'
+              'This is to prevent naming conlifcts between the remote and the '
+              'local instances of SymPortal from arising\n')
     ####################################
 
     ####### SPECIES ASSIGNMENT #########
