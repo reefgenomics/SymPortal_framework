@@ -1118,6 +1118,24 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     ################### CREATE CONTIGS SAMPLE BY SAMPLE #################
 
+        # TODO check to see whether the reference_fasta_database_used has been created
+        # we no longer by default have the blast binaries already made so that we don't have to have them up on
+        # github. As such if this is the first time or if there has been an update of something
+        # we should create the bast dictionary from the .fa
+        list_of_binaries = [dataSubmissionInQ.reference_fasta_database_used + extension for extension in
+                            ['.nhr', '.nin', '.nsq']]
+        list_of_dir = os.listdir(wkd)
+        binary_count = 0
+        for item in list_of_dir:
+            if item in list_of_binaries:
+                binary_count += 1
+        if binary_count != 3:
+            # then some of the binaries are not present and we need to regenerate the blast dictionary
+            # generate the blast dictionary again
+            completed_process = subprocess.run(
+                ['makeblastdb', '-in', dataSubmissionInQ.reference_fasta_database_used, '-dbtype', 'nucl', '-title',
+                 dataSubmissionInQ.reference_fasta_database_used.replace('.fa', '')], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
 
         print('Processing fastQ files')
 
@@ -1258,22 +1276,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     inputPath = r'{}/blastInputFasta.fa'.format(wkd)
     os.chdir(wkd)
 
-    #TODO check to see whether the reference_fasta_database_used has been created
-    # we no longer by default have the blast binaries already made so that we don't have to have them up on
-    # github. As such if this is the first time or if there has been an update of something
-    # we should create the bast dictionary from the .fa
-    list_of_binaries = [dataSubmissionInQ.reference_fasta_database_used + extension for extension in ['.nhr', '.nin', '.nsq']]
-    list_of_dir = os.listdir(wkd)
-    binary_count = 0
-    for item in list_of_dir:
-        if item in list_of_binaries:
-            binary_count += 1
-    if binary_count != 3:
-        # then some of the binaries are not present and we need to regenerate the blast dictionary
-        # generate the blast dictionary again
-        completed_process = subprocess.run(
-            ['makeblastdb', '-in', dataSubmissionInQ.reference_fasta_database_used, '-dbtype', 'nucl', '-title',
-             dataSubmissionInQ.reference_fasta_database_used.replace('.fa', '')], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
 
 
     # Run local blast
