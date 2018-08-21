@@ -1234,8 +1234,9 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     # Here I also want to by default output a sequence drop that is a drop of the named sequences and their associated
     # sequences so that we mantain a link of the sequences to the names of the sequences
     sequence_drop_file = perform_sequence_drop()
-    writeListToDestination(os.path.dirname(__file__) + '/dbBackUp/seq_dumps/seq_dump_' + str(datetime.now()), sequence_drop_file)
-
+    sequence_drop_path = os.path.dirname(__file__) + '/dbBackUp/seq_dumps/seq_dump_' + str(datetime.now())
+    sys.stdout.write('\n\nBack up of named reference_sequences output to {}\n'.format(sequence_drop_path))
+    writeListToDestination(sequence_drop_path, sequence_drop_file)
 
 
     ###### Assess and print out a fasta of the sequences that were found in multiple samples but were
