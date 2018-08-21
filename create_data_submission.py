@@ -627,6 +627,10 @@ def deuniqueWorker(input, output):
     # will have to save the list of directories and go through them one by one to create the sequences
 
     for mBatchFilePath in iter(input.get, 'STOP'):
+
+        cwd = os.path.dirname(mBatchFilePath)
+        sampleName = cwd.split('/')[-2]
+
         sys.stdout.write('{}: deuniqueing QCed seqs\n'.format(sampleName))
         found = True
 
@@ -636,8 +640,7 @@ def deuniqueWorker(input, output):
         # Modify the deuniqued fasta to append sample name to all of the sequences
         # Get list of files in directory
         deuniquedFasta = []
-        cwd = os.path.dirname(mBatchFilePath)
-        sampleName = cwd.split('/')[-2]
+
         # Replace '_' in name as MED uses text up to first underscore as sample name
         # This shouldn't be necessary
         #sampleName = sampleName.replace('_', '-')
@@ -1161,7 +1164,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         allProcesses = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
-        sys.stdout.write('\n\nPerforming QC\n')
+        sys.stdout.write('\nPerforming QC\n')
         for n in range(numProc):
             p = Process(target=worker, args=(taskQueue, outputQueue, wkd, dSID, e_value_multiP_dict, dataSubmissionInQ.reference_fasta_database_used))
             allProcesses.append(p)
@@ -1178,7 +1181,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             failedList.append(i)
 
         sys.stdout.write('\n\n{0} out of {1} samples successfully passed QC.\n'
-              '{2} samples produced erorrs'.format((len(sampleFastQPairs)-len(failedList)), len(sampleFastQPairs), len(failedList)))
+              '{2} samples produced erorrs\n'.format((len(sampleFastQPairs)-len(failedList)), len(sampleFastQPairs), len(failedList)))
         for contigPair in sampleFastQPairs:
             sampleName = contigPair.split('\t')[0].replace('[dS]', '-')
             if sampleName not in failedList:
@@ -1215,7 +1218,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     readMeList = []
     sumMessage = '{0} out of {1} samples successfully passed QC.\n' \
-                 '{2} samples produced erorrs'.format((len(sampleList) - len(failedList)), len(sampleList),
+                 '{2} samples produced erorrs\n'.format((len(sampleList) - len(failedList)), len(sampleList),
                                                len(failedList))
     print(sumMessage)
     readMeList.append(sumMessage)
