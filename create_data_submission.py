@@ -1217,7 +1217,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             failedList.append(sample.name)
 
     readMeList = []
-    sumMessage = '{0} out of {1} samples successfully passed QC.\n' \
+    sumMessage = '\n\n{0} out of {1} samples successfully passed QC.\n' \
                  '{2} samples produced erorrs\n'.format((len(sampleList) - len(failedList)), len(sampleList),
                                                len(failedList))
     print(sumMessage)
