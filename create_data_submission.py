@@ -14,6 +14,7 @@ import json
 import glob
 from datetime import datetime
 import sys
+import pandas as pd
 
 ###### Generic functions ######
 def readDefinedFileToList(filename):
@@ -744,41 +745,6 @@ def collateFilesForMed(listofdeuniquedfastapaths, wkd):
 
     return
 
-def runMED(wkd):
-    # For each of the files in the wkd/deuniquedFastaForMed directory
-    # Pad gaps
-    # Decompose
-
-
-    # Get files
-    # and pad
-
-    listOfFiles = []
-    for (dirpath, dirnames, filenames) in os.walk('{}/deuniquedFastaForMED/'.format(wkd)):
-        listOfFiles.extend(filenames)
-        break
-    for file in listOfFiles:
-        if '.fasta' in file and 'PADDED' not in file:
-            pathToFile = '{}/deuniquedFastaForMED/{}'.format(wkd, file)
-            # Sanity check at debug to how sample information is extracted
-            #completedProcess = subprocess.run([r'o-get-sample-info-from-fasta', r'{0}'.format(pathToFile)])
-            completedProcess = subprocess.run([r'o-pad-with-gaps', r'{0}'.format(pathToFile)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    #Decompose
-    listOfFiles = []
-    for (dirpath, dirnames, filenames) in os.walk('{}/deuniquedFastaForMED/'.format(wkd)):
-        listOfFiles.extend(filenames)
-        break
-    for file in listOfFiles:
-        if 'PADDED' in file: # Then this is one of the padded fastas
-            clade = file.split('.')[1]
-            pathToFile = '{}/deuniquedFastaForMED/{}'.format(wkd, file)
-            outputDir = '{}/deuniquedFastaForMED/{}'.format(wkd, clade)
-            os.makedirs(outputDir, exist_ok=True)
-            completedProcess = subprocess.run([r'decompose', '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o', outputDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-    return
-
 
 def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
     ''' Here we have modified the original method processMEDDataDirectCCDefinition'''
@@ -972,8 +938,12 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
     return
 
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
-         full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload'):
+         full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload', data_sheet_path=None):
 
+
+    # Create a pandas df from the data_sheet if it was provided
+    if data_sheet_path:
+        sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:O')
 
 
     ############### UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE ##################
@@ -981,7 +951,10 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     dataSubmissionInQ = data_set.objects.get(id=dSID)
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     if dataSubmissionInQ.initialDataProcessed == False:
-        # create directory in which to write process files
+
+
+        # working directory will be housed in a temp folder within the directory in which the sequencing data
+        # is currently housed
         if '.' in pathToInputFile.split('/')[-1]:
             # then this path points to a file rather than a directory and we should pass through the path only
             wkd = os.path.abspath('{}/tempData/{}'.format(os.path.dirname(pathToInputFile), dSID))
@@ -989,6 +962,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             # then we assume that we are pointing to a directory and we can directly use that to make the wkd
             wkd = os.path.abspath('{}/tempData/{}'.format(pathToInputFile, dSID))
 
+        # if the directory already exists remove it and start from scratch
         if os.path.exists(wkd):
             shutil.rmtree(wkd)
         os.makedirs(wkd)
@@ -996,14 +970,15 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
         # Check to see if the files are already decompressed
         # If so then simply copy the files over to the destination folder
+        # we do this copying so that we don't corrupt the original files
+        # we will delte these duplicate files after processing
         compressed = True
 
+
         for file in os.listdir(pathToInputFile):
-
-
             if 'fastq.gz' in file or 'fq.gz' in file:
                 # Then there is a fastq.gz already uncompressed in this folder
-                # In this case we will assume that the seq data is not compressed into a mast .zip or .gz
+                # In this case we will assume that the seq data is not compressed into a master .zip or .gz
                 # Copy to the wkd
                 compressed = False
                 os.chdir('{}'.format(pathToInputFile))
@@ -1017,6 +992,8 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                 elif 'fq.gz' in file:
                     completedProcess = subprocess.run(['cp'] + glob.glob('*.fq.gz') + [wkd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
                 break
+
+        # if compressed then we are dealing with a single compressed file that should contain the fastq.gz pairs
         # Decompress the file to destination
         if compressed:
             extComponents = pathToInputFile.split('.')
@@ -1028,38 +1005,54 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                 completedProcess = subprocess.run(["gunzip", "-c", pathToInputFile, ">", wkd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-        # TODO see if we can make this simpler
-        # Get rid of any dashes in the .gz filenames
-        # Mothur does not allow '-' character in group names
-        # When we use the filename anywhere but Mothur we can replace the tilde with the dash
-        # Get string upto first underscore and consider it name
-        # Check to see that it is not shared by more than two samples
-        # Do this for each name. If it is shared then use the next underscore
 
-        list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
+        # Identify sample names
+        if data_sheet_path:
+            # get the list of names from the index of the sample_meta_df
+            list_of_names = sample_meta_df.index.values.toList()
+            # we will also need to know how to relate the samples to the fastq files
+            # for this we will make a dict of fastq file name to sample
+            # but before we do this we should verify that all of the fastq files listed in the sample_meta_df
+            # are indeed found in the directory that we've been given
+            list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
+            list_of_meta_gz_files = []
+            list_of_meta_gz_files.extend(sample_meta_df['fastq_fwd_file_name'].values.toList())
+            list_of_meta_gz_files.extend(sample_meta_df['fastq_rev_file_name'].values.toList())
+            for fastq in list_of_meta_gz_files:
+                if fastq not in list_of_meta_gz_files:
+                    sys.exit('{} listed in data_sheet not found'.format(fastq, wkd))
+            # now make the dictionary
+            fastq_file_to_sample_name_dict = {}
+            for sample_index in sample_meta_df.index.values.toList():
+                fastq_file_to_sample_name_dict[sample_meta_df.iloc[sample_index, 'fastq_fwd_file_name']] = sample_index
+                fastq_file_to_sample_name_dict[sample_meta_df.iloc[sample_index, 'fastq_rev_file_name']] = sample_index
 
-        # I think the simplest way to get sample names is actually to find what parts are common between all samples
-        # well actually 50% of the samples so that we also remove the R1 and R2 parts.
 
-        i = 1
-        while 1:
-            list_of_endings = []
+        else:
+            list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
+
+            # I think the simplest way to get sample names is to find what parts are common between all samples
+            # well actually 50% of the samples so that we also remove the R1 and R2 parts.
+
+            i = 1
+            while 1:
+                list_of_endings = []
+                for file in list_of_gz_files_in_wkd:
+                    list_of_endings.append(file[-i:])
+                if len(set(list_of_endings)) > 2:
+                    break
+                else:
+                    i += 1
+                    # then this is one i too many and our magic i was i-1
+            end_index = i-1
+
+            list_of_names_non_unique = []
             for file in list_of_gz_files_in_wkd:
-                list_of_endings.append(file[-i:])
-            if len(set(list_of_endings)) > 2:
-                break
-            else:
-                i += 1
-                # then this is one i too many and our magic i was i-1
-        end_index = i-1
+                list_of_names_non_unique.append(file[:-end_index])
+            list_of_names = list(set(list_of_names_non_unique))
 
-        list_of_names_non_unique = []
-        for file in list_of_gz_files_in_wkd:
-            list_of_names_non_unique.append(file[:-end_index])
-        list_of_names = list(set(list_of_names_non_unique))
-
-        if len(list_of_names) != len(list_of_gz_files_in_wkd)/2:
-            sys.exit('Error in sample name extraction')
+            if len(list_of_names) != len(list_of_gz_files_in_wkd)/2:
+                sys.exit('Error in sample name extraction')
 
 
         # Make a batch file for mothur, set input and output dir and create a .file file
@@ -1073,19 +1066,42 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         completedProcess = subprocess.run(['mothur', r'{0}/mBatchFile_makeFile'.format(wkd)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
-        # So for the mothur we have '_'s. But for all else we convert these '_'s to dashes
+        # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
         sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
 
         newstabilityFile = []
-        for pair in sampleFastQPairs:
-            pairComponenets = pair.split('\t')
-            # I am going to use '[dS]' as a place holder for a dash
-            # If I remember correctly each line of the stability file is a three column format with the first
-            # column being the sample name. The second and third are the full paths of the .fastq.gz files
+        # if we have a data_sheet_path then we will use the sample names that the user has associated to each
+        # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
+        # if we do not have a data_sheet path then we will get the sample name from the first
+        # fastq using the end_index that we determined above
+        if data_sheet_path:
+            for stability_file_line in sampleFastQPairs:
+                pairComponenets = stability_file_line.split('\t')
+                # I am going to use '[dS]' as a place holder for a dash in the sample names
+                # Each line of the stability file is a three column format with the first
+                # column being the sample name. The second and third are the full paths of the .fastq.gz files
+                # the sample name at the moment is garbage, we will identify the sample name from the
+                # first fastq path using the fastq_file_to_sample_name_dict
 
-            newstabilityFile.append('{}\t{}\t{}'.format(
-                pairComponenets[1].split('/')[-1][:-end_index].replace('-', '[dS]'),
-                pairComponenets[1], pairComponenets[2]))
+                newstabilityFile.append(
+                    '{}\t{}\t{}'.format(
+                        fastq_file_to_sample_name_dict[pairComponenets[1].split('/')[-1]].replace('-', '[dS]'),
+                        pairComponenets[1],
+                        pairComponenets[2]))
+        else:
+            for stability_file_line in sampleFastQPairs:
+                pairComponenets = stability_file_line.split('\t')
+                # I am going to use '[dS]' as a place holder for a dash in the sample names
+                # Each line of the stability file is a three column format with the first
+                # column being the sample name. The second and third are the full paths of the .fastq.gz files
+                # the sample name at the moment is garbage, we will extract the sample name from the
+                # first fastq path using the end_index that we determined above
+
+                newstabilityFile.append(
+                    '{}\t{}\t{}'.format(
+                    pairComponenets[1].split('/')[-1][:-end_index].replace('-', '[dS]'),
+                    pairComponenets[1],
+                    pairComponenets[2]))
 
 
 
@@ -1098,23 +1114,40 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
 
         # Create data_set_sample instances
-        listOfSamples = []
+        list_of_sample_objects = []
         sys.stdout.write('\nCreating data_set_sample objects\n')
         for sampleName in list_of_names:
             print('\rCreating data_set_sample {}'.format(sampleName))
+            # Create the data_set_sample objects in bulk.
             # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
             # sample divided by clade. This is used in the output to keep track of sequences that are not
             # included in cladeCollections
             emptyCladalSeqTotals = json.dumps([0 for cl in cladeList])
-            dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ, cladalSeqTotals=emptyCladalSeqTotals)  # We can do this using bulk_create
-            listOfSamples.append(dss)
+            if data_sheet_path:
+                dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ,
+                                      cladalSeqTotals=emptyCladalSeqTotals,
+                                      sample_type          = sample_meta_df.iloc[sampleName, 'sample_type'],
+                                      host_phylum          = sample_meta_df.iloc[sampleName, 'host_phylum'],
+                                      host_class           = sample_meta_df.iloc[sampleName, 'host_class'],
+                                      host_order           = sample_meta_df.iloc[sampleName, 'host_order'],
+                                      host_family          = sample_meta_df.iloc[sampleName, 'host_family'],
+                                      host_genus           = sample_meta_df.iloc[sampleName, 'host_genus'],
+                                      host_species         = sample_meta_df.iloc[sampleName, 'host_species'],
+                                      collection_latitude  = sample_meta_df.iloc[sampleName, 'collection_latitude'],
+                                      collection_longitude = sample_meta_df.iloc[sampleName, 'collection_longitude'],
+                                      collection_date      = sample_meta_df.iloc[sampleName, 'collection_date'],
+                                      collection_depth     = sample_meta_df.iloc[sampleName, 'collection_depth']
+                                      )
+            else:
+                dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ, cladalSeqTotals=emptyCladalSeqTotals)
+            list_of_sample_objects.append(dss)
             # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-        smpls = data_set_sample.objects.bulk_create(listOfSamples)
+        smpls = data_set_sample.objects.bulk_create(list_of_sample_objects)
 
 
     ################### CREATE CONTIGS SAMPLE BY SAMPLE #################
 
-        # TODO check to see whether the reference_fasta_database_used has been created
+        # check to see whether the reference_fasta_database_used has been created
         # we no longer by default have the blast binaries already made so that we don't have to have them up on
         # github. As such if this is the first time or if there has been an update of something
         # we should create the bast dictionary from the .fa

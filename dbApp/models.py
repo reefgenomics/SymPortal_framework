@@ -107,6 +107,23 @@ class data_set_sample(models.Model):
     errorReason = models.CharField(max_length=100, default='noError')
     cladalSeqTotals = models.CharField(max_length=5000, null=True)
 
+    # Meta data for the sample
+    sample_type = models.CharField(max_length=50, default='NoData')
+    host_phylum = models.CharField(max_length=50, default='NoData')
+    host_class = models.CharField(max_length=50, default='NoData')
+    host_order = models.CharField(max_length=50, default='NoData')
+    host_family = models.CharField(max_length=50, default='NoData')
+    host_genus = models.CharField(max_length=50, default='NoData')
+    host_species = models.CharField(max_length=50, default='NoData')
+    collection_latitude = models.DecimalField(max_digits=11, decimal_places=8, default=999.99999999)
+    collection_longitude = models.DecimalField(max_digits=11, decimal_places=8, default=999.99999999)
+    # do not use the django date field as this causes problems when trying to dump and load the database
+    collection_date = models.CharField(max_length=40, default='NoData')
+    # store a string rather than a number as this may be given as a range e.g. 6 - 12
+    collection_depth = models.CharField(max_length=40, default='NoData')
+
+
+
     def __str__(self):
         return self.name
 

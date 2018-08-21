@@ -22,6 +22,7 @@ import data_sub_collection_run
 import create_data_submission
 from collections import defaultdict
 import json
+import sys
 
 
 ###### Generic functions ######
@@ -60,15 +61,19 @@ def main():
 
     # Mutually exclusive arguments
     group.add_argument('--submit', metavar='path_to_dir', help='Run this to submit data to the framework\'s database. '
-                                                               'This command takes a '
-                                                               'single argument giving the directory containing the '
+                                                               'The first argument to this command must be an absolute '
+                                                               'path to a directory containing  the '
                                                                'paired sequencing reads in .fastq.gz '
-                                                               'format. Alternatively, the path can point directly to a'
+                                                               'format. Alternatively, this path can point directly to a'
                                                                ' single compressed file containing the '
-                                                               'same paired fastq.gz files. A name must be associated with '
-                                                               'the data_set using the --name flag. The number of '
-                                                               'processes to use can also be specified using the '
-                                                               '--num_proc flag')
+                                                               'same paired fastq.gz files. '
+                                                               '\nA name must be associated with '
+                                                               'the data_set using the --name flag. '
+                                                               '\nThe number of processes to use can also be specified '
+                                                               'using the --num_proc flag.'
+                                                               '\nA datasheet can also be uploaded using the '
+                                                               '--data_sheet flag and the full path to the .xlxs '
+                                                               'data_sheet file. (RECOMMENDED)')
 
 
     group.add_argument('--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
@@ -118,14 +123,15 @@ def main():
     group.add_argument('--vacuum_database', action='store_true', help='Vacuuming the database will free up memory from '
                                                                      'objects that have been deleted recently')
     parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
+    parser.add_argument('--data_sheet', help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
     args = parser.parse_args()
 
 
     # Code to run the main functionality of SymPortal
     if args.submit:
         if args.name == 'noName':
-            print('Please provide a name using the --name flag. e.g. --name splendid_dataset')
-            return
+            sys.exit('Please provide a name using the --name flag. e.g. --name splendid_dataset')
+
 
 
         # This is how we read data into the SP database
@@ -150,7 +156,13 @@ def main():
         else:
             screen_sub_evalue_bool = False
 
-        create_data_submission.main(input_dir, new_data_set.id, num_proc, screen_sub_evalue=screen_sub_evalue_bool)
+        if args.data_sheet:
+            if os.path.isfile(args.data_sheet):
+                create_data_submission.main(input_dir, new_data_set.id, num_proc, screen_sub_evalue=screen_sub_evalue_bool, data_sheet_path=args.data_sheet)
+            else:
+                sys.exit('{} not found'.format(args.data_sheet))
+        else:
+            create_data_submission.main(input_dir, new_data_set.id, num_proc, screen_sub_evalue=screen_sub_evalue_bool)
 
     elif args.analyse:
         if args.name == 'noName':
