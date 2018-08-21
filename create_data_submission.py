@@ -13,6 +13,7 @@ import re
 import json
 import glob
 from datetime import datetime
+import sys
 
 ###### Generic functions ######
 def readDefinedFileToList(filename):
@@ -120,7 +121,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             #Initial Mothur QC, making contigs, screening for ambiguous calls and homopolymers
             # Uniqueing, discarding <2 abundance seqs, removing primers and adapters
 
-            print('Sample: {0}'.format(sampleName))
+            sys.stdout.write('{0}: QC started\n'.format(sampleName))
             currentDir = r'{0}/{1}/'.format(wkd, sampleName)
             os.makedirs(currentDir, exist_ok=True)
             stabilityFile = [contigPair]
@@ -163,11 +164,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             mBatchFilePath = r'{0}{1}{2}'.format(currentDir, 'mBatchFile', sampleName)
             writeListToDestination(mBatchFilePath, mBatchFile)
 
-            # TODO Alejandros samples are causing us problems as they are presenting lots of errors when they
-            # are running. We will try to intercept the error messages and kill the process if we get them
-            #TODO if we get the blank fasta name error that causes Mothur to stall then we can take the contig
-            # pair out and run it through pandaseq to get the contigs and then put it back into mothur.
-            # This could be the way we save Alejandros 120 samples that seem to be causing an issue.
+
             error = False
 
             with subprocess.Popen(['mothur', '{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, bufsize=1, universal_newlines=True) as p:
@@ -175,7 +172,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
                     # print(line)
                     if '[WARNING]: Blank fasta name, ignoring read.' in line:
 
-                        #DEBUGing
+
 
                         p.terminate()
                         errorReason = 'Blank fasta name'
@@ -183,18 +180,10 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
                         error = True
                         output.put(sampleName)
                         break
-            apples = 'pears'
-                # # It may be that we make it through the above mothur run without receiving the specific error message
-                # # but an error may still have occoured so we should leave the following line in here.
-                # if not error and p.returncode == 1:
-                #     errorReason = 'make.contig but not Blank fasta name'
-                #     logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
-                #     output.put(sampleName)
-                #     continue
+
+
             if error:
                 continue
-            apples = 'pears'
-
 
 
             # Here check the outputted files to see if they are reverse complement or not by running the pcr.seqs and checking the results
@@ -241,15 +230,14 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             writeListToDestination(mBatchFilePath, mBatchFileContinued)
             completedProcess = subprocess.run(
                 ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            #TODO examine which name file it is that we will need to break down in order to get the value for the
-            # absolute number of sequences after the QC.
+
 
             if completedProcess.returncode == 1:
                 errorReason = 'error in inital QC'
                 logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
                 output.put(sampleName)
                 continue
-            print('{}: initial mothur complete'.format(sampleName))
+
 
             # Check to see if there are sequences in the PCR output file
             try:
@@ -269,13 +257,13 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             lastSummary = readDefinedFileToList('{}{}.trim.contigs.summary'.format(currentDir, rootName))
             number_of_seqs_contig_absolute = len(lastSummary) - 1
             dataSetSampleInstanceInQ.initialTotSeqNum = number_of_seqs_contig_absolute
-            print('Sample: {}; dataSetSampleInstanceInQ.initialTotSeqNum = {}'.format(sampleName, number_of_seqs_contig_absolute))
+            sys.stdout.write('{}: dataSetSampleInstanceInQ.initialTotSeqNum = {}\n'.format(sampleName, number_of_seqs_contig_absolute))
 
             # Get number of sequences after unique
             lastSummary = readDefinedFileToList('{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(currentDir, rootName))
             number_of_seqs_contig_unique = len(lastSummary) - 1
             dataSetSampleInstanceInQ.initialUniqueSeqNum = number_of_seqs_contig_unique
-            print('Sample: {}; dataSetSampleInstanceInQ.initialUniqueSeqNum = {}'.format(sampleName, number_of_seqs_contig_unique))
+            sys.stdout.write('{}: dataSetSampleInstanceInQ.initialUniqueSeqNum = {}\n'.format(sampleName, number_of_seqs_contig_unique))
 
             # Get absolute number of sequences after after sequence QC
             last_summary = readDefinedFileToList('{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(currentDir, rootName))
@@ -284,13 +272,10 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
                 absolute_count += int(line.split('\t')[6])
             dataSetSampleInstanceInQ.post_seq_qc_absolute_num_seqs = absolute_count
             dataSetSampleInstanceInQ.save()
-            print('Sample: {}; dataSetSampleInstanceInQ.post_seq_qc_absolute_num_seqs = {}'.format(sampleName,
+            sys.stdout.write('{}: dataSetSampleInstanceInQ.post_seq_qc_absolute_num_seqs = {}\n'.format(sampleName,
                                                                                                    absolute_count))
 
-            if sampleName == 'P7-F05_P7-F05_N705-S520':
-                apples = 'asdf'
-
-            print('Initial mothur complete')
+            sys.stdout.write('{}: Initial mothur complete\n'.format(sampleName))
             # Each sampleDataDir should contain a set of .fasta, .name and .group files that we can use to do local blasts with
 
             ncbircFile = []
@@ -302,7 +287,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
 
 
             # Run local blast of all seqs and determine clade. Discard seqs below evalue cutoff and write out new fasta, name, group and clade dict
-            print('Verifying seqs are Symbiodinium and determining clade: {}'.format(rootName.replace('stability','')))
+            sys.stdout.write('{}: verifying seqs are Symbiodinium and determining clade\n'.format(sampleName))
 
             #write the .ncbirc file that gives the location of the db
             writeListToDestination("{0}.ncbirc".format(currentDir), ncbircFile)
@@ -328,7 +313,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             # completedProcess = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
             completedProcess = subprocess.run(['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', reference_db_name,
                  '-max_target_seqs', '1', '-num_threads', '1'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            print('{}: blast complete'.format(sampleName))
+            sys.stdout.write('{}: BLAST complete\n'.format(sampleName))
             # Read in blast output
             blastOutputFile = readDefinedFileToList(r'{}blast.out'.format(currentDir))
             blastDict = {a.split('\t')[0]: a.split('\t')[1][-1] for a in blastOutputFile}
@@ -340,8 +325,8 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             #Add any seqs that did not return a blast match to the throwAwaySeq list
             diff = set(fastaDict.keys()) - set(blastDict.keys())
             throwAwaySeqs.extend(list(diff))
-            print(
-                'Sample {}: {} sequences thrown out initially due to being too divergent from reference sequences'.format(
+            sys.stdout.write(
+                '{}: {} sequences thrown out initially due to being too divergent from reference sequences\n'.format(
                     sampleName, len(list(diff))))
             ## 030518 We are starting to throw away Symbiodinium sequences here, especially in the non-coral samples
             # I think we will need to severely relax the e value cut off in order to incorporate more sequences
@@ -394,7 +379,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
 
             # Output new fasta, name and group files that don't contain seqs that didn't make the cut
 
-            print('Discarding {} unique sequences for evalue cutoff violations'.format(str(len(throwAwaySeqs))))
+            sys.stdout.write('{}: discarding {} unique sequences for evalue cutoff violations\n'.format(sampleName, str(len(throwAwaySeqs))))
             newFasta = []
             newName = []
             newGroup = []
@@ -427,7 +412,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
                 logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
                 output.put(sampleName)
                 continue
-            print('{}: non-Symbiodinium sequences binned'.format(sampleName))
+            sys.stdout.write('{}: non-Symbiodinium sequences binned\n'.format(sampleName))
             writeListToDestination('{0}{1}.trim.contigs.good.unique.abund.pcr.blast.fasta'.format(currentDir, rootName), newFasta)
             writeListToDestination('{0}{1}.trim.contigs.good.abund.pcr.blast.names'.format(currentDir, rootName), newName)
             writeListToDestination('{0}{1}.contigs.good.abund.pcr.blast.groups'.format(currentDir, rootName), newGroup)
@@ -439,8 +424,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             # Now finish off the mothur analyses by discarding by size range
             # Have to find how big the average seq was and then discard 50 bigger or smaller than this
             # Read in last summary file
-            #TODO check to see if this is the correct last Summary file
-            # TODO maybe consider doing absolute size range cutoff
+
             # I am now going to switch this to an absolute size range as I am having problems with Mani's sequences.
             # For some reason he is having an extraordinarily high number of very short sequence (i.e. 15bp long).
             # These are not being thrown out in the blast work. As such the average is being thrown off. and means that our
@@ -494,7 +478,7 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
                 logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName)
                 continue
 
-            print('{}: final Mothur completed'.format(sampleName))
+            sys.stdout.write('{}: final Mothur completed\n'.format(sampleName))
             fastaDict = createDictFromFasta(fastaFile)
 
             nameDict = {a.split('\t')[0]: a for a in nameFile}
@@ -546,9 +530,9 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
             # Now update the data_set_sample instance to set initialProcessingComplete to True
             dataSetSampleInstanceInQ.initialProcessingComplete = True
             dataSetSampleInstanceInQ.save()
-            print('{}: initial processing complete\n'
-                  'dataSetSampleInstanceInQ.finalUniqueSeqNum = {}\n'
-                  'dataSetSampleInstanceInQ.finalTotSeqNum = {}'.format(sampleName, len(nameDict), count))
+            sys.stdout.write('{}: initial processing complete\n'.format(sampleName))
+            sys.stdout.write('{}: dataSetSampleInstanceInQ.finalUniqueSeqNum = {}\n'.format(sampleName, len(nameDict)))
+            sys.stdout.write('{}: dataSetSampleInstanceInQ.finalTotSeqNum = {}\n'.format(sampleName, count))
 
             os.chdir(currentDir)
             fileList = [f for f in os.listdir(currentDir) if f.endswith((".names", ".fasta", ".qual", ".summary", ".oligos",
@@ -556,6 +540,8 @@ def worker(input, output, wkd, dataSubID, e_val_collection_dict, reference_db_na
                                                              ".out"))]
             for f in fileList:
                 os.remove(f)
+
+            sys.stdout.write('{}: pre-MED processing completed\n'.format(sampleName))
 
     return
 
@@ -628,9 +614,7 @@ def deuniqueFiles(wkd, ID, numProc):
     for p in allProcesses:
         p.join()
 
-    ### DEBUG ###
 
-    #############
 
     return listOfDeuniquedFastaPaths
 
@@ -643,6 +627,7 @@ def deuniqueWorker(input, output):
     # will have to save the list of directories and go through them one by one to create the sequences
 
     for mBatchFilePath in iter(input.get, 'STOP'):
+        sys.stdout.write('{}: deuniqueing QCed seqs\n'.format(sampleName))
         found = True
 
         # Run the dunique
@@ -673,29 +658,30 @@ def deuniqueWorker(input, output):
         # Put the path to the deuniqued fasta into the output list for use in MED analyses
         output.put('{}/{}/'.format(os.path.dirname(pathToFile), 'MEDOUT'))
 
-        try:
-            # The fasta that we want to pad and MED is the 'file'
-            completedProcess = subprocess.run([r'o-pad-with-gaps', r'{}'.format(pathToFile)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if completedProcess.returncode == 1:
-                pear = 'appe;'
-            # Now run MED
-            listOfFiles = []
-            for (dirpath, dirnames, filenames) in os.walk(cwd):
-                listOfFiles.extend(filenames)
+
+        # The fasta that we want to pad and MED is the 'file'
+        sys.stdout.write('{}: padding alignment\n'.format(sampleName))
+        completedProcess = subprocess.run([r'o-pad-with-gaps', r'{}'.format(pathToFile)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if completedProcess.returncode == 1:
+            pear = 'appe;'
+        # Now run MED
+        listOfFiles = []
+        for (dirpath, dirnames, filenames) in os.walk(cwd):
+            listOfFiles.extend(filenames)
+            break
+        for file in listOfFiles:
+            if 'PADDED' in file:
+                pathToFile = '{0}/{1}'.format(cwd, file)
                 break
-            for file in listOfFiles:
-                if 'PADDED' in file:
-                    pathToFile = '{0}/{1}'.format(cwd, file)
-                    break
-            MEDOutDir = '{}/{}/'.format(cwd, 'MEDOUT')
-            os.makedirs(MEDOutDir, exist_ok=True)
-            completedProcess = subprocess.run(
-                [r'decompose', '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
-                 MEDOutDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            if completedProcess.returncode == 1:
-                pear = 'appe;'
-        except:
-            breakPpoint = 'point'
+        MEDOutDir = '{}/{}/'.format(cwd, 'MEDOUT')
+        os.makedirs(MEDOutDir, exist_ok=True)
+        sys.stdout.write('{}: running MED\n'.format(sampleName))
+        completedProcess = subprocess.run(
+            [r'decompose', '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
+             MEDOutDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        sys.stdout.write('{}: MED complete\n'.format(sampleName))
+
+
 
 def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict, refSeqIDNameDict):
     # seqInQ = the MED node sequence in question
@@ -709,13 +695,13 @@ def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict, r
     if seqInQ in refSeqIdDict:  # Found actual seq in dict
         # assign the MED node name to the reference_sequence ID that it matches
         nodeToRefDict[nodeName] = refSeqIdDict[seqInQ]
-        print('Assigning MED node {} to existing reference sequence {}'.format(nodeName,
+        sys.stdout.write('\rAssigning MED node {} to existing reference sequence {}'.format(nodeName,
                                                                                refSeqIDNameDict[refSeqIdDict[seqInQ]]))
         return True
     elif 'A' + seqInQ in refSeqIdDict:  # This was a seq shorter than refseq but we can associate it to this ref seq
         # assign the MED node name to the reference_sequence ID that it matches
         nodeToRefDict[nodeName] = refSeqIdDict['A' + seqInQ]
-        print('Assigning MED node {} to existing reference sequence {}'.format(nodeName, refSeqIDNameDict[
+        sys.stdout.write('\rAssigning MED node {} to existing reference sequence {}'.format(nodeName, refSeqIDNameDict[
             refSeqIdDict['A' + seqInQ]]))
         return True
     else:  # This checks if either the seq in question is found in the sequence of a reference_sequence
@@ -727,7 +713,7 @@ def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict, r
             if seqInQ in ref_seq_key or ref_seq_key in seqInQ:
                 # Then this is a match
                 nodeToRefDict[nodeName] = refSeqIdDict[ref_seq_key]
-                print('Assigning MED node {} to existing reference sequence {}'.format(
+                sys.stdout.write('\rAssigning MED node {} to existing reference sequence {}'.format(
                     nodeName, refSeqIDNameDict[refSeqIdDict[ref_seq_key]]))
                 return True
     return False
@@ -819,7 +805,7 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
         # Get the clade
         clade = dir.split('/')[-3]
 
-        print('Populating {} with clade {} sequences'.format(sampleName, clade))
+        sys.stdout.write('\n\nPopulating {} with clade {} sequences\n'.format(sampleName, clade))
 
 
         # Read in the node file
@@ -860,12 +846,14 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
                     # Then assign the MED node to this new reference_sequence using the nodeToRefDict
                     newreferenceSequence = reference_sequence(clade=clade, sequence=sequenceInQ)
                     newreferenceSequence.save()
+                    newreferenceSequence.name = str(newreferenceSequence.id)
+                    newreferenceSequence.save()
                     listOfRefSeqs.append(newreferenceSequence)
                     reference_sequence_sequence_to_ID_dict[newreferenceSequence.sequence] = newreferenceSequence.id
                     nodeToRefDict[nodeNameInQ] = newreferenceSequence.id
                     reference_sequence_ID_to_name_dict[newreferenceSequence.id] = newreferenceSequence.name
 
-                    print('Assigning MED node {} to new reference sequence {}'.format(nodeFile[i][1:].split('|')[0],
+                    sys.stdout.write('\rAssigning MED node {} to new reference sequence {}'.format(nodeFile[i][1:].split('|')[0],
                                                                                       newreferenceSequence.name))
         ########################################################################################
 
@@ -923,10 +911,15 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
 
 
             dssList = []
-            print('Populating sample {} with clade {} sequences'.format(samples[i], clade))
+
             if sum(countArray[i]) > 200:
+                sys.stdout.write('\n{} clade {} sequences in {}. Creating clade_collection object\n'.format(sum(countArray[i]), sampleName, clade))
                 newCC = clade_collection(clade=clade, dataSetSampleFrom=data_set_sample_object)
                 newCC.save()
+            else:
+                sys.stdout.write(
+                    '\n{} clade {} sequences in {}. Insufficient sequence to create a clade_collection object\n'.format(
+                        sum(countArray[i]), clade, sampleName))
 
             # I want to address a problem we are having here. Now that we have thorough checks to
             # associate very similar sequences with indels by the primers to the same reference seq
@@ -944,6 +937,8 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
 
             # > 200 associate a CC to the data_set_sample, else, don't
             # irrespective, associate a data_set_sample_sequences to the data_set_sample
+            sys.stdout.write(
+                '\nAssociating clade {} data_set_sample_sequences directly to data_set_sample {}\n'.format(clade, sampleName))
             if sum(countArray[i]) > 200:
                 for refSeq in refSeqAbundanceCounter.keys():
                     dss = data_set_sample_sequence(referenceSequenceOf=refSeq,
@@ -1002,14 +997,14 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
         for file in os.listdir(pathToInputFile):
 
-            print(file)
+
             if 'fastq.gz' in file or 'fq.gz' in file:
                 # Then there is a fastq.gz already uncompressed in this folder
                 # In this case we will assume that the seq data is not compressed into a mast .zip or .gz
                 # Copy to the wkd
                 compressed = False
                 os.chdir('{}'.format(pathToInputFile))
-                print(os.getcwd())
+
                 # * asterix are only expanded in the shell and so don't work through subprocess
                 # need to use the glob library instead
                  #https://stackoverflow.com/questions/13875978/python-subprocess-popen-why-does-ls-txt-not-work
@@ -1061,10 +1056,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         list_of_names = list(set(list_of_names_non_unique))
 
         if len(list_of_names) != len(list_of_gz_files_in_wkd)/2:
-            print('Error in sample name extraction')
-            return
-
-        apples = 'asdf'
+            sys.exit('Error in sample name extraction')
 
 
         # Make a batch file for mothur, set input and output dir and create a .file file
@@ -1105,7 +1097,8 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         # Create data_set_sample instances
         listOfSamples = []
         for sampleName in list_of_names:
-            print('Creating data_set_sample {}'.format(sampleName))
+            sys.stdout.write('\nCreating data_set_sample objects\n')
+            print('\rCreating data_set_sample {}'.format(sampleName))
             # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
             # sample divided by clade. This is used in the output to keep track of sequences that are not
             # included in cladeCollections
@@ -1139,7 +1132,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                  dataSubmissionInQ.reference_fasta_database_used.replace('.fa', '')], stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE)
 
-        print('Processing fastQ files')
+
 
         sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
 
@@ -1168,6 +1161,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         allProcesses = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
+        sys.stdout.write('\n\nPerforming QC\n')
         for n in range(numProc):
             p = Process(target=worker, args=(taskQueue, outputQueue, wkd, dSID, e_value_multiP_dict, dataSubmissionInQ.reference_fasta_database_used))
             allProcesses.append(p)
@@ -1183,8 +1177,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         for i in iter(outputQueue.get, 'STOP'):
             failedList.append(i)
 
-
-        print('{0} out of {1} samples successfully passed QC.\n'
+        sys.stdout.write('\n\n{0} out of {1} samples successfully passed QC.\n'
               '{2} samples produced erorrs'.format((len(sampleFastQPairs)-len(failedList)), len(sampleFastQPairs), len(failedList)))
         for contigPair in sampleFastQPairs:
             sampleName = contigPair.split('\t')[0].replace('[dS]', '-')
@@ -1201,6 +1194,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     # This function now performs the MEDs sample by sample, clade by clade.
     # The list of outputed paths lead to the MED directories where node info etc can be found
+    sys.stdout.write('\n\nStarting MED analysis\n')
     MEDDirs = deuniqueFiles(dataSubmissionInQ.workingDirectory, dataSubmissionInQ.id, numProc)
 
 
@@ -1277,9 +1271,6 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     outputFmt = "6 qseqid sseqid staxids evalue"
     inputPath = r'{}/blastInputFasta.fa'.format(wkd)
     os.chdir(wkd)
-
-
-
 
     # Run local blast
     # completedProcess = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])

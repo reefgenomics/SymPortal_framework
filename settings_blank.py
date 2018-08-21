@@ -1,7 +1,6 @@
 import os
 
 dbPath = os.path.join(os.path.dirname(__file__), 'db.sqlite3')
-print(dbPath)
 
 DATABASES = {
     'default': {
