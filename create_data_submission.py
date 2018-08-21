@@ -1096,8 +1096,8 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
         # Create data_set_sample instances
         listOfSamples = []
+        sys.stdout.write('\nCreating data_set_sample objects\n')
         for sampleName in list_of_names:
-            sys.stdout.write('\nCreating data_set_sample objects\n')
             print('\rCreating data_set_sample {}'.format(sampleName))
             # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
             # sample divided by clade. This is used in the output to keep track of sequences that are not
