@@ -943,7 +943,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     # Create a pandas df from the data_sheet if it was provided
     if data_sheet_path:
-        sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:O')
+        sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
 
 
     ############### UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE ##################
@@ -1009,23 +1009,23 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         # Identify sample names
         if data_sheet_path:
             # get the list of names from the index of the sample_meta_df
-            list_of_names = sample_meta_df.index.values.toList()
+            list_of_names = sample_meta_df.index.values.tolist()
             # we will also need to know how to relate the samples to the fastq files
             # for this we will make a dict of fastq file name to sample
             # but before we do this we should verify that all of the fastq files listed in the sample_meta_df
             # are indeed found in the directory that we've been given
             list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
             list_of_meta_gz_files = []
-            list_of_meta_gz_files.extend(sample_meta_df['fastq_fwd_file_name'].values.toList())
-            list_of_meta_gz_files.extend(sample_meta_df['fastq_rev_file_name'].values.toList())
+            list_of_meta_gz_files.extend(sample_meta_df['fastq_fwd_file_name'].values.tolist())
+            list_of_meta_gz_files.extend(sample_meta_df['fastq_rev_file_name'].values.tolist())
             for fastq in list_of_meta_gz_files:
-                if fastq not in list_of_meta_gz_files:
+                if fastq not in list_of_gz_files_in_wkd:
                     sys.exit('{} listed in data_sheet not found'.format(fastq, wkd))
             # now make the dictionary
             fastq_file_to_sample_name_dict = {}
-            for sample_index in sample_meta_df.index.values.toList():
-                fastq_file_to_sample_name_dict[sample_meta_df.iloc[sample_index, 'fastq_fwd_file_name']] = sample_index
-                fastq_file_to_sample_name_dict[sample_meta_df.iloc[sample_index, 'fastq_rev_file_name']] = sample_index
+            for sample_index in sample_meta_df.index.values.tolist():
+                fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
+                fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
 
 
         else:
@@ -1126,17 +1126,17 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             if data_sheet_path:
                 dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ,
                                       cladalSeqTotals=emptyCladalSeqTotals,
-                                      sample_type          = sample_meta_df.iloc[sampleName, 'sample_type'],
-                                      host_phylum          = sample_meta_df.iloc[sampleName, 'host_phylum'],
-                                      host_class           = sample_meta_df.iloc[sampleName, 'host_class'],
-                                      host_order           = sample_meta_df.iloc[sampleName, 'host_order'],
-                                      host_family          = sample_meta_df.iloc[sampleName, 'host_family'],
-                                      host_genus           = sample_meta_df.iloc[sampleName, 'host_genus'],
-                                      host_species         = sample_meta_df.iloc[sampleName, 'host_species'],
-                                      collection_latitude  = sample_meta_df.iloc[sampleName, 'collection_latitude'],
-                                      collection_longitude = sample_meta_df.iloc[sampleName, 'collection_longitude'],
-                                      collection_date      = sample_meta_df.iloc[sampleName, 'collection_date'],
-                                      collection_depth     = sample_meta_df.iloc[sampleName, 'collection_depth']
+                                      sample_type          = sample_meta_df.loc[sampleName, 'sample_type'],
+                                      host_phylum          = sample_meta_df.loc[sampleName, 'host_phylum'],
+                                      host_class           = sample_meta_df.loc[sampleName, 'host_class'],
+                                      host_order           = sample_meta_df.loc[sampleName, 'host_order'],
+                                      host_family          = sample_meta_df.loc[sampleName, 'host_family'],
+                                      host_genus           = sample_meta_df.loc[sampleName, 'host_genus'],
+                                      host_species         = sample_meta_df.loc[sampleName, 'host_species'],
+                                      collection_latitude  = sample_meta_df.loc[sampleName, 'collection_latitude'],
+                                      collection_longitude = sample_meta_df.loc[sampleName, 'collection_longitude'],
+                                      collection_date      = sample_meta_df.loc[sampleName, 'collection_date'],
+                                      collection_depth     = sample_meta_df.loc[sampleName, 'collection_depth']
                                       )
             else:
                 dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ, cladalSeqTotals=emptyCladalSeqTotals)
