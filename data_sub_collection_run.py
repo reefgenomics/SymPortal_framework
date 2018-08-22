@@ -5508,10 +5508,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
                           'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique'])
     # append the noName sequences as individual sequence abundances
     break_down_strings = '\t'.join([a for a in cladeAbundanceOrderedRefSeqList if '_' in a])
-    header = '\t'.join([headerPre, noNameStrings, qc_stats, break_down_strings])
+    output_header = '\t'.join([headerPre, noNameStrings, qc_stats, break_down_strings])
 
-    intraAbundCountTable.append(header)
-    intraAbundPropTable.append(header)
+    intraAbundCountTable.append(output_header)
+    intraAbundPropTable.append(output_header)
     ######################################################################################
 
     ############ POPULATE TABLE WITH CC DATA #############
