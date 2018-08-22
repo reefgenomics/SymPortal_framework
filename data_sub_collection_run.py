@@ -5594,6 +5594,11 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # for more info on how this is ordered look at the comment in the method
         ordered_sample_list = generate_ordered_sample_list(managedSampleOutputDict, output_header)
 
+        # managedSampleOutputDict currently has data_set_sample objects as the key. This is excessive and the
+        # above list returns strings that are the dss object names
+        # so quickly convert these keys to just the names
+        managedSampleOutputDict = {k.name: v for k, v in managedSampleOutputDict.items()}
+
         for dss in ordered_sample_list:
             intraAbundCountTable.append(managedSampleOutputDict[dss][0])
             intraAbundPropTable.append(managedSampleOutputDict[dss][1])
