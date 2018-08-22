@@ -5590,7 +5590,11 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             intraAbundCountTable.append(managedSampleOutputDict[dss][0])
             intraAbundPropTable.append(managedSampleOutputDict[dss][1])
     else:
-        for dss in sampleList:
+        # this returns a list which is simply the names of the samples
+        # for more info on how this is ordered look at the comment in the method
+        ordered_sample_list = generate_ordered_sample_list(managedSampleOutputDict, output_header)
+
+        for dss in ordered_sample_list:
             intraAbundCountTable.append(managedSampleOutputDict[dss][0])
             intraAbundPropTable.append(managedSampleOutputDict[dss][1])
 
@@ -5667,6 +5671,56 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     return
 
+def generate_ordered_sample_list(managedSampleOutputDict, output_header):
+    # create a df from the managedSampleOutputDict
+    two_d_list_for_df = [list_element[1].split('\t') for list_element in managedSampleOutputDict.values()]
+    output_df_relative = pd.DataFrame(two_d_list_for_df, columns=output_header.split('\t'))
+    # convert the string elements to floats
+    # https://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.astype.html
+    output_df_relative = output_df_relative.astype('float', errors='ignore')
+    # put the sampe names as the index, drop this column and then convert the reamining cols to float
+    # n.b the convert to float fails if there are any non convertable elements in the df. Even if error warning are
+    # ignored
+    output_df_relative = output_df_relative.set_index(keys='Samples', drop=True).astype('float')
+    non_seq_columns = ['raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',
+                       'post_qc_unique_seqs',
+                       'post_taxa_id_unique_non_symbiodinium_seqs', 'post_taxa_id_absolute_symbiodinium_seqs',
+                       'post_taxa_id_unique_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique',
+                       'size_screening_violation_absolute', 'size_screening_violation_unique']
+    noName_seq_columns = ['noName Clade {}'.format(clade) for clade in list('ABCDEFGHI')]
+    cols_to_drop = non_seq_columns + noName_seq_columns
+    sequence_only_df_relative = output_df_relative.drop(columns=cols_to_drop)
+    max_seq_ddict = defaultdict(int)
+    seq_to_samp_dict = defaultdict(list)
+    # for each sample get the columns name of the max value of a div not including the columns in the following:
+    for sample_to_sort in sequence_only_df_relative.index.values.tolist():
+
+        max_abund_seq = sequence_only_df_relative.loc[sample_to_sort].idxmax()
+        max_rel_abund = sequence_only_df_relative.loc[sample_to_sort].max()
+        # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
+        seq_to_samp_dict[max_abund_seq].append((sample_to_sort, max_rel_abund))
+        # add this to the ddict count
+        max_seq_ddict[max_abund_seq] += 1
+    # then once we have compelted this for all sequences go clade by clade
+    # and generate the sample order
+    ordered_sample_list = []
+    for clade in list('ABCDEFGHI'):
+        tup_list_of_clade = []
+        # get the clade specific list of the max_seq_ddict
+        for k, v in max_seq_ddict.items():
+            if k.startswith(clade) or k[-2:] == '_{}'.format(clade):
+                tup_list_of_clade.append((k, v))
+        if not tup_list_of_clade:
+            continue
+        # now get an ordered list of the sequences for this clade
+        ordered_sequence_of_clade_list = [x[0] for x in sorted(tup_list_of_clade, key=lambda x: x[1], reverse=True)]
+
+        for seq_to_order_samples_by in ordered_sequence_of_clade_list:
+            tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_dict[seq_to_order_samples_by]
+            ordered_list_of_samples_for_seq_ordered = \
+                [x[0] for x in sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
+            ordered_sample_list.extend(ordered_list_of_samples_for_seq_ordered)
+    return ordered_sample_list
 
 def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1):
     analysisObj = analysisobj
