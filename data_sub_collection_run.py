@@ -5403,18 +5403,14 @@ def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_t
 
 def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir,
                                                            sorted_sample_list=None, analysis_obj_id=None):
-    # This function will take in a list of dataSubmissions from which to output the DIV information of the samples
-    #
-    #
+    # This function will take in a list of dataSubmissions from which
+    # to output the ITS2 sequence information of the samples
 
     ########################## ITS2 INTRA ABUND COUNT TABLE ################################
     # This is where we're going to have to work with the sequences that aren't part of a type.
     # Esentially we want to end up with the noName sequences divieded up cladally.
     # So at the moment this will mean that we will divide up the current no names but also
     # add information about the other cladal sequences that didn't make it into a cladeCollection
-
-    # Now we need to output the ITS2 intragenomic abundances that the types are based on for each CC
-    # Already have querySetOfDataSubmissions and cladeCollectionsFromDSs
 
     # list to hold the paths of the outputted files
     output_path_list = []
@@ -5670,7 +5666,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     writeListToDestination(fasta_path, fasta_output_list)
     output_path_list.append(fasta_path)
 
-    print('DIV table output files:')
+    print('ITS2 sequence output files:')
     for path_item in output_path_list:
         print(path_item)
 
@@ -6684,7 +6680,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores):
+def main(dataanalysistwoobject, cores, noFig):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
