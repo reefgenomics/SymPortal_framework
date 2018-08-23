@@ -15,6 +15,7 @@ import glob
 from datetime import datetime
 import sys
 import pandas as pd
+from data_sub_collection_run import div_output_pre_analysis_new_meta_and_new_dss_structure
 
 ###### Generic functions ######
 def readDefinedFileToList(filename):
@@ -938,7 +939,8 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
     return
 
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
-         full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload', data_sheet_path=None):
+         full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload',
+         data_sheet_path=None, noFig=False):
 
 
     # Create a pandas df from the data_sheet if it was provided
@@ -1337,6 +1339,13 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     if os.path.exists(wkd):
         shutil.rmtree(wkd)
 
+    ####### COUNT TABLE OUTPUT ########
+    # We are going to automatically make the sequence count table output as part of the dataSubmission
+    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
+    div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=dSID,
+                                                           numProcessors=numProc,
+                                                           output_dir=outputDir)
+
     # write out whether there were below e value sequences outputted.
     if fasta_out_with_clade:
         print('WARNING: {} sub_e_value cut-off sequences were output'.format(int(len(fasta_out_with_clade)/2)))
@@ -1345,7 +1354,6 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             print('These will now be automatically screened to see if they contain Symbiodinium sequences.')
             print('Screening sub e value sequences...')
 
-        apples = 'pears'
 
         symportal_framework_object = symportal_framework.objects.get(id=1)
         preious_reference_fasta_name = symportal_framework_object.latest_reference_fasta
@@ -1377,9 +1385,10 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                   'the ./symbiodiniumDB/symClade.fa fasta file and create a new BLAST datbase from this fasta with the '
                   'same name. Then re-run the submission')
             print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
-        # print('To screen these sequences for possible symbiodinium sequences please set screen_sub_evalue '
-        #       'to True and provide a directory that contains the NCBI nt database')
+
         print('data_set ID is: {}'.format(dataSubmissionInQ.id))
+
+    # Here we will now produce the output
 
 def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sample_support_cut_off, previous_reference_fasta_name, required_symbiodinium_matches, full_path_to_nt_database_directory):
     # we need to make sure that we are looking at matches that cover > 95%
