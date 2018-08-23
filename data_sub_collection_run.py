@@ -5670,7 +5670,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for path_item in output_path_list:
         print(path_item)
 
-    return
+    return output_path_list
 
 def generate_ordered_sample_list(managedSampleOutputDict, output_header):
     # create a df from the managedSampleOutputDict
@@ -5678,7 +5678,6 @@ def generate_ordered_sample_list(managedSampleOutputDict, output_header):
     output_df_relative = pd.DataFrame(two_d_list_for_df, columns=output_header.split('\t'))
     # convert the string elements to floats
     # https://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.astype.html
-    output_df_relative = output_df_relative.astype('float', errors='ignore')
     # put the sampe names as the index, drop this column and then convert the reamining cols to float
     # n.b the convert to float fails if there are any non convertable elements in the df. Even if error warning are
     # ignored
@@ -5691,11 +5690,15 @@ def generate_ordered_sample_list(managedSampleOutputDict, output_header):
     noName_seq_columns = ['noName Clade {}'.format(clade) for clade in list('ABCDEFGHI')]
     cols_to_drop = non_seq_columns + noName_seq_columns
     sequence_only_df_relative = output_df_relative.drop(columns=cols_to_drop)
+    ordered_sample_list = get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative)
+    return ordered_sample_list
+
+
+def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
     max_seq_ddict = defaultdict(int)
     seq_to_samp_dict = defaultdict(list)
     # for each sample get the columns name of the max value of a div not including the columns in the following:
     for sample_to_sort in sequence_only_df_relative.index.values.tolist():
-
         max_abund_seq = sequence_only_df_relative.loc[sample_to_sort].idxmax()
         max_rel_abund = sequence_only_df_relative.loc[sample_to_sort].max()
         # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
@@ -5719,9 +5722,11 @@ def generate_ordered_sample_list(managedSampleOutputDict, output_header):
         for seq_to_order_samples_by in ordered_sequence_of_clade_list:
             tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_dict[seq_to_order_samples_by]
             ordered_list_of_samples_for_seq_ordered = \
-                [x[0] for x in sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
+                [x[0] for x in
+                 sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
             ordered_sample_list.extend(ordered_list_of_samples_for_seq_ordered)
     return ordered_sample_list
+
 
 def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1):
     analysisObj = analysisobj

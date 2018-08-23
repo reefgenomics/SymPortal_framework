@@ -15,7 +15,12 @@ import glob
 from datetime import datetime
 import sys
 import pandas as pd
-from data_sub_collection_run import div_output_pre_analysis_new_meta_and_new_dss_structure
+from data_sub_collection_run import div_output_pre_analysis_new_meta_and_new_dss_structure, get_sample_order_from_rel_seq_abund_df
+from matplotlib.patches import Rectangle
+from matplotlib.collections import PatchCollection
+import matplotlib.pyplot as plt
+from matplotlib.pyplot import *
+
 
 ###### Generic functions ######
 def readDefinedFileToList(filename):
@@ -1340,12 +1345,23 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         shutil.rmtree(wkd)
 
     ####### COUNT TABLE OUTPUT ########
-    # We are going to automatically make the sequence count table output as part of the dataSubmission
-    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
-    div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=dSID,
+    # We are going to make the sequence count table output as part of the dataSubmission
+    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/data_set_submissions')
+    # the below method will create the tab delimited output table and print out the output file paths
+    # it will also return these paths so that we can use them to grab the data for figure plotting
+    output_path_list = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),
                                                            numProcessors=numProc,
                                                            output_dir=outputDir)
+    ###################################
+    ####### Stacked bar output fig #####
+    # here we will create a stacked bar
+    # I think it is easiest if we directly pass in the path of the above count table output
+    for path in output_path_list:
+        if 'relative' in path:
+            path_to_rel_abund_data = path
 
+    generate_stacked_bar(path_to_rel_abund_data)
+    ####################################
     # write out whether there were below e value sequences outputted.
     if fasta_out_with_clade:
         print('WARNING: {} sub_e_value cut-off sequences were output'.format(int(len(fasta_out_with_clade)/2)))
@@ -1389,6 +1405,126 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         print('data_set ID is: {}'.format(dataSubmissionInQ.id))
 
     # Here we will now produce the output
+
+def generate_stacked_bar(path_to_tab_delim_count):
+    #/Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
+
+    # Here we will generate our standard stacked bar output.
+    # We should take into account that we don't know how many samples will be coming through.
+    # I think we should aim for a standard width figure but which can get deeper if there are many samples.
+    # I.e. we should split up very large sets of samples into multiple plots to keep interpretability
+    # as high as possible.
+
+
+    # read in the SymPortal relative abundance output
+    sp_output_df = pd.read_csv(path_to_tab_delim_count, sep='\t', lineterminator='\n', header=0)
+
+    # now lets drop the QC columns from the SP output df and also drop the clade summation columns
+    # we will be left with just clumns for each one of the sequences found in the samples
+    sp_output_df.drop(columns=['noName Clade A', 'noName Clade B', 'noName Clade C', 'noName Clade D',
+                               'noName Clade E', 'noName Clade F', 'noName Clade G', 'noName Clade H',
+                               'noName Clade I', 'raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
+                               'post_taxa_id_absolute_symbiodinium_seqs', 'post_taxa_id_unique_symbiodinium_seqs',
+                               'post_taxa_id_absolute_non_symbiodinium_seqs',
+                               'post_taxa_id_unique_non_symbiodinium_seqs',
+                               'size_screening_violation_absolute', 'size_screening_violation_unique',
+                               'post_med_absolute', 'post_med_unique'
+                               ]
+                      , inplace=True)
+
+    sp_output_df = sp_output_df.set_index(keys='Samples', drop=True).astype('float')
+
+    # In theory the output should already be somewhat ordered in that the samples should be in order of similarity.
+    # However, these have the artifical clade ordering so for the plotting it will probably be better to get a new
+    # order for the samples that is not constrained to the order of the clades. For this we should order as usual
+    # according to the most common majority sequences and then within this grouping we should order according to the
+    # the abundance of these sequences within the samples.
+    # We should plot the sequences most abundant across all samples first.
+    # In terms of colour I think its easiest if we go with the high contrast colours list of 269 for the minus black
+    # and white if they are in there for the most abundant sequencs.
+    # if we have more than this number of sequences in the dataset then we should simply work ourway through a grey
+    # palette for the remainder of the sequences.
+    # when doing the plotting using the matplotlib library I want to try a new approach of creating the rectangle
+    # patches individually and holding them in a list before adding them all to the plot at once. Previously we had
+    # been generating the plot one sequence at a time. This can take a considerable amount of time when we get above
+    # ~50-150 sequences depending on the number of samples.
+
+    colour_palette = get_colour_list()
+    grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
+
+    # get a list of the sequences in order of their abundance and use this list to create the colour dict
+    # the abundances can be got by simply summing up the columns making sure to ommit the last columns
+    abundance_dict = {}
+    for col in list(sp_output_df):
+        abundance_dict[col] = sum(sp_output_df[col][:-1])
+
+    # get the names of the sequences sorted according to their totalled abundance
+    ordered_list_of_seqs = [x[0] for x in sorted(abundance_dict.item(), key=lambda x: x[1], reverse=True)]
+
+    # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
+    # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
+    colour_dict = {}
+    for i in range(len(ordered_list_of_seqs)):
+        if i < len(colour_palette):
+            colour_dict[ordered_list_of_seqs[i]] = colour_palette[i]
+        else:
+            grey_index = i%len(grey_palette)
+            colour_dict[ordered_list_of_seqs[i]] = grey_palette[grey_index]
+
+    # the ordered_list_of_seqs can also be used for the plotting order
+
+    # we should consider doing a plot per clade but for the time being lets start by doing a single plot that will
+    # contain all of the clades
+
+    # At this stage we have the ordered list of seqs we now need to order the samples
+    # this method will return us the names of the samples in order that they should be plotted
+    ordered_sample_list = get_sample_order_from_rel_seq_abund_df(sp_output_df)
+
+    # let's reorder the columns and rows of the sp_output_df according to the sequence sample and sequence
+    # order so that plotting the data is easier
+    sp_output_df = sp_output_df[ordered_list_of_seqs]
+    sp_output_df = sp_output_df.reindex(ordered_sample_list)
+
+    # At this stage we are ready to plot
+    # The three following links show how we should be able to construct a list of matplotlib
+    # patches (rectangles in this case) and add these patches to a PatchCollection before finally
+    # adding this patch collection to the ax using ax.add_collection().
+    # https://matplotlib.org/api/_as_gen/matplotlib.patches.Rectangle.html
+    # https://matplotlib.org/examples/api/patch_collection.html
+    # https://matplotlib.org/users/artists.html
+    # I hope that this will be quicker than using the bar helper sequence by sequence as we normally do
+
+    # let's start by just getting the bar plotting working without worrying about cases where we have more than 50
+    # samples
+    # maybe we can start with an arbitrary cutoff for the number of samples per plot which can be 50
+    f, axarr = plt.subplots(1, 1)
+
+    patches_list = []
+    ind = 0
+    # we can work sample by sample
+    for sample in sp_output_df.index.values.tolist():
+        # for each sample we will start at 0 for the y and then add the height of each bar to this
+        bottom = 0
+        # for each sequence, create a rect patch
+        # the rect will be 1 in width and centered about the ind value.
+        for col in list(sp_output_df):
+            # class matplotlib.patches.Rectangle(xy, width, height, angle=0.0, **kwargs)
+            rel_abund = sp_output_df.loc[sample, col]
+            if rel_abund > 0:
+                patches_list.append(Rectangle((ind-0.5,bottom), 1, sp_output_df.loc[sample, col], color=colour_dict[sample]))
+                bottom += rel_abund
+        ind += 1
+
+    # here we should have a list of Rectangle patches
+    # now create the PatchCollection object from the patches_list
+    patches_collection = PatchCollection(patches_list)
+    axarr.add_collection(patches_collection)
+    axarr.autoscale_view()
+    axarr.figure.canvas.draw()
+    axarr.show()
+
+    apples = 'asdf'
+
 
 def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sample_support_cut_off, previous_reference_fasta_name, required_symbiodinium_matches, full_path_to_nt_database_directory):
     # we need to make sure that we are looking at matches that cover > 95%
@@ -1509,3 +1645,36 @@ def perform_sequence_drop():
     for ref_seq in reference_sequence.objects.filter(hasName=True):
         output_list.append('{}\t{}\t{}'.format(ref_seq.name, ref_seq.clade, ref_seq.sequence))
     return output_list
+
+def get_colour_list():
+    colour_list = ["#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941", "#006FA6", "#A30059", "#FFDBE5",
+                  "#7A4900", "#0000A6", "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87", "#5A0007", "#809693",
+                  "#FEFFE6", "#1B4400", "#4FC601", "#3B5DFF", "#4A3B53", "#FF2F80", "#61615A", "#BA0900", "#6B7900",
+                  "#00C2A0", "#FFAA92", "#FF90C9", "#B903AA", "#D16100", "#DDEFFF", "#000035", "#7B4F4B", "#A1C299",
+                  "#300018", "#0AA6D8", "#013349", "#00846F", "#372101", "#FFB500", "#C2FFED", "#A079BF", "#CC0744",
+                  "#C0B9B2", "#C2FF99", "#001E09", "#00489C", "#6F0062", "#0CBD66", "#EEC3FF", "#456D75", "#B77B68",
+                  "#7A87A1", "#788D66", "#885578", "#FAD09F", "#FF8A9A", "#D157A0", "#BEC459", "#456648", "#0086ED",
+                  "#886F4C", "#34362D", "#B4A8BD", "#00A6AA", "#452C2C", "#636375", "#A3C8C9", "#FF913F", "#938A81",
+                  "#575329", "#00FECF", "#B05B6F", "#8CD0FF", "#3B9700", "#04F757", "#C8A1A1", "#1E6E00", "#7900D7",
+                  "#A77500", "#6367A9", "#A05837", "#6B002C", "#772600", "#D790FF", "#9B9700", "#549E79", "#FFF69F",
+                  "#201625", "#72418F", "#BC23FF", "#99ADC0", "#3A2465", "#922329", "#5B4534", "#FDE8DC", "#404E55",
+                  "#0089A3", "#CB7E98", "#A4E804", "#324E72", "#6A3A4C", "#83AB58", "#001C1E", "#D1F7CE", "#004B28",
+                  "#C8D0F6", "#A3A489", "#806C66", "#222800", "#BF5650", "#E83000", "#66796D", "#DA007C", "#FF1A59",
+                  "#8ADBB4", "#1E0200", "#5B4E51", "#C895C5", "#320033", "#FF6832", "#66E1D3", "#CFCDAC", "#D0AC94",
+                  "#7ED379", "#012C58", "#7A7BFF", "#D68E01", "#353339", "#78AFA1", "#FEB2C6", "#75797C", "#837393",
+                  "#943A4D", "#B5F4FF", "#D2DCD5", "#9556BD", "#6A714A", "#001325", "#02525F", "#0AA3F7", "#E98176",
+                  "#DBD5DD", "#5EBCD1", "#3D4F44", "#7E6405", "#02684E", "#962B75", "#8D8546", "#9695C5", "#E773CE",
+                  "#D86A78", "#3E89BE", "#CA834E", "#518A87", "#5B113C", "#55813B", "#E704C4", "#00005F", "#A97399",
+                  "#4B8160", "#59738A", "#FF5DA7", "#F7C9BF", "#643127", "#513A01", "#6B94AA", "#51A058", "#A45B02",
+                  "#1D1702", "#E20027", "#E7AB63", "#4C6001", "#9C6966", "#64547B", "#97979E", "#006A66", "#391406",
+                  "#F4D749", "#0045D2", "#006C31", "#DDB6D0", "#7C6571", "#9FB2A4", "#00D891", "#15A08A", "#BC65E9",
+                  "#FFFFFE", "#C6DC99", "#203B3C", "#671190", "#6B3A64", "#F5E1FF", "#FFA0F2", "#CCAA35", "#374527",
+                  "#8BB400", "#797868", "#C6005A", "#3B000A", "#C86240", "#29607C", "#402334", "#7D5A44", "#CCB87C",
+                  "#B88183", "#AA5199", "#B5D6C3", "#A38469", "#9F94F0", "#A74571", "#B894A6", "#71BB8C", "#00B433",
+                  "#789EC9", "#6D80BA", "#953F00", "#5EFF03", "#E4FFFC", "#1BE177", "#BCB1E5", "#76912F", "#003109",
+                  "#0060CD", "#D20096", "#895563", "#29201D", "#5B3213", "#A76F42", "#89412E", "#1A3A2A", "#494B5A",
+                  "#A88C85", "#F4ABAA", "#A3F3AB", "#00C6C8", "#EA8B66", "#958A9F", "#BDC9D2", "#9FA064", "#BE4700",
+                  "#658188", "#83A485", "#453C23", "#47675D", "#3A3F00", "#061203", "#DFFB71", "#868E7E", "#98D058",
+                  "#6C8F7D", "#D7BFC2", "#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C", "#00B57F",
+                  "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
+    return colour_list
