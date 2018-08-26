@@ -1364,6 +1364,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             path_to_rel_abund_data = path
 
     svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, dSID)
+    sys.stdout.write('\nFigure generation complete')
     sys.stdout.write('\nFigures output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}'.format(png_path))
@@ -1411,7 +1412,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                   'same name. Then re-run the submission')
             print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
 
-        print('data_set ID is: {}'.format(dataSubmissionInQ.id))
+        print('\ndata_set ID is: {}'.format(dataSubmissionInQ.id))
 
     # Here we will now produce the output
 
