@@ -1358,11 +1358,18 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     ####### Stacked bar output fig #####
     # here we will create a stacked bar
     # I think it is easiest if we directly pass in the path of the above count table output
+    sys.stdout.write('\nGenerating figures\n')
     for path in output_path_list:
         if 'relative' in path:
             path_to_rel_abund_data = path
 
-    generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, dSID)
+    svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, dSID)
+    sys.stdout.write('\nFigures output to:')
+    sys.stdout.write('\n{}'.format(svg_path))
+    sys.stdout.write('\n{}'.format(png_path))
+
+
+
     ####################################
     # write out whether there were below e value sequences outputted.
     if fasta_out_with_clade:
@@ -1531,6 +1538,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
         num_smp_in_this_subplot = len(sp_output_df.index.values.tolist()[i * smp_per_plot:end_slice])
         x_tick_label_list = []
         for sample in sp_output_df.index.values.tolist()[i * smp_per_plot:end_slice]:
+            sys.stdout.write('\rPlotting sample: {}'.format(sample))
             x_tick_label_list.append(sample)
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
@@ -1621,9 +1629,10 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     axarr[-1].set_ylim(0, ((n_rows - 1) * y_coord_increments) + leg_box_depth)
     axarr[-1].invert_yaxis()
 
-    # If there are more sequences than there are rows x cols then we need to make sure that we are only goig
+    # If there are more sequences than there are rows x cols then we need to make sure that we are only going
     # to plot the first row x cols number of sequences.
 
+    sys.stdout.write('\nGenerating figure legend for {} most common sequences\n'.format(str(max_n_rows*max_n_cols)))
     for row_increment in range(min(n_rows, max_n_rows)):
         # if not in the last row then do a full set of columns
         if row_increment + 1 != n_rows:
@@ -1668,10 +1677,13 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
 
     plt.tight_layout()
     fig_output_base = '{0}/{1}'.format(output_directory, data_sub_id_str)
+    sys.stdout.write('\nsaving as .svg\n')
     plt.savefig('{}_seq_abundance_stacked_bar_plot.svg'.format(fig_output_base))
+    sys.stdout.write('\nsaving as .png\n')
     plt.savefig('{}_seq_abundance_stacked_bar_plot.png'.format(fig_output_base))
     # plt.show()
-
+    return '{}_seq_abundance_stacked_bar_plot.svg'.format(fig_output_base), \
+           '{}_seq_abundance_stacked_bar_plot.png'.format(fig_output_base)
 
 def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sample_support_cut_off, previous_reference_fasta_name, required_symbiodinium_matches, full_path_to_nt_database_directory):
     # we need to make sure that we are looking at matches that cover > 95%
