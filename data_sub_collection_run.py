@@ -5666,7 +5666,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     writeListToDestination(fasta_path, fasta_output_list)
     output_path_list.append(fasta_path)
 
-    print('ITS2 sequence output files:')
+    print('\nITS2 sequence output files:')
     for path_item in output_path_list:
         print(path_item)
 
@@ -5727,6 +5727,32 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
             ordered_sample_list.extend(ordered_list_of_samples_for_seq_ordered)
     return ordered_sample_list
 
+def get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sequence_only_df_relative):
+    max_seq_ddict = defaultdict(int)
+    seq_to_samp_dict = defaultdict(list)
+    # for each sample get the columns name of the max value of a div not including the columns in the following:
+    for sample_to_sort in sequence_only_df_relative.index.values.tolist():
+        max_abund_seq = sequence_only_df_relative.loc[sample_to_sort].idxmax()
+        max_rel_abund = sequence_only_df_relative.loc[sample_to_sort].max()
+        # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
+        seq_to_samp_dict[max_abund_seq].append((sample_to_sort, max_rel_abund))
+        # add this to the ddict count
+        max_seq_ddict[max_abund_seq] += 1
+    # then once we have compelted this for all sequences
+    # generate the sample order according to the sequence order
+    ordered_sample_list = []
+
+    # get an ordered list of the sequencs according to the max_seq_ddict
+    ordered_list_of_sequences = [x[0] for x in sorted(max_seq_ddict.items(), key=lambda x: x[1], reverse=True)]
+
+    for seq_to_order_samples_by in ordered_list_of_sequences:
+        tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_dict[seq_to_order_samples_by]
+        ordered_list_of_samples_for_seq_ordered = \
+            [x[0] for x in
+             sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
+        ordered_sample_list.extend(ordered_list_of_samples_for_seq_ordered)
+
+    return ordered_sample_list
 
 def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1):
     analysisObj = analysisobj
