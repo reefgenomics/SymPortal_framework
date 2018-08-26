@@ -15,11 +15,13 @@ import glob
 from datetime import datetime
 import sys
 import pandas as pd
-from data_sub_collection_run import div_output_pre_analysis_new_meta_and_new_dss_structure, get_sample_order_from_rel_seq_abund_df
+from data_sub_collection_run import div_output_pre_analysis_new_meta_and_new_dss_structure, get_sample_order_from_rel_seq_abund_df_no_clade_constraint
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
 from matplotlib.pyplot import *
+from matplotlib.colors import ListedColormap
+from matplotlib.lines import Line2D
 
 
 ###### Generic functions ######
@@ -1360,7 +1362,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         if 'relative' in path:
             path_to_rel_abund_data = path
 
-    generate_stacked_bar(path_to_rel_abund_data)
+    generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, dSID)
     ####################################
     # write out whether there were below e value sequences outputted.
     if fasta_out_with_clade:
@@ -1406,7 +1408,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     # Here we will now produce the output
 
-def generate_stacked_bar(path_to_tab_delim_count):
+def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, data_sub_id_str):
     #/Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
     # Here we will generate our standard stacked bar output.
@@ -1429,7 +1431,7 @@ def generate_stacked_bar(path_to_tab_delim_count):
                                'post_taxa_id_unique_non_symbiodinium_seqs',
                                'size_screening_violation_absolute', 'size_screening_violation_unique',
                                'post_med_absolute', 'post_med_unique'
-                               ]
+                               ], index=sp_output_df.index[-1]
                       , inplace=True)
 
     sp_output_df = sp_output_df.set_index(keys='Samples', drop=True).astype('float')
@@ -1456,10 +1458,10 @@ def generate_stacked_bar(path_to_tab_delim_count):
     # the abundances can be got by simply summing up the columns making sure to ommit the last columns
     abundance_dict = {}
     for col in list(sp_output_df):
-        abundance_dict[col] = sum(sp_output_df[col][:-1])
+        abundance_dict[col] = sum(sp_output_df[col])
 
     # get the names of the sequences sorted according to their totalled abundance
-    ordered_list_of_seqs = [x[0] for x in sorted(abundance_dict.item(), key=lambda x: x[1], reverse=True)]
+    ordered_list_of_seqs = [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
 
     # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
     # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
@@ -1478,7 +1480,7 @@ def generate_stacked_bar(path_to_tab_delim_count):
 
     # At this stage we have the ordered list of seqs we now need to order the samples
     # this method will return us the names of the samples in order that they should be plotted
-    ordered_sample_list = get_sample_order_from_rel_seq_abund_df(sp_output_df)
+    ordered_sample_list = get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sp_output_df)
 
     # let's reorder the columns and rows of the sp_output_df according to the sequence sample and sequence
     # order so that plotting the data is easier
@@ -1487,43 +1489,188 @@ def generate_stacked_bar(path_to_tab_delim_count):
 
     # At this stage we are ready to plot
     # The three following links show how we should be able to construct a list of matplotlib
-    # patches (rectangles in this case) and add these patches to a PatchCollection before finally
+    # patches (Rectangles in this case) and add these patches to a PatchCollection before finally
     # adding this patch collection to the ax using ax.add_collection().
     # https://matplotlib.org/api/_as_gen/matplotlib.patches.Rectangle.html
     # https://matplotlib.org/examples/api/patch_collection.html
     # https://matplotlib.org/users/artists.html
     # I hope that this will be quicker than using the bar helper sequence by sequence as we normally do
+    # It turns out that the colour parameters are ignored from the individual patches when using
 
     # let's start by just getting the bar plotting working without worrying about cases where we have more than 50
     # samples
     # maybe we can start with an arbitrary cutoff for the number of samples per plot which can be 50
-    f, axarr = plt.subplots(1, 1)
 
-    patches_list = []
-    ind = 0
-    # we can work sample by sample
-    for sample in sp_output_df.index.values.tolist():
-        # for each sample we will start at 0 for the y and then add the height of each bar to this
-        bottom = 0
-        # for each sequence, create a rect patch
-        # the rect will be 1 in width and centered about the ind value.
-        for col in list(sp_output_df):
-            # class matplotlib.patches.Rectangle(xy, width, height, angle=0.0, **kwargs)
-            rel_abund = sp_output_df.loc[sample, col]
-            if rel_abund > 0:
-                patches_list.append(Rectangle((ind-0.5,bottom), 1, sp_output_df.loc[sample, col], color=colour_dict[sample]))
-                bottom += rel_abund
-        ind += 1
+    n_samples = len(sp_output_df.index.values.tolist())
+    smp_per_plot = 50
+    # number of subplots will be one per smp_per_plot
+    # and if tehre are remainers be sure to add an extra plot for this
+    if (n_samples % smp_per_plot) != 0:
+        n_subplots = int(n_samples / smp_per_plot) + 1
+    else:
+        n_subplots = int(n_samples / smp_per_plot)
 
-    # here we should have a list of Rectangle patches
-    # now create the PatchCollection object from the patches_list
-    patches_collection = PatchCollection(patches_list)
-    axarr.add_collection(patches_collection)
-    axarr.autoscale_view()
-    axarr.figure.canvas.draw()
-    axarr.show()
+    # depth of image is 3 inches per subplot
+    # we have to work out how to access the axarr
+    # we add  1 to the n_subplots here for the legend at the bottom
+    f, axarr = plt.subplots(n_subplots + 1, 1, figsize=(10, 3 * n_subplots))
 
-    apples = 'asdf'
+    # we will leave one subplot empty for making the legend in at the end
+    for i in range(n_subplots):
+        patches_list = []
+        ind = 0
+        colour_list = []
+        # we can work sample by sample
+        # if this is the last chunk then we slice to the end of the sp_output_df which is simply the len of samples
+        # else we slice to n_subplots-1
+        if i == n_subplots - 1:
+            end_slice = n_samples
+        else:
+            end_slice = smp_per_plot * (i + 1)
+
+        num_smp_in_this_subplot = len(sp_output_df.index.values.tolist()[i * smp_per_plot:end_slice])
+        x_tick_label_list = []
+        for sample in sp_output_df.index.values.tolist()[i * smp_per_plot:end_slice]:
+            x_tick_label_list.append(sample)
+            # for each sample we will start at 0 for the y and then add the height of each bar to this
+            bottom = 0
+            # for each sequence, create a rect patch
+            # the rect will be 1 in width and centered about the ind value.
+            for seq in list(sp_output_df):
+                # class matplotlib.patches.Rectangle(xy, width, height, angle=0.0, **kwargs)
+                rel_abund = sp_output_df.loc[sample, seq]
+                if rel_abund > 0:
+                    patches_list.append(Rectangle((ind - 0.5, bottom), 1, rel_abund, color=colour_dict[seq]))
+                    # axarr.add_patch(Rectangle((ind-0.5, bottom), 1, rel_abund, color=colour_dict[seq]))
+                    colour_list.append(colour_dict[seq])
+                    bottom += rel_abund
+            ind += 1
+
+        # We can try making a custom colour map
+        # https://matplotlib.org/api/_as_gen/matplotlib.colors.ListedColormap.html
+        this_cmap = ListedColormap(colour_list)
+
+        # here we should have a list of Rectangle patches
+        # now create the PatchCollection object from the patches_list
+        patches_collection = PatchCollection(patches_list, cmap=this_cmap)
+        patches_collection.set_array(np.arange(len(patches_list)))
+
+        # if n_subplots is only 1 then we can refer directly to the axarr object
+        # else we will need ot reference the correct set of axes with i
+        # Add the pathces to the axes
+        axarr[i].add_collection(patches_collection)
+        axarr[i].autoscale_view()
+        axarr[i].figure.canvas.draw()
+
+        # also format the axes.
+        # make it so that the x axes is constant length that will be the num of samples per subplot
+        axarr[i].set_xlim(0 - 0.5, smp_per_plot - 0.5)
+        axarr[i].set_ylim(0, 1)
+        axarr[i].set_xticks(range(num_smp_in_this_subplot))
+        axarr[i].set_xticklabels(x_tick_label_list, rotation='vertical', fontsize=6)
+        axarr[i].spines['right'].set_visible(False)
+        axarr[i].spines['top'].set_visible(False)
+
+        # as well as getting rid of the top and right axis splines
+        # I'd also like to restrict the bottom spine to where there are samples plotted but also
+        # maintain the width of the samples
+        # I think the easiest way to do this is to hack a bit by setting the x axis spines to invisible
+        # and then drawing on a line at y = 0 between the smallest and largest ind (+- 0.5)
+        axarr[i].spines['bottom'].set_visible(False)
+        axarr[i].add_line(Line2D((0 - 0.5, num_smp_in_this_subplot - 0.5), (0, 0), linewidth=2, color='black'))
+
+    # Since the matplotlib legends are pretty rubbish when made automatically, I vote that we make our own axes
+    # all in favour... Ok.
+    # Let's plot the boxes and text that are going to make up the legend in another subplot that we will put underneath
+    # the one we currenty have. So.. we will add a subplot when we initially create the figure. We will make the axis
+    # 100 by 100 just to make our coordinate easy to work with. We can get rid of all of the axes lines and ticks
+    max_n_cols = 8
+    max_n_rows = 7
+    # lets aim to plot a 10 by 10 legend max
+    # we should start plotting in the top left working right and then down
+    # until we have completed 100 sequences.
+
+    # Y axis coordinates
+    # we will allow a buffer of 0.5 of the legend box's height between each legend box.
+    # as such the coordinates of each y will be in increments of 100 / (1.5 * num rows)
+    # the depth of the Rectangle for the legend box will be 2/3 * the above.
+    y_coord_increments = 100 / (max_n_rows)
+    leg_box_depth = 2 / 3 * y_coord_increments
+
+    # X axis coordinates
+    # for the x axis we will work in sets of three columns were the first col will be for the box
+    # and the second and third cols will be for the text
+    # as such the x coordinates will be in increments of 100 / (3 * numcols) starting with 0
+    # the width of the legend Rectangle will be the above number * 1/3.
+    x_coord_increments = 100 / max_n_cols
+    leg_box_width = x_coord_increments / 3
+
+    # go column by column
+    # we can now calculate the actual number of columns and rows we are going to need.
+    if len(ordered_list_of_seqs) % max_n_cols != 0:
+        n_rows = int(len(ordered_list_of_seqs) / max_n_cols) + 1
+    else:
+        n_rows = int(len(ordered_list_of_seqs) / max_n_cols)
+    last_row_len = len(ordered_list_of_seqs) % max_n_cols
+
+    sequence_count = 0
+
+    # Once we know the number of rows, we can also adjust the y axis limits
+    axarr[-1].set_xlim(0, 100)
+    # axarr[-1].set_ylim(0, 100)
+    axarr[-1].set_ylim(0, ((n_rows - 1) * y_coord_increments) + leg_box_depth)
+    axarr[-1].invert_yaxis()
+
+    # If there are more sequences than there are rows x cols then we need to make sure that we are only goig
+    # to plot the first row x cols number of sequences.
+
+    for row_increment in range(min(n_rows, max_n_rows)):
+        # if not in the last row then do a full set of columns
+        if row_increment + 1 != n_rows:
+            for col_increment in range(max_n_cols):
+                # add the legend Rectangle
+                leg_box_x = col_increment * x_coord_increments
+                leg_box_y = row_increment * y_coord_increments
+                axarr[-1].add_patch(Rectangle((leg_box_x, leg_box_y),
+                                              width=leg_box_width, height=leg_box_depth,
+                                              color=colour_dict[ordered_list_of_seqs[sequence_count]]))
+
+                # add the text
+                text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
+                text_y = leg_box_y + (0.5 * leg_box_depth)
+                axarr[-1].text(text_x, text_y, ordered_list_of_seqs[sequence_count], verticalalignment='center',
+                               fontsize=8)
+
+                # increase the sequence count
+                sequence_count += 1
+        # else just do up to the number of last_row_cols
+        else:
+            for col_increment in range(last_row_len):
+                # add the legend Rectangle
+                leg_box_x = col_increment * x_coord_increments
+                leg_box_y = row_increment * y_coord_increments
+                axarr[-1].add_patch(Rectangle((leg_box_x, leg_box_y),
+                                              width=leg_box_width, height=leg_box_depth,
+                                              color=colour_dict[ordered_list_of_seqs[sequence_count]]))
+
+                # add the text
+                text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
+                text_y = leg_box_y + (0.5 * leg_box_depth)
+                axarr[-1].text(text_x, text_y, ordered_list_of_seqs[sequence_count], verticalalignment='center',
+                               fontsize=8)
+
+                # Increase the sequences count
+                sequence_count += 1
+
+    axarr[-1].set_frame_on(False)
+    axarr[-1].get_xaxis().set_visible(False)
+    axarr[-1].get_yaxis().set_visible(False)
+
+    plt.tight_layout()
+    fig_output_base = '{0}/{1}'.format(output_directory, data_sub_id_str)
+    plt.savefig('{}_seq_abundance_stacked_bar_plot.svg'.format(fig_output_base))
+    plt.savefig('{}_seq_abundance_stacked_bar_plot.png'.format(fig_output_base))
+    # plt.show()
 
 
 def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sample_support_cut_off, previous_reference_fasta_name, required_symbiodinium_matches, full_path_to_nt_database_directory):
