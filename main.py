@@ -104,7 +104,10 @@ def main():
                                                            'If you wish to use all available dataSubmissions,'
                                                                        'you may pass \'all\' as an argument. '
                                                            'To display all data_sets currently submitted to the '
-                                                           'framework\'s database, including their ids, use the \'show_data_sets\' command' )
+                                                           'framework\'s database, including their ids, use the \'show_data_sets\' command\n'
+                                                                 'To skip the generation of figures pass the '
+                                                                 '--noFig flag.'
+                       )
 
 
     group.add_argument('--print_output', metavar='data_set IDs, analysis ID', help='Use this function to output the '
@@ -207,7 +210,7 @@ def main():
                                             timeStamp=str(datetime.now()))
         new_analysis_object.description = args.description
         new_analysis_object.save()
-        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc)
+        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig)
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output:

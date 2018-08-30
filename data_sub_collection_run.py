@@ -6139,10 +6139,13 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1, noFig=False
     # plot for the ITS2 type profiles and one for the sequences
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
     if not noFig:
-        generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
+        svg_path, png_path = generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
                                                          output_directory=os.path.dirname(output_to_plot),
                                                          data_set_id_str=datasubstooutput,
                                                          analysis_obj_id=analysisobj.id)
+    print('Figure output files:')
+    print(svg_path)
+    print(png_path)
 
     return
 
@@ -6562,7 +6565,7 @@ def getAbundStr(totlist, sdlist, majlist):
 
 
 def namingRefSeqsUsedInDefs():
-    # TODO we now have all of the arif sequences entered into our database. This means that we can dispense of havng a
+    # We now have all of the arif sequences entered into our database. This means that we can dispense of havng a
     # refSeqDB written out in our directory. Instead we can simply create a fasta from all of the named
     # reference_sequences that we currently have in the database and use this to blast against and generate names.
     # in fact, for the local instance of SP we don't need to do any blasting as if a sequence already matched
@@ -6615,7 +6618,7 @@ def namingRefSeqsUsedInDefs():
 
         os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')))
 
-        # TODO generate a fasta, and make a blast dict that above unamed DIV sequence can be blasted again for
+        # Generate a fasta, and make a blast dict that above unamed DIV sequence can be blasted again for
         # sequence name generation.
         # This fasta should simply be the named sequences already in the SP database
         # lets call the fasta 'named_seqs_in_SP_remote_db.fa'
@@ -6665,7 +6668,7 @@ def namingRefSeqsUsedInDefs():
             typeInQ.name = typeInQ.generateName()
             typeInQ.save()
 
-        # TODO now clean up the binary files from the blast dict creation
+        # Now clean up the binary files from the blast dict creation
         # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
         sym_db_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
         list_of_dir = os.listdir(sym_db_dir)
@@ -6728,7 +6731,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores):
+def main(dataanalysistwoobject, cores, noFig=False):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
@@ -6802,6 +6805,10 @@ def main(dataanalysistwoobject, cores):
 
     ### It doesn't make sense to automatically make an output from an analysis as we don't know which
     # data_sets we want to output for.
+    # actually yes it does because we will simply output all data_sets as a default.
+    formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions, numProcessors=cores, noFig=noFig)
+
+
 
     print('data_analysis ID is: {}'.format(analysisObj.id))
 #################################################
