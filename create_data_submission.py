@@ -22,6 +22,8 @@ import matplotlib.pyplot as plt
 from matplotlib.pyplot import *
 from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
+import random
+
 
 
 ###### Generic functions ######
@@ -1358,16 +1360,17 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     ####### Stacked bar output fig #####
     # here we will create a stacked bar
     # I think it is easiest if we directly pass in the path of the above count table output
-    sys.stdout.write('\nGenerating figures\n')
-    for path in output_path_list:
-        if 'relative' in path:
-            path_to_rel_abund_data = path
+    if not noFig:
+        sys.stdout.write('\nGenerating figures\n')
+        for path in output_path_list:
+            if 'relative' in path:
+                path_to_rel_abund_data = path
 
-    svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, dSID)
-    sys.stdout.write('\nFigure generation complete')
-    sys.stdout.write('\nFigures output to:')
-    sys.stdout.write('\n{}'.format(svg_path))
-    sys.stdout.write('\n{}'.format(png_path))
+        svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, dSID)
+        sys.stdout.write('\nFigure generation complete')
+        sys.stdout.write('\nFigures output to:')
+        sys.stdout.write('\n{}'.format(svg_path))
+        sys.stdout.write('\n{}'.format(png_path))
 
 
 
@@ -1414,7 +1417,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
         print('\ndata_set ID is: {}'.format(dataSubmissionInQ.id))
 
-    # Here we will now produce the output
+
 
 def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, data_sub_id_str):
     #/Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
@@ -1838,3 +1841,5 @@ def get_colour_list():
                   "#6C8F7D", "#D7BFC2", "#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C", "#00B57F",
                   "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
     return colour_list
+
+

@@ -1,5 +1,21 @@
 #!/usr/bin/env python3.6
+''' SymPortal: a novel analytical framework and platform for coral algal
+    symbiont next-generation sequencing ITS2 profiling
+    Copyright (C) 2018  Benjamin C C Hume
 
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see
+    https://github.com/SymPortal/SymPortal_framework/tree/master/LICENSE.txt.'''
 import argparse
 import subprocess
 import itertools
@@ -73,7 +89,9 @@ def main():
                                                                'using the --num_proc flag.'
                                                                '\nA datasheet can also be uploaded using the '
                                                                '--data_sheet flag and the full path to the .xlxs '
-                                                               'data_sheet file. (RECOMMENDED)')
+                                                               'data_sheet file (RECOMMENDED). \n'
+                                                               'To skip the generation of figures pass the '
+                                                               '--noFig flag.')
 
 
     group.add_argument('--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
@@ -99,7 +117,8 @@ def main():
                                                                                        'e.g. 44,45,46.'
                                                                                        'Give the ID of the analysis you wish to '
                                                                                        'output these from using the --data_analysis_id '
-                                                                                       'flag.')
+                                                                                       'flag.\nTo skip the generation of figures pass the '
+                                                                                       '--noFig flag.')
 
 
     group.add_argument('--display_analyses', action='store_true', help=' Display data_analysis objects currently '
@@ -188,12 +207,12 @@ def main():
                                             timeStamp=str(datetime.now()))
         new_analysis_object.description = args.description
         new_analysis_object.save()
-        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig)
+        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc)
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output:
         if args.data_analysis_id:
-            data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id), numProcessors=args.num_proc, datasubstooutput=args.print_output)
+            data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id), numProcessors=args.num_proc, datasubstooutput=args.print_output, noFig=args.noFig)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses argument.')

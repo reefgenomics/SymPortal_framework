@@ -36,6 +36,11 @@ from Bio.Alphabet import IUPAC
 from skbio.stats.ordination import pcoa
 import sys
 import math
+from matplotlib.patches import Rectangle
+from matplotlib.colors import ListedColormap
+from matplotlib.lines import Line2D
+from matplotlib.collections import PatchCollection
+import random
 
 if 'PYCHARM_HOSTED' in os.environ:
     convert = False  # in PyCharm, we should disable convert
@@ -5754,7 +5759,7 @@ def get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sequence_only_df_
 
     return ordered_sample_list
 
-def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1):
+def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1, noFig=False):
     analysisObj = analysisobj
     # This is one of the last things to do before we can use our first dataset
     # The table will have types as columns and rows as samples
@@ -6127,8 +6132,20 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1):
     print('ITS2 type profile output files:')
     for output_file in output_files_list:
         print(output_file)
+        if 'relative' in output_file:
+            output_to_plot = output_file
+
+    # Finally lets produce output plots for the dataoutput. For the time being this should just be a
+    # plot for the ITS2 type profiles and one for the sequences
+    # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
+    if not noFig:
+        generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
+                                                         output_directory=os.path.dirname(output_to_plot),
+                                                         data_set_id_str=datasubstooutput,
+                                                         analysis_obj_id=analysisobj.id)
 
     return
+
 
 
 def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList,
@@ -6711,7 +6728,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores, noFig):
+def main(dataanalysistwoobject, cores):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
@@ -6783,6 +6800,345 @@ def main(dataanalysistwoobject, cores, noFig):
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
 
+    ### It doesn't make sense to automatically make an output from an analysis as we don't know which
+    # data_sets we want to output for.
+
     print('data_analysis ID is: {}'.format(analysisObj.id))
 #################################################
 
+def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, output_directory,
+                                                     data_set_id_str, analysis_obj_id):
+    #/Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
+
+    # Here we will generate our standard stacked bar output.
+    # We should take into account that we don't know how many samples will be coming through.
+    # I think we should aim for a standard width figure but which can get deeper if there are many samples.
+    # I.e. we should split up very large sets of samples into multiple plots to keep interpretability
+    # as high as possible.
+
+
+    # read in the SymPortal relative abundance output for the ITS2 type profiles
+    # I'm uneasy about absolutely specifiying the index of the row to be used as the header but
+    # I don't see any way around it.
+
+    # further down we will need to have a list of the its2 type profiles according to their abundance
+    # we will use this list to associate plotting colours to its2 type profiles.
+    # to do this we will need to keep the
+    sp_output_df = pd.read_csv(path_to_tab_delim_count, sep='\t', lineterminator='\n', skiprows=[0,1,2,3,5], header=None)
+
+    # get a list of tups that are the seq names and the abundances zipped together
+    type_profile_to_abund_tup_list = [(name, int(abund)) for name, abund in zip(sp_output_df.iloc[1][1:].values.tolist(), sp_output_df.iloc[0][1:].values.tolist())]
+
+    # add  to the header 0 position
+    sp_output_df.columns = [lab if i != 0 else 'Samples' for i, lab in enumerate(sp_output_df.iloc[0].values.tolist())]
+
+    # convert the names that are numbers into int strings rather than float strings.
+    int_temp_list = []
+    for name_abund_tup in type_profile_to_abund_tup_list:
+        try:
+            int_temp_list.append((str(int(name_abund_tup[0])), int(name_abund_tup[1])))
+        except:
+            int_temp_list.append((name_abund_tup[0], int(name_abund_tup[1])))
+    type_profile_to_abund_tup_list = int_temp_list
+
+    # use this fixed list to make the headers  to the header 0 position
+    sp_output_df.columns = ['Samples'] + [a[0] for a in type_profile_to_abund_tup_list]
+
+    # now drop the local abund row and promote the its2_type_prof names to columns headers.
+    sp_output_df.drop(index=[0,1], inplace=True)
+
+
+    # need to drop the rows that contain the sequence accession and species descriptions
+    for i, row_name in enumerate(sp_output_df['Samples']):
+        if 'Sequence accession' in row_name:
+            # then we want to drop all rows from here until the end
+            index_to_drop_from = i
+            break
+
+
+    sp_output_df = sp_output_df.iloc[:i]
+    sp_output_df = sp_output_df.set_index(keys='Samples', drop=True).astype('float')
+    # we should plot sample by sample and its2 type by its2 type in the order of the output
+
+    # the problem with doing he convert_to_pastel is that the colours become very similar
+    # colour_palette = convert_to_pastel(get_colour_list())
+    # Rather, I will attempt to generate a quick set of colours that are pastel and have a minimum distance
+    # rule for any colours that are generated from each other.
+    # let's do this for 50 colours to start with and see how long it takes.
+    # turns out it is very quick. Easily quick enough to do dynamically.
+    # When working with pastel colours (i.e. mixing with 255,255,255 it is probably best to work with a smaller dist cutoff
+
+    colour_palette_pas = ['#%02x%02x%02x' % rgb_tup for rgb_tup in create_colour_list(mix_col=(255,255,255), sq_dist_cutoff=1000, num_cols=50, time_out_iterations=10000)]
+
+
+    # # The below 3d scatter produces a 3d scatter plot to examine the spread of the colours created
+    # from mpl_toolkits.mplot3d import Axes3D
+    # colour_palette = create_colour_list(sq_dist_cutoff=5000)
+    # hex_pal = ['#%02x%02x%02x' % rgb_tup for rgb_tup in colour_palette]
+    # colcoords = [list(a) for a in zip(*colour_palette)]
+    # print(colcoords)
+    # fig = plt.figure()
+    # ax = fig.add_subplot(111, projection='3d')
+    # ax.scatter(colcoords[0], colcoords[1], colcoords[2], c=hex_pal, marker='o')
+
+
+    # colour_palette = get_colour_list()
+    grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
+
+    # we will use the col headers as the its2 type profile order for plotting but we
+    # we should colour according to the abundance of the its2 type profiles
+    # as we don't want to run out of colours by the time we get to profiles that are very abundant.
+    # The sorted_type_prof_names_by_local_abund object has the names of the its2 type profile in order of abundance
+    # we will use the index order as the order of samples to plot
+
+    # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
+    # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
+    sorted_type_prof_names_by_local_abund = [a[0] for a in sorted(type_profile_to_abund_tup_list, key=lambda x: x[0], reverse=True)]
+
+    colour_dict = {}
+    for i in range(len(sorted_type_prof_names_by_local_abund)):
+        if i < len(colour_palette_pas):
+            colour_dict[list(sorted_type_prof_names_by_local_abund)[i]] = colour_palette_pas[i]
+        else:
+            grey_index = i%len(grey_palette)
+            colour_dict[list(sorted_type_prof_names_by_local_abund)[i]] = grey_palette[grey_index]
+
+    # we should consider doing a plot per clade but for the time being lets start by doing a single plot that will
+    # contain all of the clades
+
+
+    # At this stage we are ready to plot
+    # The three following links show how we should be able to construct a list of matplotlib
+    # patches (Rectangles in this case) and add these patches to a PatchCollection before finally
+    # adding this patch collection to the ax using ax.add_collection().
+    # https://matplotlib.org/api/_as_gen/matplotlib.patches.Rectangle.html
+    # https://matplotlib.org/examples/api/patch_collection.html
+    # https://matplotlib.org/users/artists.html
+    # I hope that this will be quicker than using the bar helper sequence by sequence as we normally do
+    # It turns out that the colour parameters are ignored from the individual patches when using
+
+    n_its2_type_samples = len(sp_output_df.index.values.tolist())
+    its_type_per_plot = 50
+    # number of subplots will be one per smp_per_plot
+    # and if tehre are remainers be sure to add an extra plot for this
+    if (n_its2_type_samples % its_type_per_plot) != 0:
+        n_subplots = int(n_its2_type_samples / its_type_per_plot) + 1
+    else:
+        n_subplots = int(n_its2_type_samples / its_type_per_plot)
+
+    # depth of image is 3 inches per subplot
+    # we add  1 to the n_subplots here for the legend at the bottom
+    f, axarr = plt.subplots(n_subplots + 1, 1, figsize=(10, 3 * n_subplots))
+
+    # we will leave one subplot empty for making the legend in at the end
+    for i in range(n_subplots):
+        patches_list = []
+        ind = 0
+        colour_list = []
+        # we can work sample by sample
+        # if this is the last chunk then we slice to the end of the sp_output_df which is simply the len of samples
+        # else we slice to n_subplots-1
+        if i == n_subplots - 1:
+            end_slice = n_its2_type_samples
+        else:
+            end_slice = its_type_per_plot * (i + 1)
+
+        its_type_in_this_plot = len(sp_output_df.index.values.tolist()[i * its_type_per_plot:end_slice])
+        x_tick_label_list = []
+        for sample in sp_output_df.index.values.tolist()[i * its_type_per_plot:end_slice]:
+            sys.stdout.write('\rPlotting sample: {}'.format(sample))
+            x_tick_label_list.append(sample)
+            # for each sample we will start at 0 for the y and then add the height of each bar to this
+            bottom = 0
+            # for each sequence, create a rect patch
+            # the rect will be 1 in width and centered about the ind value.
+            # we want to plot the rects so that they add to 1. As such we want to divide
+            # each value by the total for that sample.
+            tot_for_sample = sp_output_df.loc[sample].sum()
+            for its2_profile in list(sp_output_df):
+                rel_abund = sp_output_df.loc[sample, its2_profile]
+                if rel_abund > 0:
+                    patches_list.append(Rectangle((ind - 0.5, bottom), 1, rel_abund/tot_for_sample, color=colour_dict[its2_profile]))
+                    # axarr.add_patch(Rectangle((ind-0.5, bottom), 1, rel_abund, color=colour_dict[seq]))
+                    colour_list.append(colour_dict[its2_profile])
+                    bottom += rel_abund/tot_for_sample
+            ind += 1
+
+        # We can try making a custom colour map
+        # https://matplotlib.org/api/_as_gen/matplotlib.colors.ListedColormap.html
+        this_cmap = ListedColormap(colour_list)
+
+        # here we should have a list of Rectangle patches
+        # now create the PatchCollection object from the patches_list
+        patches_collection = PatchCollection(patches_list, cmap=this_cmap)
+        patches_collection.set_array(np.arange(len(patches_list)))
+
+        # if n_subplots is only 1 then we can refer directly to the axarr object
+        # else we will need ot reference the correct set of axes with i
+        # Add the pathces to the axes
+        axarr[i].add_collection(patches_collection)
+        axarr[i].autoscale_view()
+        axarr[i].figure.canvas.draw()
+
+        # also format the axes.
+        # make it so that the x axes is constant length that will be the num of samples per subplot
+        axarr[i].set_xlim(0 - 0.5, its_type_per_plot - 0.5)
+        axarr[i].set_ylim(0, 1)
+        axarr[i].set_xticks(range(its_type_in_this_plot))
+        axarr[i].set_xticklabels(x_tick_label_list, rotation='vertical', fontsize=6)
+        axarr[i].spines['right'].set_visible(False)
+        axarr[i].spines['top'].set_visible(False)
+
+        # as well as getting rid of the top and right axis spines
+        # I'd also like to restrict the bottom spine to where there are samples plotted but also
+        # maintain the width of the samples
+        # I think the easiest way to do this is to hack a bit by setting the x axis spines to invisible
+        # and then drawing on a line at y = 0 between the smallest and largest ind (+- 0.5)
+        axarr[i].spines['bottom'].set_visible(False)
+        axarr[i].add_line(Line2D((0 - 0.5, its_type_in_this_plot - 0.5), (0, 0), linewidth=2, color='black'))
+
+    # Since the matplotlib legends are pretty rubbish when made automatically, I vote that we make our own axes
+    # all in favour... Ok.
+    # Let's plot the boxes and text that are going to make up the legend in another subplot that we will put underneath
+    # the one we currenty have. So.. we will add a subplot when we initially create the figure. We will make the axis
+    # 100 by 100 just to make our coordinate easy to work with. We can get rid of all of the axes lines and ticks
+    max_n_cols = 5
+    max_n_rows = 10
+    # The type names are generally quite long so we will cut the type legends down to 4 x 8
+    # we should start plotting in the top left working right and then down
+    # until we have completed 100 sequences.
+
+    # Y axis coordinates
+    # we will allow a buffer of 0.5 of the legend box's height between each legend box.
+    # as such the coordinates of each y will be in increments of 100 / (1.5 * num rows)
+    # the depth of the Rectangle for the legend box will be 2/3 * the above.
+    y_coord_increments = 100 / (max_n_rows)
+    leg_box_depth = 2 / 3 * y_coord_increments
+
+    # X axis coordinates
+    # for the x axis we will work in sets of three columns were the first col will be for the box
+    # and the second and third cols will be for the text
+    # as such the x coordinates will be in increments of 100 / (3 * numcols) starting with 0
+    # the width of the legend Rectangle will be the above number * 1/6 (I am making this smaller for the types).
+    x_coord_increments = 100 / max_n_cols
+    leg_box_width = x_coord_increments / 6
+
+    # go column by column
+    # we can now calculate the actual number of columns and rows we are going to need.
+    if len(list(sp_output_df)) % max_n_cols != 0:
+        n_rows = int(len(list(sp_output_df)) / max_n_cols) + 1
+    else:
+        n_rows = int(len(list(sp_output_df)) / max_n_cols)
+    last_row_len = len(list(sp_output_df)) % max_n_cols
+
+    its2_profile_count = 0
+
+    # Once we know the number of rows, we can also adjust the y axis limits
+    axarr[-1].set_xlim(0, 100)
+    # axarr[-1].set_ylim(0, 100)
+    axarr[-1].set_ylim(0, ((n_rows - 1) * y_coord_increments) + leg_box_depth)
+    axarr[-1].invert_yaxis()
+
+    # If there are more sequences than there are rows x cols then we need to make sure that we are only going
+    # to plot the first row x cols number of sequences.
+
+    sys.stdout.write('\nGenerating figure legend for {} most common sequences\n'.format(str(max_n_rows*max_n_cols)))
+    for row_increment in range(min(n_rows, max_n_rows)):
+        # if not in the last row then do a full set of columns
+        if row_increment + 1 != n_rows:
+            for col_increment in range(max_n_cols):
+                # add the legend Rectangle
+                leg_box_x = col_increment * x_coord_increments
+                leg_box_y = row_increment * y_coord_increments
+                axarr[-1].add_patch(Rectangle((leg_box_x, leg_box_y),
+                                              width=leg_box_width, height=leg_box_depth,
+                                              color=colour_dict[list(sp_output_df)[its2_profile_count]]))
+
+                # add the text
+                text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
+                text_y = leg_box_y + (0.5 * leg_box_depth)
+                axarr[-1].text(text_x, text_y, list(sp_output_df)[its2_profile_count], verticalalignment='center',
+                               fontsize=8)
+
+                # increase the sequence count
+                its2_profile_count += 1
+        # else just do up to the number of last_row_cols
+        else:
+            for col_increment in range(last_row_len):
+                # add the legend Rectangle
+                leg_box_x = col_increment * x_coord_increments
+                leg_box_y = row_increment * y_coord_increments
+                axarr[-1].add_patch(Rectangle((leg_box_x, leg_box_y),
+                                              width=leg_box_width, height=leg_box_depth,
+                                              color=colour_dict[list(sp_output_df)[its2_profile_count]]))
+
+                # add the text
+                text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
+                text_y = leg_box_y + (0.5 * leg_box_depth)
+                axarr[-1].text(text_x, text_y, list(sp_output_df)[its2_profile_count], verticalalignment='center',
+                               fontsize=8)
+
+                # Increase the sequences count
+                its2_profile_count += 1
+
+    axarr[-1].set_frame_on(False)
+    axarr[-1].get_xaxis().set_visible(False)
+    axarr[-1].get_yaxis().set_visible(False)
+
+    plt.tight_layout()
+    fig_output_base = '{}/{}_{}'.format(output_directory, analysis_obj_id, '_'.join([str(a) for a in data_set_id_str]))
+    sys.stdout.write('\nsaving as .svg\n')
+    svg_path = '{}_its2_type_profile_abundance_stacked_bar_plot.svg'.format(fig_output_base)
+    plt.savefig(svg_path)
+    sys.stdout.write('\nsaving as .png\n')
+    png_path = '{}_its2_type_profile_abundance_stacked_bar_plot.png'.format(fig_output_base)
+    plt.savefig(png_path)
+    # plt.show()
+    return '{}_its2_type_profile_abundance_stacked_bar_plot.svg'.format(fig_output_base), \
+           '{}_its2_type_profile_abundance_stacked_bar_plot.png'.format(fig_output_base)
+
+def create_colour_list(sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_iterations=10000, avoid_black_and_white=True):
+    new_colours = []
+    min_dist = []
+    attempt = 0
+    while len(new_colours) < num_cols:
+        attempt += 1
+        # Check to see if we have run out of iteration attempts to find a colour that fits into the colour space
+        if attempt > time_out_iterations:
+            sys.exit('Colour generation timed out. We have tried {} iterations of colour generation '
+                     'and have not been able to find a colour that fits into your defined colour space.\n'
+                     'Please lower the number of colours you are trying to find, '
+                     'the minimum distance between them, or both.'.format(attempt))
+        if mix_col:
+            r = int((random.randint(0, 255) + mix_col[0]) /2)
+            g = int((random.randint(0, 255) + mix_col[1]) /2)
+            b = int((random.randint(0, 255) + mix_col[2]) /2)
+        else:
+            r = random.randint(0, 255)
+            g = random.randint(0, 255)
+            b = random.randint(0, 255)
+
+        # now check to see whether the new colour is within a given distance
+        # if the avoids are true also
+        good_dist = True
+        if sq_dist_cutoff:
+            dist_list = []
+            for i in range(len(new_colours)):
+                distance = (new_colours[i][0] - r)**2 + (new_colours[i][1] - g)**2 + (new_colours[i][2] - b)**2
+                dist_list.append(distance)
+                if distance < sq_dist_cutoff:
+                    good_dist = False
+                    break
+            # now check against black and white
+            d_to_black = (r - 0)**2 + (g - 0)**2 + (b - 0)**2
+            d_to_white = (r - 255)**2 + (g - 255)**2 + (b - 255)**2
+            if avoid_black_and_white:
+                if d_to_black < sq_dist_cutoff or d_to_white < sq_dist_cutoff:
+                    good_dist = False
+            if dist_list:
+                min_dist.append(min(dist_list))
+        if good_dist:
+            new_colours.append((r,g,b))
+            attempt = 0
+
+    return new_colours
