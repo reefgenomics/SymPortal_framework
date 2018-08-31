@@ -106,8 +106,7 @@ def main():
                                                            'To display all data_sets currently submitted to the '
                                                            'framework\'s database, including their ids, use the \'show_data_sets\' command\n'
                                                                  'To skip the generation of figures pass the '
-                                                                 '--noFig flag.'
-                       )
+                                                                 '--noFig flag.')
 
 
     group.add_argument('--print_output', metavar='data_set IDs, analysis ID', help='Use this function to output the '
