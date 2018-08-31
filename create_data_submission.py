@@ -1350,7 +1350,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     ####### COUNT TABLE OUTPUT ########
     # We are going to make the sequence count table output as part of the dataSubmission
-    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/data_set_submissions')
+    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/data_set_submissions/{}'.format(dSID))
     # the below method will create the tab delimited output table and print out the output file paths
     # it will also return these paths so that we can use them to grab the data for figure plotting
     output_path_list = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),

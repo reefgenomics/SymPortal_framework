@@ -6020,7 +6020,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1, noFig=False
     outputTableOne = ['\t'.join(a) for a in outputTableOne]
     outputTableTwo = ['\t'.join(a) for a in outputTableTwo]
 
-    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/{}'.format(analysisObj.id))
+    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
     os.makedirs(outputDir, exist_ok=True)
     os.chdir(outputDir)
 
