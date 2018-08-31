@@ -1377,7 +1377,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     ####################################
     # write out whether there were below e value sequences outputted.
     if fasta_out_with_clade:
-        print('WARNING: {} sub_e_value cut-off sequences were output'.format(int(len(fasta_out_with_clade)/2)))
+        print('\n\nWARNING: {} sub_e_value cut-off sequences were output'.format(int(len(fasta_out_with_clade)/2)))
     if screen_sub_evalue:
         if fasta_out_with_clade:
             print('These will now be automatically screened to see if they contain Symbiodinium sequences.')

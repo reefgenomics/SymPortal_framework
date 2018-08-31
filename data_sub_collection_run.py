@@ -7093,7 +7093,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     axarr[-1].get_yaxis().set_visible(False)
 
     plt.tight_layout()
-    fig_output_base = '{}/{}_{}'.format(output_directory, analysis_obj_id, '_'.join([str(a) for a in data_set_id_str]))
+    fig_output_base = '{}/{}_{}'.format(output_directory, analysis_obj_id, data_set_id_str.replace(',', '_'))
     sys.stdout.write('\nsaving as .svg\n')
     svg_path = '{}_its2_type_profile_abundance_stacked_bar_plot.svg'.format(fig_output_base)
     plt.savefig(svg_path)
