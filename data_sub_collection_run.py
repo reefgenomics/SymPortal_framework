@@ -161,7 +161,7 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
         writeListToDestination('{}/group_file.groups'.format(clade_wkd), group_file)
 
         # align fasta
-        out_file = mafft_align_fasta(clade_wkd)
+        out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
 
         # Generate random data sets
         fseqboot_base = generate_fseqboot_alignments(clade_wkd, bootstrap_value, out_file)
@@ -465,7 +465,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     return PCoA_path_lists
 
 
-def mafft_align_fasta(clade_wkd):
+def mafft_align_fasta(clade_wkd, num_proc):
     # now mafft align the fasta
     # now align
     # http://plumbum.readthedocs.io/en/latest/local_commands.html#pipelining
@@ -473,8 +473,14 @@ def mafft_align_fasta(clade_wkd):
     mafft = local["mafft"]
     in_file = '{}/unique.fasta'.format(clade_wkd)
     out_file = '{}/unique.aligned.fasta'.format(clade_wkd)
+
+    # NB we were getting an error here because our os.cwd has been in the temp folder which we then deleted
+    # when mafft runs it does a look up to get what our cwd is and this was causing a crash.
+    # to fix this we will change directory to the outputdir
+    os.chdir(clade_wkd)
+
     # now run mafft including the redirect
-    (mafft['--auto', '--thread', '16', in_file] > out_file)()
+    (mafft['--auto', '--thread', num_proc, in_file] > out_file)()
     return out_file
 
 
