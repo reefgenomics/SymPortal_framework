@@ -15,7 +15,9 @@ import glob
 from datetime import datetime
 import sys
 import pandas as pd
-from data_sub_collection_run import div_output_pre_analysis_new_meta_and_new_dss_structure, get_sample_order_from_rel_seq_abund_df_no_clade_constraint
+from data_sub_collection_run import div_output_pre_analysis_new_meta_and_new_dss_structure, \
+    get_sample_order_from_rel_seq_abund_df_no_clade_constraint, \
+    generate_within_clade_UniFrac_distances_samples
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
@@ -949,7 +951,7 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
 
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload',
-         data_sheet_path=None, noFig=False):
+         data_sheet_path=None, noFig=False, noOrd=False):
 
 
     # Create a pandas df from the data_sheet if it was provided
@@ -1374,7 +1376,14 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
 
 
+    ####### between sample distances ######
+    if not noOrd:
+        generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
+                                                        method='mothur', call_type='submission', output_dir=outputDir)
+    #######################################
+
     ####################################
+
     # write out whether there were below e value sequences outputted.
     if fasta_out_with_clade:
         print('\n\nWARNING: {} sub_e_value cut-off sequences were output'.format(int(len(fasta_out_with_clade)/2)))

@@ -91,7 +91,10 @@ def main():
                                                                '--data_sheet flag and the full path to the .xlxs '
                                                                'data_sheet file (RECOMMENDED). \n'
                                                                'To skip the generation of figures pass the '
-                                                               '--noFig flag.')
+                                                               '--noFig flag.\n'
+                                                               'To skip the generation of ordination files '
+                                                               '(pairwise distances and PCoA coordinates) '
+                                                               'pass the --noOrd flag')
 
 
     group.add_argument('--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
@@ -106,7 +109,11 @@ def main():
                                                            'To display all data_sets currently submitted to the '
                                                            'framework\'s database, including their ids, use the \'show_data_sets\' command\n'
                                                                  'To skip the generation of figures pass the '
-                                                                 '--noFig flag.')
+                                                                 '--noFig flag.\n'
+                                                                 'To skip the generation of ordination files '
+                                                                 '(pairwise distances and PCoA coordinates) '
+                                                                 'pass the --noOrd flag')
+
 
 
     group.add_argument('--print_output', metavar='data_set IDs, analysis ID', help='Use this function to output the '
@@ -146,6 +153,7 @@ def main():
     parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
     parser.add_argument('--data_sheet', help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
     parser.add_argument('--noFig', action='store_true', help='Skip figure production')
+    parser.add_argument('--noOrd', action='store_true', help='Skip ordination analysis')
     args = parser.parse_args()
 
 
@@ -182,12 +190,12 @@ def main():
             if os.path.isfile(args.data_sheet):
                 create_data_submission.main(input_dir, new_data_set.id, num_proc,
                                             screen_sub_evalue=screen_sub_evalue_bool,
-                                            data_sheet_path=args.data_sheet, noFig=args.noFig)
+                                            data_sheet_path=args.data_sheet, noFig=args.noFig, noOrd=args.noOrd)
             else:
                 sys.exit('{} not found'.format(args.data_sheet))
         else:
             create_data_submission.main(input_dir, new_data_set.id, num_proc,
-                                        screen_sub_evalue=screen_sub_evalue_bool, noFig=args.noFig)
+                                        screen_sub_evalue=screen_sub_evalue_bool, noFig=args.noFig, noOrd=args.noOrd)
 
     elif args.analyse:
         if args.name == 'noName':
@@ -209,7 +217,7 @@ def main():
                                             timeStamp=str(datetime.now()))
         new_analysis_object.description = args.description
         new_analysis_object.save()
-        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig)
+        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd)
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output:
@@ -217,7 +225,7 @@ def main():
             data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id), numProcessors=args.num_proc, datasubstooutput=args.print_output, noFig=args.noFig)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
-                  'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses argument.')
+                  'flag. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
 
     elif args.display_data_sets:
         # Then print out all of the dataSubmissions with names and IDs in the db
@@ -233,15 +241,15 @@ def main():
         if args.data_analysis_id:
             data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
                 data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
-                data_analysis_id=args.data_analysis_id, method='mothur', bootstrap_value=args.bootstrap)
+                data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', bootstrap_value=args.bootstrap)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
-                  'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses argument.')
+                  'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
 
     elif args.between_sample_distances:
         data_sub_collection_run.generate_within_clade_UniFrac_distances_samples(
             dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
-            method='mothur', bootstrap_value=args.bootstrap)
+            method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
 
     elif args.print_output_no_types:
         outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')

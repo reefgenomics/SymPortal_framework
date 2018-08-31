@@ -109,7 +109,7 @@ def convert_interleaved_to_sequencial_fasta(fasta_in):
 
 ##### DISTANCE MATRICES #####
 def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_id_str, num_processors, data_analysis_id,
-                                                               method, bootstrap_value):
+                                                               method, call_type, bootstrap_value=100, noFig=False, output_dir=None):
     ''' This will produce distance matrices between ITS2 type profiles of the same clade.
     It will use exactly the same suite of programs as the generate_within_clade_UniFrac_distances_samples method
     The only difference will be that this will be calculated across ITS2 Type Profiles rather than samples.
@@ -119,9 +119,13 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
 
     output_file_paths = []
 
-    wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs',
-                                       'ordination', '_'.join(str(data_submission_id_str).split(',')),
-                                       'between_profiles', method))
+    if call_type == 'stand_alone':
+        wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs',
+                                           'ordination', '_'.join(str(data_submission_id_str).split(',')),
+                                           'between_profiles'))
+    else:
+        # call_type = 'analysis'
+        wkd = output_dir
 
     # get the dataSubmissions
     data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
@@ -252,7 +256,19 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
     return group_file, name_file, unique_fasta
 
 
-def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors, method, bootstrap_value):
+def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors,
+                                                    method, call_type, bootstrap_value=100, output_dir=None):
+    # TODO
+    # The call_type argument will be used to determine which setting this method is being called from.
+    # if it is being called as part of the initial submission call_type='submission', then we will always be working with a single
+    # data_set. In this case we should output to the same folder that the submission results were output
+    # to. In the case of being output in a standalone manner call_type='stand_alone' then we may be outputting
+    # comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
+    # into the initial submissions folder. In this case we will use the directory structure that is already
+    # in place which will put it in the ordination folder.
+    # TODO
+    # we can now also colour the ordination plots according to the meta data of the samples, if this is available.
+
     '''
     This method will generate a distance matrix between samples
     One for each clade.
@@ -292,9 +308,13 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
 
     clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_dataSubmissions]))
 
-    wkd = os.path.abspath(
-        os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(dataSubmission_str.split(',')),
-                     'between_samples', method))
+    if call_type == 'stand_alone':
+        wkd = os.path.abspath(
+            os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(dataSubmission_str.split(',')),
+                         'between_samples'))
+    else:
+        # call_type == 'submission':
+        wkd = output_dir + '/between_sample_distances'
     # for each clade found in the dataSubmissions' samples
     PCoA_path_lists = []
     for clade_in_question in clades_of_clade_collections:
@@ -438,7 +458,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
                 os.remove(os.path.join(clade_wkd, item))
 
     # Print output files
-    print('Output files:')
+    print('Between sample distances output files:')
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
@@ -6138,16 +6158,17 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1, noFig=False
     # Finally lets produce output plots for the dataoutput. For the time being this should just be a
     # plot for the ITS2 type profiles and one for the sequences
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
+    output_dir = os.path.dirname(output_to_plot)
     if not noFig:
         svg_path, png_path = generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
-                                                         output_directory=os.path.dirname(output_to_plot),
+                                                         output_directory=output_dir,
                                                          data_set_id_str=datasubstooutput,
                                                          analysis_obj_id=analysisobj.id)
     print('Figure output files:')
     print(svg_path)
     print(png_path)
 
-    return
+    return output_dir
 
 
 
@@ -6731,7 +6752,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores, noFig=False):
+def main(dataanalysistwoobject, cores, noFig=False, noOrd=False):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
@@ -6806,9 +6827,14 @@ def main(dataanalysistwoobject, cores, noFig=False):
     ### It doesn't make sense to automatically make an output from an analysis as we don't know which
     # data_sets we want to output for.
     # actually yes it does because we will simply output all data_sets as a default.
-    formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions, numProcessors=cores, noFig=noFig)
+    output_dir = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions, numProcessors=cores, noFig=noFig)
 
-
+    ######## Between type ordination analysis ##########
+    if not noOrd:
+        generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+            data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
+            data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
+    ####################################################
 
     print('data_analysis ID is: {}'.format(analysisObj.id))
 #################################################
