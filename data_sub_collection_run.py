@@ -422,7 +422,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
         writeListToDestination('{}/group_file.groups'.format(clade_wkd), master_group_list)
 
-        out_file = mafft_align_fasta(clade_wkd)
+        out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
 
         ### I am really struglling to get the jmodeltest to run through python.
         # I will therefore work with a fixed model that has been chosen by running jmodeltest on the command line
