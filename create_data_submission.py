@@ -1444,12 +1444,12 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     # In order to be able to drop the DIV row at the end and the meta information rows, we should
     # drop all rows that are after the DIV column. We will pass in an index value to the .drop
     # that is called here. To do this we need to work out which index we are working with
-    index_values_as_list = sp_output_df.index.values.tolist()
+    index_values_as_list = sp_output_df['Samples'].values.tolist()
     for i in range(-1, -(len(index_values_as_list)), -1):
         if index_values_as_list[i].startswith('DIV'):
-            #then this is the index (in negative notation) that we need to cut from
-            meta_index_to_cut_from = 0
-
+            # then this is the index (in negative notation) that we need to cut from
+            meta_index_to_cut_from = i
+            break
 
     # now lets drop the QC columns from the SP output df and also drop the clade summation columns
     # we will be left with just clumns for each one of the sequences found in the samples
@@ -1461,7 +1461,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
                                'post_taxa_id_unique_non_symbiodinium_seqs',
                                'size_screening_violation_absolute', 'size_screening_violation_unique',
                                'post_med_absolute', 'post_med_unique'
-                               ], index=sp_output_df.index[meta_index_to_cut_from]
+                               ], index=sp_output_df.index[range(meta_index_to_cut_from, 0, 1)]
                       , inplace=True)
 
     sp_output_df = sp_output_df.set_index(keys='Samples', drop=True).astype('float')

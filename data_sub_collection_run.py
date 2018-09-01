@@ -190,7 +190,7 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
                 os.remove(os.path.join(clade_wkd, item))
 
     # output the paths of the new files created
-    print('Output files:')
+    print('\n\nOutput files:\n')
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
@@ -211,7 +211,7 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
     # we already have the ratios of each of the divs
     list_of_type_profile_norm_abundance_dicts = []
     for at in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
-        print('Processing {}'.format(at))
+        sys.stout.write('\rProcessing {}'.format(at))
         list_of_div_ids = [int(b) for b in at.orderedFootprintList.split(',')]
         foot_print_ratio_array = pd.DataFrame(at.getRatioList())
         normalised_abundance_of_divs_dict = {list_of_div_ids[i]: math.ceil(foot_print_ratio_array[i].mean() * 1000) for
@@ -332,7 +332,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         # we will out put to the output queue live and process this in the main thread to create the master
         # fasta and name file
 
-        print('Creating .name and .fasta files')
+        sys.stdout.write('Creating .name and .fasta files')
 
         # setup MP
         # Create the queues that will hold the cc information
@@ -383,7 +383,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
                 proc_seq_list = fasta_name_set[3]
                 cc_id = fasta_name_set[4]
                 cc_name = fasta_name_set[5]
-                print('Adding {} to master fasta and name files'.format(cc_name))
+                sys.stdout.write('\rAdding {} to master fasta and name files'.format(cc_name))
                 master_group_list += proc_group_list
                 for seq_id in proc_seq_list:
                     seq_name = '{}_id{}_0'.format(seq_id, cc_id)
@@ -458,7 +458,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
                 os.remove(os.path.join(clade_wkd, item))
 
     # Print output files
-    print('Between sample distances output files:')
+    sys.stdout.write('\n\nBetween sample distances output files:\n')
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
@@ -469,7 +469,7 @@ def mafft_align_fasta(clade_wkd, num_proc):
     # now mafft align the fasta
     # now align
     # http://plumbum.readthedocs.io/en/latest/local_commands.html#pipelining
-    print('Aligning sequences')
+    sys.stdout.write('\rAligning sequences')
     mafft = local["mafft"]
     in_file = '{}/unique.fasta'.format(clade_wkd)
     out_file = '{}/unique.aligned.fasta'.format(clade_wkd)
@@ -504,7 +504,7 @@ def uni_frac_worker_two(input, output):
         temp_group_list = []
         temp_ref_seq_id_list = []
 
-        print('Processing cc: {} with {}'.format(cc, proc_id))
+        sys.stdout.write('\rProcessing cc: {} with {}'.format(cc, proc_id))
         for data_set_sample_seq in data_set_sample_sequence.objects.filter(
                 cladeCollectionTwoFoundIn=cc):
             ref_seq_id = data_set_sample_seq.referenceSequenceOf.id
@@ -537,17 +537,15 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     # Now create consensus tree using sumtrees.py
     concatenate_trees(list_of_tree_paths, '{}/individual_trees'.format(clade_wkd))
     in_file_fconsense = '{}/individual_trees'.format(clade_wkd)
-    # rename_tree(name_file, in_file_fconsense)
+
     # # ### DEBUG ###
     # for line in readDefinedFileToList(in_file_fconsense):
     #     if "1 Pro" in line:
     #         bob = 'asdf'
     # #############
-    # out_file_fconsense = '{}/out_seq_boot_reps/consensus_tree_output_file'.format(clade_wkd)
-    # tree_out_file_fconsense = '{}/out_seq_boot_reps/consensus_tree_consense.newick'.format(clade_wkd)
+
     tree_out_file_fconsense_sumtrees = '{}/consensus_tree_sumtrees.newick'.format(clade_wkd)
-    # sumtree = local["sumtrees.py"]
-    # output = (sumtree['-F', 'newick', in_file_fconsense] > tree_out_file_fconsense_sumtrees)()
+
 
     completed_consensus = subprocess.run(
         ['sumtrees.py', '-F', 'newick', '--replace', '-o', tree_out_file_fconsense_sumtrees, in_file_fconsense],
@@ -557,7 +555,7 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
             print(line)
         for line in completed_consensus.sterr.decode('utf-8'):
             print(line)
-        apples = 'asdf'
+
 
     # The consunsus tree output by sumtree is causing problems because it contains metadata.
     # It is important that the tree we use for the unifrac has the branch lengths on it
@@ -578,7 +576,7 @@ def generate_PCoA_coords(clade_wkd, raw_dist_file):
         sample_names_from_dist_matrix.append(temp_elements[0].replace(' ', ''))
         temp_two_D_list.append([float(a) for a in temp_elements[1:]])
     uni_frac_dist_array = np.array(temp_two_D_list)
-    print('calculating PCoA coordinates')
+    sys.stdout.write('\rcalculating PCoA coordinates')
     pcoA_full_path = clade_wkd + '/PCoA_coords.csv'
     this = pcoa(uni_frac_dist_array)
 
@@ -601,7 +599,7 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     out_file_seqboot = in_file_seqboot + '.fseqboot'
     fseqboot = local["fseqboot"]
     # run fseqboot
-    print('generating multiple datasets')
+    sys.stdout.write('\rGenerating multiple datasets')
     (fseqboot['-sequence', in_file_seqboot, '-outfile', out_file_seqboot, '-test', 'b', '-reps', num_reps])()
     # Now divide the fseqboot file up into its 100 different alignments
     fseqboot_file = readDefinedFileToList(out_file_seqboot)
@@ -638,13 +636,13 @@ def perform_unifrac(clade_wkd, tree_path):
     mothur_batch_path = '{}/mothur_batch_WU'.format(clade_wkd)
     writeListToDestination(mothur_batch_path, mothur_batch_WU)
     # now run the batch file with mothur
-    print('calculating unifrac distances')
+    sys.stdout.write('\rcalculating unifrac distances')
     completedProcess = \
         subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if completedProcess.returncode == 0:
-        print('Unifrac successful')
+        sys.stdout.write('\rUnifrac successful')
     else:
-        print('ERROR: {}'.format(completedProcess.sterr.decode('utf-8')))
+        sys.stdout.write('\rERROR: {}'.format(completedProcess.sterr.decode('utf-8')))
     return
 
 
@@ -793,7 +791,7 @@ def plotPCoA_types(full_path_to_coords):
 # mothur method
 def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
     for p in iter(input.get, 'STOP'):
-        print('Processing p={} with {}'.format(p, current_process().name))
+        sys.stdout.write('\rProcessing p={} with {}'.format(p, current_process().name))
         # convert the interleaved fasta to sequential fasta
         interleaved_fast = readDefinedFileToList('{}{}'.format(fseqboot_base, p))
         sequen_fast = convert_interleaved_to_sequencial_fasta(interleaved_fast)
@@ -807,10 +805,10 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
         writeListToDestination(mothur_batch_path, mothur_batch_dist)
 
         # now run the batch file with mothur
-        print('Calculating distances...')
+        sys.stdout.write('\rCalculating distances...')
         completedProcess = \
             subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print('Done.')
+        sys.stdout.write('\rDone.')
         # now run in clearcut
         input = '{}{}.sequential.square.dist'.format(fseqboot_base, p)
         mothur_batch_clearcut = \
@@ -820,10 +818,10 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
 
         mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_clearcut_{}'.format(clade_wkd, p)
         writeListToDestination(mothur_batch_path, mothur_batch_clearcut)
-        print('Generating NJ tree from distances')
+        sys.stdout.write('\rGenerating NJ tree from distances')
         completedProcess = \
             subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        print('Done')
+        sys.stdout.write('\rDone')
         output.put(input.replace('.dist', '.tre'))
     output.put('kill')
 
@@ -6440,6 +6438,7 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False):
 
     ######## Between type ordination analysis ##########
     if not noOrd:
+        sys.stdout.write('\nCalculating pairwise distances\n')
         generate_within_clade_UniFrac_distances_ITS2_type_profiles(
             data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
             data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
@@ -6498,7 +6497,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
             break
 
 
-    sp_output_df = sp_output_df.iloc[:i]
+    sp_output_df = sp_output_df.iloc[:index_to_drop_from]
     sp_output_df = sp_output_df.set_index(keys='Samples', drop=True).astype('float')
     # we should plot sample by sample and its2 type by its2 type in the order of the output
 
