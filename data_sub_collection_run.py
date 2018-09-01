@@ -258,7 +258,7 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
 
 def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors,
                                                     method, call_type, bootstrap_value=100, output_dir=None):
-    # TODO
+
     # The call_type argument will be used to determine which setting this method is being called from.
     # if it is being called as part of the initial submission call_type='submission', then we will always be working with a single
     # data_set. In this case we should output to the same folder that the submission results were output
@@ -1094,7 +1094,7 @@ def profileDiscovery(nProcessors):
                 # cladalDictionaryKey = dictelement[1]
                 # CC = dictelement[2]
                 # CC.maj() = dictelement[3]
-                # TODO 07/12/17 here we are going to start to make changes to the format of the footprintlist
+                # 07/12/17 here we are going to start to make changes to the format of the footprintlist
                 # called mastercldallistoffootprintdicts
                 # For the maj types (passedElement[3]) we are going to put them into their own list rather than
                 # have them as items in a single list
@@ -1175,14 +1175,14 @@ def profileDiscovery(nProcessors):
                 ############################################################################################
 
                 ############ CREATE ANALYSIS TYPES BASED ON DISCOVRED FOOTPRINTS ############################
-                # TODO 08/12/17 we need to be careful here when we initiate the types as the types we were previously
+                # 08/12/17 we need to be careful here when we initiate the types as the types we were previously
                 ''' generating would represent essentially the majoirty of the ccts sequences. but now some of the types
                 will be smaller proportions of the ccts so we should check to see how the initial abundnace of the types
                 are calculated. e.g. are they calculated as the proportion of the total seqs in the cct or are we 
                 already working on as proportions of the seqs of the type in question. Hopefully it is the latter
                 and we were just going with the types that represented the largest number of sequences for the cct.
                 '''
-                # TODO 08/12/17 I have carefully looked through the type initTypeAtributes method
+                # 08/12/17 I have carefully looked through the type initTypeAtributes method
                 ''' Firsly it always works in the context of the sequences found in the type. It produces absoulte
                  counts per sequence in the type for each cladeCollection that the type was supported by.
                  It also produces a count that is relative proportions of each sequence of the type for each CC.
@@ -1578,7 +1578,7 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
 
                                 ############ IF DOESN'T EXIST; MAKE NEW TYPE AND ASSOCIATED CCs ###########
                                 elif not exists and intrasInCommonList:
-                                    # TODO 08/12/17 here we need to make sure that the intrasIncommonList doesn't contain a mixture of
+                                    # 08/12/17 here we need to make sure that the intrasIncommonList doesn't contain a mixture of
                                     # basal seqs
                                     # will return True if there are multiple basal type in the intras in common list
                                     if not check_if_intrasInCommonList_contains_multiple_basal_seqs(intrasInCommonList):
@@ -1735,14 +1735,14 @@ def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CC
         # if str(analysis_type.objects.get(id=typeToCheckID)) == 'C42g-C42a-C42.2-C42h-C1-C42b':
         #     apples = 'pears'
 
-        # TODO DEBUG it seems that some of the CCs' ID are not being found in the CCToInitialTypeDict
-        # TODO The dict is created earlier on  line 1609. It is created by going through every type
+        # DEBUG it seems that some of the CCs' ID are not being found in the CCToInitialTypeDict
+        # The dict is created earlier on  line 1609. It is created by going through every type
         # in the collecting all of the CCs that it was found in initially and then creating the dict by
         # key = CC id and value = the type.
         # So it is quite possible that if we are going through each CC in the analysis and if a CC didn't have
         # an initial type associated to it then we will have a key error here as the CC would not be incorporated into
         # the CCToInitialTypeDict
-        # TODO check to see if we are going through all CCs in this MP
+        # check to see if we are going through all CCs in this MP
         # It turns out that we are going through the 'list of CCs to check'
         # @ line 609: listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections() if cc.clade == currentClade]
         # So as you can see it is entirely possible that some of the CCs did not have initial types assigned to them
@@ -1786,7 +1786,7 @@ def workerArtefactTwo(input, supportList, CCToInitialTypeDict, typeToCheckID, CC
             # Now must check to see if typeInQ covers more seqs than its initial type
 
             # Get tot abundance for current inital type
-            # TODO 08/12/17
+            # 08/12/17
             # So here the question is 1 - does the CC already associate with a type of the basal sequence of the type
             # in question. If yes then we need to compare against this type. If no, then we can carry on with a
             # attempt at finding an association
@@ -1904,9 +1904,7 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
     # also the CC to type dict will need to be kept uptodate.
 
     # Get list of CCs in this analysis that are also of the clade in Q
-    # TODO This still needs doing vvvv
-    # This is currently a huge ammount of work to do going through all of these CCs
-    # Would be good to cut this down
+
 
     # I'm making a change. We can include all CCs here and simply modify the workerOne code so that if a CC doesn't have an itnitial type
     # currently it can give support to the PNT if the PNT's DIVs are found in the CC.
@@ -1922,8 +1920,7 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
 
     ######################### CHECK EVERY CC OF THE ANALYSISOBJ ################################
     # To see whether the CC supports the pnt
-    # TODO multiprocess this. Would need a managed list
-    # Support list would be the the managed list
+
 
     ############# NEW MP CODE #############
 
@@ -1987,7 +1984,7 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
         typeToCCToBeRemovedDict = defaultdict(list)  # we may have to do this manually instead of defaultdict
         for CC in supportList:
             if CC.id in cctocurrentinitialtypedict.keys():
-                # TODO 08/12/17 again we need to work out which of the types if there are multiples, was effected: DONE but check the new method check_which_type...
+                # 08/12/17 again we need to work out which of the types if there are multiples, was effected: DONE but check the new method check_which_type...
                 initialTypeID = None
                 if len(cctocurrentinitialtypedict[CC.id]) == 1:
                     initialTypeID = cctocurrentinitialtypedict[CC.id][0]
@@ -2029,7 +2026,6 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
             anTypeInQ.removeCCListFromInitialCladeCollectionList(listOfCCsToBeRemovedStrID)
 
             # Change the CC associations in the cctocurrent... dict
-            # TODO 08/12/17 remove and add to list DONE.
             for ccstrid in listOfCCsToBeRemovedStrID:
                 cctocurrentinitialtypedict[int(ccstrid)].remove(anType)
                 cctocurrentinitialtypedict[int(ccstrid)].append(newAnalysisType.id)
@@ -2235,7 +2231,7 @@ def workerArtefactOne(input, supportList, cctorefabunddict, pnt, cctocurrentinit
             # we need to consider whether this type covers more sequences than the PNT
             # if the PNT covers more, add support, else do not
             if CC.id in cctocurrentinitialtypedict.keys():
-                # TODO 08/12/17 here we need a fix as the CCs can now support more than one type
+                # 08/12/17 here we need a fix as the CCs can now support more than one type
                 # we need to get the type that we should be comparing to.
                 # If there are multiple types associated to a given CCt then they will be of different basal origins
                 # we need to find the one that is the basal origin of the pnt
@@ -2470,7 +2466,7 @@ def createTotalSeqsDictForAllCCs(cores):
         for CC in listOfCCsToCheck:
             taskQueue.put(CC)
 
-        for N in range(cores):  # TODO Change back to cores
+        for N in range(cores):
             taskQueue.put('STOP')
 
         allProcesses = []
@@ -2661,12 +2657,12 @@ def checkForAdditionalArtefactTypes(cores):
     # Create dict for each type of refSeqs, artefact and non-artefact DIVs, and footprint
     typeFootPrintDict = createTypeArtefactDivInfoDict(allTypesFromDataAnalysis, cores)
 
-    # TODO 08/12/17 this is going to need to be looked at as each CC can now have multiple initial types
+    # 08/12/17 this is going to need to be looked at as each CC can now have multiple initial types
     # Create a dict that is CC: inital type found in
     CCToInitialTypeDict = createCCtoInitialTypeDict(allTypesFromDataAnalysis)
 
     # Do pairwise comparison of types within clades
-    # TODO 08/12/17
+    # 08/12/17
     # I have gone through all of the remaining code in this function and fixed the cc to initial type dict
     # so that it is compatible with ccts having multiple types.
     # we still need to do the other artefact checking
@@ -2695,7 +2691,7 @@ def checkForAdditionalArtefactTypes(cores):
                     listOfNonArtefactIntrasA = typeFootPrintDict[a.id][0]
                     listOfNonArtefactIntrasB = typeFootPrintDict[b.id][0]
 
-                    # TODO 08/12/17 here we can simply check to see if the pair of types contain incompatible types
+                    # 08/12/17 here we can simply check to see if the pair of types contain incompatible types
                     # if they do then we don't compare them and simply add to the done list
                     # returns False if it is OK to compare, i.e. non incompatabiites
                     # returns True if there are incompatabilities and they cannot be compared
@@ -2808,7 +2804,7 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
                 c3dsss = data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=cctList[i],
                                                               referenceSequenceOf=rs)
 
-                # TODO check that whether it is a list that we are adding to
+                # check that whether it is a list that we are adding to
                 # this will probably fail because maj list is currently just a list.
                 # we need to change this to be a 2Dlist we will need to update this when we are first forming the dict
                 if c3dsss not in footprintdict[keyname][1][i]:
@@ -2820,7 +2816,7 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
             for i in range(len(cctList)):
                 c1dsss = data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=cctList[i],
                                                               referenceSequenceOf=rs)
-                # TODO check that whether it is a list that we are adding to
+                # check that whether it is a list that we are adding to
                 # this will probably fail because maj list is currently just a list.
                 # we need to change this to be a 2Dlist we will need to update this when we are first forming the dict
                 if c1dsss not in footprintdict[keyname][1][i]:
@@ -3252,7 +3248,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                         '-'.join(str(refseq) for refseq in bigFootprint.profile)), end='\r')
                     # These three are so that we only collapse into footprints that have the maj seqs of the bigfootprints
                     # see code futher down
-                    # TODO 07/12/17 this is going to cause some problems for our basal checks as we only have one maj listed
+                    # 07/12/17 this is going to cause some problems for our basal checks as we only have one maj listed
                     # maybe if we identify that footprint contains multiple basals then we can add the most abudant basal maj as well.
                     # We will be performing the check_if_contains... on each of the footprintList keys so when we do this
                     # check we and we find that there are multiple basals, then we can change the dict and add the additional majs
@@ -3267,7 +3263,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
 
                     topScore = 0
                     for smallerFootprint in nMinusOneList:
-                        # TODO 08/12/17 we should only consider collapsing into the small footprint if it
+                        # 08/12/17 we should only consider collapsing into the small footprint if it
                         # doesn't contain multiple basal types. so we should put it through the checker
                         # If the small foot print is a subset of the big footprint consider for collapse
                         # Only collapse if this is the best option i.e. if it give the largest number of support
@@ -3281,18 +3277,18 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                             # and make sure that it is a subset of the smaller footprint in question
 
                             ######## MAKE SURE THAT THE MAJ SEQS OF THE n FOOTPRINT ARE IN THE n-1 FOOTPRINT
-                            # TODO 07/12/17 I think we only need to find one of the large maj refs in the list of smaller maj refs
+                            # 07/12/17 I think we only need to find one of the large maj refs in the list of smaller maj refs
                             # I don't think we need it to be a complete subset.
                             # if setOfMajRefSeqsLarge.issubset(smallerFootprint):
                             # Just check to see if one of the maj ref seqs is found in common between the small and large footprints
-                            # TODO 10/01/18 the above logic is wrong. You need to have all of the set_of_maj_ref_seqs's ref seqs
+                            # 10/01/18 the above logic is wrong. You need to have all of the set_of_maj_ref_seqs's ref seqs
                             # to be found in the smallerFootprint. If you don't then it means you are collapsing a clade collection
                             # into the smaller footprint where its maj seq may not be found and that is not correct.
                             # This logic is not correct either. e.g. when you have a big footprint that contains multiple basal seqs
                             # e.g. set of maj ref seqs is c15h and c3 then we will never find both of these in a small footprint
                             # st this point as the small footprint would have to contain multiple basals as well
                             # What we actually need to do is ask whether if bigFootprint is not multibasal then, this is fine.
-                            # TODO 10/01/18 what we actually need is quite complicated. If the big type is not multi basal,
+                            # 10/01/18 what we actually need is quite complicated. If the big type is not multi basal,
                             # then we have no problem and we need to find all of the set of maj ref seqs in the small profile
                             # but if the large type is multi basal then it gets a little more complicated
                             # if the large type is multi basal then which of its set of maj ref seqs we need to find in the small profile
@@ -3337,7 +3333,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
             # (we will see if the smaller footprint we added it to is supported next round of n)
             # Or each key of the collapseDict add it to the value.
             # then remove the key from the unsupportedList
-            # TODO 08/12/17 here is where we will need to start to implement extraction rather than just deletion for the potentially multiple
+            # 08/12/17 here is where we will need to start to implement extraction rather than just deletion for the potentially multiple
             # We will need to be careful that we don't start extracting profiles for non basal mixes, e.g. if we have
             # C3, C3a, C3b, C3d in the big and the small is C3, C3a, C3b we don't want to extract this, we want to use
             # the preivous method of deletion. I guess the best way to tell whether we want to do extraction vs deletion
@@ -3347,7 +3343,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
             # Yep, we now have this and I am doing the initial write now.
 
             collapse_dict_keys_list = list(collapseDict.keys())
-            # TODO 070218 - Go through to make sure that all of the keys are found in the unsupported typelist  -they should be
+            # 070218 - Go through to make sure that all of the keys are found in the unsupported typelist  -they should be
             ### DEBUG
             count = 0
             for t in range(len(collapse_dict_keys_list)):
@@ -3413,7 +3409,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     # remember that we are simply listing ccts for support and the Majs found in those CCts. We can remove
                     # the subsetted sequences from the footprint of the big and put it back in the dict
 
-                    # TODO 171217 consolidating thoughts
+                    # 171217 consolidating thoughts
                     # so below we want to extend the clade collection list of the small with that of the large
                     # this is not a problem to do and very straight forwards
                     # what will cause us more of an issue is the dsss, that we extend with
@@ -3428,9 +3424,9 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     small_init_type = collapseDict[collapse_dict_keys_list[q]]
                     small_init_type.extract_support_from_large_initType(collapse_dict_keys_list[q])
 
-                    # TODO the large init type should remain in the init_type_list
+                    # the large init type should remain in the init_type_list
 
-                    # TODO need to check if the new profile created from the original footPrintToCollapse
+                    # need to check if the new profile created from the original footPrintToCollapse
                     #  that has now had the small)init_type extracted from it is already shared with another init_type
                     # If so then we need to combine the init_types.
                     # else then we don't need to do anything
@@ -3460,7 +3456,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
 
                             # Should this just be the same as when a small initT absorbs a large initT?
                             # I think so but lets check
-                            # TODO check to see that this is appropriate
+                            # check to see that this is appropriate
                             # we need to check specifically if the initial_types[p] is found in the types that
                             # still need to be collapsed. so we need to slice here.
                             match = True
@@ -3518,7 +3514,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                             except:
                                 apples = 'wer'
 
-                    # TODO the large init_type does not need removing from the initial type list.
+                    # the large init_type does not need removing from the initial type list.
                     # but we still need to do the check to see if the profile length is SMALLER than n. If it is smaller
                     # then n then we should remove it from the unsupported list else we should leave it in the
                     # unsupported list.
@@ -3559,7 +3555,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                 # Only carry on if we have lengthN footprints to get sequences from
                 if listOfTypesOfLengthN:
 
-                    # TODO here is where we should start the new approach.
+                    # here is where we should start the new approach.
                     # add the nLength Types into a MP list
                     # then add the stops
                     # then in the worker create a dict that is same as the one below, only the using the nLengthtype instead
@@ -3612,16 +3608,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     # This info is used to make sure that when collapsing types the maj sequences are shared between the
                     # larger and smaller types
 
-                    # TODO 231217 we should no longer need this
-                    # majRefSeqsDict = {}
-                    # for nLengthType in unsupportedList:
-                    #     listOfAnalysesSampleSequencesLarge = []
-                    #     for majdssslist in footprintList[nLengthType][1]:
-                    #         for dss in majdssslist:
-                    #             listOfAnalysesSampleSequencesLarge.append(dss)
-                    #     listOfMajRefSeqsLarge = [smpl.referenceSequenceOf for smpl in listOfAnalysesSampleSequencesLarge]
-                    #     setOfMajRefSeqsLarge = set(listOfMajRefSeqsLarge)
-                    #     majRefSeqsDict[nLengthType] = setOfMajRefSeqsLarge
+
 
                     ## Items for printing out our progress
                     total = len(collapseNMerDict) * len(unsupportedList)
@@ -3630,7 +3617,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     print('\rChecking new set of synthetic types', end='')
 
                     for frTupKey in collapseNMerDict.keys():  # for each of the synthetic footprints
-                        # TODO 10/01/18 we need to check that each of the frTupKeys contains multiple basal seqs
+                        # 10/01/18 we need to check that each of the frTupKeys contains multiple basal seqs
                         # If it does then we can't collapse into it.
                         if does_set_of_ref_seqs_contain_multiple_basal_types(frTupKey):
                             continue
@@ -3697,27 +3684,27 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                             #
                             #     ##### DEBUG
                             for k in range(len(collapseNMerDict[kmer])):
-                                # chek to see if the footprint is still in the unsupportedlist #TODO!! 11/01/18 also need to check that the bigFootprint hasn't already been collapsed
+                                # chek to see if the footprint is still in the unsupportedlist #!! 11/01/18 also need to check that the bigFootprint hasn't already been collapsed
                                 # if it isn't then it has already been associated to a new footprint
                                 #   pass it over
                                 if collapseNMerDict[kmer][k] in unsupportedList and kmer.issubset(
                                         collapseNMerDict[kmer][
                                             k].profile):  # Then this footprint hasn't been collapsed anywhere yet. Here we also check to make sure that the profile hasn't been changed
                                     # if an init_type already exists with the profile (kmer) in question then add the big init_type to it
-                                    # TODO 231217 we will have to check whether the big init_type is a multiple basal seqs
+                                    # 231217 we will have to check whether the big init_type is a multiple basal seqs
                                     # and therefore whether this is an extraction or a absorption
                                     exists = False
                                     for i in range(len(initial_types_list)):
                                         # for initT_one in initial_types_list:
                                         if initial_types_list[i].profile == kmer:
                                             exists = True
-                                            # TODO 231217 we will have to check whether the big init_type is a multiple basal seqs
+                                            # 231217 we will have to check whether the big init_type is a multiple basal seqs
                                             # and therefore whether this is an extraction or a absorption
                                             # bear in mind that it doesn't matter if the initT we are absorbing or
                                             # extracting into is a multi basal. We will wory about that in the next
                                             # iteration
                                             if collapseNMerDict[kmer][k].contains_multiple_basal_sequences:
-                                                # TODO 231317 this still needs writing
+                                                # 231317 this still needs writing
                                                 # Then we need to extract
                                                 initial_types_list[i].extract_support_from_large_initType(
                                                     collapseNMerDict[kmer][k])
@@ -3725,7 +3712,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                                 # Once we have extracted into the smaller type
                                                 # check to see if the big init Type still contains set_of_maj_ref_seqs
                                                 if collapseNMerDict[kmer][k].set_of_maj_ref_seqs:
-                                                    # TODO!!!! 10/01/18 we first need to check if the new profile already exists and if it does we need to do as we do above and add it to the similar one
+                                                    # 10/01/18 we first need to check if the new profile already exists and if it does we need to do as we do above and add it to the similar one
                                                     # if the big init type still exists with maj containing profiles
                                                     # then remove from unsupported list
                                                     for j in range(len(initial_types_list)):
@@ -3751,7 +3738,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
 
                                                             # Should this just be the same as when a small initT absorbs a large initT?
                                                             # I think so but lets check
-                                                            # TODO check to see that this is appropriate
+                                                            # check to see that this is appropriate
                                                             collapseNMerDict[kmer][k].absorb_large_init_type(
                                                                 initial_types_list[j])
 
@@ -3777,14 +3764,14 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                                     initial_types_list.remove(collapseNMerDict[kmer][k])
                                                     unsupportedList.remove(collapseNMerDict[kmer][k])
                                             else:
-                                                # TODO 231217 then we need can absorb
+                                                # 231217 then we need can absorb
                                                 initial_types_list[i].absorb_large_init_type(collapseNMerDict[kmer][k])
                                                 # make sure that we then get rid of the bigFootprintToCollapse
                                                 initial_types_list.remove(collapseNMerDict[kmer][k])
                                                 unsupportedList.remove(collapseNMerDict[kmer][k])
                                             break
                                     if not exists:  # then the kmer was not already represented by an existing initT
-                                        # TODO 270118 We need to check to see if the big type is contains mutiple
+                                        # 270118 We need to check to see if the big type is contains mutiple
                                         # basal if it does then we should extract as above. This should be exactly the
                                         # same code as above but extracting into a new type rather than an existing one
                                         # Try to create a blank type
@@ -3818,7 +3805,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
 
                                                         # Should this just be the same as when a small initT absorbs a large initT?
                                                         # I think so but lets check
-                                                        # TODO check to see that this is appropriate
+                                                        # check to see that this is appropriate
                                                         collapseNMerDict[kmer][k].absorb_large_init_type(initT)
 
                                                         # the initT will need removing from the inital_types_list and the unsupportedList as it no longer exists.
@@ -3839,7 +3826,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                                 initial_types_list.remove(collapseNMerDict[kmer][k])
                                                 unsupportedList.remove(collapseNMerDict[kmer][k])
                                         ############## NEW #################
-                                        # TODO 231217 in this case we should create a new inital_type
+                                        # 231217 in this case we should create a new inital_type
                                         # I am going to have to think about how we will do this
                                         # this still needs to be coded
 
@@ -3891,12 +3878,12 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                 unsupFp = unsupportedList[0]
 
                 # For each clade collection
-                # TODO 241217 we need to do each cladeCollection individually here bear in mind.
+                # 241217 we need to do each cladeCollection individually here bear in mind.
                 for i in range(len(unsupFp.cladeCollection_list)):
                     # check each maj dsss
                     for maj_dss in unsupFp.majority_sequence_list[i]:
                         # Check to see if an initial type with profile of that maj_dss refseq already exists
-                        # TODO 241217 it may be worth having a dictionary of the profiles and init types to speed this up.
+                        # 241217 it may be worth having a dictionary of the profiles and init types to speed this up.
                         # Let's see how slow it is.
                         found = False
                         for initT in [init for init in initial_types_list if init.profile_length == 1]:
@@ -3905,7 +3892,7 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                                 # If the big init type is multi basal then we need to extract
                                 # if the clade maj dss contains multiple sequences
                                 # if unsupFp.contains_multiple_basal_sequences:
-                                #     #TODO 241217 check that the large type has had the basal seqs readjusted
+                                #     #241217 check that the large type has had the basal seqs readjusted
                                 #     # so that when we do the next maj_dss it may be non multiple basal
                                 #     initT.extract_support_from_large_initType(unsupFp)
                                 # # else we need to absorb
@@ -4031,443 +4018,6 @@ def does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(bi
             return False
 
 
-def collapsePotentialProfiles(footprintList, reqsupport, nprocessors):
-    # TODO 10/12/17 I have just thought of something else we will have to consider. When you have a profile that
-    # has a genuine codom type so there are e.g. MAJs of C3 and C3a, what will happen in this cricumstances.
-    # For the time being we will not think too much about this and in the initialType profile classes that we are
-    # creating, if we find a multiple basal type situation we will be sure to add the maj type to each of the
-    # dsss lists.
-    # TODO 10/12/17, I also think we can take the opportunity to move away from working with dataSetSampleSequences
-    # and move towards working with referenceSequences, as it seems that we are always converting them to
-    # reference sequences any way. Maybe for the time being we will work with dsss and get things up and running
-    # before converting to working with referenceSequences.
-    # TODO 09/12/17 I want to make sure that the subsets collapsing is still working and taking into account the
-    # basal types compatabilites. Actually the subset collapsing is not taking into account basal sequences
-    # but this is not a problem. We are essentially just consolidating the larger types into the smaller ones
-    # the smaller ones still then have to found as supported using the basal sequences information.
-
-    # TODO 09/12/17 This has become unbarably slow. We have an awful lot of redundancy in here that I would like to fix
-    # especially when it comes to checking for basal types. So I am going to create some clases which will only be
-    # held in RAM. ie. not in the database.
-    # class will be initialType. will contain, profile, profile length, contains_multiple_basal_sequences,
-    # basal_sequence_list, clade_collection_list, maj_seq_list, maj_seq_set
-    '''This will be our latest battle field 07/12/17. We have a problem where we are getting multiple types
-    So the object that we're playing around with here is a dictionary with key that is the set of referencesequences
-    objects with a value of a 2d list with containing two lists. the first list is the clade collection object that
-    this profile was found in. THe second list is the majority sequence of this set in this clade collection
-    so if we want to be able to split up these objects to extract e.g. c15 and c3 sets then we'll need to create another
-    dictionary entry. So we were probably relying on their only ever being one cladecollection to every set of sequences
-    but if we start to do the extractions then were going to end up with multiple clade collections in the dict
-    we will also need to be able to calcualate a new maj sequence for each for each of the extracted set of sequences
-    we'll then have to see how this might reek havoc further down stream.
-    so we end up creating the analysis types from the information that we have created here so
-    I don't think that its going to be a problem that we ahve serveral types for a cgiven clade collection as it simply
-    means that one clade collection is going to be found listed in multiple types. So lets give it a go!'''
-
-    # We were having problems with the original.
-    # The problem was when you have lots of long footprints that have intras in common i.e. D1 and D1a,
-    # these long footprints are collapsed all the way down to D1 or D1a, depending on the maj becuase
-    # there aren't any footprints that are JUST D1/D1a. So I have a better approach hopefully that will solve this
-    # This approach builds on the original collapseFootprints
-    # It starts with an n of the longest type and it tries to collapse each of the types into the n-1 types.
-    # However, unlike the original, if it fails to collapse into the n-1 it does not then try to collapse into
-    # n-2 types etc. Once we have tested all of the n length types and collapsed those that can be we move those that
-    # couldn't into a list of unsupported types.
-    # We then get all of the sequences found in the footprints of length n and we do itertools to get all n-1 combinations
-    # we then try to fit each of these into the unsupported types. We create new footprints in order of the most supported
-    # footprints and assign the associted CCs and Maj seqs. Any n length seqs that still don't have a collapse are
-    # kept in the unsupported list. This is iterated dropping through the ns. I think this will be great!
-    # 1 - check which supported which not, move supported to supportedlist, move unsupported to unsupported lit
-    # 2 - for all unsupported check to see if can be collapsed into fooprints of n-1
-    #   if can then collapse into and remove type from not supported list
-    # 3 - get all n-1 combos of all seqs found in the n-1 unsupported sequences
-    # All the seqs found in a CC can now be accessed from the [2] list (third list) of the foorprintList dict value
-    # actually I don't think we'll need to caryy around the [2] list as we can simply use the footprint value
-    # to get the list of refseqs - duh!
-    # see how many footprints have these types, sort by order
-    # create new footprints fot these footprints
-    # if supported move to supportedlist
-    # if not supported move to the non-supporetd list
-    # next n...
-
-    # Lists that will hold the footprints that have and do not have support throughout the collapse
-    supportedList = []
-    unsupportedList = []
-
-    # start with n at the largest footprint in the footprintlist
-    # the lowest n that we will work with is 2
-    # when we get to the footprints that are two in length we will do the first type of collapsing
-    # i.e. we will collapse into existant 1s if feasible but we will not do the combinations
-    # section as this will be moot as each will only be one intra big anyway.
-    # once we have done the inital collapse of the 2s then we will sort the 1s into
-    # supported or unsupported.
-    # At this point all of the footprints that were in the footprintList to begin with will be either in
-    # the supported or unsupported list
-    # we will then convert these types to the maj types
-
-    # for each length starting at max and dropping by 1 with each increment
-    for n in range(max([len(keyName) for keyName in footprintList.keys()]), 0, -1):
-        # This dict will hold the top collapses where bigfootprint = key and smallFootprint = value
-        collapseDict = {}
-        # populate supported and unsupported list for the next n
-        nList = [keyName for keyName in footprintList.keys() if len(keyName) == n]
-        for keyName in nList:
-
-            # we have to ensure that the check_if_contains... runs so we will assign its return to a variable
-            # it may not run if we have it as an additional conditional in the if as the first part of the if will
-            # be evaluated first
-            check = check_if_contains_multiple_basal_seqs(footprintList, keyName)
-            if len(footprintList[keyName][0]) >= reqsupport and check:  # supported
-                supportedList.append(keyName)
-            else:  # above support threshold
-                unsupportedList.append(keyName)
-
-        ############# TRY TO COLLAPSE SIZE n FOOTPRINTS INTO SIZE n-1 FOOTPRINTS ################
-        # we will try iterating this as now that we have the potential to find two types in one profile, e.g.
-        # a C15 and C3, we may only extract the C3 on the first one but there may still be a C15 in there.
-        # whichever had the highest score will have been extracted. Eitherway, along the way, the unsupportedList
-        # will have been updated
-        repeat = True
-        while repeat:
-            collapseDict = {}
-            repeat = False
-            nMinusOneList = [keyName for keyName in footprintList.keys() if len(keyName) == n - 1]
-            if nMinusOneList:
-
-                for bigFootprint in unsupportedList:  # For each big check if small will fit in
-                    print('\nAssessing discovered footprint {} for supported type'.format(
-                        '-'.join(str(refseq) for refseq in bigFootprint)))
-                    # These three are so that we only collapse into footprints that have the maj seqs of the bigfootprints
-                    # see code futher down
-                    # TODO 07/12/17 this is going to cause some problems for our basal checks as we only have one maj listed
-                    # maybe if we identify that footprint contains multiple basals then we can add the most abudant basal maj as well.
-                    # We will be performing the check_if_contains... on each of the footprintList keys so when we do this
-                    # check we and we find that there are multiple basals, then we can change the dict and add the additional majs
-
-                    # listOfAnalysesSampleSequencesLarge = footprintList[bigFootprint][1]
-                    listOfAnalysesSampleSequencesLarge = []
-                    for majdssslist in footprintList[bigFootprint][1]:
-                        for dss in majdssslist:
-                            listOfAnalysesSampleSequencesLarge.append(dss)
-                    listOfRefSeqsLarge = [smpl.referenceSequenceOf for smpl in listOfAnalysesSampleSequencesLarge]
-                    setOfMajRefSeqsLarge = set(listOfRefSeqsLarge)
-                    score = 0
-                    topScore = 0
-                    for smallerFootprint in nMinusOneList:
-                        # TODO 08/12/17 we should only consider collapsing into the small footprint if it
-                        # doesn't contain multiple basal types. so we should put it through the checker
-                        # If the small foot print is a subset of the big footprint consider for collapse
-                        # Only collapse if this is the best option i.e. if it give the largest number of support
-                        checked = check_if_contains_multiple_basal_seqs(footprintList, smallerFootprint)
-                        if set(smallerFootprint).issubset(set(bigFootprint)) and checked:
-                            # Consider this for collapse only if the majsequences of the smaller are a subset of the maj sequences of the larger
-                            # e.g. we don't want A B C D being collapsed into B C D when A is the maj of the first and B is a maj of the second
-
-                            # simplest way to check this is to take the setOfMajRefSeqsLarge which is a set of all of the
-                            # ref seqs that are majs in the cc that the footprint is found in
-                            # and make sure that it is a subset of the smaller footprint in question
-
-                            ######## MAKE SURE THAT THE MAJ SEQS OF THE n FOOTPRINT ARE IN THE n-1 FOOTPRINT
-                            # TODO 07/12/17 I think we only need to find one of the large maj refs in the list of smaller maj refs
-                            # I don't think we need it to be a complete subset.
-                            # if setOfMajRefSeqsLarge.issubset(smallerFootprint):
-                            # Just check to see if one of the
-                            if len(setOfMajRefSeqsLarge.intersection(smallerFootprint)) >= 1:
-                                # score = number of samples big was found in plus num samples small was found in
-                                score = len(footprintList[bigFootprint][0]) + len(footprintList[smallerFootprint][0])
-                                if score > topScore:
-                                    topScore = score
-                                    repeat = True
-                                    collapseDict[bigFootprint] = smallerFootprint
-
-            # Once here we have tried to collapse all of the large seq into all of the smaller footprinst
-            # now if there is a collapse do the collapse and then remove it from the unsupported list
-            # (we will see if the smaller footprint we added it to is supported next round of n)
-            # Or each key of the collapseDict add it to the value.
-            # then remove the key from the unsupportedList
-            # TODO 08/12/17 here is where we will need to start to implement extraction rather than just deletion for the potentially multiple
-            # We will need to be careful that we don't start extracting profiles for non basal mixes, e.g. if we have
-            # C3, C3a, C3b, C3d in the big and the small is C3, C3a, C3b we don't want to extract this, we want to use
-            # the preivous method of deletion. I guess the best way to tell whether we want to do extraction vs deletion
-            # is if there is another basal maj type in the large footprint
-            # I'm starting to think that it might be worth having an initial type object where we can store useful
-            # information like list of cc, list of dsss and list of basal maj
-            for footPrintToCollapse in collapseDict.keys():
-                # returns bool representing whether to extract. If false, delete rather than extract
-                extraction_deletion = check_if_contains_multiple_basal_majs(footPrintToCollapse)
-                if not extraction_deletion:
-                    # below = smaller footprint data = [[smallerCCs += bigger CCs], [smallerMajSeqsForCCs += largerMajSeqsForCCs]]
-                    footprintList[collapseDict[footPrintToCollapse]] = [
-                        footprintList[collapseDict[footPrintToCollapse]][0] + footprintList[footPrintToCollapse][0],
-                        footprintList[collapseDict[footPrintToCollapse]][1] + footprintList[footPrintToCollapse][1]]
-                    del footprintList[footPrintToCollapse]
-                    unsupportedList.remove(footPrintToCollapse)
-                else:
-                    # Here we need to implement the extraction. It is important that we extract all of the Majs that
-                    # should go into the type we are collapsing into
-                    # It is not just enough to send over all of the Majs that the big and small majref seqs have in common.
-                    # Actually I think it is OK to just send over the Majs that the small and big have in commmon. We need to
-                    # remember that we are simply listing ccts for support and the Majs found in those CCts. We can remove
-                    # the subsetted sequences from the footprint of the big and put it back in the dict
-
-                    # 1 - Collapse big to small
-                    # Here we have to make a new list of lists for the majSeqs for each cct with only the maj seqs
-                    # of the majs found in the small type we are collapsing into
-
-                    # Get list of MajRefSeqs for big and small type
-                    listOfAnalysesSampleSequencesLarge = []
-                    for majdssslist in footprintList[footPrintToCollapse][1]:
-                        for dss in majdssslist:
-                            listOfAnalysesSampleSequencesLarge.append(dss)
-                    listOfRefSeqsLarge = [smpl.referenceSequenceOf for smpl in listOfAnalysesSampleSequencesLarge]
-                    setOfMajRefSeqsLarge = set(listOfRefSeqsLarge)
-
-                    listOfAnalysesSampleSequencesSmall = []
-                    for majdssslist in footprintList[collapseDict[footPrintToCollapse]][1]:
-                        for dss in majdssslist:
-                            listOfAnalysesSampleSequencesSmall.append(dss)
-                    listOfRefSeqsSmall = [smpl.referenceSequenceOf for smpl in listOfAnalysesSampleSequencesSmall]
-                    setOfMajRefSeqsSmall = set(listOfRefSeqsSmall)
-
-                    listOfMajSeqListsBigFootprint = footprintList[footPrintToCollapse][1]
-                    extractedMajSeqs = []
-
-                    refSeqsInCommon = setOfMajRefSeqsLarge.intersection(setOfMajRefSeqsSmall)
-                    for i in range(len(listOfMajSeqListsBigFootprint)):
-                        temp_listEx = []
-                        dsssToRemove = []
-                        for j in range(len(listOfMajSeqListsBigFootprint[i])):
-                            if listOfMajSeqListsBigFootprint[i][j].referenceSequenceOf in refSeqsInCommon:
-                                # Then this is one of the seqs we want
-                                temp_listEx.append(listOfMajSeqListsBigFootprint[i][j])
-                                # we then need to remove this majSeq from the big footprints list
-                                dsssToRemove.append(listOfMajSeqListsBigFootprint[i][j])
-                                # footprintList[footPrintToCollapse][1][i].remove(listOfMajSeqListsBigFootprint[i][j])
-                        for dsstr in dsssToRemove:
-                            footprintList[footPrintToCollapse][1][i].remove(dsstr)
-                        # add the list of Maj dss to the list of lits
-                        extractedMajSeqs.append(temp_listEx)
-
-                    # Now perform the collapse using the extractedMajSeqs list as the 2D list of maj dsss
-                    # below = smaller footprint data = [[smallerCCs += bigger CCs], [smallerMajSeqsForCCs += largerMajSeqsForCCs]]
-                    footprintList[collapseDict[footPrintToCollapse]] = [
-                        footprintList[collapseDict[footPrintToCollapse]][0] + footprintList[footPrintToCollapse][0],
-                        footprintList[collapseDict[footPrintToCollapse]][1] + extractedMajSeqs]
-
-                    # NB if this was an extraction case, then there should still be a maj dss for each of the ccts lef.
-
-                    # 2 Adjust big so that the seqs of the small are removed from its profile
-                    # the extracted maj dsss have already been removed
-                    # I guess we now need to work out what to do with the big profile post extraction
-                    # TODO check that my assumption about the big type being in the unsupported list are true
-                    # I'm assuming that the big type was in the unsupported List
-                    # The big type will have shrunk in size, I guess that if the big type is still > n then we
-                    # can update its key in the unsupportedList. But if it is smaller then n then we should remove it from
-                    # the unsupported list.
-                    # newKey = smallerseqset not in common with largerseqset
-                    updatedKey = collapseDict[footPrintToCollapse] ^ footPrintToCollapse
-                    # I suppose we also need to check to see if the new key already exists.
-                    if updatedKey in footprintList.keys():
-                        # then this already exists and we need to add support to the already existant profile
-                        # we should just be able to do simple additions here
-                        footprintList[updatedKey] = [
-                            footprintList[updatedKey][0] + footprintList[footPrintToCollapse][0],
-                            footprintList[updatedKey][1] + footprintList[footPrintToCollapse][1]]
-
-                    else:
-                        footprintList[updatedKey] = footprintList[footPrintToCollapse]
-
-                    # Now the updated versin of the bigfootprint has been added to the footprintList, we can delete
-                    # old version
-                    del footprintList[footPrintToCollapse]
-
-                    # Now remove from unsupported list and place back in depending on the length of the profile compared to n
-                    unsupportedList.remove(footPrintToCollapse)
-                    if len(updatedKey) >= n:
-                        unsupportedList.append(updatedKey)
-
-        if n > 2:
-            # We only need to attempt the further collapsing if there are unsupported types to collapse
-            # else move onto the next n
-            if unsupportedList:
-                # Now we are left with the footprints that are still in the unsupported list
-                # Get all the seqs that are found in the footprints that are of length n
-
-                # we are going to change this.
-                # Currently we are generating an enormous generator in the itertools.combinations
-                # This is because we are using all of the sequences found in all of the length n types
-                # However, I see non reason why we should be using combinatations of sequences found in different profiles.
-                # This is not in keeping with the biology.
-                # Instead the synthetic types should be made from
-                # combinattions of sequences found in each profile
-                # This will better represent the biology and also greatly cutdown on computational cost
-                # And it will mean that we can multiprocess this
-                setOfRefSeqsOfSmpSeqsFoundInCCsOfLengthN = set()
-                listOfTypesOfLengthN = [footprint for footprint in footprintList.keys() if len(footprint) == n]
-                # Only carry on if we have lengthN footprints to get sequences from
-                if listOfTypesOfLengthN:
-
-                    # TODO here is where we should start the new approach.
-                    # add the nLength Types into a MP list
-                    # then add the stops
-                    # then in the worker create a dict that is same as the one below, only the using the nLengthtype instead
-                    # Create the queues that will hold the sample information
-                    print('starting to generate Synthetic footprints for collapse')
-
-                    taskQueue = Queue()
-                    collapseNMerDictManager = Manager()
-                    collapseNMerDict = collapseNMerDictManager.dict()
-                    # outputQueue = Queue()
-
-                    for nLengthType in listOfTypesOfLengthN:
-                        taskQueue.put(nLengthType)
-
-                    numProcessors = nprocessors
-                    for N in range(numProcessors):
-                        taskQueue.put('STOP')
-
-                    allProcesses = []
-
-                    for N in range(numProcessors):
-                        p = Process(target=workerDiscoveryOne, args=(taskQueue, collapseNMerDict, n))
-                        allProcesses.append(p)
-                        p.start()
-
-                    for p in allProcesses:
-                        p.join()
-
-                    # outputQueue.put('STOP')
-
-                    # collapseNMerDict = {}
-                    # for dictionary in iter(outputQueue.get, 'STOP'):
-                    #     collapseNMerDict.update(dictionary)
-
-                    # for nLengthType in listOfTypesOfLengthN:
-                    #     # nLengthType should be a frozen set so we will take the refSeqs it contains and add them to the setOfRefSeqs...
-                    #     setOfRefSeqsOfSmpSeqsFoundInCCsOfLengthN.update([refSeq for refSeq in nLengthType])
-
-                    # Now go through each of the (n-1)mer footprints and see if they fit into a footprint in the unsuported list
-                    # This dict value = the synthetic footprint of length n-1, value, a list of unsupported types that are mastersets of the synthetic footprint
-
-                    # collapseNMerDict = {frozenset(tup): [] for tup in itertools.combinations(setOfRefSeqsOfSmpSeqsFoundInCCsOfLengthN, n-1)}
-                    print('Generated {} Synthetic footprints'.format(len(collapseNMerDict)))
-                    # We create a dict that is key, type and value is the set of the majrefseqs found in the type
-                    # this was being calculated once for every synthetic type. But the number of synthetic types are getting very large
-                    # so by having this dict we should speed things up considerably
-                    # This info is used to make sure that when collapsing types the maj sequences are shared between the
-                    # larger and smaller types
-                    majRefSeqsDict = {}
-                    for nLengthType in unsupportedList:
-                        listOfAnalysesSampleSequencesLarge = []
-                        for majdssslist in footprintList[nLengthType][1]:
-                            for dss in majdssslist:
-                                listOfAnalysesSampleSequencesLarge.append(dss)
-                        listOfMajRefSeqsLarge = [smpl.referenceSequenceOf for smpl in
-                                                 listOfAnalysesSampleSequencesLarge]
-                        setOfMajRefSeqsLarge = set(listOfMajRefSeqsLarge)
-                        majRefSeqsDict[nLengthType] = setOfMajRefSeqsLarge
-
-                    ## Items for printing out our progress
-                    total = len(collapseNMerDict) * len(unsupportedList)
-                    count = 0
-                    printVal = 0.01
-                    print('Checking new set of synthetic types')
-
-                    for frTupKey in collapseNMerDict.keys():  # for each of the synthetic footprints
-
-                        for nLengthType in unsupportedList:
-                            ## Items for printing out progress
-                            count += 1
-                            percentComplete = count / total
-                            if percentComplete > printVal:
-                                print("%.2f" % percentComplete)
-                                printVal = max([printVal + 0.01, percentComplete + 0.01])
-
-                            # For each of the N-1mers see if they fit within the unsupported types
-                            # if so then add the footprint into the n-1mers list
-                            # we should check for the maj rule again. I.e. we should want all of the Majs of the footprint in Q to be in the kmer footprint
-                            # maybe recycle code for this
-                            if frTupKey.issubset(nLengthType):
-                                if majRefSeqsDict[nLengthType].issubset(frTupKey):
-                                    collapseNMerDict[frTupKey].append(nLengthType)
-                    # Here we have a populated dict.
-                    # Order dict
-                    # We are only interseted in kmers that were found in the unsupported types
-                    # Because alot of the kmers will be found in the sequences they originated from
-                    # require the kmer to be associated with more than 1 cladecollection
-                    # I am not able to express my logic here perfectly but I am sure that this makes sense
-                    listOfnKmersWithCollapsableFootprints = [kmer for kmer in collapseNMerDict.keys() if
-                                                             len(collapseNMerDict[kmer]) > 1]
-                    # No need to continue if there are no footprints that match the nKmers
-                    if listOfnKmersWithCollapsableFootprints:
-                        # We now go through the kmers according to the number of footprints they were found in
-                        orderedListOfPopulatedKmers = sorted(listOfnKmersWithCollapsableFootprints,
-                                                             key=lambda x: len(collapseNMerDict[x]), reverse=True)
-
-                        for kmer in orderedListOfPopulatedKmers:
-                            # for each footprint in their lists
-                            for bigFootprintToCollapse in collapseNMerDict[kmer]:
-                                # chek to see if the footprint is still in the unsupportedlist
-                                # if it isn't then it has already been associated to a new footprint
-                                #   pass it over
-                                if bigFootprintToCollapse in unsupportedList:  # Then this footprint hasn't been collapsed anywhere yet
-                                    # if the footprint exists in footprintlist then add the CC details to it
-                                    if kmer in footprintList.keys():
-                                        footprintList[kmer] = [
-                                            footprintList[kmer][0] + footprintList[bigFootprintToCollapse][0],
-                                            footprintList[kmer][1] + footprintList[bigFootprintToCollapse][1]]
-                                        # then remove the footprint from the unsupported type
-                                        # Also remove the bigFootprintprintToCollapse from the footprintList as its details are not in another key
-                                        unsupportedList.remove(bigFootprintToCollapse)
-                                        del footprintList[bigFootprintToCollapse]
-                                    else:
-                                        # if the footprint is not already in the footprint list then create newfootprint item and add it to the footprintlist and assign the
-                                        # CC details to it.
-                                        # remove the footprint from the unsupported type list
-                                        # Also remove the bigFootprintprintToCollapse from the footprintList as its details are not in another key
-                                        footprintList[kmer] = [footprintList[bigFootprintToCollapse][0],
-                                                               footprintList[bigFootprintToCollapse][1]]
-                                        unsupportedList.remove(bigFootprintToCollapse)
-                                        del footprintList[bigFootprintToCollapse]
-                            # each unsupportedfootprint in the nmer has been collapsed
-                        # each of the kmers have been gone through and all unsupportedfootprints that could fit into the kmers have been collapsed
-                        # Time for the next n here!
-                        # Check to see what is happening once we get to the smaller ns
-                        # It may be that we can use the code from below to simply put the maj as the type for footprints that are still
-                        # unassigned
-        else:
-            # At this point we may have some 2s or larger in the unsupported list still
-            # we will collapse these to their maj ref seq type
-            # Once we have pushed these into the 1s or made new 1s if the maj ref seq type did not already exist
-            # then we should collect all of the 1 length footprints and put them in the supported list
-            # Or actually in theory so long as we have deleted collapsed footprints from the footprintList we should
-            # be able to return the footprint list
-            for unsupFp in unsupportedList:
-                # for each clade collection check to see if its maj dss is already a profile on its own
-                # If it already exists then add to this. Else create new
-                for i in range(len(footprintList[unsupFp][0])):
-                    # TODO 08/12/17 we can now have multiple majdsss associated with a given profile
-                    # So here we should go through each of the maj dsss that are associated with
-                    # if the majRefSeq is a footprint add to the existant footprint
-                    for majdss in footprintList[unsupFp][1][i]:
-                        singleDivProfileInQ = frozenset([majdss.referenceSequenceOf])
-                        if singleDivProfileInQ in footprintList.keys():
-                            # then we need to add the support to the existant single maj div profile
-                            # current single Div in q info = [[current list of CCts] + [cct in question], [current list of dsss lists] + [[majdssofcct]]
-                            footprintList[singleDivProfileInQ] = [
-                                footprintList[singleDivProfileInQ][0] + [footprintList[unsupFp][0][i]],
-                                footprintList[singleDivProfileInQ][1] + [[majdss]]]
-                        # if frozenset([footprintList[unsupFp][1][i].referenceSequenceOf]) in footprintList.keys():
-                        #     footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])] = [footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])][0] + [footprintList[unsupFp][0][i]], footprintList[frozenset([footprintList[unsupFp][1][i].referenceSequenceOf])][1] + [footprintList[unsupFp][1][i]] ]
-                        else:  # create new footprintList entry
-                            footprintList[singleDivProfileInQ] = [[footprintList[unsupFp][0][i]], [[majdss]]]
-                # remove the unsupportedType from the footprintList
-                del footprintList[unsupFp]
-            # All unsupported footprints have been associated to their maj and deleted from the footprintList
-            return footprintList
-
-    return False
-
 
 def workerDiscoveryOne(input, collapsenmerdict, n):
     for refSeqFrozenSet in iter(input.get, 'STOP'):
@@ -4568,19 +4118,7 @@ def profileAssignment(nProcessors):
     ##############################################################
 
     ################ TYPE ASSIGNMENT ################
-    # TODO  I believe that this is causing problems due to the MP access of the database.
-    # This actually makes sense. We go clade collection by cladeCollection,
-    # but within each clade collection we go analysis_type by analysis_type.
-    # We will be modifying these analysis types by changing their .listOfCladeCollection parameters
-    # As this is writing we may well come into conflicts.
-    # Two options, hard wire this MP section to only use 1 core, or see if the conflict is cleared up by using a
-    # postgresql sever instead of the sqlite server.
 
-    # TO be sure of why this is happening. I will first re-run the MP analysis with iterations and quantify
-    # How many mismatches happen between the CC ids attached to each analysis_type vs the number of Cladecollectiontypes
-    # there are associated with each at. I will do this with the normal cores being used in this type assignment.
-    # I will then do this again with the cores hard coded to 1 (for just this MP) and keep the cores for everyother
-    # process. Hopefully this will then confim that it is indeed this part of the code that is causing our problems
 
     # The main bulk of the type assignment will happen in workerAssignmentThree
     print('\n\nStarting type assignment')
@@ -4651,7 +4189,7 @@ def profileAssignment(nProcessors):
         analysisTypeInQ.save()
 
     # #Add the CC's to the profiles
-    # #TODO don't use the manager dict it is causing so many problems
+    # #don't use the manager dict it is causing so many problems
     # # instead just get the information required to do the below bit of code from the above
     # # bulk create list
     # for typeKey in typeCladeColDict.keys():
@@ -4660,7 +4198,7 @@ def profileAssignment(nProcessors):
     #         analysisTypeInQ.addCCListToCladeCollectionList(typeCladeColDict[typeKey])
     #         analysisTypeInQ.save()
 
-    # TODO this is likely not parallelable because it requires writing to the database.
+    # this is likely not parallelable because it requires writing to the database.
     # updateTypeAttributes updates
     # Update the types' counts and ratios from the up-to-date CC lists
     # See the updateTypeAttributes comment for more details of the use
@@ -4671,7 +4209,7 @@ def profileAssignment(nProcessors):
             antype.save()
             print('\rUpdating type {}'.format(antype.name), end='')
 
-    # TODO this might be parallelable
+    # this might be parallelable
     multiModalDetection(False)
 
     analysisObj.analysisTypesAssigned = True
@@ -4742,7 +4280,7 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
 
 
 
-                else:  # If Type is only one DIV # TODO can't we just look this up with the CCRedSeqAbundDict?
+                else:  # If Type is only one DIV # can't we just look this up with the CCRedSeqAbundDict?
                     # ensure that the seq is found at above 0.05 of the CC
                     seqsInCC = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=CC)
                     abundanceOfSeqsInCC = sum(aSS.abundance for aSS in seqsInCC)
@@ -4764,7 +4302,7 @@ def workerAssignmentThree(input, CCRefSeqAbundDict, CCfootprintDict, bulkCreateL
                 # candidateTypesList is the list of potentials that are already due to be associated with the CC
                 for candidate in candidateTypesList:
 
-                    ##### TODO Delete these they are just for debugging purposes
+                    ##### Delete these they are just for debugging purposes
                     candidateName = analysis_type.objects.get(id=candidate)
                     anTypeName = analysis_type.objects.get(id=analysisTypesIDs[i])
                     #####
@@ -5031,13 +4569,13 @@ def multiModalDetection(initialRun):
                                 # (we will need to claculate the setofMajSeqs inorder to initiate the new analysis type)
                                 # Get set of representative ref seqs of the maj seqs from each cc collection
 
-                                # TODO check my logic here but,  the maj in the clade collection is not necessarily in the type
+                                # check my logic here but,  the maj in the clade collection is not necessarily in the type
                                 # so therefore it won't count towards whether a type is codom or not.
                                 # we need to find the most abundant refseq of the CC that is in the type
                                 # for each of the CCsForTypeX lists, go through ordered list generated and if found in the initial types footprint then add
                                 # to the majSeqRefSeqSetX
                                 # I have fixed this now
-                                # TODO this is currently very slow and can likely be imporved. One option would be
+                                # this is currently very slow and can likely be imporved. One option would be
                                 # just to check a small number of the seqs first rather than all of them and then
                                 # if we don't find a sequence from the CC that is in the type then we can go and check
                                 # them all.
@@ -6703,7 +6241,7 @@ def namingRefSeqsUsedInDefs():
             if 'named_seqs_in_SP_remote_db.fa' in item:
                 os.remove(os.path.join(sym_db_dir, item))
 
-        # TODO remake the fasta and write out.
+        # remake the fasta and write out.
         # create the fasta
         named_seqs_in_SP_remote_db_fasta_list = []
         for rs in reference_sequence.objects.filter(hasName=True):
