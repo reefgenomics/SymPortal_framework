@@ -3347,7 +3347,6 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
             for t in range(len(collapse_dict_keys_list)):
                 if collapse_dict_keys_list[t] not in unsupportedList:
                     count += 1
-            print('{} number of keys not found in unsupported list'.format(count))
 
             # The collapseDict footprint is now key=large initial type and value = small initial type
 
@@ -3358,7 +3357,6 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     for t in range(len(collapse_dict_keys_list)):
                         if collapse_dict_keys_list[t] not in unsupportedList:
                             count += 1
-                    print('{} number of keys not found in unsupported list'.format(count))
                 # ### DEBUG ###
                 # for cc in footPrintToCollapse.cladeCollection_list:
                 #     if cc.dataSetSampleFrom.name == 'FS1PC9-FS1PC9-N708' and cc.clade == 'C':
