@@ -221,9 +221,16 @@ def main():
                 tempList.append(str(ds.id))
             stringList = ','.join(tempList)
             custom_data_set_ids = stringList
+
+        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
+            config_dict = json.load(f)
+        new_data_set_submitting_user = config_dict['user_name']
+        new_data_set_user_email = config_dict['user_email']
+
         new_analysis_object = data_analysis(listOfDataSubmissions=str(custom_data_set_ids),
                                          withinCladeCutOff=float(within_clade_cutoff), name=args.name,
-                                            timeStamp=str(datetime.now()))
+                                            timeStamp=str(datetime.now()), submittingUser=new_data_set_submitting_user,
+                                            submitting_user_email=new_data_set_user_email)
         new_analysis_object.description = args.description
         new_analysis_object.save()
         data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd)
