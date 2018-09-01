@@ -4970,8 +4970,9 @@ def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_t
     return [analysis_type.objects.get(id=x[0]) for x in type_IDs_sorted]
 
 
-def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir,
-                                                           sorted_sample_list=None, analysis_obj_id=None):
+def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir, call_type,
+                                                           sorted_sample_list=None, analysis_obj_id=None, output_user=None ):
+    # print out the user and time stamp and dataID if from a submission
     # This function will take in a list of dataSubmissions from which
     # to output the ITS2 sequence information of the samples
 
@@ -4989,12 +4990,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     dataSubmissionsToOutput = [int(a) for a in datasubstooutput.split(',')]
 
-    #
-    # Get collection of types that are specific for the dataSubmissions we are looking at
+    # Get collection of data_sets that are specific for the dataSubmissions we are looking at
     querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
 
-    #
-    #
+
 
     cladeAbundanceOrderedRefSeqList = []
     refSeqsInDSs = reference_sequence.objects.filter(
@@ -5196,6 +5195,41 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     intraAbundCountTable.append(accession_str)
     intraAbundPropTable.append(accession_str)
 
+    # Now append the meta infromation for each of the data_sets that make up the output contents
+    # this is information like the submitting user, what the IDs of the datasets are etc.
+    # There are several ways that this can be called.
+    # it can be called as part of the submission: call_type = submission
+    # part of an analysis output: call_type = analysis
+    # or stand alone: call_type = 'stand_alone'
+    # we should have an output for each scenario
+    if call_type=='submission':
+        meta_info_string_items = []
+        data_set_object = querySetOfDataSubmissions[0]
+        # there will only be one data_set object
+        meta_info_string = 'Output as part of data_set submission ID: {}\tsubmitting_user: {}\ttime_stamp: {}\t'.format(data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp)
+        meta_info_string_items.append(meta_info_string)
+    elif call_type=='analysis':
+        data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
+        meta_info_string_items = [
+            'Output as part of data_analysis ID: {}\t'
+            'Number of data_set objects as part of analysis = {}\t'
+            'submitting_user: {}\ttime_stamp {}'.format(
+                data_analysis_obj.id, len(querySetOfDataSubmissions), data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
+        for data_set_object in querySetOfDataSubmissions:
+            meta_info_string_items.append('Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp))
+    else:
+        # call_type=='stand_alone'
+        meta_info_string_items = [
+            'Stand_alone output by {} on {}\tNumber of data_set objects as part of output = {}'.format(output_user, str(datetime.now()), len(querySetOfDataSubmissions))]
+        for data_set_object in querySetOfDataSubmissions:
+            meta_info_string_items.append('Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp))
+
+    # now add the meta information onto the end of the output table lists
+    intraAbundCountTable.extend(meta_info_string_items)
+    intraAbundPropTable.extend(meta_info_string_items)
+
+
+
     # Here we have the tables populated and ready to output
     if analysis_obj_id:
         path_to_div_absolute = '{}/{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
@@ -5323,7 +5357,7 @@ def get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sequence_only_df_
 
     return ordered_sample_list
 
-def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1, noFig=False):
+def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, noFig=False, output_user=None):
     analysisObj = analysisobj
     # This is one of the last things to do before we can use our first dataset
     # The table will have types as columns and rows as samples
@@ -5677,6 +5711,36 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1, noFig=False
             outputTableOne.append(species + '\t' + species_ref_dict[species])
             outputTableTwo.append(species + '\t' + species_ref_dict[species])
 
+    # Now append the meta infromation for the output. i.e. the user running the analysis or the standalone
+    # and the data_set submissions used in the analysis.
+    # two scenarios in which this can be called
+    # from the analysis: call_type = 'analysis'
+    # or as a stand alone: call_type = 'stand_alone'
+
+    if call_type == 'analysis':
+        meta_info_string_items = [
+            'Output as part of data_analysis ID: {}\t'
+            'Number of data_set objects as part of analysis = {}\t'
+            'submitting_user: {}\ttime_stamp {}'.format(
+                analysisobj.id, len(querySetOfDataSubmissions), analysisobj.submittingUser, analysisobj.timeStamp)]
+        for data_set_object in querySetOfDataSubmissions:
+            meta_info_string_items.append(
+                'Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id,
+                                                                              data_set_object.submittingUser,
+                                                                              data_set_object.timeStamp))
+    else:
+        # call_type=='stand_alone'
+        meta_info_string_items = [
+            'Stand_alone output by {} on {}\tdata_analysis ID: {}\t'
+            'Number of data_set objects as part of output = {}'
+                .format(output_user, str(datetime.now()), analysisobj.id, len(querySetOfDataSubmissions))]
+
+        for data_set_object in querySetOfDataSubmissions:
+            meta_info_string_items.append(
+                'Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id,
+                                                                              data_set_object.submittingUser,
+                                                                              data_set_object.timeStamp))
+
     path_to_profiles_absolute = '{}/{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, '_'.join(
         [str(a) for a in dataSubmissionsToOutput]))
     writeListToDestination(path_to_profiles_absolute, outputTableOne)
@@ -5691,7 +5755,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, numProcessors=1, noFig=False
     div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
                                                            numProcessors=numProcessors, output_dir=outputDir,
                                                            sorted_sample_list=samples_that_have_been_sorted,
-                                                           analysis_obj_id=analysisobj.id)
+                                                           analysis_obj_id=analysisobj.id, call_type='analysis')
 
     print('ITS2 type profile output files:')
     for output_file in output_files_list:
@@ -6371,7 +6435,8 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False):
     ### It doesn't make sense to automatically make an output from an analysis as we don't know which
     # data_sets we want to output for.
     # actually yes it does because we will simply output all data_sets as a default.
-    output_dir = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions, numProcessors=cores, noFig=noFig)
+    output_dir = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions,
+                                  call_type='analysis', numProcessors=cores, noFig=noFig)
 
     ######## Between type ordination analysis ##########
     if not noOrd:

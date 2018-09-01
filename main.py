@@ -174,8 +174,17 @@ def main():
 
         name_for_data_set = args.name
 
+
+        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
+            config_dict = json.load(f)
+        new_data_set_submitting_user = config_dict['user_name']
+        new_data_set_user_email = config_dict['user_email']
+
         # If working on the remote server a difference reference_fasta_database_used can be used.
-        new_data_set = data_set(name = name_for_data_set, timeStamp=str(datetime.now()), reference_fasta_database_used='symClade.fa')
+        new_data_set = data_set(name = name_for_data_set, timeStamp=str(datetime.now()),
+                                reference_fasta_database_used='symClade.fa',
+                                submittingUser=new_data_set_submitting_user,
+                                submitting_user_email=new_data_set_user_email)
         new_data_set.save()
 
         # only perform sub_evalue_screening when working on the remote system
@@ -221,8 +230,14 @@ def main():
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output:
+        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
+            config_dict = json.load(f)
+        new_data_set_submitting_user = config_dict['user_name']
         if args.data_analysis_id:
-            data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id), numProcessors=args.num_proc, datasubstooutput=args.print_output, noFig=args.noFig)
+            data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id),
+                                                     numProcessors=args.num_proc, call_type='stand_alone',
+                                                     datasubstooutput=args.print_output, noFig=args.noFig,
+                                                     output_user=new_data_set_submitting_user)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'flag. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
@@ -252,8 +267,16 @@ def main():
             method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
 
     elif args.print_output_no_types:
+        # this is a stand_alone and output and we should grab the user who is requresting it from the config file
+        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
+            config_dict = json.load(f)
+        new_data_set_submitting_user = config_dict['user_name']
+
         outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
-        data_sub_collection_run.div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=args.print_output_no_types, numProcessors=args.num_proc, output_dir=outputDir)
+        data_sub_collection_run.\
+            div_output_pre_analysis_new_meta_and_new_dss_structure(
+            datasubstooutput=args.print_output_no_types, numProcessors=args.num_proc, output_dir=outputDir,
+            call_type='stand_alone', output_user=new_data_set_submitting_user)
 
     elif args.vacuumDatabase:
         print('Vacuuming database')
