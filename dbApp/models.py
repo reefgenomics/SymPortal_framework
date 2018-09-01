@@ -28,7 +28,8 @@ class symportal_framework(models.Model):
 class data_set(models.Model):
     name = models.CharField(max_length = 60, default='something')
     reference_fasta_database_used = models.CharField(max_length = 60, default='None')
-    submittingUser = models.CharField(max_length=30, default='Bob')
+    submittingUser = models.CharField(max_length=100, default='no_user_defined')
+    submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
     # submittedDataRaw = models.FileField()
     workingDirectory = models.CharField(max_length=300, default='None')
 
@@ -42,7 +43,7 @@ class data_set(models.Model):
     # On startup all dataSubs have their currentlyBeingProcessed to False using the apps.py and __init__.py scipts:
     #http://stackoverflow.com/questions/28896627/executing-code-on-startup-in-django-1-7
     currentlyBeingProcessed = models.BooleanField(default=False)
-    timeStamp = models.CharField(max_length=40, default='None')
+    timeStamp = models.CharField(max_length=100, default='None')
     #http://stackoverflow.com/questions/27220480/django-datetime-migration-error
     # We can programatically set whenSubmitted by '= datetime.now()'
     # The Datetimes were causing a lot of problems when doing the dumpdata and loaddata. I think it was becuase of the
@@ -145,7 +146,9 @@ class data_analysis(models.Model):
     dbVersionAnalysis = models.BooleanField(default=False)
     dbVersionToRunAgainstID = models.IntegerField(null=True)
     dSIDToAnalyse = models.IntegerField(null=True)
-    timeStamp = models.CharField(max_length=40, default='None')
+    timeStamp = models.CharField(max_length=100, default='None')
+    submittingUser = models.CharField(max_length=100, default='no_user_defined')
+    submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
     def getCladeCollections(self):
         listOfIds = [int(x) for x in self.listOfDataSubmissions.split(',')]
         cladeCollections = clade_collection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=listOfIds)
