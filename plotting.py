@@ -724,7 +724,7 @@ def plot_between_sample_distance_scatter(csv_path):
     png_path = '{}.png'.format(fig_output_base)
     sys.stdout.write('\rsaving as .png')
     plt.savefig(png_path)
-    sys.stdout.write('\nDistance plots output to:')
+    sys.stdout.write('\rDistance plots output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
 
@@ -766,6 +766,6 @@ def plot_between_its2_type_prof_dist_scatter(csv_path):
     png_path = '{}.png'.format(fig_output_base)
     sys.stdout.write('\rsaving as .png')
     plt.savefig(png_path)
-    sys.stdout.write('\nDistance plots output to:')
+    sys.stdout.write('\rDistance plots output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))

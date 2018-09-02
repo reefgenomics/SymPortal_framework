@@ -950,19 +950,21 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     if not noOrd:
         PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
                                                         method='mothur', call_type='submission', output_dir=outputDir)
+        ####### distance plotting #############
+        if not noFig:
+            for pcoa_path in PCoA_paths_list:
+                if 'PCoA_coords' in pcoa_path:
+                    # then this is a full path to one of the .csv files that contains the coordinates that we can plot
+                    # we will get the output directory from the passed in pcoa_path
+                    sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
+                    plot_between_sample_distance_scatter(pcoa_path)
+        ####################################
     #######################################
 
-    ####### distance plotting #############
-    if not noFig:
-        sys.stdout.write('\nGenerating between sample distance figures\n')
-        for pcoa_path in PCoA_paths_list:
-            if 'PCoA_coords' in pcoa_path:
-                # then this is a full path to one of the .csv files that contains the coordinates that we can plot
-                # we will get the output directory from the passed in pcoa_path
-                sys.stdout.write('\n\n Generating between sample distance plot\n')
-                plot_between_sample_distance_scatter(pcoa_path)
 
-    ####################################
+
+
+
 
     # write out whether there were below e value sequences outputted.
     if fasta_out_with_clade:
@@ -1006,7 +1008,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
         print('\ndata_set ID is: {}'.format(dataSubmissionInQ.id))
     print('data_set submission complete')
-    return
+    return dataSubmissionInQ.id
 
 
 def generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ, e_value_multiP_dict, pathToInputFile,
