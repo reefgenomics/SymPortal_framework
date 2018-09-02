@@ -33,8 +33,11 @@ from dbApp.models import symportal_framework, data_set, reference_sequence, data
 
 import data_sub_collection_run
 import create_data_submission
+import output
+import plotting
 import json
 import sys
+import distance
 
 def main():
 
@@ -238,7 +241,7 @@ def main():
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
 
     elif args.between_sample_distances:
-        data_sub_collection_run.generate_within_clade_UniFrac_distances_samples(
+        distance.generate_within_clade_UniFrac_distances_samples(
             dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
             method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
 
@@ -249,8 +252,7 @@ def main():
         new_data_set_submitting_user = config_dict['user_name']
 
         outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
-        data_sub_collection_run.\
-            div_output_pre_analysis_new_meta_and_new_dss_structure(
+        output.div_output_pre_analysis_new_meta_and_new_dss_structure(
             datasubstooutput=args.print_output_no_types, numProcessors=args.num_proc, output_dir=outputDir,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
 

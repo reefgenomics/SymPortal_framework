@@ -694,49 +694,7 @@ def plot_between_sample_distance_scatter(csv_path):
     # clade in Q for use later
     clade_in_q = output_directory.split('/')[-1]
     # create a pandas dataframe to work with from the .csv
-    plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index=0)
-
-    # setup figure
-    f, ax = plt.subplots(1, 1, figsize=(9, 9 ))
-
-    # x values
-    x_values = plotting_df['PC1'].values.tolist()[:-1]
-
-    # y values
-    y_values = plotting_df['PC2'].values.tolist()[:-1]
-
-    # plot the points
-    ax.scatter(x_values, y_values, c='black', marker='o')
-
-    # add axes labels
-    ax.set_xlabel('PC1; explained = {}'.format('%.20f' % plotting_df['PC1'][-1]))
-    ax.set_ylabel('PC2; explained = {}'.format('%.20f' % plotting_df['PC2'][-1]))
-
-    # set axis title
-    ax.set_title('between sample distances clade {}'.format(clade_in_q))
-
-    fig_output_base = '{}/between_sample_distances_clade_{}'.format(output_directory, clade_in_q)
-
-    plt.tight_layout()
-    sys.stdout.write('\rsaving as .svg')
-    svg_path = '{}.svg'.format(fig_output_base)
-    plt.savefig(svg_path)
-    png_path = '{}.png'.format(fig_output_base)
-    sys.stdout.write('\rsaving as .png')
-    plt.savefig(png_path)
-    sys.stdout.write('\nDistance plots output to:\n')
-    sys.stdout.write('\n{}'.format(svg_path))
-    sys.stdout.write('\n{}\n'.format(png_path))
-
-def plot_between_its2_type_prof_dist_scatter(csv_path):
-    # the directory where we should put the output plot
-    output_directory = os.path.dirname(csv_path)
-
-    # clade in Q for use later
-    clade_in_q = output_directory.split('/')[-1]
-
-    # create a pandas dataframe to work with from the .csv
-    plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index=0)
+    plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index_col=0)
 
     # setup figure
     f, ax = plt.subplots(1, 1, figsize=(9, 9))
@@ -751,8 +709,50 @@ def plot_between_its2_type_prof_dist_scatter(csv_path):
     ax.scatter(x_values, y_values, c='black', marker='o')
 
     # add axes labels
-    ax.set_xlabel('PC1; explained = {}'.format('%.20f' % plotting_df['PC1'][-1]))
-    ax.set_ylabel('PC2; explained = {}'.format('%.20f' % plotting_df['PC2'][-1]))
+    ax.set_xlabel('PC1; explained = {}'.format('%.3f' % plotting_df['PC1'][-1]))
+    ax.set_ylabel('PC2; explained = {}'.format('%.3f' % plotting_df['PC2'][-1]))
+
+    # set axis title
+    ax.set_title('between sample distances clade {}'.format(clade_in_q))
+
+    fig_output_base = '{}/between_sample_distances_clade_{}'.format(output_directory, clade_in_q)
+
+    plt.tight_layout()
+    sys.stdout.write('\rsaving as .svg')
+    svg_path = '{}.svg'.format(fig_output_base)
+    plt.savefig(svg_path)
+    png_path = '{}.png'.format(fig_output_base)
+    sys.stdout.write('\rsaving as .png')
+    plt.savefig(png_path)
+    sys.stdout.write('\nDistance plots output to:')
+    sys.stdout.write('\n{}'.format(svg_path))
+    sys.stdout.write('\n{}\n'.format(png_path))
+
+def plot_between_its2_type_prof_dist_scatter(csv_path):
+    # the directory where we should put the output plot
+    output_directory = os.path.dirname(csv_path)
+
+    # clade in Q for use later
+    clade_in_q = output_directory.split('/')[-1]
+
+    # create a pandas dataframe to work with from the .csv
+    plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index_col=0)
+
+    # setup figure
+    f, ax = plt.subplots(1, 1, figsize=(9, 9))
+
+    # x values
+    x_values = plotting_df['PC1'].values.tolist()[:-1]
+
+    # y values
+    y_values = plotting_df['PC2'].values.tolist()[:-1]
+
+    # plot the points
+    ax.scatter(x_values, y_values, c='black', marker='o')
+
+    # add axes labels
+    ax.set_xlabel('PC1; explained = {}'.format('%.3f' % plotting_df['PC1'][-1]))
+    ax.set_ylabel('PC2; explained = {}'.format('%.3f' % plotting_df['PC2'][-1]))
 
     # set axis title
     ax.set_title('between its2 type profile distances clade {}'.format(clade_in_q))
@@ -766,6 +766,6 @@ def plot_between_its2_type_prof_dist_scatter(csv_path):
     png_path = '{}.png'.format(fig_output_base)
     sys.stdout.write('\rsaving as .png')
     plt.savefig(png_path)
-    sys.stdout.write('\nDistance plots output to:\n')
+    sys.stdout.write('\nDistance plots output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
