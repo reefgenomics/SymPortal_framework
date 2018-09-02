@@ -35,7 +35,6 @@ import data_sub_collection_run
 import create_data_submission
 import json
 import sys
-from general import readDefinedFileToList, writeListToDestination
 
 def main():
 
