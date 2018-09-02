@@ -125,7 +125,7 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
                                            'between_profiles'))
     else:
         # call_type = 'analysis'
-        wkd = output_dir
+        wkd = '{}/{}'.format(output_dir, 'between_its2_type_profile_distances')
 
     # get the dataSubmissions
     data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
@@ -211,7 +211,7 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
     # we already have the ratios of each of the divs
     list_of_type_profile_norm_abundance_dicts = []
     for at in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
-        sys.stout.write('\rProcessing {}'.format(at))
+        sys.stdout.write('\rProcessing {}'.format(at))
         list_of_div_ids = [int(b) for b in at.orderedFootprintList.split(',')]
         foot_print_ratio_array = pd.DataFrame(at.getRatioList())
         normalised_abundance_of_divs_dict = {list_of_div_ids[i]: math.ceil(foot_print_ratio_array[i].mean() * 1000) for
