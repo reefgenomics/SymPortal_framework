@@ -25,6 +25,7 @@ import sys
 from general import writeListToDestination, readDefinedFileToList
 from distance import generate_within_clade_UniFrac_distances_ITS2_type_profiles
 from output import formatOutput_ord
+from plotting import plot_between_its2_type_prof_dist_scatter
 
 if 'PYCHARM_HOSTED' in os.environ:
     convert = False  # in PyCharm, we should disable convert
@@ -4201,9 +4202,16 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False):
     ######## Between type ordination analysis ##########
     if not noOrd:
         sys.stdout.write('\nCalculating pairwise distances\n')
-        generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+        pcoa_path_list = generate_within_clade_UniFrac_distances_ITS2_type_profiles(
             data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
             data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
+
+        if not noFig:
+            sys.stdout.write('\nPlotting between its2 type profile distances\n')
+            for pcoa_path in pcoa_path_list:
+                if 'PCoA_coords' in pcoa_path:
+                    # then this is a pcoa csv that we should plot
+                    plot_between_its2_type_prof_dist_scatter(pcoa_path)
     ####################################################
 
     print('data_analysis ID is: {}'.format(analysisObj.id))

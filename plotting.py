@@ -8,6 +8,7 @@ from matplotlib.lines import Line2D
 from collections import defaultdict
 import pandas as pd
 import random
+import os
 
 def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, data_sub_id_str):
     #/Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
@@ -685,3 +686,86 @@ def get_colour_list():
                   "#6C8F7D", "#D7BFC2", "#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C", "#00B57F",
                   "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
     return colour_list
+
+def plot_between_sample_distance_scatter(csv_path):
+    # the directory where we should put the output plot
+    output_directory = os.path.dirname(csv_path)
+
+    # clade in Q for use later
+    clade_in_q = output_directory.split('/')[-1]
+    # create a pandas dataframe to work with from the .csv
+    plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index=0)
+
+    # setup figure
+    f, ax = plt.subplots(1, 1, figsize=(9, 9 ))
+
+    # x values
+    x_values = plotting_df['PC1'].values.tolist()[:-1]
+
+    # y values
+    y_values = plotting_df['PC2'].values.tolist()[:-1]
+
+    # plot the points
+    ax.scatter(x_values, y_values, c='black', marker='o')
+
+    # add axes labels
+    ax.set_xlabel('PC1; explained = {}'.format('%.20f' % plotting_df['PC1'][-1]))
+    ax.set_ylabel('PC2; explained = {}'.format('%.20f' % plotting_df['PC2'][-1]))
+
+    # set axis title
+    ax.set_title('between sample distances clade {}'.format(clade_in_q))
+
+    fig_output_base = '{}/between_sample_distances_clade_{}'.format(output_directory, clade_in_q)
+
+    plt.tight_layout()
+    sys.stdout.write('\rsaving as .svg')
+    svg_path = '{}.svg'.format(fig_output_base)
+    plt.savefig(svg_path)
+    png_path = '{}.png'.format(fig_output_base)
+    sys.stdout.write('\rsaving as .png')
+    plt.savefig(png_path)
+    sys.stdout.write('\nDistance plots output to:\n')
+    sys.stdout.write('\n{}'.format(svg_path))
+    sys.stdout.write('\n{}\n'.format(png_path))
+
+def plot_between_its2_type_prof_dist_scatter(csv_path):
+    # the directory where we should put the output plot
+    output_directory = os.path.dirname(csv_path)
+
+    # clade in Q for use later
+    clade_in_q = output_directory.split('/')[-1]
+
+    # create a pandas dataframe to work with from the .csv
+    plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index=0)
+
+    # setup figure
+    f, ax = plt.subplots(1, 1, figsize=(9, 9))
+
+    # x values
+    x_values = plotting_df['PC1'].values.tolist()[:-1]
+
+    # y values
+    y_values = plotting_df['PC2'].values.tolist()[:-1]
+
+    # plot the points
+    ax.scatter(x_values, y_values, c='black', marker='o')
+
+    # add axes labels
+    ax.set_xlabel('PC1; explained = {}'.format('%.20f' % plotting_df['PC1'][-1]))
+    ax.set_ylabel('PC2; explained = {}'.format('%.20f' % plotting_df['PC2'][-1]))
+
+    # set axis title
+    ax.set_title('between its2 type profile distances clade {}'.format(clade_in_q))
+
+    fig_output_base = '{}/between_its2_type_prof_dist_clade_{}'.format(output_directory, clade_in_q)
+
+    plt.tight_layout()
+    sys.stdout.write('\rsaving as .svg')
+    svg_path = '{}.svg'.format(fig_output_base)
+    plt.savefig(svg_path)
+    png_path = '{}.png'.format(fig_output_base)
+    sys.stdout.write('\rsaving as .png')
+    plt.savefig(png_path)
+    sys.stdout.write('\nDistance plots output to:\n')
+    sys.stdout.write('\n{}'.format(svg_path))
+    sys.stdout.write('\n{}\n'.format(png_path))

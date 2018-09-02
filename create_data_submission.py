@@ -18,7 +18,7 @@ import pandas as pd
 from output import div_output_pre_analysis_new_meta_and_new_dss_structure
 from general import *
 from distance import generate_within_clade_UniFrac_distances_samples
-from plotting import generate_stacked_bar_data_submission
+from plotting import generate_stacked_bar_data_submission, plot_between_sample_distance_scatter
 
 
 def logQCErrorAndContinue(datasetsampleinstanceinq, samplename, errorreason):
@@ -933,7 +933,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     # here we will create a stacked bar
     # I think it is easiest if we directly pass in the path of the above count table output
     if not noFig:
-        sys.stdout.write('\nGenerating figures\n')
+        sys.stdout.write('\nGenerating sequence count table figures\n')
         for path in output_path_list:
             if 'relative' in path:
                 path_to_rel_abund_data = path
@@ -948,9 +948,19 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     ####### between sample distances ######
     if not noOrd:
-        generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
+        PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
                                                         method='mothur', call_type='submission', output_dir=outputDir)
     #######################################
+
+    ####### distance plotting #############
+    if not noFig:
+        sys.stdout.write('\nGenerating between sample distance figures\n')
+        for pcoa_path in PCoA_paths_list:
+            if 'PCoA_coords' in pcoa_path:
+                # then this is a full path to one of the .csv files that contains the coordinates that we can plot
+                # we will get the output directory from the passed in pcoa_path
+                sys.stdout.write('\n\n Generating between sample distance plot\n')
+                plot_between_sample_distance_scatter(pcoa_path)
 
     ####################################
 
