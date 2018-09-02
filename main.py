@@ -17,9 +17,6 @@
     along with this program.  If not, see
     https://github.com/SymPortal/SymPortal_framework/tree/master/LICENSE.txt.'''
 import argparse
-import subprocess
-import itertools
-from datetime import datetime
 # Django specific settings
 import os
 from datetime import datetime
@@ -36,36 +33,9 @@ from dbApp.models import symportal_framework, data_set, reference_sequence, data
 
 import data_sub_collection_run
 import create_data_submission
-from collections import defaultdict
 import json
 import sys
-
-
-###### Generic functions ######
-def readDefinedFileToList(filename):
-    tempList = []
-    with open(filename, mode='r') as reader:
-        tempList = [line.rstrip() for line in reader]
-    return tempList
-
-def writeListToDestination(destination, listToWrite):
-    #print('Writing list to ' + destination)
-    try:
-        os.makedirs(os.path.dirname(destination))
-    except FileExistsError:
-        pass
-
-    with open(destination, mode='w') as writer:
-        i = 0
-        while i < len(listToWrite):
-            if i != len(listToWrite)-1:
-                writer.write(listToWrite[i] + '\n')
-            elif i == len(listToWrite)-1:
-                writer.write(listToWrite[i])
-            i += 1
-###############################
-
-
+from general import readDefinedFileToList, writeListToDestination
 
 def main():
 
