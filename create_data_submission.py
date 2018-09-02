@@ -871,6 +871,9 @@ def processMEDDataDirectCCDefinition_new_dss_structure(wkd, ID, MEDDirs):
 
     return
 
+
+
+
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload',
          data_sheet_path=None, noFig=False, noOrd=False):
@@ -887,122 +890,23 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     if dataSubmissionInQ.initialDataProcessed == False:
 
-
-        # working directory will be housed in a temp folder within the directory in which the sequencing data
-        # is currently housed
-        if '.' in pathToInputFile.split('/')[-1]:
-            # then this path points to a file rather than a directory and we should pass through the path only
-            wkd = os.path.abspath('{}/tempData/{}'.format(os.path.dirname(pathToInputFile), dSID))
-        else:
-            # then we assume that we are pointing to a directory and we can directly use that to make the wkd
-            wkd = os.path.abspath('{}/tempData/{}'.format(pathToInputFile, dSID))
-
-        # if the directory already exists remove it and start from scratch
-        if os.path.exists(wkd):
-            shutil.rmtree(wkd)
-        os.makedirs(wkd)
-
-
-        # Check to see if the files are already decompressed
-        # If so then simply copy the files over to the destination folder
-        # we do this copying so that we don't corrupt the original files
-        # we will delte these duplicate files after processing
-        compressed = True
-
-
-        for file in os.listdir(pathToInputFile):
-            if 'fastq.gz' in file or 'fq.gz' in file:
-                # Then there is a fastq.gz already uncompressed in this folder
-                # In this case we will assume that the seq data is not compressed into a master .zip or .gz
-                # Copy to the wkd
-                compressed = False
-                os.chdir('{}'.format(pathToInputFile))
-
-                # * asterix are only expanded in the shell and so don't work through subprocess
-                # need to use the glob library instead
-                 #https://stackoverflow.com/questions/13875978/python-subprocess-popen-why-does-ls-txt-not-work
-
-                if 'fastq.gz' in file:
-                    completedProcess = subprocess.run(['cp'] + glob.glob('*.fastq.gz') + [wkd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                elif 'fq.gz' in file:
-                    completedProcess = subprocess.run(['cp'] + glob.glob('*.fq.gz') + [wkd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                break
-
-        # if compressed then we are dealing with a single compressed file that should contain the fastq.gz pairs
-        # Decompress the file to destination
-        if compressed:
-            extComponents = pathToInputFile.split('.')
-            if extComponents[-1] == 'zip':  # .zip
-                completedProcess = subprocess.run(["unzip", pathToInputFile, '-d', wkd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            elif extComponents[-2] == 'tar' and extComponents[-1] == 'gz':  # .tar.gz
-                completedProcess = subprocess.run(["tar", "-xf", pathToInputFile, "-C", wkd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-            elif extComponents[-1] == 'gz':  # .gz
-                completedProcess = subprocess.run(["gunzip", "-c", pathToInputFile, ">", wkd], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-
+        # decompress (if necessary) and move the input files to the working directory
+        wkd = copy_file_to_wkd(dSID, pathToInputFile)
 
         # Identify sample names
         if data_sheet_path:
-            # get the list of names from the index of the sample_meta_df
-            list_of_names = sample_meta_df.index.values.tolist()
-            # we will also need to know how to relate the samples to the fastq files
-            # for this we will make a dict of fastq file name to sample
-            # but before we do this we should verify that all of the fastq files listed in the sample_meta_df
-            # are indeed found in the directory that we've been given
-            list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
-            list_of_meta_gz_files = []
-            list_of_meta_gz_files.extend(sample_meta_df['fastq_fwd_file_name'].values.tolist())
-            list_of_meta_gz_files.extend(sample_meta_df['fastq_rev_file_name'].values.tolist())
-            for fastq in list_of_meta_gz_files:
-                if fastq not in list_of_gz_files_in_wkd:
-                    sys.exit('{} listed in data_sheet not found'.format(fastq, wkd))
-            # now make the dictionary
-            fastq_file_to_sample_name_dict = {}
-            for sample_index in sample_meta_df.index.values.tolist():
-                fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
-                fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
+            # if we are given a data_sheet then use these sample names given as the data_set_sample object names
+            fastq_file_to_sample_name_dict, list_of_names = identify_sample_names_data_sheet(sample_meta_df, wkd)
 
 
         else:
-            list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
-
-            # I think the simplest way to get sample names is to find what parts are common between all samples
-            # well actually 50% of the samples so that we also remove the R1 and R2 parts.
-
-            i = 1
-            while 1:
-                list_of_endings = []
-                for file in list_of_gz_files_in_wkd:
-                    list_of_endings.append(file[-i:])
-                if len(set(list_of_endings)) > 2:
-                    break
-                else:
-                    i += 1
-                    # then this is one i too many and our magic i was i-1
-            end_index = i-1
-
-            list_of_names_non_unique = []
-            for file in list_of_gz_files_in_wkd:
-                list_of_names_non_unique.append(file[:-end_index])
-            list_of_names = list(set(list_of_names_non_unique))
-
-            if len(list_of_names) != len(list_of_gz_files_in_wkd)/2:
-                sys.exit('Error in sample name extraction')
+            # else, we have to infer what the samples names are
+            # we do this by taking off the part of the fastq.gz name that samples have in common
+            end_index, list_of_names = identify_sample_names_inferred(wkd)
 
 
         # Make a batch file for mothur, set input and output dir and create a .file file
-
-        mBatchFile = [
-            r'set.dir(input={0})'.format(wkd),
-            r'set.dir(output={0})'.format(wkd),
-            r'make.file(inputdir={0}, type=gz, numcols=3)'.format(wkd)
-        ]
-        writeListToDestination(r'{0}/mBatchFile_makeFile'.format(wkd), mBatchFile)
-        completedProcess = subprocess.run(['mothur', r'{0}/mBatchFile_makeFile'.format(wkd)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
-        # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
-        sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+        sampleFastQPairs = generate_mothur_dotfile_file(wkd)
 
         newstabilityFile = []
         # if we have a data_sheet_path then we will use the sample names that the user has associated to each
@@ -1010,40 +914,13 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         # if we do not have a data_sheet path then we will get the sample name from the first
         # fastq using the end_index that we determined above
         if data_sheet_path:
-            for stability_file_line in sampleFastQPairs:
-                pairComponenets = stability_file_line.split('\t')
-                # I am going to use '[dS]' as a place holder for a dash in the sample names
-                # Each line of the stability file is a three column format with the first
-                # column being the sample name. The second and third are the full paths of the .fastq.gz files
-                # the sample name at the moment is garbage, we will identify the sample name from the
-                # first fastq path using the fastq_file_to_sample_name_dict
-
-                newstabilityFile.append(
-                    '{}\t{}\t{}'.format(
-                        fastq_file_to_sample_name_dict[pairComponenets[1].split('/')[-1]].replace('-', '[dS]'),
-                        pairComponenets[1],
-                        pairComponenets[2]))
+            generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, newstabilityFile, sampleFastQPairs)
         else:
-            for stability_file_line in sampleFastQPairs:
-                pairComponenets = stability_file_line.split('\t')
-                # I am going to use '[dS]' as a place holder for a dash in the sample names
-                # Each line of the stability file is a three column format with the first
-                # column being the sample name. The second and third are the full paths of the .fastq.gz files
-                # the sample name at the moment is garbage, we will extract the sample name from the
-                # first fastq path using the end_index that we determined above
+            generate_new_stability_file_inferred(end_index, newstabilityFile, sampleFastQPairs)
 
-                newstabilityFile.append(
-                    '{}\t{}\t{}'.format(
-                    pairComponenets[1].split('/')[-1][:-end_index].replace('-', '[dS]'),
-                    pairComponenets[1],
-                    pairComponenets[2]))
-
-
-
+        # write out the new stability file
         writeListToDestination(r'{0}/stability.files'.format(wkd), newstabilityFile)
         sampleFastQPairs = newstabilityFile
-
-
         dataSubmissionInQ.workingDirectory = wkd
         dataSubmissionInQ.save()
 
@@ -1347,6 +1224,153 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
 
         print('\ndata_set ID is: {}'.format(dataSubmissionInQ.id))
+
+
+def generate_new_stability_file_inferred(end_index, newstabilityFile, sampleFastQPairs):
+    for stability_file_line in sampleFastQPairs:
+        pairComponenets = stability_file_line.split('\t')
+        # I am going to use '[dS]' as a place holder for a dash in the sample names
+        # Each line of the stability file is a three column format with the first
+        # column being the sample name. The second and third are the full paths of the .fastq.gz files
+        # the sample name at the moment is garbage, we will extract the sample name from the
+        # first fastq path using the end_index that we determined above
+
+        newstabilityFile.append(
+            '{}\t{}\t{}'.format(
+                pairComponenets[1].split('/')[-1][:-end_index].replace('-', '[dS]'),
+                pairComponenets[1],
+                pairComponenets[2]))
+
+
+def generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, newstabilityFile, sampleFastQPairs):
+    for stability_file_line in sampleFastQPairs:
+        pairComponenets = stability_file_line.split('\t')
+        # I am going to use '[dS]' as a place holder for a dash in the sample names
+        # Each line of the stability file is a three column format with the first
+        # column being the sample name. The second and third are the full paths of the .fastq.gz files
+        # the sample name at the moment is garbage, we will identify the sample name from the
+        # first fastq path using the fastq_file_to_sample_name_dict
+
+        newstabilityFile.append(
+            '{}\t{}\t{}'.format(
+                fastq_file_to_sample_name_dict[pairComponenets[1].split('/')[-1]].replace('-', '[dS]'),
+                pairComponenets[1],
+                pairComponenets[2]))
+
+
+def generate_mothur_dotfile_file(wkd):
+    mBatchFile = [
+        r'set.dir(input={0})'.format(wkd),
+        r'set.dir(output={0})'.format(wkd),
+        r'make.file(inputdir={0}, type=gz, numcols=3)'.format(wkd)
+    ]
+    writeListToDestination(r'{0}/mBatchFile_makeFile'.format(wkd), mBatchFile)
+    completedProcess = subprocess.run(['mothur', r'{0}/mBatchFile_makeFile'.format(wkd)], stdout=subprocess.PIPE,
+                                      stderr=subprocess.PIPE)
+    # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
+    # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
+    sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    return sampleFastQPairs
+
+
+def identify_sample_names_inferred(wkd):
+    list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
+    # I think the simplest way to get sample names is to find what parts are common between all samples
+    # well actually 50% of the samples so that we also remove the R1 and R2 parts.
+    i = 1
+    while 1:
+        list_of_endings = []
+        for file in list_of_gz_files_in_wkd:
+            list_of_endings.append(file[-i:])
+        if len(set(list_of_endings)) > 2:
+            break
+        else:
+            i += 1
+            # then this is one i too many and our magic i was i-1
+    end_index = i - 1
+    list_of_names_non_unique = []
+    for file in list_of_gz_files_in_wkd:
+        list_of_names_non_unique.append(file[:-end_index])
+    list_of_names = list(set(list_of_names_non_unique))
+    if len(list_of_names) != len(list_of_gz_files_in_wkd) / 2:
+        sys.exit('Error in sample name extraction')
+    return end_index, list_of_names
+
+
+def identify_sample_names_data_sheet(sample_meta_df, wkd):
+    # get the list of names from the index of the sample_meta_df
+    list_of_names = sample_meta_df.index.values.tolist()
+    # we will also need to know how to relate the samples to the fastq files
+    # for this we will make a dict of fastq file name to sample
+    # but before we do this we should verify that all of the fastq files listed in the sample_meta_df
+    # are indeed found in the directory that we've been given
+    list_of_gz_files_in_wkd = [a for a in os.listdir(wkd) if '.gz' in a]
+    list_of_meta_gz_files = []
+    list_of_meta_gz_files.extend(sample_meta_df['fastq_fwd_file_name'].values.tolist())
+    list_of_meta_gz_files.extend(sample_meta_df['fastq_rev_file_name'].values.tolist())
+    for fastq in list_of_meta_gz_files:
+        if fastq not in list_of_gz_files_in_wkd:
+            sys.exit('{} listed in data_sheet not found'.format(fastq, wkd))
+    # now make the dictionary
+    fastq_file_to_sample_name_dict = {}
+    for sample_index in sample_meta_df.index.values.tolist():
+        fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
+        fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
+    return fastq_file_to_sample_name_dict, list_of_names
+
+
+def copy_file_to_wkd(dSID, pathToInputFile):
+    # working directory will be housed in a temp folder within the directory in which the sequencing data
+    # is currently housed
+    if '.' in pathToInputFile.split('/')[-1]:
+        # then this path points to a file rather than a directory and we should pass through the path only
+        wkd = os.path.abspath('{}/tempData/{}'.format(os.path.dirname(pathToInputFile), dSID))
+    else:
+        # then we assume that we are pointing to a directory and we can directly use that to make the wkd
+        wkd = os.path.abspath('{}/tempData/{}'.format(pathToInputFile, dSID))
+    # if the directory already exists remove it and start from scratch
+    if os.path.exists(wkd):
+        shutil.rmtree(wkd)
+    os.makedirs(wkd)
+    # Check to see if the files are already decompressed
+    # If so then simply copy the files over to the destination folder
+    # we do this copying so that we don't corrupt the original files
+    # we will delte these duplicate files after processing
+    compressed = True
+    for file in os.listdir(pathToInputFile):
+        if 'fastq.gz' in file or 'fq.gz' in file:
+            # Then there is a fastq.gz already uncompressed in this folder
+            # In this case we will assume that the seq data is not compressed into a master .zip or .gz
+            # Copy to the wkd
+            compressed = False
+            os.chdir('{}'.format(pathToInputFile))
+
+            # * asterix are only expanded in the shell and so don't work through subprocess
+            # need to use the glob library instead
+            # https://stackoverflow.com/questions/13875978/python-subprocess-popen-why-does-ls-txt-not-work
+
+            if 'fastq.gz' in file:
+                completedProcess = subprocess.run(['cp'] + glob.glob('*.fastq.gz') + [wkd], stdout=subprocess.PIPE,
+                                                  stderr=subprocess.PIPE)
+            elif 'fq.gz' in file:
+                completedProcess = subprocess.run(['cp'] + glob.glob('*.fq.gz') + [wkd], stdout=subprocess.PIPE,
+                                                  stderr=subprocess.PIPE)
+            break
+    # if compressed then we are dealing with a single compressed file that should contain the fastq.gz pairs
+    # Decompress the file to destination
+    if compressed:
+        extComponents = pathToInputFile.split('.')
+        if extComponents[-1] == 'zip':  # .zip
+            completedProcess = subprocess.run(["unzip", pathToInputFile, '-d', wkd], stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE)
+        elif extComponents[-2] == 'tar' and extComponents[-1] == 'gz':  # .tar.gz
+            completedProcess = subprocess.run(["tar", "-xf", pathToInputFile, "-C", wkd], stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE)
+        elif extComponents[-1] == 'gz':  # .gz
+            completedProcess = subprocess.run(["gunzip", "-c", pathToInputFile, ">", wkd], stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE)
+    return wkd
+
 
 def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sample_support_cut_off, previous_reference_fasta_name, required_symbiodinium_matches, full_path_to_nt_database_directory):
     # we need to make sure that we are looking at matches that cover > 95%
