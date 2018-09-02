@@ -4207,9 +4207,10 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False):
             data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
 
         if not noFig:
-            sys.stdout.write('\nPlotting between its2 type profile distances\n')
+
             for pcoa_path in pcoa_path_list:
                 if 'PCoA_coords' in pcoa_path:
+                    sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
                     # then this is a pcoa csv that we should plot
                     plot_between_its2_type_prof_dist_scatter(pcoa_path)
     ####################################################
