@@ -652,7 +652,7 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
         name_file_reps.append(line.split('\t')[0])
     seq_re = re.compile('\d+[_ ]id[\d_]+')
     seq_re_meta = re.compile('\[[^\]]*\]')
-    print('renaming tree nodes')
+    sys.stdout.write('\rrenaming tree nodes')
     tree_file = readDefinedFileToList(tree_out_file_fconsense)
     new_tree_file = []
     for line in tree_file:
@@ -722,7 +722,7 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
         new_tree_file.append(new_str)
 
     # here all of the tree_file names should have been replaced. Now write back out.
-    print('writing out tree')
+    sys.stdout.write('\rwriting out tree')
     writeListToDestination(tree_out_file_fconsense, new_tree_file)
 
 
@@ -893,7 +893,7 @@ def mothur_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
         writeListToDestination(mothur_batch_path, mothur_batch_dist)
 
         # now run the batch file with mothur
-        print('calculating distances')
+        sys.stdout.write('\rcalculating distances')
         completedProcess = \
             subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
