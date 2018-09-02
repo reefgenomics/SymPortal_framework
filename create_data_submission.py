@@ -879,82 +879,15 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          data_sheet_path=None, noFig=False, noOrd=False):
 
 
-    # Create a pandas df from the data_sheet if it was provided
-    if data_sheet_path:
-        sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
-
-
     ############### UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE ##################
 
     dataSubmissionInQ = data_set.objects.get(id=dSID)
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     if dataSubmissionInQ.initialDataProcessed == False:
 
-        # decompress (if necessary) and move the input files to the working directory
-        wkd = copy_file_to_wkd(dSID, pathToInputFile)
-
-        # Identify sample names
-        if data_sheet_path:
-            # if we are given a data_sheet then use these sample names given as the data_set_sample object names
-            fastq_file_to_sample_name_dict, list_of_names = identify_sample_names_data_sheet(sample_meta_df, wkd)
-
-
-        else:
-            # else, we have to infer what the samples names are
-            # we do this by taking off the part of the fastq.gz name that samples have in common
-            end_index, list_of_names = identify_sample_names_inferred(wkd)
-
-
-        # Make a batch file for mothur, set input and output dir and create a .file file
-        sampleFastQPairs = generate_mothur_dotfile_file(wkd)
-
-        newstabilityFile = []
-        # if we have a data_sheet_path then we will use the sample names that the user has associated to each
-        # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
-        # if we do not have a data_sheet path then we will get the sample name from the first
-        # fastq using the end_index that we determined above
-        if data_sheet_path:
-            generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, newstabilityFile, sampleFastQPairs)
-        else:
-            generate_new_stability_file_inferred(end_index, newstabilityFile, sampleFastQPairs)
-
-        # write out the new stability file
-        writeListToDestination(r'{0}/stability.files'.format(wkd), newstabilityFile)
-        sampleFastQPairs = newstabilityFile
-        dataSubmissionInQ.workingDirectory = wkd
-        dataSubmissionInQ.save()
-
-
-        # Create data_set_sample instances
-        list_of_sample_objects = []
-        sys.stdout.write('\nCreating data_set_sample objects\n')
-        for sampleName in list_of_names:
-            print('\rCreating data_set_sample {}'.format(sampleName))
-            # Create the data_set_sample objects in bulk.
-            # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
-            # sample divided by clade. This is used in the output to keep track of sequences that are not
-            # included in cladeCollections
-            emptyCladalSeqTotals = json.dumps([0 for cl in cladeList])
-            if data_sheet_path:
-                dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ,
-                                      cladalSeqTotals=emptyCladalSeqTotals,
-                                      sample_type          = sample_meta_df.loc[sampleName, 'sample_type'],
-                                      host_phylum          = sample_meta_df.loc[sampleName, 'host_phylum'],
-                                      host_class           = sample_meta_df.loc[sampleName, 'host_class'],
-                                      host_order           = sample_meta_df.loc[sampleName, 'host_order'],
-                                      host_family          = sample_meta_df.loc[sampleName, 'host_family'],
-                                      host_genus           = sample_meta_df.loc[sampleName, 'host_genus'],
-                                      host_species         = sample_meta_df.loc[sampleName, 'host_species'],
-                                      collection_latitude  = sample_meta_df.loc[sampleName, 'collection_latitude'],
-                                      collection_longitude = sample_meta_df.loc[sampleName, 'collection_longitude'],
-                                      collection_date      = sample_meta_df.loc[sampleName, 'collection_date'],
-                                      collection_depth     = sample_meta_df.loc[sampleName, 'collection_depth']
-                                      )
-            else:
-                dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ, cladalSeqTotals=emptyCladalSeqTotals)
-            list_of_sample_objects.append(dss)
-            # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-        smpls = data_set_sample.objects.bulk_create(list_of_sample_objects)
+        # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
+        wkd = generate_new_stability_file_and_data_set_sample_objects(cladeList, dSID, dataSubmissionInQ,
+                                                                      data_sheet_path, pathToInputFile)
 
 
     ################### CREATE CONTIGS SAMPLE BY SAMPLE #################
@@ -1224,6 +1157,107 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
 
         print('\ndata_set ID is: {}'.format(dataSubmissionInQ.id))
+
+
+def generate_new_stability_file_and_data_set_sample_objects(cladeList, dSID, dataSubmissionInQ, data_sheet_path,
+                                                            pathToInputFile):
+    # decompress (if necessary) and move the input files to the working directory
+    wkd = copy_file_to_wkd(dSID, pathToInputFile)
+    # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
+    if data_sheet_path:
+        # if a data_sheet is provided ensure the samples names are derived from those in the data_sheet
+        list_of_sample_objects = generate_stability_file_and_data_set_sample_objects_data_sheet(cladeList,
+                                                                                                dataSubmissionInQ,
+                                                                                                data_sheet_path, wkd)
+    else:
+        # if no data_sheet then infer the names of the samples from the .fastq.gz files
+        list_of_sample_objects = generate_stability_file_and_data_set_sample_objects_inferred(cladeList,
+                                                                                              dataSubmissionInQ,
+                                                                                              wkd)
+    # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
+    smpls = data_set_sample.objects.bulk_create(list_of_sample_objects)
+    return wkd
+
+
+def generate_stability_file_and_data_set_sample_objects_inferred(cladeList, dataSubmissionInQ, wkd):
+    # else, we have to infer what the samples names are
+    # we do this by taking off the part of the fastq.gz name that samples have in common
+    end_index, list_of_names = identify_sample_names_inferred(wkd)
+    # Make a batch file for mothur, set input and output dir and create a .file file
+    sampleFastQPairs = generate_mothur_dotfile_file(wkd)
+    newstabilityFile = []
+    # if we have a data_sheet_path then we will use the sample names that the user has associated to each
+    # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
+    # if we do not have a data_sheet path then we will get the sample name from the first
+    # fastq using the end_index that we determined above
+    generate_new_stability_file_inferred(end_index, newstabilityFile, sampleFastQPairs)
+    # write out the new stability file
+    writeListToDestination(r'{0}/stability.files'.format(wkd), newstabilityFile)
+    sampleFastQPairs = newstabilityFile
+    dataSubmissionInQ.workingDirectory = wkd
+    dataSubmissionInQ.save()
+    # Create data_set_sample instances
+    list_of_sample_objects = []
+    sys.stdout.write('\nCreating data_set_sample objects\n')
+    for sampleName in list_of_names:
+        print('\rCreating data_set_sample {}'.format(sampleName))
+        # Create the data_set_sample objects in bulk.
+        # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
+        # sample divided by clade. This is used in the output to keep track of sequences that are not
+        # included in cladeCollections
+        emptyCladalSeqTotals = json.dumps([0 for cl in cladeList])
+
+        dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ,
+                              cladalSeqTotals=emptyCladalSeqTotals)
+        list_of_sample_objects.append(dss)
+    return list_of_sample_objects
+
+
+def generate_stability_file_and_data_set_sample_objects_data_sheet(cladeList, dataSubmissionInQ, data_sheet_path, wkd):
+    # Create a pandas df from the data_sheet if it was provided
+    sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+    # if we are given a data_sheet then use these sample names given as the data_set_sample object names
+    fastq_file_to_sample_name_dict, list_of_names = identify_sample_names_data_sheet(sample_meta_df, wkd)
+    # Make a batch file for mothur, set input and output dir and create a .file file
+    sampleFastQPairs = generate_mothur_dotfile_file(wkd)
+    newstabilityFile = []
+    # if we have a data_sheet_path then we will use the sample names that the user has associated to each
+    # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
+    # if we do not have a data_sheet path then we will get the sample name from the first
+    # fastq using the end_index that we determined above
+    generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, newstabilityFile, sampleFastQPairs)
+    # write out the new stability file
+    writeListToDestination(r'{0}/stability.files'.format(wkd), newstabilityFile)
+    sampleFastQPairs = newstabilityFile
+    dataSubmissionInQ.workingDirectory = wkd
+    dataSubmissionInQ.save()
+    # Create data_set_sample instances
+    list_of_sample_objects = []
+    sys.stdout.write('\nCreating data_set_sample objects\n')
+    for sampleName in list_of_names:
+        print('\rCreating data_set_sample {}'.format(sampleName))
+        # Create the data_set_sample objects in bulk.
+        # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
+        # sample divided by clade. This is used in the output to keep track of sequences that are not
+        # included in cladeCollections
+        emptyCladalSeqTotals = json.dumps([0 for cl in cladeList])
+
+        dss = data_set_sample(name=sampleName, dataSubmissionFrom=dataSubmissionInQ,
+                              cladalSeqTotals=emptyCladalSeqTotals,
+                              sample_type=sample_meta_df.loc[sampleName, 'sample_type'],
+                              host_phylum=sample_meta_df.loc[sampleName, 'host_phylum'],
+                              host_class=sample_meta_df.loc[sampleName, 'host_class'],
+                              host_order=sample_meta_df.loc[sampleName, 'host_order'],
+                              host_family=sample_meta_df.loc[sampleName, 'host_family'],
+                              host_genus=sample_meta_df.loc[sampleName, 'host_genus'],
+                              host_species=sample_meta_df.loc[sampleName, 'host_species'],
+                              collection_latitude=sample_meta_df.loc[sampleName, 'collection_latitude'],
+                              collection_longitude=sample_meta_df.loc[sampleName, 'collection_longitude'],
+                              collection_date=sample_meta_df.loc[sampleName, 'collection_date'],
+                              collection_depth=sample_meta_df.loc[sampleName, 'collection_depth']
+                              )
+        list_of_sample_objects.append(dss)
+    return list_of_sample_objects
 
 
 def generate_new_stability_file_inferred(end_index, newstabilityFile, sampleFastQPairs):
