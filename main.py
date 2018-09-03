@@ -126,6 +126,15 @@ def main():
     parser.add_argument('--data_sheet', help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
     parser.add_argument('--noFig', action='store_true', help='Skip figure production')
     parser.add_argument('--noOrd', action='store_true', help='Skip ordination analysis')
+    # when run as remote
+    parser.add_argument('--submitting_user_name', help='Only for use when running as remote'
+                                                       '\nallows the association of a different user_name '
+                                                       'to the data_set than the one listed in sp_config',
+                        default='not supplied')
+    parser.add_argument('--submitting_user_email', help='Only for use when running as remote'
+                                                        '\nallows the association of a different user_email '
+                                                        'to the data_set than the one listed in sp_config',
+                        default='not supplied')
     args = parser.parse_args()
 
 
@@ -149,8 +158,20 @@ def main():
 
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
             config_dict = json.load(f)
-        new_data_set_submitting_user = config_dict['user_name']
-        new_data_set_user_email = config_dict['user_email']
+        local_or_remote = config_dict['system_type']
+        if local_or_remote == 'remote':
+            screen_sub_evalue_bool = True
+            if args.submitting_user_name and args.submitting_user_email:
+                new_data_set_submitting_user = args.submitting_user_name
+                new_data_set_user_email = args.submitting_user_email
+            else:
+                print('Please supply --submitting_user_name and --submitting_user_email.')
+                sys.exit(1)
+        else:
+            new_data_set_submitting_user = config_dict['user_name']
+            new_data_set_user_email = config_dict['user_email']
+            screen_sub_evalue_bool = False
+
 
         # If working on the remote server a difference reference_fasta_database_used can be used.
         new_data_set = data_set(name = name_for_data_set, timeStamp=str(datetime.now()),
@@ -160,12 +181,8 @@ def main():
         new_data_set.save()
 
         # only perform sub_evalue_screening when working on the remote system
-        with open('sp_config') as f:
-            config_dict = json.load(f)
-        if config_dict['system_type'] == 'remote':
-            screen_sub_evalue_bool = True
-        else:
-            screen_sub_evalue_bool = False
+
+
 
         if args.data_sheet:
             if os.path.isfile(args.data_sheet):
