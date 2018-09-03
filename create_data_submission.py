@@ -920,6 +920,12 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     if os.path.exists(wkd):
         shutil.rmtree(wkd)
 
+    # also make sure that we get rid of .logfile files in the symbiodiniumDB directory
+    symbiodiniumdb_dir = os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')
+    log_file_list = [f for f in os.listdir(symbiodiniumdb_dir) if f.endswith(".logfile")]
+    for f in log_file_list:
+        os.remove('{}/{}'.format(symbiodiniumdb_dir, f))
+
     ####### COUNT TABLE OUTPUT ########
     # We are going to make the sequence count table output as part of the dataSubmission
     outputDir = os.path.join(os.path.dirname(__file__), 'outputs/data_set_submissions/{}'.format(dSID))
