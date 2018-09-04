@@ -851,7 +851,6 @@ def deuniqueWorker(input, output):
         sys.stdout.write('{}: MED complete\n'.format(sampleName))
 
 
-
 def checkIfSeqInQHadRefSeqMatch(seqInQ, nodeName, refSeqIdDict, nodeToRefDict, refSeqIDNameDict):
     # seqInQ = the MED node sequence in question
     # refSeqIdDict = dictionary of all current ref_sequences sequences (KEY) to their ID (VALUE).
@@ -1101,7 +1100,6 @@ def create_data_set_sample_sequences_from_MED_nodes(wkd, ID, MEDDirs):
 
 
 
-
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload',
          data_sheet_path=None, noFig=False, noOrd=False):
@@ -1118,7 +1116,11 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                                                                       data_sheet_path, pathToInputFile)
 
     ################### PERFORM pre-MED QC #################
-        e_value_multiP_dict = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd)
+        if screen_sub_evalue:
+            new_seqs_added_count = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue)
+        else:
+            fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue)
+
 
     # This function now performs the MEDs sample by sample, clade by clade.
     # The list of outputed paths lead to the MED directories where node info etc can be found
@@ -1198,53 +1200,21 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     #######################################
 
 
-
-
-
-
     # write out whether there were below e value sequences outputted.
-    if fasta_out_with_clade:
-        print('\n\nWARNING: {} sub_e_value cut-off sequences were output'.format(int(len(fasta_out_with_clade)/2)))
     if screen_sub_evalue:
-        if fasta_out_with_clade:
-            print('These will now be automatically screened to see if they contain Symbiodinium sequences.')
-            print('Screening sub e value sequences...')
-
-
-        symportal_framework_object = symportal_framework.objects.get(id=1)
-        preious_reference_fasta_name = symportal_framework_object.latest_reference_fasta
-        required_sample_support = symportal_framework_object.required_sub_e_value_seq_support_samples
-        required_symbiodinium_blast_matches = symportal_framework_object.required_sub_e_value_seq_support_blast_symbiodinium
-        next_reference_fasta_iteration_id = symportal_framework_object.next_reference_fasta_iteration
-        new_reference_fasta_name, num_additional_sequences, new_ref_fasta_location = screen_sub_e_value_sequences(dSID, pathToInputFile, iteration_id=next_reference_fasta_iteration_id, seq_sample_support_cut_off=required_sample_support, previous_reference_fasta_name=preious_reference_fasta_name, required_symbiodinium_matches=required_symbiodinium_blast_matches, full_path_to_nt_database_directory=full_path_to_nt_database_directory)
-
-        print('Done\n')
-
-        if new_reference_fasta_name:
-
-            print('WARNING: {} Symbiodinium sequences were found in those discarded due to e value cutoffs.'.format(num_additional_sequences))
-            print('A new reference fasta has been created that contains these new sequences as well as those that '
-                  'were contained in the previous version of the reference fasta.')
-            print('This new reference fasta is called: {}'.format(new_reference_fasta_name))
-            print('It has been output to the following location: {}'.format(new_ref_fasta_location))
-        else:
-            print('None of the e value discarded sequences returned matches for Symbiodinium when run against '
-                  'the nt database.\nHappy days!')
-        print('data_set ID is: {}'.format(dataSubmissionInQ.id))
+        sys.stdout.write('{} sequences were added to the symClade.fa database as part of this data submission\n'.format(new_seqs_added_count))
     else:
-        if fasta_out_with_clade:
-            print('A .fasta file containing the sub_e_values cut-off sequences was '
-                  'output at {}'.format(pathToInputFile + '/below_e_cutoff_seqs_{}.fasta'.format(dSID)))
-            print('These sequences were not submitted to your database as part of your data_set submission as SymPortal '
-                  'could not be sure that they were truely Symbiodinium in origin')
-            print('If you wish to include some of these sequences into your data_set submission please add them to '
-                  'the ./symbiodiniumDB/symClade.fa fasta file and create a new BLAST datbase from this fasta with the '
-                  'same name. Then re-run the submission')
-            print('However, we strongly recommend that you verify these sequences to be of Symbiodinium origin before doing so.')
+        if fasta_of_sig_sub_e_seqs:
+            sys.stdout.write('{} distinct sequences from your submission were of questionable taxonomic origin.'
+                             '\nSymPortal can\'t be sure that they are of Symbiodinium/Symbiodiniaceae origin despit them showing some degree of similarity to the reference sequences.'
+                             '\nA .fasta has been output which contains these sequences here:'
+                             '\n{}\n'.format(len(fasta_of_sig_sub_e_seqs), fasta_of_sig_sub_e_seqs_path))
+        else:
+            sys.stdout.write('There were no sub evalue sequences returned - hooray!')
 
-        print('\ndata_set ID is: {}'.format(dataSubmissionInQ.id))
-    print('data_set submission complete')
+    print('data_set ID is: {}'.format(dataSubmissionInQ.id))
     return dataSubmissionInQ.id
+    
 
 
 def generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ, e_value_multiP_dict, wkd):
@@ -1256,9 +1226,11 @@ def generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ,
         fasta_out_with_clade = make_evalue_screening_fasta_with_clade(dataSubmissionInQ, fasta_out, wkd)
         # this will return a new fasta containing only the sequences that were 'Symbiodinium' matches
         # we can then output this dictionary
-        writeListToDestination(wkd + '/below_e_cutoff_seqs_{}.fasta'.format(dSID), fasta_out_with_clade)
-        return fasta_out_with_clade
-    return False
+        path_to_fasta_out_with_clade = wkd + '/below_e_cutoff_seqs_{}.fasta'.format(dSID)
+        writeListToDestination(path_to_fasta_out_with_clade, fasta_out_with_clade)
+        return fasta_out_with_clade, path_to_fasta_out_with_clade
+    else:
+        return fasta_out, None
 
 
 def make_evalue_screening_fasta_with_clade(dataSubmissionInQ, fasta_out, wkd):
@@ -1337,9 +1309,11 @@ def processed_samples_status(dataSubmissionInQ, pathToInputFile):
 
 
 
-def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list):
+def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list, screen_sub_e):
     sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
 
+
+    #TODO we will only be modifying and screening if screen_sub_e is true
 
 
     # TODO this will all need to be taken into a loop that will continue so long as we don't find
@@ -1351,38 +1325,57 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
     # are good Symbiodinium sequences. Also only continue to execute if there are sequences in the below evalue list
     # if there are no sequences in this list then there are no sequences to screen.
 
-    # At this point we should create a back up of the current symClade db.
-    # first check to see that the backup dir is present
-    create_symClade_backup(dSID)
+    #TODO if we screen we want to report the new sequences added
+    # else we want to report how many seqs were found that need screening
 
-    found = True
-    while found :
-        # everytime that the execute_worker is run it pickles out the files needed for the next worker
+
+    # If we will be screening the seuqences
+    # At this point we should create a back up of the current symClade db.
+    # if not screening. no need to back up.
+    if screen_sub_e:
+        new_seqs_add_to_symClade_db_count = 0
+        create_symClade_backup(dSID)
+
+        found = True
+        while found :
+            # everytime that the execute_worker is run it pickles out the files needed for the next worker
+            e_value_multiP_dict = execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
+                                                                sampleFastQPairs, wkd)
+            if len(e_value_multiP_dict) == 0:
+                # then there are no sub_e_seqs to screen and we can exit
+                break
+
+            # this is where we will do the screening.
+            # the outcome of this should be an updated symClade.fa that we should then make a blastdb from
+            # if we indeed find that some of the sequences that were below the evalue cut off are symbiodinium
+            # then this should return True. else False.
+
+            # From the e_value_multiP_dict generate a fasta of the sequences that were found in more than 3 samples
+            # pass this to the screen_sub_e_seqs
+
+            # The number of samples a sequence must have been found in for us to consider it for screening is taken into
+            # account when the fasta is written out.
+            # This function will reuturn False if we end up with no sequences to screen
+            # It will outherwise reutrn the list that is the fasta that was written out.
+            fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ,
+                                                                                       e_value_multiP_dict, wkd)
+            # we only need to screen if we have a fasta to screen
+            if fasta_out:
+                # here found represents whether we found any of the seqs to be symbiodinium
+                # if found is returned then no change has been made to the symcladedb.
+                found, new_seqs = screen_sub_e_seqs(data_set_id=dSID, wkd=wkd)
+                new_seqs_add_to_symClade_db_count += new_seqs
+
+    else:
+        # if not doing the screening we can simply run the execute_worker_ta... once.
+        # during its run it will have output all of the files we need to run the following workers.
+        # we can also run the generate_and_write_below... function to write out a fast of significant sequences
+        # we can then report to the user using that object
         e_value_multiP_dict = execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
                                                             sampleFastQPairs, wkd)
-        if len(e_value_multiP_dict) == 0:
-            # then there are no sub_e_seqs to screen and we can exit
-            break
 
-        # this is where we will do the screening.
-        # the outcome of this should be an updated symClade.fa that we should then make a blastdb from
-        # if we indeed find that some of the sequences that were below the evalue cut off are symbiodinium
-        # then this should return True. else False.
-
-        # From the e_value_multiP_dict generate a fasta of the sequences that were found in more than 3 samples
-        # pass this to the screen_sub_e_seqs
-
-        # The number of samples a sequence must have been found in for us to consider it for screening is taken into
-        # account when the fasta is written out.
-        # This function will reuturn False if we end up with no sequences to screen
-        # It will outherwise reutrn the list that is the fasta that was written out.
-        found = generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ,
-                                                                                   e_value_multiP_dict, wkd)
-        # we only need to screen if we have a fasta to screen
-        if found:
-            # here found represents whether we found any of the seqs to be symbiodinium
-            # if found is returned then no change has been made to the symcladedb.
-            found = screen_sub_e_seqs(data_set_id=dSID, wkd=wkd)
+        fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ,
+                                                                                        e_value_multiP_dict, wkd)
 
 
     #TODO now do the setup for running the writing out of the screened samples..
@@ -1423,7 +1416,12 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
     for p in allProcesses:
         p.join()
 
-    return
+    if screen_sub_e:
+        # If we are screening then we want to be returning the number of seqs added
+        return new_seqs_add_to_symClade_db_count
+    else:
+        # if we are not screening then we want to return the fasta that contains the significant seqs
+        return fasta_out, fasta_out_path
 
 
 def create_symClade_backup(dSID):
@@ -1527,13 +1525,13 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,  full_p
         previous_reference_fasta = readDefinedFileToList(
             '{}/{}'.format(sym_db_dir, 'symClade.fa'))
 
+        combined_fasta = new_fasta + previous_reference_fasta
 
-        new_fasta += previous_reference_fasta
 
         # now that the reference db fasta has had the new sequences added to it.
         # write out to the db to the database directory of SymPortal
         full_path_to_new_db = '{}/symClade.fa'.format(sym_db_dir)
-        writeListToDestination(full_path_to_new_db, new_fasta)
+        writeListToDestination(full_path_to_new_db, combined_fasta)
 
 
         # run makeblastdb
@@ -1541,9 +1539,9 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,  full_p
             ['makeblastdb', '-in', full_path_to_new_db, '-dbtype', 'nucl', '-title', 'symClade'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        return True
+        return True, len(new_fasta)
     else:
-        return False
+        return False, 0
 
 
 def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc, sampleFastQPairs, wkd):
@@ -2030,7 +2028,7 @@ def worker_associate_QC_meta_data_to_samples(input_q, error_sample_list, wkd, da
         sys.stdout.write('{}: pre-MED processing completed\n'.format(sampleName))
     return
 
-def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd):
+def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue):
     # check to see whether the reference_fasta_database_used has been created
     # we no longer by default have the blast binaries already made so that we don't have to have them up on
     # github. As such if this is the first time or if there has been an update of something
@@ -2048,8 +2046,14 @@ def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd):
     # TODO now do the iterative screening
     # this should contain two parts, the screening and the handling of the screening results
     # it should also contain the writing out of the screened seqs.
-    taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd, numProc=numProc,
-                        error_sample_list=error_sample_list)
+    if screen_sub_evalue:
+        new_seqs_added_count = taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd,
+                                                   numProc=numProc, error_sample_list=error_sample_list,
+                                                   screen_sub_e=screen_sub_evalue)
+    else:
+        fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path = \
+            taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd, numProc=numProc,
+                                error_sample_list=error_sample_list, screen_sub_e=screen_sub_evalue)
 
     # At this point we should have the fasta names and group files written out.
     # now do the size screening
@@ -2064,7 +2068,10 @@ def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd):
     ### We also need to set initialDataProcessed to True
     dataSubmissionInQ.initialDataProcessed = True
     dataSubmissionInQ.save()
-    return
+    if screen_sub_evalue:
+        return new_seqs_added_count
+    else:
+        return fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path
 
 
 def execute_worker_initial_mothur(dSID, numProc, wkd):
