@@ -1214,7 +1214,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     print('data_set ID is: {}'.format(dataSubmissionInQ.id))
     return dataSubmissionInQ.id
-    
+
 
 
 def generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ, e_value_multiP_dict, wkd):
