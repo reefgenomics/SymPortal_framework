@@ -77,9 +77,14 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
 
     # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
     # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
+    # If we aer only going to have a legend that is cols x rows as shown below, then we should only use
+    # that many colours in the plotting.
+    max_n_cols = 8
+    max_n_rows = 7
+    num_leg_cells = max_n_cols * max_n_rows
     colour_dict = {}
     for i in range(len(ordered_list_of_seqs)):
-        if i < len(colour_palette):
+        if i < num_leg_cells:
             colour_dict[ordered_list_of_seqs[i]] = colour_palette[i]
         else:
             grey_index = i%len(grey_palette)
@@ -197,8 +202,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     # Let's plot the boxes and text that are going to make up the legend in another subplot that we will put underneath
     # the one we currenty have. So.. we will add a subplot when we initially create the figure. We will make the axis
     # 100 by 100 just to make our coordinate easy to work with. We can get rid of all of the axes lines and ticks
-    max_n_cols = 8
-    max_n_rows = 7
+
     # lets aim to plot a 10 by 10 legend max
     # we should start plotting in the top left working right and then down
     # until we have completed 100 sequences.
@@ -220,11 +224,15 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
 
     # go column by column
     # we can now calculate the actual number of columns and rows we are going to need.
-    if len(ordered_list_of_seqs) % max_n_cols != 0:
-        n_rows = int(len(ordered_list_of_seqs) / max_n_cols) + 1
+    if len(ordered_list_of_seqs) < num_leg_cells:
+        if len(ordered_list_of_seqs) % max_n_cols != 0:
+            n_rows = int(len(ordered_list_of_seqs) / max_n_cols) + 1
+        else:
+            n_rows = int(len(ordered_list_of_seqs) / max_n_cols)
+        last_row_len = len(ordered_list_of_seqs) % max_n_cols
     else:
-        n_rows = int(len(ordered_list_of_seqs) / max_n_cols)
-    last_row_len = len(ordered_list_of_seqs) % max_n_cols
+        n_rows = max_n_rows
+        last_row_len = max_n_cols
 
     sequence_count = 0
 
