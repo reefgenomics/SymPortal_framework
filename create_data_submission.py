@@ -1011,7 +1011,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,  full_p
     # Run local blast
     completedProcess = subprocess.run(
         ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', path_to_input_fasta, '-db', 'nt',
-         '-max_target_seqs', '10', '-num_threads', num_proc], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+         '-max_target_seqs', '10', '-num_threads', str(num_proc)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Read in blast output
     blast_output_file = readDefinedFileToList(blastOutputPath)
@@ -1065,7 +1065,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,  full_p
             ['makeblastdb', '-in', full_path_to_new_db, '-dbtype', 'nucl', '-title', 'symClade'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        return True, len(new_fasta)
+        return True, len(new_fasta)/2
     else:
         return False, 0
 
@@ -1464,7 +1464,8 @@ def write_out_clade_separated_fastas(wkd, numProc, dSID, error_sample_list):
     input_q = Queue()
 
     # the list that contains the sampleNames that have failed so far
-    error_sample_list_shared = Queue(error_sample_list)
+    worker_manager = Manager()
+    error_sample_list_shared = worker_manager.list(error_sample_list)
 
     # load up the input q
     for contigPair in sampleFastQPairs:
@@ -1495,7 +1496,8 @@ def associate_QC_meta_data_to_samples(wkd, numProc, dSID, error_sample_list):
     input_q = Queue()
 
     # the list that contains the sampleNames that have failed so far
-    error_sample_list_shared = Queue(error_sample_list)
+    worker_manager = Manager()
+    error_sample_list_shared = worker_manager.list(error_sample_list)
 
     # load up the input q
     for contigPair in sampleFastQPairs:
