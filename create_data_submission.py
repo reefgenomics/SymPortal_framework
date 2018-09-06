@@ -671,6 +671,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     ##### CLEAN UP tempData FOLDER #####
     # get rid of the entire temp folder rather than just the individual wkd for this data submission
     # just in case multiple
+    print('Cleaning up temp folders')
     dir_to_del = os.path.abspath('{}/tempData'.format(pathToInputFile))
     if os.path.exists(dir_to_del):
         shutil.rmtree(dir_to_del)
@@ -715,6 +716,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     ####### between sample distances ######
     if not noOrd:
+        print('Calculating between sample pairwise distances')
         PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
                                                         method='mothur', call_type='submission', output_dir=outputDir)
         ####### distance plotting #############
@@ -1612,7 +1614,7 @@ def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue):
     # this should contain two parts, the screening and the handling of the screening results
     # it should also contain the writing out of the screened seqs.
     if screen_sub_evalue:
-        new_seqs_added_count, discarded_seq_fasta = taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd,
+        new_seqs_added_count, discarded_seqs_fasta = taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd,
                                                    numProc=numProc, error_sample_list=error_sample_list,
                                                    screen_sub_e=screen_sub_evalue)
     else:
