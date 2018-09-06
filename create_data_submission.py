@@ -845,6 +845,10 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
     # At this point we should create a back up of the current symClade db.
     # if not screening. no need to back up.
     if screen_sub_e:
+        # TODO we should be able to make this much fasta by having a list that keeps track of which samples have
+        # already reported having 0 sequences thrown out due to being too divergent from reference sequences
+        # we should populate this list when we are checking a sample in execute_worker_taxa_screening
+        checked_samples = []
         new_seqs_add_to_symClade_db_count = 0
         create_symClade_backup(dSID)
 
@@ -856,8 +860,8 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
         found = True
         while found :
             # everytime that the execute_worker is run it pickles out the files needed for the next worker
-            e_value_multiP_dict = execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
-                                                                sampleFastQPairs, wkd)
+            e_value_multiP_dict, checked_samples = execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
+                                                                sampleFastQPairs, wkd, checked_samples)
             if len(e_value_multiP_dict) == 0:
                 # then there are no sub_e_seqs to screen and we can exit
                 break
@@ -882,6 +886,8 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
                 # if found is returned then no change has been made to the symcladedb.
                 found, new_seqs = screen_sub_e_seqs(data_set_id=dSID, wkd=wkd)
                 new_seqs_add_to_symClade_db_count += new_seqs
+            else:
+                found = False
 
     else:
         # if not doing the screening we can simply run the execute_worker_ta... once.
@@ -1065,12 +1071,12 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,  full_p
             ['makeblastdb', '-in', full_path_to_new_db, '-dbtype', 'nucl', '-title', 'symClade'],
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-        return True, len(new_fasta)/2
+        return True, int(len(new_fasta)/2)
     else:
         return False, 0
 
 
-def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc, sampleFastQPairs, wkd):
+def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc, sampleFastQPairs, wkd, checked_samples=None):
     # The error sample list is a list that houses the sample names that failed in the inital mothur QC worker
 
     # Create the queues that will hold the sample information
@@ -1089,6 +1095,10 @@ def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
     # Create an MP list of the error_sample_list so that we can use it thread safe.
     error_sample_list_shared = worker_manager.list(error_sample_list)
 
+    if checked_samples:
+        # list to check which of the samples have already had 0 seqs thown out initially
+        checked_samples_shared = worker_manager.list(checked_samples)
+
     # load up the input q
     for contigPair in sampleFastQPairs:
         input_q.put(contigPair)
@@ -1101,23 +1111,36 @@ def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
     db.connections.close_all()
     sys.stdout.write('\nPerforming QC\n')
     for n in range(numProc):
-        p = Process(target=worker_taxonomy_screening,
-                    args=(input_q, wkd, dataSubmissionInQ.reference_fasta_database_used,
-                          e_value_multiP_dict, error_sample_list_shared))
+        if checked_samples:
+            p = Process(target=worker_taxonomy_screening,
+                        args=(input_q, wkd, dataSubmissionInQ.reference_fasta_database_used,
+                              e_value_multiP_dict, error_sample_list_shared, checked_samples_shared))
+        else:
+            p = Process(target=worker_taxonomy_screening,
+                        args=(input_q, wkd, dataSubmissionInQ.reference_fasta_database_used,
+                              e_value_multiP_dict, error_sample_list_shared))
         allProcesses.append(p)
         p.start()
     for p in allProcesses:
         p.join()
-    return e_value_multiP_dict
+    if checked_samples:
+        return e_value_multiP_dict, list(checked_samples_shared)
+    else:
+        return e_value_multiP_dict
 
 
-def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_dict, err_smpl_list):
+def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_dict, err_smpl_list, checked_list=None):
 
     for contigPair in iter(input_q.get, 'STOP'):
         sampleName = contigPair.split('\t')[0].replace('[dS]','-')
         # If the sample gave an error during the inital mothur then we don't consider it here.
         if sampleName in err_smpl_list:
             continue
+        # A sample will be in this list if we have already performed this worker on it and it came
+        # up as having 0 sequences thrown out initially due to being too divergent from
+        if checked_list:
+            if sampleName in checked_list:
+                continue
 
         currentDir = r'{0}/{1}/'.format(wkd, sampleName)
         rootName = r'{0}stability'.format(sampleName)
@@ -1147,7 +1170,7 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
         # Set up environment for running local blast
 
         blastOutputPath = r'{}blast.out'.format(currentDir)
-        outputFmt = "6 qseqid sseqid staxids evalue"
+        outputFmt = "6 qseqid sseqid staxids evalue pident qcovs"
         inputPath = r'{}blastInputFasta.fa'.format(currentDir)
         os.chdir(currentDir)
 
@@ -1183,38 +1206,40 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
         already_processed_blast_seq_result = []
         for line in blastOutputFile:
             seqInQ = line.split('\t')[0]
+            identity = float(line.split('\t')[4])
+            coverage = float(line.split('\t')[5])
             if seqInQ in already_processed_blast_seq_result:
                 continue
             already_processed_blast_seq_result.append(seqInQ)
             try:
                 evaluePower = int(line.split('\t')[3].split('-')[1])
+                #TODO with the smallest sequences i.e. 185bp it is impossible to get above the 100 threshold
+                # even if there is an exact match. As such, we sould also look at the match identity and coverage
                 if evaluePower < 100:  # evalue cut off, collect sequences that don't make the cut
+                    if identity < 80 or coverage < 95:
+                        throwAwaySeqs.append(seqInQ)
+                        # incorporate the size cutoff here that would normally happen below
+                        if 184 < len(fastaDict[seqInQ]) < 310:
+                            if fastaDict[seqInQ] in e_val_collection_dict.keys():
+                                e_val_collection_dict[fastaDict[seqInQ]] += 1
+                            else:
+                                e_val_collection_dict[fastaDict[seqInQ]] = 1
+            except:
+                # here we weren't able to extract the evaluePower for some reason.
+                if identity < 80 or coverage < 95:
                     throwAwaySeqs.append(seqInQ)
-                    # incorporate the size cutoff here that would normally happen below
                     if 184 < len(fastaDict[seqInQ]) < 310:
                         if fastaDict[seqInQ] in e_val_collection_dict.keys():
                             e_val_collection_dict[fastaDict[seqInQ]] += 1
                         else:
                             e_val_collection_dict[fastaDict[seqInQ]] = 1
-            except:
-                # here we weren't able to extract the evaluePower for some reason.
-                throwAwaySeqs.append(seqInQ)
-                if 184 < len(fastaDict[seqInQ]) < 310:
-                    if fastaDict[seqInQ] in e_val_collection_dict.keys():
-                        e_val_collection_dict[fastaDict[seqInQ]] += 1
-                    else:
-                        e_val_collection_dict[fastaDict[seqInQ]] = 1
+
+        if checked_list:
+            # if we see that there were no seqs thrown away from this sample then we don't need to be checking it in
+            # the further iterations so we can add it to the checked_samples list
+            checked_list.append(sampleName)
 
         # here we will pickle out all of the items that we are going to need for the next worker.
-        # TODO gonna need:
-        # thowAway seqs
-        # output list
-        # nameDict
-        # fastaDict
-        # blastDict
-        # groupFile
-        # datasetsampleinstanceinQ
-
         pickle.dump(nameDict, open("{}/name_dict.pickle".format(currentDir), "wb"))
         pickle.dump(fastaDict, open("{}/fasta_dict.pickle".format(currentDir), "wb"))
         pickle.dump(throwAwaySeqs, open("{}/throw_away_seqs.pickle".format(currentDir), "wb"))
