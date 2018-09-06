@@ -1095,7 +1095,7 @@ def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
     # Create an MP list of the error_sample_list so that we can use it thread safe.
     error_sample_list_shared = worker_manager.list(error_sample_list)
 
-    if checked_samples:
+    if checked_samples != None:
         # list to check which of the samples have already had 0 seqs thown out initially
         checked_samples_shared = worker_manager.list(checked_samples)
 
@@ -1234,7 +1234,7 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
                         else:
                             e_val_collection_dict[fastaDict[seqInQ]] = 1
 
-        if checked_list:
+        if checked_list and not throwAwaySeqs:
             # if we see that there were no seqs thrown away from this sample then we don't need to be checking it in
             # the further iterations so we can add it to the checked_samples list
             checked_list.append(sampleName)
