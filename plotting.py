@@ -2,13 +2,16 @@
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
 import matplotlib.pyplot as plt
-from matplotlib.pyplot import *
+# from matplotlib.pyplot import *
 from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
 from collections import defaultdict
 import pandas as pd
 import random
 import os
+import numpy as np
+import sys
+plt.ioff()
 
 def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, data_sub_id_str):
     #/Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt

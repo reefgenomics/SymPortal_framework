@@ -455,15 +455,46 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
 
     tree_out_file_fconsense_sumtrees = '{}/consensus_tree_sumtrees.newick'.format(clade_wkd)
 
-
     completed_consensus = subprocess.run(
         ['sumtrees.py', '-F', 'newick', '--replace', '-o', tree_out_file_fconsense_sumtrees, in_file_fconsense],
         stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if completed_consensus.returncode != 0:
-        for line in completed_consensus.stdout.decode('utf-8'):
-            print(line)
-        for line in completed_consensus.sterr.decode('utf-8'):
-            print(line)
+        try:
+            if 'recursion' in completed_consensus.stdout.decode('utf-8'):
+                sys.exit('There has been a recursion depth error whilst trying to calculate a consensus tree\n'
+                         'This occured whilst calculating between sample distances.\n'
+                         'This problem occurs when trees are too big for sumtrees.py to process.\n'
+                         'This problem can often be solved by increasing the recursion limit used when running sumtrees.py\n'
+                         'The dafault value is 1000. This can be increased.\n'
+                         'To do this you need to edit the sumtrees.py file.\n'
+                         'To locate this file, try typing:\n'
+                         ' \'which sumtrees.py\'\n'
+                         'This should return the location of the sumtrees.py file\n'
+                         'After the line:\n'
+                         ' \'import json\'  '
+                         '\non a new line add: '
+                         '\n\'import sys\' '
+                         '\nand then on the next line:\n'
+                         'sys.setrecursionlimit(1500)\n'
+                         'Save changes and rerun.')
+
+        except:
+            sys.exit('There has likely been a recursion depth error whilst trying to calculate a consensus tree\n'
+                     'This occured whilst calculating between sample distances.\n'
+                     'This problem occurs when trees are too big for sumtrees.py to process.\n'
+                     'This problem can often be solved by increasing the recursion limit used when running sumtrees.py\n'
+                     'The dafault value is 1000. This can be increased.\n'
+                     'To do this you need to edit the sumtrees.py file.\n'
+                     'To locate this file, try typing:\n'
+                     ' \'which sumtrees.py\'\n'
+                     'This should return the location of the sumtrees.py file\n'
+                     'After the line:\n'
+                     ' \'import json\'  '
+                     '\non a new line add: '
+                     '\n\'import sys\' '
+                     '\nand then on the next line:\n'
+                     'sys.setrecursionlimit(1500)\n'
+                     'Save changes and rerun.')
 
 
     # The consunsus tree output by sumtree is causing problems because it contains metadata.
@@ -785,50 +816,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     return raw_dist_file, dist_file_path
 
 
-def mothur_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
-    ### MOTHUR TRIAL ###
-    list_of_tree_paths = []
-    for p in range(num_reps):
-        # convert the interleaved fasta to sequential fasta
-        interleaved_fast = readDefinedFileToList('{}{}'.format(fseqboot_base, p))
-        sequen_fast = convert_interleaved_to_sequencial_fasta(interleaved_fast)
-        writeListToDestination('{}{}.sequential.fasta'.format(fseqboot_base, p), sequen_fast)
-        mothur_batch_dist = \
-            ['set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
-             'dist.seqs(fasta={}, countends=T, output=square)'
-                 .format('{}{}.sequential.fasta'.format(fseqboot_base, p))]
-        mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_dist'.format(clade_wkd)
 
-        writeListToDestination(mothur_batch_path, mothur_batch_dist)
-
-        # now run the batch file with mothur
-        sys.stdout.write('\rcalculating distances')
-        completedProcess = \
-            subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-        # now run in clearcut
-        input = '{}{}.sequential.square.dist'.format(fseqboot_base, p)
-        mothur_batch_clearcut = \
-            ['set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
-             'clearcut(phylip={}, verbose=t)'
-                 .format(input)]
-
-        mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_clearcut'.format(clade_wkd)
-        writeListToDestination(mothur_batch_path, mothur_batch_clearcut)
-
-        completedProcess = \
-            subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        list_of_tree_paths.append(input.replace('.dist', '.tre'))
-
-    tree_out_file_fconsense_sumtrees = create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file)
-
-    perform_unifrac(clade_wkd, tree_out_file_fconsense_sumtrees)
-
-    dist_file_path = '{}/{}'.format(clade_wkd,
-                                    tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
-
-    raw_dist_file = readDefinedFileToList(dist_file_path)
-    return raw_dist_file
 
 
 # phylip method
