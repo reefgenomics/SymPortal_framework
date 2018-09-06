@@ -710,7 +710,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         sys.stdout.write('\nFigure generation complete')
         sys.stdout.write('\nFigures output to:')
         sys.stdout.write('\n{}'.format(svg_path))
-        sys.stdout.write('\n{}'.format(png_path))
+        sys.stdout.write('\n{}\n'.format(png_path))
 
 
 
