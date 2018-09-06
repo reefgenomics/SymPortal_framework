@@ -1111,7 +1111,7 @@ def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
     db.connections.close_all()
     sys.stdout.write('\nPerforming QC\n')
     for n in range(numProc):
-        if checked_samples:
+        if checked_samples != None:
             p = Process(target=worker_taxonomy_screening,
                         args=(input_q, wkd, dataSubmissionInQ.reference_fasta_database_used,
                               e_value_multiP_dict, error_sample_list_shared, checked_samples_shared))
@@ -1123,13 +1123,13 @@ def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
         p.start()
     for p in allProcesses:
         p.join()
-    if checked_samples:
+    if checked_samples != None:
         return e_value_multiP_dict, list(checked_samples_shared)
     else:
         return e_value_multiP_dict
 
 
-def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_dict, err_smpl_list, checked_list=None):
+def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_dict, err_smpl_list, checked_samples=None):
 
     for contigPair in iter(input_q.get, 'STOP'):
         sampleName = contigPair.split('\t')[0].replace('[dS]','-')
@@ -1138,8 +1138,8 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
             continue
         # A sample will be in this list if we have already performed this worker on it and it came
         # up as having 0 sequences thrown out initially due to being too divergent from
-        if checked_list:
-            if sampleName in checked_list:
+        if checked_samples != None:
+            if sampleName in checked_samples:
                 continue
 
         currentDir = r'{0}/{1}/'.format(wkd, sampleName)
@@ -1234,10 +1234,10 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
                         else:
                             e_val_collection_dict[fastaDict[seqInQ]] = 1
 
-        if checked_list and not throwAwaySeqs:
+        if checked_samples != None and not throwAwaySeqs:
             # if we see that there were no seqs thrown away from this sample then we don't need to be checking it in
             # the further iterations so we can add it to the checked_samples list
-            checked_list.append(sampleName)
+            checked_samples.append(sampleName)
 
         # here we will pickle out all of the items that we are going to need for the next worker.
         pickle.dump(nameDict, open("{}/name_dict.pickle".format(currentDir), "wb"))
