@@ -117,6 +117,11 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
             error = False
             with subprocess.Popen(['mothur', '{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, bufsize=1,
                                   universal_newlines=True) as p:
+                if p.returncode != 0:
+                    errorReason = 'error in inital QC'
+                    logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
+                    error_sample_list.append(sampleName)
+                    continue
                 for line in p.stdout:
                     # print(line)
                     if '[WARNING]: Blank fasta name, ignoring read.' in line:
