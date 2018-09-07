@@ -113,20 +113,27 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
             mBatchFilePath = r'{0}{1}{2}'.format(currentDir, 'mBatchFile', sampleName)
             writeListToDestination(mBatchFilePath, mBatchFile)
 
-
             error = False
+            # NB the mothur return code doesn't seem to work. We just get None type.
+            # apparently they have fixed this in the newest mothur but we have not upgraded to that yet.
+            # so for the time being we will check for error by hand in the stdout.
             with subprocess.Popen(['mothur', '{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, bufsize=1,
                                   universal_newlines=True) as p:
-                if p.returncode != 0:
-                    errorReason = 'error in inital QC'
-                    logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
-                    error_sample_list.append(sampleName)
-                    continue
+                # Here look for the specific blank fasta name warning (which should be interpreted as an error)
+                # and any other error that may be arising
+                # if found, log error.
                 for line in p.stdout:
                     # print(line)
                     if '[WARNING]: Blank fasta name, ignoring read.' in line:
                         p.terminate()
                         errorReason = 'Blank fasta name'
+                        logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
+                        error = True
+                        error_sample_list.append(sampleName)
+                        break
+                    if 'ERROR' in line:
+                        p.terminate()
+                        errorReason = 'error in inital QC'
                         logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
                         error = True
                         error_sample_list.append(sampleName)
@@ -191,7 +198,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
             completedProcess = subprocess.run(
                 ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            if completedProcess.returncode == 1:
+            if completedProcess.returncode == 1 or 'ERROR' in completedProcess.stdout.decode('utf-8'):
                 errorReason = 'error in inital QC'
                 logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
                 error_sample_list.append(sampleName)
@@ -1389,7 +1396,7 @@ def worker_screen_size(input_q, error_sample_list, wkd, dataSubID ):
         completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE,
                                           stderr=subprocess.PIPE)
 
-        if completedProcess.returncode == 1:
+        if completedProcess.returncode == 1 or 'ERROR' in completedProcess.stdout.decode('utf-8'):
             errorReason = 'No Symbiodinium sequences left after size screening'
             logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
             error_sample_list.put(sampleName)
