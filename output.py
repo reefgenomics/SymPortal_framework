@@ -198,21 +198,35 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # we already have the
 
     # need to work with proportions here so that we can compare type abundances betweeen samples
-    list_for_df = []
-    for an_type_key in across_clade_type_sample_abund_dict.keys():
-        list_for_df.append(across_clade_type_sample_abund_dict[an_type_key][1])
-    columns_for_df = 'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-            '\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples]))
-    sample_sorting_df = pd.DataFrame(list_for_df, columns=columns_for_df)
-    sample_sorting_df.set_index('ITS2 type profile', drop=False)
+    list_for_df_absolute = []
+    list_for_df_relative = []
 
-    # at this point we have the df.
+    # get list for the aboslute df
+    for an_type_key in across_clade_type_sample_abund_dict.keys():
+        list_for_df_absolute.append(across_clade_type_sample_abund_dict[an_type_key][0].split('\t'))
+
+    # get list for the relative df
+    for an_type_key in across_clade_type_sample_abund_dict.keys():
+        list_for_df_relative.append(across_clade_type_sample_abund_dict[an_type_key][1].split('\t'))
+
+    # headers can be same for each
+    columns_for_df =('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
+            '\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples]))).split('\t')
+
+    # make absolute
+    df_absolute = pd.DataFrame(list_for_df_absolute, columns=columns_for_df)
+    df_absolute.set_index('ITS2 type profile', drop=False, inplace=True)
+
+    df_relative = pd.DataFrame(list_for_df_relative, columns=columns_for_df)
+    df_relative.set_index('ITS2 type profile', drop=False, inplace=True)
+
+    # at this point we have both of the dfs. We will use the relative df for getting the ordered smpl list
     # now go sample by sample find the samples max type and add to the dictionary where key is types, and value
     # is list of tups, one for each sample which is sample name and rel_abund of the given type
     type_to_sample_abund_dict = defaultdict.list()
     typeless_samples_list = []
     for i in range(7, 7 + len(listOfDataSetSamples)):
-        sample_series = sample_sorting_df.iloc[:,i]
+        sample_series = df_relative.iloc[:,i].astype('float')
         max_type_pos = sample_series.values.argmax()
         max_type_label = sample_series.idxmax()
         rel_abund_of_max_type = sample_series[max_type_label]
@@ -225,7 +239,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # type, into the sorted sample list, addtionaly sorted by how abund the type was in each of the samples
     samples_that_have_been_sorted = []
     # we are only concerned with the types that had samples that had them as most abundant
-    for an_type_name in [at.name for at in sorted_analysis_type_abundance_list if at in type_to_sample_abund_dict.keys()]:
+    for an_type_name in [at.name for at in sorted_analysis_type_abundance_list if at.name in type_to_sample_abund_dict.keys()]:
         samples_that_have_been_sorted.extend([a[0] for a in sorted(type_to_sample_abund_dict[an_type_name], key=lambda x: x[1], reverse=True)])
 
     # here we should have a list of samples that have been sorted according to the types they were found to
@@ -233,91 +247,101 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # now we just need to add the samples that didn't have a type in them to be associated to. Negative etc.
     samples_that_have_been_sorted.extend(typeless_samples_list)
 
-    # now that we have the sorted list of types
-    # we want to extract some information
-    # For each sample, we want to have the abundance of each of the types in that sample in the order of the types
-    print('Collecting type abundances for samples:')
-    dataSetSample_to_type_abundance_dict = dict()
-    for i in range(len(listOfDataSetSamples)):
-        sys.stdout.write('\r{}'.format(listOfDataSetSamples[i]))
-        temp_abundance_list = []
-        for analysis_type_obj in sorted_analysis_type_abundance_list:
-            temp_abundance = int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1][i])
-            temp_abundance_list.append(temp_abundance)
-        dataSetSample_to_type_abundance_dict[listOfDataSetSamples[i]] = temp_abundance_list
+    # # now that we have the sorted list of types
+    # # we want to extract some information
+    # # For each sample, we want to have the abundance of each of the types in that sample in the order of the types
+    # print('Collecting type abundances for samples:')
+    # dataSetSample_to_type_abundance_dict = dict()
+    # for i in range(len(listOfDataSetSamples)):
+    #     sys.stdout.write('\r{}'.format(listOfDataSetSamples[i]))
+    #     temp_abundance_list = []
+    #     for analysis_type_obj in sorted_analysis_type_abundance_list:
+    #         temp_abundance = int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1][i])
+    #         temp_abundance_list.append(temp_abundance)
+    #     dataSetSample_to_type_abundance_dict[listOfDataSetSamples[i]] = temp_abundance_list
+    #
+    #
+    # # list of samples that have been added to the sorted list
+    # samples_that_have_been_sorted = []
+    #
+    # # for each analysis type in order of the most abundant types first
+    # sys.stdout.write('\n\nSorting samples according to ITS2 type profile abundances\n')
+    # for j in range(len(sorted_analysis_type_abundance_list)):
+    #     sys.stdout.write('\rSorting {}'.format(sorted_analysis_type_abundance_list[j]))
+    #     # go through all of the samples and if a sample has the type as its most abundant type
+    #     # then add it and its relative abundance of the type to to the below list
+    #     list_of_samples_containing_analysis_type = []
+    #     for data_set_sample_obj in dataSetSample_to_type_abundance_dict.keys():
+    #         if data_set_sample_obj not in samples_that_have_been_sorted:
+    #             # see if the type in question is the most abundant type in the sample in question
+    #             list_of_abundances = dataSetSample_to_type_abundance_dict[data_set_sample_obj]
+    #             abundance_of_type_in_sample = list_of_abundances[j]
+    #             if abundance_of_type_in_sample != 0:
+    #                 # then we need to see if this type is the most abundant in the sample
+    #                 if all(i <= abundance_of_type_in_sample for i in list_of_abundances):
+    #                     # then this type is the most abundant type in the sample and it should be added to the
+    #                     # list_of_samples_containing_analysis_type
+    #                     list_of_samples_containing_analysis_type.append(
+    #                         (data_set_sample_obj, abundance_of_type_in_sample / sum(list_of_abundances)))
+    #     # now that we've been through all of the samples for the given type
+    #     # we need to sort the list_of_samples_containing_analysis_type by the second value of the tuple
+    #     # we then need to add the samples in this order to the sample_that_have_been_sorted and remove them
+    #     # from the samples_still_to_be_sorted
+    #     sorted_list_of_samples_containing_analysis_type = sorted(list_of_samples_containing_analysis_type,
+    #                                                              key=lambda x: x[1], reverse=True)
+    #     sorted_list_of_samples_for_this_type = [a[0] for a in sorted_list_of_samples_containing_analysis_type]
+    #
+    #     for data_set_sample_obj in sorted_list_of_samples_for_this_type:
+    #         samples_that_have_been_sorted.append(data_set_sample_obj)
+    #
+    # # here the samples_that_have_been_sorted should be populated in the sorted order that we want
+    #
+    # # Here the samples we should be left with should be samples that don't have a type associated to them
+    # # negatives etc.
+    # samples_not_ordered = list(set(listOfDataSetSamples) - set(samples_that_have_been_sorted))
+    #
+    # # add these samples to the list
+    # samples_that_have_been_sorted.extend(samples_not_ordered)
 
+    # # these are the tables that the ITS2 type data will be stored in.
+    # outputTableOne.append(
+    #     'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
+    #         '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted])))
+    # outputTableTwo.append(
+    #     'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
+    #         '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted])))
 
-    # list of samples that have been added to the sorted list
-    samples_that_have_been_sorted = []
+    # rearange the sample columns so that they are in the new order
+    new_cols = ('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
+            '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted]))).split('\t')
+    df_absolute = df_absolute[new_cols]
+    df_relative = df_relative[new_cols]
 
-    # for each analysis type in order of the most abundant types first
-    sys.stdout.write('\n\nSorting samples according to ITS2 type profile abundances\n')
-    for j in range(len(sorted_analysis_type_abundance_list)):
-        sys.stdout.write('\rSorting {}'.format(sorted_analysis_type_abundance_list[j]))
-        # go through all of the samples and if a sample has the type as its most abundant type
-        # then add it and its relative abundance of the type to to the below list
-        list_of_samples_containing_analysis_type = []
-        for data_set_sample_obj in dataSetSample_to_type_abundance_dict.keys():
-            if data_set_sample_obj not in samples_that_have_been_sorted:
-                # see if the type in question is the most abundant type in the sample in question
-                list_of_abundances = dataSetSample_to_type_abundance_dict[data_set_sample_obj]
-                abundance_of_type_in_sample = list_of_abundances[j]
-                if abundance_of_type_in_sample != 0:
-                    # then we need to see if this type is the most abundant in the sample
-                    if all(i <= abundance_of_type_in_sample for i in list_of_abundances):
-                        # then this type is the most abundant type in the sample and it should be added to the
-                        # list_of_samples_containing_analysis_type
-                        list_of_samples_containing_analysis_type.append(
-                            (data_set_sample_obj, abundance_of_type_in_sample / sum(list_of_abundances)))
-        # now that we've been through all of the samples for the given type
-        # we need to sort the list_of_samples_containing_analysis_type by the second value of the tuple
-        # we then need to add the samples in this order to the sample_that_have_been_sorted and remove them
-        # from the samples_still_to_be_sorted
-        sorted_list_of_samples_containing_analysis_type = sorted(list_of_samples_containing_analysis_type,
-                                                                 key=lambda x: x[1], reverse=True)
-        sorted_list_of_samples_for_this_type = [a[0] for a in sorted_list_of_samples_containing_analysis_type]
+    # transpose
+    df_absolute = df_absolute.T
+    df_relative = df_relative.T
 
-        for data_set_sample_obj in sorted_list_of_samples_for_this_type:
-            samples_that_have_been_sorted.append(data_set_sample_obj)
-
-    # here the samples_that_have_been_sorted should be populated in the sorted order that we want
-
-    # Here the samples we should be left with should be samples that don't have a type associated to them
-    # negatives etc.
-    samples_not_ordered = list(set(listOfDataSetSamples) - set(samples_that_have_been_sorted))
-
-    # add these samples to the list
-    samples_that_have_been_sorted.extend(samples_not_ordered)
-
-    # these are the tables that the ITS2 type data will be stored in.
-    outputTableOne.append(
-        'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-            '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted])))
-    outputTableTwo.append(
-        'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-            '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted])))
-
-    # at this point we need to rearrange the data that is held in the current row strings
-    for analysis_type_obj in across_clade_sorted_type_order:
-        current_abundance_list_counts = across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1]
-        current_abundance_list_props = across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[7:-1]
-        new_abundance_list_counts = []
-        new_abundance_list_props = []
-        for new_sample in samples_that_have_been_sorted:
-            new_abundance_list_counts.append(current_abundance_list_counts[listOfDataSetSamples.index(new_sample)])
-            new_abundance_list_props.append(current_abundance_list_props[listOfDataSetSamples.index(new_sample)])
-
-        new_string_counts = '{}\t{}\t{}'.format(
-            '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[:7]),
-            '\t'.join(new_abundance_list_counts),
-            across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[-1])
-        new_sting_props = '{}\t{}\t{}'.format(
-            '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[:7]),
-            '\t'.join(new_abundance_list_props),
-            across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[-1])
-
-        outputTableOne.append(new_string_counts)
-        outputTableTwo.append(new_sting_props)
+    # # at this point we need to rearrange the data that is held in the current row strings
+    # for analysis_type_obj in across_clade_sorted_type_order:
+    #     current_abundance_list_counts = across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1]
+    #     current_abundance_list_props = across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[7:-1]
+    #     new_abundance_list_counts = []
+    #     new_abundance_list_props = []
+    #     for new_sample in samples_that_have_been_sorted:
+    #         new_abundance_list_counts.append(current_abundance_list_counts[listOfDataSetSamples.index(new_sample)])
+    #         new_abundance_list_props.append(current_abundance_list_props[listOfDataSetSamples.index(new_sample)])
+    #
+    #     new_string_counts = '{}\t{}\t{}'.format(
+    #         '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[:7]),
+    #         '\t'.join(new_abundance_list_counts),
+    #         across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[-1])
+    #     new_sting_props = '{}\t{}\t{}'.format(
+    #         '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[:7]),
+    #         '\t'.join(new_abundance_list_props),
+    #         across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[-1])
+    #
+    #     outputTableOne.append(new_string_counts)
+    #     outputTableTwo.append(new_sting_props)
 
     # At this point we should have gone through each of the clades in order and for each clade we should have
     # created an analysis_type row in order of the sortedListOfTypes.
@@ -326,17 +350,17 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # We want to reverse this as there will often be more samples than types
     # https://stackoverflow.com/questions/6473679/transpose-list-of-lists
 
-    # Put into list of lists format to transpose
-    newOutOne = [a.split('\t') for a in outputTableOne]
-    newOutTwo = [a.split('\t') for a in outputTableTwo]
-
-    # Transpose
-    outputTableOne = list(map(list, zip(*newOutOne)))
-    outputTableTwo = list(map(list, zip(*newOutTwo)))
-
-    # Put back into tab delim format
-    outputTableOne = ['\t'.join(a) for a in outputTableOne]
-    outputTableTwo = ['\t'.join(a) for a in outputTableTwo]
+    # # Put into list of lists format to transpose
+    # newOutOne = [a.split('\t') for a in outputTableOne]
+    # newOutTwo = [a.split('\t') for a in outputTableTwo]
+    #
+    # # Transpose
+    # outputTableOne = list(map(list, zip(*newOutOne)))
+    # outputTableTwo = list(map(list, zip(*newOutTwo)))
+    #
+    # # Put back into tab delim format
+    # outputTableOne = ['\t'.join(a) for a in outputTableOne]
+    # outputTableTwo = ['\t'.join(a) for a in outputTableTwo]
 
     outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
     os.makedirs(outputDir, exist_ok=True)
@@ -422,14 +446,14 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             species_set.update(analysis_type_obj.species.split(','))
 
     # put in the species reference title
-    outputTableOne.append('Species references')
-    outputTableTwo.append('Species references')
+    df_absolute.append('Species references')
+    df_relative.append('Species references')
 
     # now add the references for each of the associated species
     for species in species_set:
         if species in species_ref_dict.keys():
-            outputTableOne.append(species + '\t' + species_ref_dict[species])
-            outputTableTwo.append(species + '\t' + species_ref_dict[species])
+            df_absolute.append([species, species_ref_dict[species]])
+            df_relative.append([species, species_ref_dict[species]])
 
     # Now append the meta infromation for the output. i.e. the user running the analysis or the standalone
     # and the data_set submissions used in the analysis.
@@ -438,37 +462,42 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # or as a stand alone: call_type = 'stand_alone'
 
     if call_type == 'analysis':
-        meta_info_string_items = [
-            'Output as part of data_analysis ID: {}\t'
-            'Number of data_set objects as part of analysis = {}\t'
-            'submitting_user: {}\ttime_stamp {}'.format(
-                analysisobj.id, len(querySetOfDataSubmissions), analysisobj.submittingUser, analysisobj.timeStamp)]
+        meta_info_string_items = ['Output as part of data_analysis ID: {}'.format(analysisobj.id),
+                                  'Number of data_set objects as part of analysis = {}'.format(len(querySetOfDataSubmissions)),
+                                  'submitting_user: {}'.format(analysisobj.submittingUser),
+                                  'time_stamp {}'.format(analysisobj.timeStamp)]
+        df_absolute.append(meta_info_string_items)
+        df_relative.append(meta_info_string_items)
         for data_set_object in querySetOfDataSubmissions:
-            meta_info_string_items.append(
-                'Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id,
-                                                                              data_set_object.submittingUser,
-                                                                              data_set_object.timeStamp))
+            data_set_meta_list = ['Data_set ID: {}'.format(data_set_object.id),
+                                          'submitting_user: {}'.format(data_set_object.submittingUser),
+                                          'time_stamp: {}'.format(data_set_object.timeStamp)]
+            df_absolute.append(data_set_meta_list)
+            df_relative.append(data_set_meta_list)
     else:
         # call_type=='stand_alone'
         meta_info_string_items = [
-            'Stand_alone output by {} on {}\tdata_analysis ID: {}\t'
-            'Number of data_set objects as part of output = {}'
-                .format(output_user, str(datetime.now()), analysisobj.id, len(querySetOfDataSubmissions))]
+            'Stand_alone output by {} on {}'.format(output_user, str(datetime.now())),
+            'data_analysis ID: {}'.format(analysisobj.id),
+            'Number of data_set objects as part of output = {}'.format(len(querySetOfDataSubmissions))]
 
         for data_set_object in querySetOfDataSubmissions:
-            meta_info_string_items.append(
-                'Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id,
-                                                                              data_set_object.submittingUser,
-                                                                              data_set_object.timeStamp))
+            meta_info_string_items=[
+                'Data_set ID: {}'.format(data_set_object.id),
+                'submitting_user: {}'.format(data_set_object.submittingUser),
+                'time_stamp: {}'.format(data_set_object.timeStamp)]
+            df_absolute.append(meta_info_string_items)
+            df_relative.append(meta_info_string_items)
 
-    path_to_profiles_absolute = '{}/{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, '_'.join(
-        [str(a) for a in dataSubmissionsToOutput]))
-    writeListToDestination(path_to_profiles_absolute, outputTableOne)
+    date_time_string = str(datetime.now())
+    path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
+    df_absolute.to_csv(path_to_profiles_absolute, sep="\t")
+    # writeListToDestination(path_to_profiles_absolute, outputTableOne)
     output_files_list.append(path_to_profiles_absolute)
 
-    path_to_profiles_rel = '{}/{}_{}.profiles.relative.txt'.format(outputDir, analysisObj.id,
-                                                                   '_'.join([str(a) for a in dataSubmissionsToOutput]))
-    writeListToDestination(path_to_profiles_rel, outputTableTwo)
+    path_to_profiles_rel = '{}/{}_{}_{}.profiles.relative.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
+    df_relative.to_csv(path_to_profiles_rel, sep="\t")
+    # writeListToDestination(path_to_profiles_rel, outputTableTwo)
     output_files_list.append(path_to_profiles_rel)
 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
@@ -614,11 +643,11 @@ def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_
         typeAbundAndSDString = getAbundStr(TotList, SDList, majList)
 
         sequenceAccession = typeInQ.generateName(accession=True)
-        rowOne = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
+        rowOne = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
                                                              species, str(typeAbundance), str(globalCount), typeProfile,
                                                              '\t'.join([str(a) for a in dataRowRaw]),
                                                              sequenceAccession, typeAbundAndSDString)
-        rowTwo = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
+        rowTwo = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
                                                              species, str(typeAbundance), str(globalCount), typeProfile,
                                                              '\t'.join(["{:.3f}".format(prop) for prop in
                                                                         dataRowProp]), sequenceAccession,
