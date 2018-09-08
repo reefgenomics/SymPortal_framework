@@ -131,7 +131,7 @@ class data_set_sample(models.Model):
 
 class data_analysis(models.Model):
     # This will be a jsoned list of IDs of the dataSubmissions that are included in this analysis
-    listOfDataSubmissions = models.CharField(max_length=100, null=True)
+    listOfDataSubmissions = models.CharField(max_length=500, null=True)
     withinCladeCutOff = models.FloatField(default=0.04)
     typeSupport = models.FloatField(default=0.01)
     cladeCollectionPopulationComplete = models.BooleanField(default=False)
@@ -737,10 +737,10 @@ class reference_sequence(models.Model):
     sequence = models.CharField(max_length=500)
     accession = models.CharField(max_length=50, null=True)
     def __str__(self):
-        if self.name == 'noName':
-            return '{}'.format(self.id)
-        else:
+        if self.hasName:
             return self.name
+        else:
+            return '{}'.format(self.id)
 
 
 class data_set_sample_sequence(models.Model):
@@ -752,9 +752,9 @@ class data_set_sample_sequence(models.Model):
 
 
     def __str__(self):
-        try:
+        if self.referenceSequenceOf.hasName:
             return self.referenceSequenceOf.name
-        except:
+        else:
             return 'ID=' + self.id
 
 

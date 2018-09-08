@@ -43,6 +43,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
 
     at = set()
     for cct in cladeCollectionTypesFromThisAnalysisObjAndDataSubmission:
+        sys.stdout.write('\rCollecting analysis_type from clade collection type {}'.format(cct))
         at.add(cct.analysisTypeOf)
     at = list(at)
 
@@ -78,7 +79,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # Go clade by clade
     for i in range(len(typesCladalList)):
         if typesCladalList[i]:
-
+            cladeInQ = cladeList[i]
             ###### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
             #     # For each type we want to calculate the average proportions of the defining seqs in that type
             #     # We will also calculate an SD.
@@ -106,11 +107,32 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             # data once the MPing has been done.
 
             # This dict will hold all of the output rows that the MPing has created.
-            typeOutputManager = Manager()
-            typeOutputManagedDict = typeOutputManager.dict({type: None for type in sortedListOfTypes})
+            worker_manager = Manager()
+            typeOutputManagedDict = worker_manager.dict({type: None for type in sortedListOfTypes})
 
-            listOfDataSetSamplesManager = Manager()
-            listOfDataSetSamplesManagedList = listOfDataSetSamplesManager.list(listOfDataSetSamples)
+
+            #NB using shared items was considerably slowing us down so now I will just use copies of items
+            # we don't actually need to use managed items as they don't really need to be shared (i.e. input
+            # from different processes.
+            # a list that is the IDs of each of the samples in the analyis
+            sample_IDs_list = [smp.id for smp in listOfDataSetSamples]
+            # listOfDataSetSampleIDsManagedList = worker_manager.list(sample_IDs_list)
+
+            # A corresponding dictionary that is the list of the clade collection IDs for each of the samples
+            # that are in the ID list above.
+            sample_ID_to_cc_IDs_of_clade = {}
+            print('\nCreating sample_ID_to_cc_IDs dictionary clade {}'.format(cladeInQ))
+            for smp in listOfDataSetSamples:
+                sys.stdout.write('\rCollecting clade collections for sample {}'.format(smp))
+                try:
+                    sample_ID_to_cc_IDs_of_clade[smp.id] = clade_collection.objects.get(dataSetSampleFrom=smp,
+                                                                                        clade=cladeInQ).id
+                except clade_collection.DoesNotExist:
+                    sample_ID_to_cc_IDs_of_clade[smp.id] = None
+                except Exception as ex:  # Just incase there is some weird stuff going on
+                    print(ex)
+            # sample_ID_to_cc_ID_of_clade_shared = worker_manager.dict(sample_ID_to_cc_IDs_of_clade)
+
 
             typeInputQueue = Queue()
 
@@ -129,7 +151,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             sys.stdout.write('\nCalculating ITS2 type profile abundances clade {}\n'.format(cladeList[i]))
             for N in range(numProcessors):
                 p = Process(target=outputWorkerOne,
-                            args=(typeInputQueue, listOfDataSetSamplesManagedList, typeOutputManagedDict))
+                            args=(typeInputQueue, sample_IDs_list, typeOutputManagedDict, sample_ID_to_cc_IDs_of_clade))
                 allProcesses.append(p)
                 p.start()
 
@@ -168,19 +190,62 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # now we can sort this list according to the abundance and this will give us the order of types that we want
     sorted_analysis_type_abundance_list = [a[0] for a in sorted(type_to_abund_list, key=lambda x: x[1], reverse=True)]
 
+    # TODO I think we should try to improve this as it is currently horrifically slow.
+    # currently for each sample we collect the abundances of the types for each type. Not sure why
+    # then for each analysis type we go through these samples and pull out the samples
+    # that had it as it maj type. We then sort these samples based on the abundance of that type. crazy.
+    # I think we can pandas this.
+    # we already have the
+
+    # need to work with proportions here so that we can compare type abundances betweeen samples
+    list_for_df = []
+    for an_type_key in across_clade_type_sample_abund_dict.keys():
+        list_for_df.append(across_clade_type_sample_abund_dict[an_type_key][1])
+    columns_for_df = 'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
+            '\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples]))
+    sample_sorting_df = pd.DataFrame(list_for_df, columns=columns_for_df)
+    sample_sorting_df.set_index('ITS2 type profile', drop=False)
+
+    # at this point we have the df.
+    # now go sample by sample find the samples max type and add to the dictionary where key is types, and value
+    # is list of tups, one for each sample which is sample name and rel_abund of the given type
+    type_to_sample_abund_dict = defaultdict.list()
+    typeless_samples_list = []
+    for i in range(7, 7 + len(listOfDataSetSamples)):
+        sample_series = sample_sorting_df.iloc[:,i]
+        max_type_pos = sample_series.values.argmax()
+        max_type_label = sample_series.idxmax()
+        rel_abund_of_max_type = sample_series[max_type_label]
+        if not rel_abund_of_max_type > 0:
+            typeless_samples_list.append(sample_series.name)
+        type_to_sample_abund_dict[max_type_label].append((sample_series.name, rel_abund_of_max_type))
+
+    # here we have the dictionary populated. We can now go type by type according
+    # to the sorted_analysis_type_abundance_list and put the samples that had the given type as their most abundant
+    # type, into the sorted sample list, addtionaly sorted by how abund the type was in each of the samples
+    samples_that_have_been_sorted = []
+    # we are only concerned with the types that had samples that had them as most abundant
+    for an_type_name in [at.name for at in sorted_analysis_type_abundance_list if at in type_to_sample_abund_dict.keys()]:
+        samples_that_have_been_sorted.extend([a[0] for a in sorted(type_to_sample_abund_dict[an_type_name], key=lambda x: x[1], reverse=True)])
+
+    # here we should have a list of samples that have been sorted according to the types they were found to
+    # have as their most abundant
+    # now we just need to add the samples that didn't have a type in them to be associated to. Negative etc.
+    samples_that_have_been_sorted.extend(typeless_samples_list)
+
     # now that we have the sorted list of types
     # we want to extract some information
     # For each sample, we want to have the abundance of each of the types in that sample in the order of the types
+    print('Collecting type abundances for samples:')
     dataSetSample_to_type_abundance_dict = dict()
     for i in range(len(listOfDataSetSamples)):
+        sys.stdout.write('\r{}'.format(listOfDataSetSamples[i]))
         temp_abundance_list = []
         for analysis_type_obj in sorted_analysis_type_abundance_list:
             temp_abundance = int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1][i])
             temp_abundance_list.append(temp_abundance)
         dataSetSample_to_type_abundance_dict[listOfDataSetSamples[i]] = temp_abundance_list
 
-    # list of samples that still need to be sorted
-    samples_still_to_be_sorted = listOfDataSetSamples
 
     # list of samples that have been added to the sorted list
     samples_that_have_been_sorted = []
@@ -436,21 +501,23 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
 def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_types,
                                                               clade_collection_types_in_current_output):
     # create a list of tupples that is the type ID and the number of this output's CCs that it was found in.
-
+    sys.stdout.write('\nSorting types by abundance of clade collections\n')
     tuple_list = []
-    clade_collections_in_current_output = [clade_collection_type_obj.cladeCollectionFoundIn.id for
+    clade_collections_ID_in_current_output = [clade_collection_type_obj.cladeCollectionFoundIn.id for
                                            clade_collection_type_obj in clade_collection_types_in_current_output]
     for at in list_of_analysis_types:
+        sys.stdout.write('\rCounting for type {}'.format(at))
         list_of_clade_collections_found_in = [int(x) for x in at.listOfCladeCollections.split(',')]
         num_clade_collections_of_output = list(
-            set(clade_collections_in_current_output).intersection(list_of_clade_collections_found_in))
+            set(clade_collections_ID_in_current_output).intersection(list_of_clade_collections_found_in))
         tuple_list.append((at.id, len(num_clade_collections_of_output)))
 
     type_IDs_sorted = sorted(tuple_list, key=lambda x: x[1], reverse=True)
 
     return [analysis_type.objects.get(id=x[0]) for x in type_IDs_sorted]
 
-def outputWorkerOne(input, listOfDataSetSamples, outputDict):
+def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_of_clade_ID):
+    num_samples = len(listOfDataSetSample_IDs)
     for anType in iter(input.get, 'STOP'):  # Within each type go through each of the samples
 
         sys.stdout.write('\rprocessing ITS2 type profile: {}'.format(anType))
@@ -467,21 +534,18 @@ def outputWorkerOne(input, listOfDataSetSamples, outputDict):
         # or whether we should only represent the averages of samples found in this dataset.
         # I think it needs to be a global average. Because the type is defined based on all samples in the
         # SymPortal db.
-        averageList = [[] for defseq in orderedFootPrintlist]
-        for a in range(len(footprintAbundances)):
-            for b in range(len(orderedFootPrintlist)):
-                averageList[b].append(float(int(footprintAbundances[a][b]) / sum(footprintAbundances[a])))
-        # Here we have a list for each def seq (as proportions), this can now have totals, SDs and averages calculated on it
-        # then convert to proportions by dividing by total
-        SDList = []
-        TotList = []
 
-        for a in range(len(averageList)):
-            SDList.append(statistics.pstdev(averageList[a]))
-            TotList.append(sum(averageList[a]))
-        tot = sum(TotList)
-        for a in range(len(TotList)):
-            TotList[a] = TotList[a] / tot
+        # Calculate the average proportion of each DIV as a proportion of the absolute abundances of the divs
+        # of the type within the samples the type is found in
+        div_abundance_df = pd.DataFrame(footprintAbundances)
+        # https://stackoverflow.com/questions/26537878/pandas-sum-across-columns-and-divide-each-cell-from-that-value
+        # convert each cell to a proportion as a function of the sum of the row
+        div_abundance_df_proportion = div_abundance_df.div(div_abundance_df.sum(axis=1),
+                                                           axis=0)
+        div_abundance_df_proportion_T = div_abundance_df_proportion.T
+
+        TotList = list(div_abundance_df_proportion_T.mean(axis=1))
+        SDList = list(div_abundance_df_proportion_T.std(axis=1))
 
         # The TotList now contains the proportions of each def seq
         # The SDList now contains the SDs for each of the def seqs proportions
@@ -495,42 +559,47 @@ def outputWorkerOne(input, listOfDataSetSamples, outputDict):
         clade = typeInQ.clade
 
         # For each type create a holder that will hold 0s for each sample until populated below
-        dataRowRaw = [0 for smpl in listOfDataSetSamples]
-        dataRowProp = [0 for smpl in listOfDataSetSamples]
+        dataRowRaw = [0 for smpl in range(num_samples)]
+        dataRowProp = [0 for smpl in range(num_samples)]
         typeCCIDs = [int(a) for a in typeInQ.listOfCladeCollections.split(',')]
 
         # We also need the type abund db value. We can get this from the type cladeCollections
         globalCount = len(typeCCIDs)
 
-        for k in range(len(listOfDataSetSamples)):  # Within each type go through each of the samples
-            # when looking at sample, get the clade collections found in the sample
-            CCsInSample = clade_collection.objects.filter(dataSetSampleFrom=listOfDataSetSamples[k])
-            # because we are within a clade here the type can only have one cladecollection in common with the sample
-            # so check to see if there are any items in common between the type's CC list and the samples CC
-            ccInSampleIDs = [a.id for a in CCsInSample]
+        # Within each type go through each of the samples
+        # TODO do we really have to go through every sample? I don't think so.
+        # Because we have only one cc ID per sample we can simply identify the
+        # sample ID (keys) in the sample_ID_to_cc_of_clade_ID dict where the cc ID (value) is found in the typeCCIDs.
+        IDs_of_samples_that_had_type = [smp_id for smp_id in listOfDataSetSample_IDs if
+                                        sample_ID_to_cc_of_clade_ID[smp_id] in typeCCIDs]
+        for ID in IDs_of_samples_that_had_type:
+            abundanceCount += 1
+            # Need to work out how many seqs were found from the sample for this type
+            # Also need to work this out as a proportion of all of the Symbiodinium seqs found in the sample
+            try:
+                ccInQ_ID = sample_ID_to_cc_of_clade_ID[ID]
+            except:
+                apples = 'asdf'
 
-            IDsInCommon = list(set(ccInSampleIDs).intersection(typeCCIDs))
-            if IDsInCommon:  # Then this type was found in this sample
-                abundanceCount += 1
-                # Need to work out how many seqs were found from the sample for this type
-                # Also need to work this out as a proportion of all of the Symbiodinium seqs found in the sample
-                ccInQ = clade_collection.objects.get(id=IDsInCommon[0])
+            # The number of sequences that were returned for the sample in question
+            try:
+                totSeqNum = data_set_sample.objects.get(id=ID).finalTotSeqNum
+            except:
+                apples = 'asdf'
 
-                # The number of sequences that were returned for the sample in question
-                totSeqNum = data_set_sample.objects.get(clade_collection=ccInQ).finalTotSeqNum
-
-                # The number of sequences that make up the type in q
-                # The index of the CC in the type's listOfCladeCollections
-                CCindexInType = typeCCIDs.index(ccInQ.id)
-                # List containing the abundances of each of the ref seqs that make up the type in the given CC
-                seqAbundanceInfoForCCandTypeInQ = json.loads(typeInQ.footprintSeqAbundances)[CCindexInType]
-                # total of the above list, i.e. seqs in type
-                sumOfDefRefSeqAbundInType = sum(seqAbundanceInfoForCCandTypeInQ)
-                # type abundance as proportion of the total seqs found in the sample
-                typeProp = sumOfDefRefSeqAbundInType / totSeqNum
-                # Now populate the dataRow with the sumOfDefRefSeqAbundInType and the typeProp
-                dataRowRaw[k] = sumOfDefRefSeqAbundInType
-                dataRowProp[k] = typeProp
+            # The number of sequences that make up the type in q
+            # The index of the CC in the type's listOfCladeCollections
+            CCindexInType = typeCCIDs.index(ccInQ_ID)
+            # List containing the abundances of each of the ref seqs that make up the type in the given CC
+            seqAbundanceInfoForCCandTypeInQ = json.loads(typeInQ.footprintSeqAbundances)[CCindexInType]
+            # total of the above list, i.e. seqs in type
+            sumOfDefRefSeqAbundInType = sum(seqAbundanceInfoForCCandTypeInQ)
+            # type abundance as proportion of the total seqs found in the sample
+            typeProp = sumOfDefRefSeqAbundInType / totSeqNum
+            # Now populate the dataRow with the sumOfDefRefSeqAbundInType and the typeProp
+            index_of_sample_ID_in_listOfDataSetSample_IDs = listOfDataSetSample_IDs.index(ID)
+            dataRowRaw[index_of_sample_ID_in_listOfDataSetSample_IDs] = sumOfDefRefSeqAbundInType
+            dataRowProp[index_of_sample_ID_in_listOfDataSetSample_IDs] = typeProp
 
         # Type Profile
         typeID = anType.id
@@ -561,8 +630,7 @@ def outputWorkerOne(input, listOfDataSetSamples, outputDict):
         outputDict[anType] = [rowOne, rowTwo]
 
 def getMajList(atype):
-    if str(atype) in ['D1/D2-D4', 'D1/D6/D2.2-D4', 'B5/B5e-B5a-B5b']:
-        apples = 'asdf'
+
     # This is a little tricky. Have to take into account that the Maj seqs are not always more abundant
     # than the non-Maj seqs.
     # e.g. type B5/B5e-B5a-B5b, B5e is acutally the least abundant of the seqs
@@ -579,9 +647,8 @@ def getMajList(atype):
         for item in range(len(seqsInOrderOfAbunIDs)):
             if seqsInOrderOfAbunIDs[item] in majSeqsIDs:
                 maj_seq_obj = reference_sequence.objects.get(id=int(seqsInOrderOfAbunIDs[item]))
-                maj_seq_obj_name = maj_seq_obj.name
-                if maj_seq_obj_name != 'noName':
-                    majList.append(maj_seq_obj_name)
+                if maj_seq_obj.hasName:
+                    majList.append(maj_seq_obj.name)
                 else:
                     majList.append(str(maj_seq_obj.id))
                 del seqsInOrderOfAbunIDs[item]
