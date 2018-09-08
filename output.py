@@ -223,7 +223,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # at this point we have both of the dfs. We will use the relative df for getting the ordered smpl list
     # now go sample by sample find the samples max type and add to the dictionary where key is types, and value
     # is list of tups, one for each sample which is sample name and rel_abund of the given type
-    type_to_sample_abund_dict = defaultdict.list()
+    type_to_sample_abund_dict = defaultdict(list)
     typeless_samples_list = []
     for i in range(7, 7 + len(listOfDataSetSamples)):
         sample_series = df_relative.iloc[:,i].astype('float')
@@ -313,7 +313,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
 
     # rearange the sample columns so that they are in the new order
     new_cols = ('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-            '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted]))).split('\t')
+            '\t'.join(samples_that_have_been_sorted))).split('\t')
     df_absolute = df_absolute[new_cols]
     df_relative = df_relative[new_cols]
 
@@ -446,14 +446,18 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             species_set.update(analysis_type_obj.species.split(','))
 
     # put in the species reference title
-    df_absolute.append('Species references')
-    df_relative.append('Species references')
+    temp_series = pd.Series()
+    temp_series.name = 'Species references'
+    df_absolute = df_absolute.append(temp_series)
+    df_relative = df_relative.append(temp_series)
 
     # now add the references for each of the associated species
     for species in species_set:
         if species in species_ref_dict.keys():
-            df_absolute.append([species, species_ref_dict[species]])
-            df_relative.append([species, species_ref_dict[species]])
+            temp_series = pd.Series([species_ref_dict[species]], index=[list(df_relative)[0]])
+            temp_series.name = species
+            df_absolute = df_absolute.append(temp_series)
+            df_relative = df_relative.append(temp_series)
 
     # Now append the meta infromation for the output. i.e. the user running the analysis or the standalone
     # and the data_set submissions used in the analysis.
@@ -462,32 +466,53 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # or as a stand alone: call_type = 'stand_alone'
 
     if call_type == 'analysis':
-        meta_info_string_items = ['Output as part of data_analysis ID: {}'.format(analysisobj.id),
-                                  'Number of data_set objects as part of analysis = {}'.format(len(querySetOfDataSubmissions)),
-                                  'submitting_user: {}'.format(analysisobj.submittingUser),
-                                  'time_stamp {}'.format(analysisobj.timeStamp)]
-        df_absolute.append(meta_info_string_items)
-        df_relative.append(meta_info_string_items)
+
+        temp_series.name = species
+        meta_info_string_items = ['Output as part of data_analysis ID: {}; '
+                                  'Number of data_set objects as part of analysis = {}; '
+                                  'submitting_user: {}; '
+                                  'time_stamp {}'
+                                      .format(analysisobj.id,
+                                              len(querySetOfDataSubmissions),
+                                              analysisobj.submittingUser,
+                                              analysisobj.timeStamp)]
+        temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]])
+        temp_series.name = 'meta_info_summary'
+        df_absolute = df_absolute.append(temp_series)
+        df_relative = df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
-            data_set_meta_list = ['Data_set ID: {}'.format(data_set_object.id),
-                                          'submitting_user: {}'.format(data_set_object.submittingUser),
-                                          'time_stamp: {}'.format(data_set_object.timeStamp)]
-            df_absolute.append(data_set_meta_list)
-            df_relative.append(data_set_meta_list)
+            data_set_meta_list = ['Data_set ID: {}; '
+                                  'submitting_user: {}; '
+                                  'time_stamp: {}'
+                                      .format(data_set_object.id,
+                                              data_set_object.submittingUser,
+                                              data_set_object.timeStamp)]
+            temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]])
+            temp_series.name = 'data_set_info'
+            df_absolute = df_absolute.append(temp_series)
+            df_relative = df_relative.append(temp_series)
     else:
         # call_type=='stand_alone'
         meta_info_string_items = [
-            'Stand_alone output by {} on {}'.format(output_user, str(datetime.now())),
-            'data_analysis ID: {}'.format(analysisobj.id),
-            'Number of data_set objects as part of output = {}'.format(len(querySetOfDataSubmissions))]
-
+            'Stand_alone output by {} on {}; '
+            'data_analysis ID: {}; '
+            'Number of data_set objects as part of output = {}'
+                .format(output_user, str(datetime.now()), analysisobj.id, len(querySetOfDataSubmissions))]
+        temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]])
+        temp_series.name = 'meta_info_summary'
+        df_absolute = df_absolute.append(temp_series)
+        df_relative = df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
-            meta_info_string_items=[
-                'Data_set ID: {}'.format(data_set_object.id),
-                'submitting_user: {}'.format(data_set_object.submittingUser),
-                'time_stamp: {}'.format(data_set_object.timeStamp)]
-            df_absolute.append(meta_info_string_items)
-            df_relative.append(meta_info_string_items)
+            data_set_meta_list = ['Data_set ID: {}; '
+                                  'submitting_user: {}; '
+                                  'time_stamp: {}'
+                                      .format(data_set_object.id,
+                                              data_set_object.submittingUser,
+                                              data_set_object.timeStamp)]
+            temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]])
+            temp_series.name = 'data_set_info'
+            df_absolute = df_absolute.append(temp_series)
+            df_relative = df_relative.append(temp_series)
 
     date_time_string = str(datetime.now())
     path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
