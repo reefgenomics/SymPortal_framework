@@ -376,8 +376,6 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # or as a stand alone: call_type = 'stand_alone'
 
     if call_type == 'analysis':
-
-        temp_series.name = species
         meta_info_string_items = ['Output as part of data_analysis ID: {}; '
                                   'Number of data_set objects as part of analysis = {}; '
                                   'submitting_user: {}; '
@@ -386,10 +384,10 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
                                               len(querySetOfDataSubmissions),
                                               analysisobj.submittingUser,
                                               analysisobj.timeStamp)]
-        temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]])
-        temp_series.name = 'meta_info_summary'
+        temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]], name='meta_info_summary')
         df_absolute = df_absolute.append(temp_series)
         df_relative = df_relative.append(temp_series)
+
         for data_set_object in querySetOfDataSubmissions:
             data_set_meta_list = ['Data_set ID: {}; '
                                   'submitting_user: {}; '
@@ -397,8 +395,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
                                       .format(data_set_object.id,
                                               data_set_object.submittingUser,
                                               data_set_object.timeStamp)]
-            temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]])
-            temp_series.name = 'data_set_info'
+            temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]], name='data_set_info')
             df_absolute = df_absolute.append(temp_series)
             df_relative = df_relative.append(temp_series)
     else:
@@ -408,8 +405,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             'data_analysis ID: {}; '
             'Number of data_set objects as part of output = {}'
                 .format(output_user, str(datetime.now()).replace(' ', '_'), analysisobj.id, len(querySetOfDataSubmissions))]
-        temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]])
-        temp_series.name = 'meta_info_summary'
+        temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]], name='meta_info_summary')
         df_absolute = df_absolute.append(temp_series)
         df_relative = df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
@@ -419,15 +415,13 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
                                       .format(data_set_object.id,
                                               data_set_object.submittingUser,
                                               data_set_object.timeStamp)]
-            temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]])
-            temp_series.name = 'data_set_info'
+            temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]], name='data_set_info')
             df_absolute = df_absolute.append(temp_series)
             df_relative = df_relative.append(temp_series)
 
     date_time_string = str(datetime.now()).replace(' ', '_')
     path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
     df_absolute.to_csv(path_to_profiles_absolute, sep="\t")
-    # writeListToDestination(path_to_profiles_absolute, outputTableOne)
     output_files_list.append(path_to_profiles_absolute)
 
     del df_absolute
@@ -682,109 +676,97 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         cladeSet.add(refSeq.clade)
 
     # Order the list of clades alphabetically
+    #TODO the only purpuse of this worker 2 is to end up with a set of sequences ordered by clade and then
+    # by abundance across all samples.
+    # I was doing this on a clade by clade basis on a sequence by sequence basis.
+    # but now we should get rid of the clade sorting and just do that afterwards.
+    # we should instad go by a sample by sample basis. This will allow us also to undertake the work that
+    # is happening in worker three.
+    # two birds one stone.
+    # this is actually also better because now we can count the abundance of the sequences in proportions
+    # rather than simply absolute values. Which is far more accurate.
     sub_clade_list = [a for a in clade_list if a in cladeSet]
 
     sys.stdout.write('\n')
+
+
+
+    # This counter dict will have key = sequence name (either the sequence name, if named, or 'id_clade' if not)
+    # value = the abundnace of the reference sequence across all of the samples in the output
+    worker_manager = Manager()
+    intraCounter = worker_manager.dict()
+
+    dsssQueue = Queue()
+
+    # I will have a set of three dictionaries to pass into worker 2
+    # 1 - Seqname to cumulative abundance of relative abundances (for getting the over lying order of ref seqs)
+    # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
+    # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
+
+    refSeq_names_annotated = [refSeq.name if refSeq.hasName else refSeq.id + '_{}'.format(refSeq.clade) for refSeq in refSeqsInDSs]
+    generic_seq_to_abund_dict = {refSeq_name:0 for refSeq_name in refSeq_names_annotated}
+
+    list_of_dicts_for_processors = []
+    for n in range(numProcessors):
+        list_of_dicts_for_processors.append((worker_manager.dict(generic_seq_to_abund_dict), worker_manager.dict(), worker_manager.dict()))
+
+    for dss in querySetOfDataSubmissions:
+        dsssQueue.put(dss)
+
+    for N in range(numProcessors):
+        dsssQueue.put('STOP')
+
+    allProcesses = []
+
+    # close all connections to the db so that they are automatically recreated for each process
+    # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+    db.connections.close_all()
+
+
+    for n in range(numProcessors):
+        p = Process(target=outputWorkerTwo, args=(dsssQueue, list_of_dicts_for_processors[n][0],
+                                                  list_of_dicts_for_processors[n][1],
+                                                  list_of_dicts_for_processors[n][2], sub_clade_list,
+                                                  refSeq_names_annotated))
+        allProcesses.append(p)
+        p.start()
+
+    for p in allProcesses:
+        p.join()
+
+    print('\nCollecting results of data_set_sample_counting across {} dictionaries'.format(numProcessors))
+    master_seq_abundance_counter = Counter()
+    master_smple_seq_dict = dict()
+    master_smple_noName_clade_summary = dict()
+
+    # now we need to do different actions for each of the three dictionary sets. One set for each numProc
+    # for the seqName counter we simply need to add to the master counter as we were doing before
+    # for both of the sample-centric dictionaries we simply need to update a master dictionary
+    for n in range(len(list_of_dicts_for_processors)):
+        master_seq_abundance_counter += Counter(dict(list_of_dicts_for_processors[n][0]))
+        master_smple_seq_dict.update(dict(list_of_dicts_for_processors[n][1]))
+        master_smple_noName_clade_summary.update(dict(list_of_dicts_for_processors[n][2]))
+
+    print('Collection complete. Summing...')
+    print('{} sequences collected\n\n'.format(sum(master_seq_abundance_counter.values())))
+
+
+    # we now need to separate by clade and sort within the clade
+    cladeAbundanceOrderedRefSeqList = []
     for i in range(len(sub_clade_list)):
+        temp_within_clade_list_for_sorting = []
+        for seq_name, abund_val in master_seq_abundance_counter.items():
+            if seq_name.startswith(sub_clade_list[i]) or seq_name[-2:] == '_{}'.format(sub_clade_list[i]):
+                # then this is a seq of the clade in Q and we should add to the temp list
+                temp_within_clade_list_for_sorting.append(seq_name, abund_val)
+        # now sort the temp_within_clade_list_for_sorting and add to the cladeAbundanceOrderedRefSeqList
+        sorted_within_clade = [a[0] for a in sorted(temp_within_clade_list_for_sorting, key=lambda x: x[1], reverse=True)]
+        cladeAbundanceOrderedRefSeqList.extend(sorted_within_clade)
 
+    # now delete the master_seq_abundance_counter as we are done with it
+    del master_seq_abundance_counter
 
-        found_pickle_archive = False
-
-        fileList = [f for f in os.listdir(output_dir) if f.endswith('.readme')]
-        for file in fileList:
-            # check to see if there is the associated pickle
-            if os.path.isfile('{}/{}'.format(output_dir, file.replace('readme', 'pickle'))):
-
-                if file.split('_')[-2] == sub_clade_list[i]:
-                    archive_dict = pickle.load(open('{}/{}'.format(output_dir, file)))
-                    # {'data_set IDs' : datasubstooutput, 'data_analysis ID' : analysis_obj_id}
-                    if archive_dict['data_set IDs'] == datasubstooutput and archive_dict[
-                        'data_analysis ID'] == analysis_obj_id:
-                        # Then this readme should be assocated with a pickle of a sortedIntraCounter that matches
-                        # what we are trying to acieve with the code below exactly so we can just load it
-                        sortedIntraCounter = pickle.load(
-                            open('{}/{}'.format(output_dir, file.replace('readme', 'pickle'))))
-                        found_pickle_archive = True
-                        break
-
-        if not found_pickle_archive:
-
-            # refSeqs of clade
-            refSeqsOfClade = refSeqsInDSs.filter(clade=sub_clade_list[i])
-
-            # dataSetSampleSequencesOfClade
-            sys.stdout.write('Querying database for data_set_sample_sequences of clade {}\n'.format(sub_clade_list[i]))
-            dataSetSampleSequencesOfClade = data_set_sample_sequence.objects.filter(
-                data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions,
-                referenceSequenceOf__in=refSeqsOfClade)
-
-            num_data_set_sample_sequence_objects = len(dataSetSampleSequencesOfClade)
-            sys.stdout.write('\n{} data_set_sample_sequence objects of clade {}'.format(len(dataSetSampleSequencesOfClade),
-                                                                                        sub_clade_list[i]))
-
-            # This counter dict will have key = sequence name (either the sequence name, if named, or 'id_clade' if not)
-            # value = the abundnace of the reference sequence across all of the samples in the output
-            worker_manager = Manager()
-            intraCounter = worker_manager.dict()
-
-            dsssQueue = Queue()
-
-            list_of_dicts_for_processors = []
-            for n in range(numProcessors):
-                list_of_dicts_for_processors.append(worker_manager.dict())
-
-            for dsss in dataSetSampleSequencesOfClade:
-                dsssQueue.put(dsss)
-
-            for N in range(numProcessors):
-                dsssQueue.put('STOP')
-
-            allProcesses = []
-
-            # close all connections to the db so that they are automatically recreated for each process
-            # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
-            db.connections.close_all()
-
-            print('\nCreating refSeq counts for clade {}'.format(sub_clade_list[i]))
-            for N in range(numProcessors):
-                p = Process(target=outputWorkerTwo, args=(dsssQueue, list_of_dicts_for_processors[N]))
-                allProcesses.append(p)
-                p.start()
-
-            for p in allProcesses:
-                p.join()
-
-            print('\nCollecting results of data_set_sample_counting across {} dictionaries'.format(numProcessors))
-            master_counter = Counter()
-            for n in range(numProcessors):
-                master_counter += Counter(dict(list_of_dicts_for_processors[n]))
-            print('Verifying that {} == {}'.format(num_data_set_sample_sequence_objects, len(master_counter.items())))
-            print('Collection complete. Summing...')
-            print('{} sequences collected for clade {}\n\n'.format(sum(master_counter.values()), sub_clade_list[i]))
-
-            # # Sort counter dict by abundance
-            # sortedIntraCounter = sorted(intraCounter.items(), key=operator.itemgetter(1), reverse=True)
-
-            # sort the counter
-            counter_dict = dict(master_counter)
-            sortedIntraCounter = [a[0] for a in sorted(counter_dict.items(), key=lambda x: x[1], reverse=True)]
-
-            # pickle the sortedIntraCounter for the time being
-            # we can also pickle a companion readme.
-            time_stamp = str(datetime.now()).replace(' ', '_')
-            with open('{}/sortedIntraCounterclade_{}_{}.pickle'.format(output_dir, sub_clade_list[i], time_stamp),
-                      'wb') as f:
-                pickle.dump(sortedIntraCounter, f)
-            read_me_dict = {'data_set IDs': datasubstooutput, 'data_analysis ID': analysis_obj_id}
-            # also pickle a dict so that we can check to see if this is a sortedIntraCounter for the same data_analysis and
-            # same data_sets.
-            with open('{}/sortedIntraCounterclade_{}_{}.readme'.format(output_dir, sub_clade_list[i], time_stamp),
-                      'wb') as f:
-                pickle.dump(read_me_dict, f)
-
-        # Add the refSeqNames to the master cladeAbundanceOrderedRefSeqList
-        cladeAbundanceOrderedRefSeqList.extend(sortedIntraCounter)
-
+    ###### WORKER THREE DOMAIN
     # Create the two output tables as lists
     intraAbundCountTable = []
     intraAbundPropTable = []
@@ -796,22 +778,25 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # we will put together the headers piece by piece
 
     # 1 - the sample header and the named sequence headers
-    headerPre = 'Samples\t{}'.format('\t'.join([a for a in cladeAbundanceOrderedRefSeqList if '_' not in a]))
-    noNameStrings = '\t'.join(['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']])
+    headerPre = '\t'.join(cladeAbundanceOrderedRefSeqList)
+    no_name_summary_strings = '\t'.join(['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']])
     qc_stats = '\t'.join(['raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
                           'post_taxa_id_absolute_symbiodinium_seqs', 'post_taxa_id_unique_symbiodinium_seqs',
                           'size_screening_violation_absolute', 'size_screening_violation_unique',
                           'post_taxa_id_absolute_non_symbiodinium_seqs',
                           'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique'])
-    # append the noName sequences as individual sequence abundances
-    break_down_strings = '\t'.join([a for a in cladeAbundanceOrderedRefSeqList if '_' in a])
-    output_header = '\t'.join([headerPre, noNameStrings, qc_stats, break_down_strings])
 
-    intraAbundCountTable.append(output_header)
-    intraAbundPropTable.append(output_header)
+    # append the noName sequences as individual sequence abundances
+    output_header = '\t'.join([qc_stats, no_name_summary_strings, headerPre]).split('\t')
+
+
     ######################################################################################
 
     ############ POPULATE TABLE WITH CC DATA #############
+
+    # create the dataframes that will hold the tables to be output
+    output_df_absolute = pd.DataFrame(columns=output_header)
+    output_df_relative = pd.DataFrame(columns=output_header)
     # For every sample
     sampleList = data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions)
 
@@ -821,11 +806,8 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # sampleList order and output the data in this order.
     # So we will need a managed output dict.
 
-    sampleOutputDictManager = Manager()
-    managedSampleOutputDict = sampleOutputDictManager.dict()
-
-    cladeAbundanceOrderedRefSeqListManager = Manager()
-    cladeAbundanceOrderedRefSeqList = cladeAbundanceOrderedRefSeqListManager.list(cladeAbundanceOrderedRefSeqList)
+    worker_manager = Manager()
+    managedSampleOutputDict = worker_manager.dict()
 
     dssQueue = Queue()
 
@@ -844,21 +826,23 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     sys.stdout.write('\n\nOutputting DIV data\n')
     for N in range(numProcessors):
         p = Process(target=outputWorkerThree_pre_analysis_new_dss_structure, args=(
-            dssQueue, managedSampleOutputDict, cladeAbundanceOrderedRefSeqList, querySetOfDataSubmissions))
+            dssQueue, managedSampleOutputDict, cladeAbundanceOrderedRefSeqList, output_header,
+            master_smple_seq_dict, master_smple_noName_clade_summary))
         allProcesses.append(p)
         p.start()
 
     for p in allProcesses:
         p.join()
 
-    # Now before writing out we need to add to the intraAbund objects from the managedSampleOutputDict in order of
-    # sampleList
+
     #### DEVELOPMENT ####
     # So that we can inspect the managedSampleOutputDict
     managedSampleOutputDict_dict = dict(managedSampleOutputDict)
 
     #####################
 
+    # now we need to populate the output dataframe with the sample series in order of the sorted_sample_list
+    # if there is one.
     # If there is a sorted sample list, make sure that it matches the samples that we are outputting
 
     if sorted_sample_list:
@@ -884,49 +868,40 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
         for provided_name in sorted_sample_list_names:
             dss = provided_name_to_samp_name_dict[provided_name]
-            intraAbundCountTable.append(managedSampleOutputDict[dss][0])
-            intraAbundPropTable.append(managedSampleOutputDict[dss][1])
+            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss][0])
+            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss][1])
     else:
         # this returns a list which is simply the names of the samples
-        # for more info on how this is ordered look at the comment in the method
+        # This will order the samples according to which sequence is their most abundant.
+        # I.e. samples found to have the sequence which is most abundant in the largest number of sequences
+        # will be first. Within each maj sequence, the samples will be sorted by the abundance of that sequence
+        # in the sample.
+        # At the moment we are also ordering by clade just so that you see samples with the A's at the top
+        # of the output so that we minimise the number of 0's in the top left of the output
+        # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
+        # discounting clade. THis is what we do for the clade order when plotting.
         ordered_sample_list = generate_ordered_sample_list(managedSampleOutputDict, output_header)
 
-        # managedSampleOutputDict currently has data_set_sample objects as the key. This is excessive and the
-        # above list returns strings that are the dss object names
-        # so quickly convert these keys to just the names
-        managedSampleOutputDict = {k.name: v for k, v in managedSampleOutputDict.items()}
-
         for dss in ordered_sample_list:
-            intraAbundCountTable.append(managedSampleOutputDict[dss][0])
-            intraAbundPropTable.append(managedSampleOutputDict[dss][1])
+            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss][0])
+            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss][1])
 
     # Now add the accesion number / UID for each of the DIVs
-    accession_list = []
-    accession_list.append('DIV_accession')
-    for ref_seq_name in [a for a in cladeAbundanceOrderedRefSeqList if '_' not in a]:
-        ref_seq = reference_sequence.objects.get(name=ref_seq_name)
-        if ref_seq.accession and ref_seq.accession != 'None':
-            ref_seq_accession = ref_seq.accession
-        else:
-            ref_seq_accession = str(ref_seq.id)
-        accession_list.append(ref_seq_accession)
+    temp_series = pd.Series(name='DIV_accession')
+    output_df_absolute = output_df_absolute.append(temp_series)
+    output_df_relative = output_df_relative.append(temp_series)
+    # go column name by column name and if the col name is in seq_annotated_name
+    # then get the accession and add to the accession_list
+    # else do nothing and a blank should be automatically added for us.
+    for col_name in list(output_df_relative):
+        if col_name in cladeAbundanceOrderedRefSeqList:
+            ref_seq = reference_sequence.objects.get(name=col_name)
+            if ref_seq.accession and ref_seq.accession != 'None':
+                ref_seq_accession = ref_seq.accession
+            else:
+                ref_seq_accession = str(ref_seq.id)
+            output_df_absolute.loc['DIV_accession', col_name] = ref_seq_accession
 
-    accession_str = '\t'.join(accession_list)
-
-    # now add the blanks for the noName cladal columns
-    accession_str += ''.join(['\t' for cld in clade_list])
-    # add blanks for the qc stats
-    accession_str += ''.join(['\t' for i in range(11)])
-
-    # now add the accession numbers for the noName break down seqs
-    accession_list = []
-    for ref_seq_name in [a for a in cladeAbundanceOrderedRefSeqList if '_' in a]:
-        accession_list.append(ref_seq_name.split('_')[0])
-
-    accession_str = '\t'.join([accession_str, '\t'.join(accession_list)])
-
-    intraAbundCountTable.append(accession_str)
-    intraAbundPropTable.append(accession_str)
 
     # Now append the meta infromation for each of the data_sets that make up the output contents
     # this is information like the submitting user, what the IDs of the datasets are etc.
@@ -935,38 +910,64 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # part of an analysis output: call_type = analysis
     # or stand alone: call_type = 'stand_alone'
     # we should have an output for each scenario
+    data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
     if call_type=='submission':
-        meta_info_string_items = []
         data_set_object = querySetOfDataSubmissions[0]
         # there will only be one data_set object
-        meta_info_string = 'Output as part of data_set submission ID: {}\tsubmitting_user: {}\ttime_stamp: {}\t'.format(data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp)
-        meta_info_string_items.append(meta_info_string)
+        meta_info_string_items = ['Output as part of data_set submission ID: {}; '
+                                  'submitting_user: {}; '
+                                  'time_stamp: {}'
+                                      .format(data_set_object.id,
+                                              data_set_object.submittingUser,
+                                              data_set_object.timeStamp)
+                                  ]
+        temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
+        output_df_absolute = output_df_absolute.append(temp_series)
+        output_df_relative = output_df_relative.append(temp_series)
     elif call_type=='analysis':
-        data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
+
         meta_info_string_items = [
-            'Output as part of data_analysis ID: {}\t'
-            'Number of data_set objects as part of analysis = {}\t'
-            'submitting_user: {}\ttime_stamp {}'.format(
+            'Output as part of data_analysis ID: {}; '
+            'Number of data_set objects as part of analysis = {}; '
+            'submitting_user: {}; time_stamp {}'.format(
                 data_analysis_obj.id, len(querySetOfDataSubmissions), data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
+        temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
+        output_df_absolute = output_df_absolute.append(temp_series)
+        output_df_relative = output_df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
-            meta_info_string_items.append('Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp))
+            data_set_meta_list = ['Data_set ID: {}; '
+                                  'submitting_user: {}; '
+                                  'time_stamp: {}'
+                                      .format(data_set_object.id,
+                                              data_set_object.submittingUser,
+                                              data_set_object.timeStamp)]
+            temp_series = pd.Series(data_set_meta_list, index=[list(output_df_absolute)[0]], name='data_set_info')
+            output_df_absolute = output_df_absolute.append(temp_series)
+            output_df_relative = output_df_relative.append(temp_series)
     else:
         # call_type=='stand_alone'
         meta_info_string_items = [
-            'Stand_alone output by {} on {}\tNumber of data_set objects as part of output = {}'.format(output_user, str(datetime.now()).replace(' ', '_'), len(querySetOfDataSubmissions))]
+            'Stand_alone output by {} on {}; '
+            'Number of data_set objects as part of output = {}'
+                .format(output_user, str(datetime.now()).replace(' ', '_'), len(querySetOfDataSubmissions))]
+        temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
+        output_df_absolute = output_df_absolute.append(temp_series)
+        output_df_relative = output_df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
-            meta_info_string_items.append('Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp))
-
-    # now add the meta information onto the end of the output table lists
-    intraAbundCountTable.extend(meta_info_string_items)
-    intraAbundPropTable.extend(meta_info_string_items)
-
+            data_set_meta_list = ['Data_set ID: {}; '
+                                          'submitting_user: {}; '
+                                          'time_stamp: {}'
+                                          .format(data_set_object.id,
+                                                  data_set_object.submittingUser,
+                                                  data_set_object.timeStamp)]
+            temp_series = pd.Series(data_set_meta_list, index=[list(output_df_absolute)[0]], name='data_set_info')
+            output_df_absolute = output_df_absolute.append(temp_series)
+            output_df_relative = output_df_relative.append(temp_series)
 
 
     # Here we have the tables populated and ready to output
     if analysis_obj_id:
-        path_to_div_absolute = '{}/{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
-                                                                   '_'.join([str(a) for a in dataSubmissionsToOutput]))
+        path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id, data_analysis_obj.]))
     else:
         path_to_div_absolute = '{}/{}.DIVs.absolute.txt'.format(output_dir,
                                                                 '_'.join([str(a) for a in dataSubmissionsToOutput]))
@@ -1007,28 +1008,49 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         print(path_item)
 
     return output_path_list
-def outputWorkerTwo(input, outDict):
-    for dsss in iter(input.get, 'STOP'):
-        if not dsss.referenceSequenceOf.hasName:
-            name_unit = str(dsss.referenceSequenceOf.id) + '_{}'.format(dsss.referenceSequenceOf.clade)
-        else:
-            name_unit = dsss.referenceSequenceOf.name
-        if name_unit in outDict.keys():
-            outDict[name_unit] = outDict[name_unit] + dsss.abundance
-        else:
-            outDict[name_unit] = dsss.abundance
-        sys.stdout.write('\rCounting seqs for {}'.format(name_unit))
+
+def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_summary_dict, sub_clade_list,
+                    refSeq_names_annotated):
+    # 1 - Seqname to cumulative abundance of relative abundances (for getting the over lying order of ref seqs)
+    # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
+    # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
+    for dss in iter(input.get, 'STOP'):
+        sys.stdout.write('\rCounting seqs for {}'.format(dss))
+        # the first dict will hold the absolute abundances, whilst the second will hold the relative abundances
+        clade_summary_absolute_dict = {clade:0 for clade in sub_clade_list}
+        clade_summary_relative_dict = {clade:0 for clade in sub_clade_list}
+        smple_seq_count_aboslute_dict = {seq_name:0 for seq_name in refSeq_names_annotated}
+        smple_seq_count_relative_dict = {seq_name: 0 for seq_name in refSeq_names_annotated}
+
+        cladalAbundances = [int(a) for a in json.loads(dss.cladalSeqTotals)]
+
+        sampleSeqTot = sum(cladalAbundances)
+
+        if dss.errorInProcessing or sampleSeqTot == 0:
+            continue
+
+        dsssInSample = data_set_sample_sequence.objects.filter(data_set_sample_from=dss)
+
+        for dsss in dsssInSample:
+
+            if not dsss.referenceSequenceOf.hasName:
+                name_unit = str(dsss.referenceSequenceOf.id) + '_{}'.format(dsss.referenceSequenceOf.clade)
+                seq_rel_abund_dict[name_unit] += dsss.abundance / sampleSeqTot
+            else:
+                name_unit = dsss.referenceSequenceOf.name
+                seq_rel_abund_dict[name_unit] += dsss.abundance / sampleSeqTot
+
+        smpl_noName_clade_summary_dict[dss.name] = [clade_summary_absolute_dict, clade_summary_relative_dict]
+        smpl_seq_dict[dss.name] = [smple_seq_count_aboslute_dict, smple_seq_count_relative_dict]
+
+
 
 def generate_ordered_sample_list(managedSampleOutputDict, output_header):
-    # create a df from the managedSampleOutputDict
-    two_d_list_for_df = [list_element[1].split('\t') for list_element in managedSampleOutputDict.values()]
-    output_df_relative = pd.DataFrame(two_d_list_for_df, columns=output_header.split('\t'))
-    # convert the string elements to floats
-    # https://pandas.pydata.org/pandas-docs/stable/generated/pandas.DataFrame.astype.html
-    # put the sampe names as the index, drop this column and then convert the reamining cols to float
-    # n.b the convert to float fails if there are any non convertable elements in the df. Even if error warning are
-    # ignored
-    output_df_relative = output_df_relative.set_index(keys='Samples', drop=True).astype('float')
+    # create a df from the managedSampleOutputDict. We will use the relative values here
+    output_df_relative = pd.DataFrame(columns=output_header)
+    for smp, series_list in managedSampleOutputDict.items():
+        output_df_relative = output_df_relative.append(series_list[1])
+
     non_seq_columns = ['raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',
                        'post_qc_unique_seqs',
                        'post_taxa_id_unique_non_symbiodinium_seqs', 'post_taxa_id_absolute_symbiodinium_seqs',
@@ -1036,14 +1058,16 @@ def generate_ordered_sample_list(managedSampleOutputDict, output_header):
                        'size_screening_violation_absolute', 'size_screening_violation_unique']
     noName_seq_columns = ['noName Clade {}'.format(clade) for clade in list('ABCDEFGHI')]
     cols_to_drop = non_seq_columns + noName_seq_columns
-    sequence_only_df_relative = output_df_relative.drop(columns=cols_to_drop)
-    ordered_sample_list = get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative)
+
+    output_df_relative.drop(columns=cols_to_drop, inplace=True)
+    ordered_sample_list = get_sample_order_from_rel_seq_abund_df(output_df_relative)
     return ordered_sample_list
 
 def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
     max_seq_ddict = defaultdict(int)
     seq_to_samp_dict = defaultdict(list)
-    # for each sample get the columns name of the max value of a div not including the columns in the following:
+
+    # for each sample get the columns name of the max value of a div
     for sample_to_sort in sequence_only_df_relative.index.values.tolist():
         max_abund_seq = sequence_only_df_relative.loc[sample_to_sort].idxmax()
         max_rel_abund = sequence_only_df_relative.loc[sample_to_sort].max()
@@ -1051,6 +1075,7 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
         seq_to_samp_dict[max_abund_seq].append((sample_to_sort, max_rel_abund))
         # add this to the ddict count
         max_seq_ddict[max_abund_seq] += 1
+
     # then once we have compelted this for all sequences go clade by clade
     # and generate the sample order
     ordered_sample_list = []
@@ -1073,8 +1098,9 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
             ordered_sample_list.extend(ordered_list_of_samples_for_seq_ordered)
     return ordered_sample_list
 
-def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList,
-                                                     querySetOfDataSubmissions):
+def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList, output_header,
+                                                     smpl_abund_dicts_dict,
+                                                     smpl_clade_summary_dicts_dict):
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     for dss in iter(input.get, 'STOP'):
 
@@ -1086,228 +1112,203 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
         sampleSeqTot = sum(cladalAbundances)
 
         if dss.errorInProcessing or sampleSeqTot == 0:
-            # Then this sample had a problem in the sequencing and we need to just output 0s across the board
-            # Named sequences get 0s
-            for name in [a for a in cladeAbundanceOrderedRefSeqList if '_' not in a]:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # Clade totals get 0s
+            #Then this sample had a problem in the sequencing and we need to just output 0s across the board
+            # QC
+
+            populate_QC_data_of_failed_sample(dss, sampleRowDataCounts, sampleRowDataProps)
+
+            # no name clade summaries get 0.
             for cl in cladeList:
                 sampleRowDataCounts.append(0)
                 sampleRowDataProps.append(0)
-            # Add in the qc totals if possible
-            # For the proportions we will have to add zeros as we cannot do proportions
-            # CONTIGS
-            # This is the absolute number of sequences after make.contigs
-            if dss.initialTotSeqNum:
-                contig_num = dss.initialTotSeqNum
-                sampleRowDataCounts.append(contig_num)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # POST-QC
-            # store the aboslute number of sequences after sequencing QC at this stage
-            if dss.post_seq_qc_absolute_num_seqs:
-                post_qc_absolute = dss.post_seq_qc_absolute_num_seqs
-                sampleRowDataCounts.append(post_qc_absolute)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # This is the unique number of sequences after the sequencing QC
-            if dss.initialUniqueSeqNum:
-                post_qc_unique = dss.initialUniqueSeqNum
-                sampleRowDataCounts.append(post_qc_unique)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # POST TAXA-ID
-            # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
-            if dss.finalTotSeqNum:
-                tax_id_symbiodinium_absolute = dss.finalTotSeqNum
-                sampleRowDataCounts.append(tax_id_symbiodinium_absolute)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # Same as above but the number of unique seqs
-            if dss.finalUniqueSeqNum:
-                tax_id_symbiodinium_unique = dss.finalUniqueSeqNum
-                sampleRowDataCounts.append(tax_id_symbiodinium_unique)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # size violation absolute
-            if dss.size_violation_absolute:
-                size_viol_ab = dss.size_violation_absolute
-                sampleRowDataCounts.append(size_viol_ab)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # size violation unique
-            if dss.size_violation_unique:
-                size_viol_uni = dss.size_violation_unique
-                sampleRowDataCounts.append(size_viol_uni)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # store the abosolute number of sequenes that were not considered Symbiodinium
-            if dss.non_sym_absolute_num_seqs:
-                tax_id_non_symbiodinum_abosulte = dss.non_sym_absolute_num_seqs
-                sampleRowDataCounts.append(tax_id_non_symbiodinum_abosulte)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # This is the number of unique sequences that were not considered Symbiodinium
-            if dss.nonSymSeqsNum:
-                tax_id_non_symbiodinium_unique = dss.nonSymSeqsNum
-                sampleRowDataCounts.append(tax_id_non_symbiodinium_unique)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # post-med absolute
-            if dss.post_med_absolute:
-                post_med_abs = dss.post_med_absolute
-                sampleRowDataCounts.append(post_med_abs)
-                sampleRowDataProps.append(0)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-            # post-med absolute
-            if dss.post_med_unique:
-                post_med_uni = dss.post_med_unique
-                sampleRowDataCounts.append(post_med_uni)
-                sampleRowDataProps.append(0)
-            else:
+
+            # All sequences get 0s
+            for name in cladeAbundanceOrderedRefSeqList:
                 sampleRowDataCounts.append(0)
                 sampleRowDataProps.append(0)
 
-            # Breakdown details get 0s
-            for name in [a for a in cladeAbundanceOrderedRefSeqList if '_' in a]:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
             # Here we need to add the string to the outputDict rather than the intraAbund table objects
-            countData = '{}\t{}'.format(dss.name, '\t'.join(str(x) for x in sampleRowDataCounts))
-            propData = '{}\t{}'.format(dss.name, '\t'.join("{:.3f}".format(x) for x in sampleRowDataProps))
-            outDict[dss] = [countData, propData]
+            sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
+            sample_series_relative = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
+
+            outDict[dss.name] = [sample_series_absolute, sample_series_relative]
             continue
 
-        # Get number of seqs found in Sample
-        dsssInSample = data_set_sample_sequence.objects.filter(data_set_sample_from=dss)
-
-        dataSetSampleSeqDict = defaultdict(int)
-        # this dict will hold noName seqs abundances separated by clade.
-        # when we come to populate the info on the sequences that were not in clade collections then we will
-        # check to see if there is info for the clade in question in this dict first.
-        # if the clade in question isn't in this dict then we will use the information from the
-        # samples cladalSeqTotals parameter
-        noNameCladalHolder = defaultdict(int)
-        no_name_break_down_dict = defaultdict(int)
-        for dsss in dsssInSample:
-            ref_seq_obj = dsss.referenceSequenceOf
-            ref_seq_obj_name = ref_seq_obj.name
-            ref_seq_obj_clade = ref_seq_obj.clade
-            if ref_seq_obj.hasName:
-                dataSetSampleSeqDict[ref_seq_obj_name] += dsss.abundance
-            else:
-                noNameCladalHolder[ref_seq_obj_clade] += dsss.abundance
-                no_name_break_down_dict[str(ref_seq_obj.id) + '_{}'.format(
-                    ref_seq_obj_clade)] += dsss.abundance  # populate row in order of the master sorted intras
-        # Do not populate any of the noName categories
-
-        for name in [a for a in cladeAbundanceOrderedRefSeqList if '_' not in a]:
-            if name in dataSetSampleSeqDict.keys():
-                counts = dataSetSampleSeqDict[name]
-                sampleRowDataCounts.append(counts)
-                sampleRowDataProps.append(counts / sampleSeqTot)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
-
-        # for each clade in cladeList, just look to see if there is data.
-        for clade in cladeList:
-            if clade in noNameCladalHolder.keys():
-                sampleRowDataCounts.append(noNameCladalHolder[clade])
-                sampleRowDataProps.append(noNameCladalHolder[clade] / sampleSeqTot)
-            else:
-                # then there were no no_names of this clade
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
+        # get the list of sample specific dicts that contain the clade summaries and the seq abundances
+        smpl_seq_abund_absolute_dict = smpl_abund_dicts_dict[dss.name][0]
+        smpl_seq_abund_relative_dict = smpl_abund_dicts_dict[dss.name][1]
+        smpl_clade_summary_absolute_dict = smpl_clade_summary_dicts_dict[dss.name][0]
+        smpl_clade_summary_relative_dict = smpl_clade_summary_dicts_dict[dss.name][1]
 
         # Here we add in the post qc and post-taxa id counts
         # For the absolute counts we will report the absolute seq number
         # For the relative counts we will report these as proportions of the sampleSeqTot.
         # I.e. we will have numbers larger than 1 for many of the values and the symbiodinium seqs should be 1
+        populate_QC_data_of_successful_sample(dss, sampleRowDataCounts, sampleRowDataProps, sampleSeqTot)
 
-        # CONTIGS
-        # This is the absolute number of sequences after make.contigs
-        contig_num = dss.initialTotSeqNum
-        sampleRowDataCounts.append(contig_num)
-        sampleRowDataProps.append(contig_num / sampleSeqTot)
 
-        # POST-QC
-        # store the aboslute number of sequences after sequencing QC at this stage
-        post_qc_absolute = dss.post_seq_qc_absolute_num_seqs
-        sampleRowDataCounts.append(post_qc_absolute)
-        sampleRowDataProps.append(post_qc_absolute / sampleSeqTot)
-        # This is the unique number of sequences after the sequencing QC
-        post_qc_unique = dss.initialUniqueSeqNum
-        sampleRowDataCounts.append(post_qc_unique)
-        sampleRowDataProps.append(post_qc_unique / sampleSeqTot)
+        # now add the clade divided summaries of the clades
+        for clade in cladeList:
+            sampleRowDataCounts.append(smpl_clade_summary_absolute_dict[clade])
+            sampleRowDataProps.append(smpl_clade_summary_relative_dict[clade])
 
-        # POST TAXA-ID
-        # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
-        tax_id_symbiodinium_absolute = dss.finalTotSeqNum
-        sampleRowDataCounts.append(tax_id_symbiodinium_absolute)
-        sampleRowDataProps.append(tax_id_symbiodinium_absolute / sampleSeqTot)
-        # Same as above but the number of unique seqs
-        tax_id_symbiodinium_unique = dss.finalUniqueSeqNum
-        sampleRowDataCounts.append(tax_id_symbiodinium_unique)
-        sampleRowDataProps.append(tax_id_symbiodinium_unique / sampleSeqTot)
-        # store the absolute number of sequences lost to size cutoff violations
-        size_violation_aboslute = dss.size_violation_absolute
-        sampleRowDataCounts.append(size_violation_aboslute)
-        sampleRowDataProps.append(size_violation_aboslute / sampleSeqTot)
-        # store the unique size cutoff violations
-        size_violation_unique = dss.size_violation_unique
-        sampleRowDataCounts.append(size_violation_unique)
-        sampleRowDataProps.append(size_violation_unique / sampleSeqTot)
-        # store the abosolute number of sequenes that were not considered Symbiodinium
-        tax_id_non_symbiodinum_abosulte = dss.non_sym_absolute_num_seqs
-        sampleRowDataCounts.append(tax_id_non_symbiodinum_abosulte)
-        sampleRowDataProps.append(tax_id_non_symbiodinum_abosulte / sampleSeqTot)
-        # This is the number of unique sequences that were not considered Symbiodinium
-        tax_id_non_symbiodinium_unique = dss.nonSymSeqsNum
-        sampleRowDataCounts.append(tax_id_non_symbiodinium_unique)
-        sampleRowDataProps.append(tax_id_non_symbiodinium_unique / sampleSeqTot)
 
-        # Post MED absolute
-        post_med_absolute = dss.post_med_absolute
-        sampleRowDataCounts.append(post_med_absolute)
-        sampleRowDataProps.append(post_med_absolute / sampleSeqTot)
-        # Post MED unique
-        post_med_unique = dss.post_med_unique
-        sampleRowDataCounts.append(post_med_unique)
-        sampleRowDataProps.append(post_med_unique / sampleSeqTot)
+        # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
+        # the sampleRowDataCounts and the sampleRowDataProps
+        for seq_name in cladeAbundanceOrderedRefSeqList:
+            sampleRowDataCounts.append(smpl_seq_abund_absolute_dict[seq_name])
+            sampleRowDataProps.append(smpl_seq_abund_relative_dict[seq_name])
 
-        # now add the noName clade breakdown sequence counts
-        for name in [a for a in cladeAbundanceOrderedRefSeqList if '_' in a]:
-            if name in no_name_break_down_dict.keys():
-                counts = no_name_break_down_dict[name]
-                sampleRowDataCounts.append(counts)
-                sampleRowDataProps.append(counts / sampleSeqTot)
-            else:
-                sampleRowDataCounts.append(0)
-                sampleRowDataProps.append(0)
 
         # Here we need to add the string to the outputDict rather than the intraAbund table objects
-        countData = '{}\t{}'.format(dss.name, '\t'.join(str(x) for x in sampleRowDataCounts))
-        propData = '{}\t{}'.format(dss.name, '\t'.join("{:.3f}".format(x) for x in sampleRowDataProps))
-        outDict[dss] = [countData, propData]
+        sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
+        sample_series_relative = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
+
+        outDict[dss.name] = [sample_series_absolute, sample_series_relative]
+
+
+
+def populate_QC_data_of_successful_sample(dss, sampleRowDataCounts, sampleRowDataProps, sampleSeqTot):
+    # CONTIGS
+    # This is the absolute number of sequences after make.contigs
+    contig_num = dss.initialTotSeqNum
+    sampleRowDataCounts.append(contig_num)
+    sampleRowDataProps.append(contig_num / sampleSeqTot)
+    # POST-QC
+    # store the aboslute number of sequences after sequencing QC at this stage
+    post_qc_absolute = dss.post_seq_qc_absolute_num_seqs
+    sampleRowDataCounts.append(post_qc_absolute)
+    sampleRowDataProps.append(post_qc_absolute / sampleSeqTot)
+    # This is the unique number of sequences after the sequencing QC
+    post_qc_unique = dss.initialUniqueSeqNum
+    sampleRowDataCounts.append(post_qc_unique)
+    sampleRowDataProps.append(post_qc_unique / sampleSeqTot)
+    # POST TAXA-ID
+    # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
+    tax_id_symbiodinium_absolute = dss.finalTotSeqNum
+    sampleRowDataCounts.append(tax_id_symbiodinium_absolute)
+    sampleRowDataProps.append(tax_id_symbiodinium_absolute / sampleSeqTot)
+    # Same as above but the number of unique seqs
+    tax_id_symbiodinium_unique = dss.finalUniqueSeqNum
+    sampleRowDataCounts.append(tax_id_symbiodinium_unique)
+    sampleRowDataProps.append(tax_id_symbiodinium_unique / sampleSeqTot)
+    # store the absolute number of sequences lost to size cutoff violations
+    size_violation_aboslute = dss.size_violation_absolute
+    sampleRowDataCounts.append(size_violation_aboslute)
+    sampleRowDataProps.append(size_violation_aboslute / sampleSeqTot)
+    # store the unique size cutoff violations
+    size_violation_unique = dss.size_violation_unique
+    sampleRowDataCounts.append(size_violation_unique)
+    sampleRowDataProps.append(size_violation_unique / sampleSeqTot)
+    # store the abosolute number of sequenes that were not considered Symbiodinium
+    tax_id_non_symbiodinum_abosulte = dss.non_sym_absolute_num_seqs
+    sampleRowDataCounts.append(tax_id_non_symbiodinum_abosulte)
+    sampleRowDataProps.append(tax_id_non_symbiodinum_abosulte / sampleSeqTot)
+    # This is the number of unique sequences that were not considered Symbiodinium
+    tax_id_non_symbiodinium_unique = dss.nonSymSeqsNum
+    sampleRowDataCounts.append(tax_id_non_symbiodinium_unique)
+    sampleRowDataProps.append(tax_id_non_symbiodinium_unique / sampleSeqTot)
+    # Post MED absolute
+    post_med_absolute = dss.post_med_absolute
+    sampleRowDataCounts.append(post_med_absolute)
+    sampleRowDataProps.append(post_med_absolute / sampleSeqTot)
+    # Post MED unique
+    post_med_unique = dss.post_med_unique
+    sampleRowDataCounts.append(post_med_unique)
+    sampleRowDataProps.append(post_med_unique / sampleSeqTot)
+
+
+def populate_QC_data_of_failed_sample(dss, sampleRowDataCounts, sampleRowDataProps):
+    # Add in the qc totals if possible
+    # For the proportions we will have to add zeros as we cannot do proportions
+    # CONTIGS
+    # This is the absolute number of sequences after make.contigs
+    if dss.initialTotSeqNum:
+        contig_num = dss.initialTotSeqNum
+        sampleRowDataCounts.append(contig_num)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # POST-QC
+    # store the aboslute number of sequences after sequencing QC at this stage
+    if dss.post_seq_qc_absolute_num_seqs:
+        post_qc_absolute = dss.post_seq_qc_absolute_num_seqs
+        sampleRowDataCounts.append(post_qc_absolute)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # This is the unique number of sequences after the sequencing QC
+    if dss.initialUniqueSeqNum:
+        post_qc_unique = dss.initialUniqueSeqNum
+        sampleRowDataCounts.append(post_qc_unique)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # POST TAXA-ID
+    # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
+    if dss.finalTotSeqNum:
+        tax_id_symbiodinium_absolute = dss.finalTotSeqNum
+        sampleRowDataCounts.append(tax_id_symbiodinium_absolute)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # Same as above but the number of unique seqs
+    if dss.finalUniqueSeqNum:
+        tax_id_symbiodinium_unique = dss.finalUniqueSeqNum
+        sampleRowDataCounts.append(tax_id_symbiodinium_unique)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # size violation absolute
+    if dss.size_violation_absolute:
+        size_viol_ab = dss.size_violation_absolute
+        sampleRowDataCounts.append(size_viol_ab)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # size violation unique
+    if dss.size_violation_unique:
+        size_viol_uni = dss.size_violation_unique
+        sampleRowDataCounts.append(size_viol_uni)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # store the abosolute number of sequenes that were not considered Symbiodinium
+    if dss.non_sym_absolute_num_seqs:
+        tax_id_non_symbiodinum_abosulte = dss.non_sym_absolute_num_seqs
+        sampleRowDataCounts.append(tax_id_non_symbiodinum_abosulte)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # This is the number of unique sequences that were not considered Symbiodinium
+    if dss.nonSymSeqsNum:
+        tax_id_non_symbiodinium_unique = dss.nonSymSeqsNum
+        sampleRowDataCounts.append(tax_id_non_symbiodinium_unique)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # post-med absolute
+    if dss.post_med_absolute:
+        post_med_abs = dss.post_med_absolute
+        sampleRowDataCounts.append(post_med_abs)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
+    # post-med absolute
+    if dss.post_med_unique:
+        post_med_uni = dss.post_med_unique
+        sampleRowDataCounts.append(post_med_uni)
+        sampleRowDataProps.append(0)
+    else:
+        sampleRowDataCounts.append(0)
+        sampleRowDataProps.append(0)
