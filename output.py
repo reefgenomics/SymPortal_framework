@@ -228,7 +228,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     type_to_sample_abund_dict = defaultdict(list)
     typeless_samples_list = []
     for i in range(7, 7 + len(listOfDataSetSamples)):
-        print('Getting type abundance information for {}'.format(listOfDataSetSamples[i]))
+        print('Getting type abundance information for {}'.format(listOfDataSetSamples[i - 7]))
         sample_series = df_relative.iloc[:,i].astype('float')
         max_type_label = sample_series.idxmax()
         rel_abund_of_max_type = sample_series[max_type_label]
@@ -407,7 +407,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             'Stand_alone output by {} on {}; '
             'data_analysis ID: {}; '
             'Number of data_set objects as part of output = {}'
-                .format(output_user, str(datetime.now()), analysisobj.id, len(querySetOfDataSubmissions))]
+                .format(output_user, str(datetime.now()).replace(' ', '_'), analysisobj.id, len(querySetOfDataSubmissions))]
         temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]])
         temp_series.name = 'meta_info_summary'
         df_absolute = df_absolute.append(temp_series)
@@ -424,7 +424,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             df_absolute = df_absolute.append(temp_series)
             df_relative = df_relative.append(temp_series)
 
-    date_time_string = str(datetime.now())
+    date_time_string = str(datetime.now()).replace(' ', '_')
     path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
     df_absolute.to_csv(path_to_profiles_absolute, sep="\t")
     # writeListToDestination(path_to_profiles_absolute, outputTableOne)
@@ -644,6 +644,11 @@ def getAbundStr(totlist, sdlist, majlist):
 
 def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir, call_type,
                                                            sorted_sample_list=None, analysis_obj_id=None, output_user=None ):
+    # TODO at the moment we have a bit of an odd strucutre for our output in that we have all of the named sequences,
+    # followed by the summary stats, followed by qc stats followed by the unamed sequences.
+    # I would like to change it so that all of the stats are listed first
+    # then all of the sequences in order of their abundance irrespective of whether they are named or not.
+
     # print out the user and time stamp and dataID if from a submission
     # This function will take in a list of dataSubmissions from which
     # to output the ITS2 sequence information of the samples
@@ -688,16 +693,17 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         fileList = [f for f in os.listdir(output_dir) if f.endswith('.readme')]
         for file in fileList:
             # check to see if there is the associated pickle
-            if os.path.isfile(file.replace('readme', 'pickle')):
+            if os.path.isfile('{}/{}'.format(output_dir, file.replace('readme', 'pickle'))):
 
                 if file.split('_')[-2] == sub_clade_list[i]:
-                    archive_dict = pickle.load(open(file))
+                    archive_dict = pickle.load(open('{}/{}'.format(output_dir, file)))
                     # {'data_set IDs' : datasubstooutput, 'data_analysis ID' : analysis_obj_id}
                     if archive_dict['data_set IDs'] == datasubstooutput and archive_dict[
-                        'data_analysis_ID'] == analysis_obj_id:
+                        'data_analysis ID'] == analysis_obj_id:
                         # Then this readme should be assocated with a pickle of a sortedIntraCounter that matches
                         # what we are trying to acieve with the code below exactly so we can just load it
-                        sortedIntraCounter = pickle.load(open(file.replace('readme', 'pickle')))
+                        sortedIntraCounter = pickle.load(
+                            open('{}/{}'.format(output_dir, file.replace('readme', 'pickle'))))
                         found_pickle_archive = True
                         break
 
@@ -707,6 +713,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             refSeqsOfClade = refSeqsInDSs.filter(clade=sub_clade_list[i])
 
             # dataSetSampleSequencesOfClade
+            sys.stdout.write('Querying database for data_set_sample_sequences of clade {}\n'.format(sub_clade_list[i]))
             dataSetSampleSequencesOfClade = data_set_sample_sequence.objects.filter(
                 data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions,
                 referenceSequenceOf__in=refSeqsOfClade)
@@ -747,20 +754,33 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             for p in allProcesses:
                 p.join()
 
-            print('Collecting results of data_set_sample_counting across {} dictionaries'.format(numProcessors))
+            print('\nCollecting results of data_set_sample_counting across {} dictionaries'.format(numProcessors))
             master_counter = Counter()
             for n in range(numProcessors):
-                master_counter += Counter(dict(list_of_dicts_for_processors[N]))
+                master_counter += Counter(dict(list_of_dicts_for_processors[n]))
             print('Verifying that {} == {}'.format(num_data_set_sample_sequence_objects, len(master_counter.items())))
             print('Collection complete. Summing...')
-            print('{} sequences collected for clade A\n\n'.format(sum(master_counter.values())))
+            print('{} sequences collected for clade {}\n\n'.format(sum(master_counter.values()), sub_clade_list[i]))
 
             # # Sort counter dict by abundance
             # sortedIntraCounter = sorted(intraCounter.items(), key=operator.itemgetter(1), reverse=True)
 
             # sort the counter
             counter_dict = dict(master_counter)
-            sortedIntraCounter = [a[0] for a in sorted(counter_dict.items(), key=lambda x: x[0], reverse=True)]
+            sortedIntraCounter = [a[0] for a in sorted(counter_dict.items(), key=lambda x: x[1], reverse=True)]
+
+            # pickle the sortedIntraCounter for the time being
+            # we can also pickle a companion readme.
+            time_stamp = str(datetime.now()).replace(' ', '_')
+            with open('{}/sortedIntraCounterclade_{}_{}.pickle'.format(output_dir, sub_clade_list[i], time_stamp),
+                      'wb') as f:
+                pickle.dump(sortedIntraCounter, f)
+            read_me_dict = {'data_set IDs': datasubstooutput, 'data_analysis ID': analysis_obj_id}
+            # also pickle a dict so that we can check to see if this is a sortedIntraCounter for the same data_analysis and
+            # same data_sets.
+            with open('{}/sortedIntraCounterclade_{}_{}.readme'.format(output_dir, sub_clade_list[i], time_stamp),
+                      'wb') as f:
+                pickle.dump(read_me_dict, f)
 
         # Add the refSeqNames to the master cladeAbundanceOrderedRefSeqList
         cladeAbundanceOrderedRefSeqList.extend(sortedIntraCounter)
@@ -933,7 +953,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     else:
         # call_type=='stand_alone'
         meta_info_string_items = [
-            'Stand_alone output by {} on {}\tNumber of data_set objects as part of output = {}'.format(output_user, str(datetime.now()), len(querySetOfDataSubmissions))]
+            'Stand_alone output by {} on {}\tNumber of data_set objects as part of output = {}'.format(output_user, str(datetime.now()).replace(' ', '_'), len(querySetOfDataSubmissions))]
         for data_set_object in querySetOfDataSubmissions:
             meta_info_string_items.append('Data_set ID: {}\tsubmitting_user: {}\ttime_stamp: {}'.format(data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp))
 
