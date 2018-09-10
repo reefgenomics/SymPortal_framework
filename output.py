@@ -11,6 +11,8 @@ from general import writeListToDestination
 from collections import defaultdict
 import pandas as pd
 from plotting import generate_stacked_bar_data_analysis_type_profiles
+import pickle
+from collections import Counter
 
 def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, noFig=False, output_user=None):
     analysisObj = analysisobj
@@ -226,13 +228,14 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     type_to_sample_abund_dict = defaultdict(list)
     typeless_samples_list = []
     for i in range(7, 7 + len(listOfDataSetSamples)):
+        print('Getting type abundance information for {}'.format(listOfDataSetSamples[i]))
         sample_series = df_relative.iloc[:,i].astype('float')
-        max_type_pos = sample_series.values.argmax()
         max_type_label = sample_series.idxmax()
         rel_abund_of_max_type = sample_series[max_type_label]
         if not rel_abund_of_max_type > 0:
             typeless_samples_list.append(sample_series.name)
-        type_to_sample_abund_dict[max_type_label].append((sample_series.name, rel_abund_of_max_type))
+        else:
+            type_to_sample_abund_dict[max_type_label].append((sample_series.name, rel_abund_of_max_type))
 
     # here we have the dictionary populated. We can now go type by type according
     # to the sorted_analysis_type_abundance_list and put the samples that had the given type as their most abundant
@@ -247,69 +250,15 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # now we just need to add the samples that didn't have a type in them to be associated to. Negative etc.
     samples_that_have_been_sorted.extend(typeless_samples_list)
 
-    # # now that we have the sorted list of types
-    # # we want to extract some information
-    # # For each sample, we want to have the abundance of each of the types in that sample in the order of the types
-    # print('Collecting type abundances for samples:')
-    # dataSetSample_to_type_abundance_dict = dict()
-    # for i in range(len(listOfDataSetSamples)):
-    #     sys.stdout.write('\r{}'.format(listOfDataSetSamples[i]))
-    #     temp_abundance_list = []
-    #     for analysis_type_obj in sorted_analysis_type_abundance_list:
-    #         temp_abundance = int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1][i])
-    #         temp_abundance_list.append(temp_abundance)
-    #     dataSetSample_to_type_abundance_dict[listOfDataSetSamples[i]] = temp_abundance_list
-    #
-    #
-    # # list of samples that have been added to the sorted list
-    # samples_that_have_been_sorted = []
-    #
-    # # for each analysis type in order of the most abundant types first
-    # sys.stdout.write('\n\nSorting samples according to ITS2 type profile abundances\n')
-    # for j in range(len(sorted_analysis_type_abundance_list)):
-    #     sys.stdout.write('\rSorting {}'.format(sorted_analysis_type_abundance_list[j]))
-    #     # go through all of the samples and if a sample has the type as its most abundant type
-    #     # then add it and its relative abundance of the type to to the below list
-    #     list_of_samples_containing_analysis_type = []
-    #     for data_set_sample_obj in dataSetSample_to_type_abundance_dict.keys():
-    #         if data_set_sample_obj not in samples_that_have_been_sorted:
-    #             # see if the type in question is the most abundant type in the sample in question
-    #             list_of_abundances = dataSetSample_to_type_abundance_dict[data_set_sample_obj]
-    #             abundance_of_type_in_sample = list_of_abundances[j]
-    #             if abundance_of_type_in_sample != 0:
-    #                 # then we need to see if this type is the most abundant in the sample
-    #                 if all(i <= abundance_of_type_in_sample for i in list_of_abundances):
-    #                     # then this type is the most abundant type in the sample and it should be added to the
-    #                     # list_of_samples_containing_analysis_type
-    #                     list_of_samples_containing_analysis_type.append(
-    #                         (data_set_sample_obj, abundance_of_type_in_sample / sum(list_of_abundances)))
-    #     # now that we've been through all of the samples for the given type
-    #     # we need to sort the list_of_samples_containing_analysis_type by the second value of the tuple
-    #     # we then need to add the samples in this order to the sample_that_have_been_sorted and remove them
-    #     # from the samples_still_to_be_sorted
-    #     sorted_list_of_samples_containing_analysis_type = sorted(list_of_samples_containing_analysis_type,
-    #                                                              key=lambda x: x[1], reverse=True)
-    #     sorted_list_of_samples_for_this_type = [a[0] for a in sorted_list_of_samples_containing_analysis_type]
-    #
-    #     for data_set_sample_obj in sorted_list_of_samples_for_this_type:
-    #         samples_that_have_been_sorted.append(data_set_sample_obj)
-    #
-    # # here the samples_that_have_been_sorted should be populated in the sorted order that we want
-    #
-    # # Here the samples we should be left with should be samples that don't have a type associated to them
-    # # negatives etc.
-    # samples_not_ordered = list(set(listOfDataSetSamples) - set(samples_that_have_been_sorted))
-    #
-    # # add these samples to the list
-    # samples_that_have_been_sorted.extend(samples_not_ordered)
+    # now pickle out the samples_that_have_been_sorted list if we are running on the remote system
+    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
+    with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
+        config_dict = json.load(f)
+    local_or_remote = config_dict['system_type']
+    if local_or_remote == 'remote':
+        pickle.dump(samples_that_have_been_sorted,
+                    open("{}/samples_that_have_been_sorted.pickle".format(outputDir), "wb"))
 
-    # # these are the tables that the ITS2 type data will be stored in.
-    # outputTableOne.append(
-    #     'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-    #         '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted])))
-    # outputTableTwo.append(
-    #     'ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-    #         '\t'.join([dataSamp.name for dataSamp in samples_that_have_been_sorted])))
 
     # rearange the sample columns so that they are in the new order
     new_cols = ('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
@@ -321,46 +270,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     df_absolute = df_absolute.T
     df_relative = df_relative.T
 
-    # # at this point we need to rearrange the data that is held in the current row strings
-    # for analysis_type_obj in across_clade_sorted_type_order:
-    #     current_abundance_list_counts = across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[7:-1]
-    #     current_abundance_list_props = across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[7:-1]
-    #     new_abundance_list_counts = []
-    #     new_abundance_list_props = []
-    #     for new_sample in samples_that_have_been_sorted:
-    #         new_abundance_list_counts.append(current_abundance_list_counts[listOfDataSetSamples.index(new_sample)])
-    #         new_abundance_list_props.append(current_abundance_list_props[listOfDataSetSamples.index(new_sample)])
-    #
-    #     new_string_counts = '{}\t{}\t{}'.format(
-    #         '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[:7]),
-    #         '\t'.join(new_abundance_list_counts),
-    #         across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[-1])
-    #     new_sting_props = '{}\t{}\t{}'.format(
-    #         '\t'.join(across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[:7]),
-    #         '\t'.join(new_abundance_list_props),
-    #         across_clade_type_sample_abund_dict[analysis_type_obj][1].split('\t')[-1])
-    #
-    #     outputTableOne.append(new_string_counts)
-    #     outputTableTwo.append(new_sting_props)
 
-    # At this point we should have gone through each of the clades in order and for each clade we should have
-    # created an analysis_type row in order of the sortedListOfTypes.
-
-    # The current out put has samples on the Y and types on the X.
-    # We want to reverse this as there will often be more samples than types
-    # https://stackoverflow.com/questions/6473679/transpose-list-of-lists
-
-    # # Put into list of lists format to transpose
-    # newOutOne = [a.split('\t') for a in outputTableOne]
-    # newOutTwo = [a.split('\t') for a in outputTableTwo]
-    #
-    # # Transpose
-    # outputTableOne = list(map(list, zip(*newOutOne)))
-    # outputTableTwo = list(map(list, zip(*newOutTwo)))
-    #
-    # # Put back into tab delim format
-    # outputTableOne = ['\t'.join(a) for a in outputTableOne]
-    # outputTableTwo = ['\t'.join(a) for a in outputTableTwo]
 
     outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
     os.makedirs(outputDir, exist_ok=True)
@@ -520,10 +430,14 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # writeListToDestination(path_to_profiles_absolute, outputTableOne)
     output_files_list.append(path_to_profiles_absolute)
 
+    del df_absolute
+
     path_to_profiles_rel = '{}/{}_{}_{}.profiles.relative.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
     df_relative.to_csv(path_to_profiles_rel, sep="\t")
     # writeListToDestination(path_to_profiles_rel, outputTableTwo)
     output_files_list.append(path_to_profiles_rel)
+
+    del df_relative
 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
     div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
@@ -574,7 +488,7 @@ def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_
     num_samples = len(listOfDataSetSample_IDs)
     for anType in iter(input.get, 'STOP'):  # Within each type go through each of the samples
 
-        sys.stdout.write('\rprocessing ITS2 type profile: {}'.format(anType))
+        print('Processing ITS2 type profile: {}'.format(anType))
 
         ###### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
         # For each type we want to calculate the average proportions of the defining seqs in that type
@@ -621,7 +535,7 @@ def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_
         globalCount = len(typeCCIDs)
 
         # Within each type go through each of the samples
-        # TODO do we really have to go through every sample? I don't think so.
+        # Do we really have to go through every sample? I don't think so.
         # Because we have only one cc ID per sample we can simply identify the
         # sample ID (keys) in the sample_ID_to_cc_of_clade_ID dict where the cc ID (value) is found in the typeCCIDs.
         IDs_of_samples_that_had_type = [smp_id for smp_id in listOfDataSetSample_IDs if
@@ -768,47 +682,88 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     sys.stdout.write('\n')
     for i in range(len(sub_clade_list)):
 
-        # refSeqs of clade
-        refSeqsOfClade = refSeqsInDSs.filter(clade=sub_clade_list[i])
 
-        # dataSetSampleSequencesOfClade
-        dataSetSampleSequencesOfClade = data_set_sample_sequence.objects.filter(
-            data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions,
-            referenceSequenceOf__in=refSeqsOfClade)
+        found_pickle_archive = False
 
-        # This counter dict will have key = sequence name (either the sequence name, if named, or 'id_clade' if not)
-        # value = the abundnace of the reference sequence across all of the samples in the output
-        intraCounterManager = Manager()
-        intraCounter = intraCounterManager.dict()
+        fileList = [f for f in os.listdir(output_dir) if f.endswith('.readme')]
+        for file in fileList:
+            # check to see if there is the associated pickle
+            if os.path.isfile(file.replace('readme', 'pickle')):
 
-        dsssQueue = Queue()
+                if file.split('_')[-2] == sub_clade_list[i]:
+                    archive_dict = pickle.load(open(file))
+                    # {'data_set IDs' : datasubstooutput, 'data_analysis ID' : analysis_obj_id}
+                    if archive_dict['data_set IDs'] == datasubstooutput and archive_dict[
+                        'data_analysis_ID'] == analysis_obj_id:
+                        # Then this readme should be assocated with a pickle of a sortedIntraCounter that matches
+                        # what we are trying to acieve with the code below exactly so we can just load it
+                        sortedIntraCounter = pickle.load(open(file.replace('readme', 'pickle')))
+                        found_pickle_archive = True
+                        break
 
-        for dsss in dataSetSampleSequencesOfClade:
-            dsssQueue.put(dsss)
+        if not found_pickle_archive:
 
-        for N in range(numProcessors):
-            dsssQueue.put('STOP')
+            # refSeqs of clade
+            refSeqsOfClade = refSeqsInDSs.filter(clade=sub_clade_list[i])
 
-        allProcesses = []
+            # dataSetSampleSequencesOfClade
+            dataSetSampleSequencesOfClade = data_set_sample_sequence.objects.filter(
+                data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions,
+                referenceSequenceOf__in=refSeqsOfClade)
 
-        # close all connections to the db so that they are automatically recreated for each process
-        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
-        db.connections.close_all()
+            num_data_set_sample_sequence_objects = len(dataSetSampleSequencesOfClade)
+            sys.stdout.write('\n{} data_set_sample_sequence objects of clade {}'.format(len(dataSetSampleSequencesOfClade),
+                                                                                        sub_clade_list[i]))
 
-        print('\nCreating refSeq counts for clade {}'.format(sub_clade_list[i]))
-        for N in range(numProcessors):
-            p = Process(target=outputWorkerTwo, args=(dsssQueue, intraCounter))
-            allProcesses.append(p)
-            p.start()
+            # This counter dict will have key = sequence name (either the sequence name, if named, or 'id_clade' if not)
+            # value = the abundnace of the reference sequence across all of the samples in the output
+            worker_manager = Manager()
+            intraCounter = worker_manager.dict()
 
-        for p in allProcesses:
-            p.join()
+            dsssQueue = Queue()
 
-        # Sort counter dict by abundance
-        sortedIntraCounter = sorted(intraCounter.items(), key=operator.itemgetter(1), reverse=True)
+            list_of_dicts_for_processors = []
+            for n in range(numProcessors):
+                list_of_dicts_for_processors.append(worker_manager.dict())
+
+            for dsss in dataSetSampleSequencesOfClade:
+                dsssQueue.put(dsss)
+
+            for N in range(numProcessors):
+                dsssQueue.put('STOP')
+
+            allProcesses = []
+
+            # close all connections to the db so that they are automatically recreated for each process
+            # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+            db.connections.close_all()
+
+            print('\nCreating refSeq counts for clade {}'.format(sub_clade_list[i]))
+            for N in range(numProcessors):
+                p = Process(target=outputWorkerTwo, args=(dsssQueue, list_of_dicts_for_processors[N]))
+                allProcesses.append(p)
+                p.start()
+
+            for p in allProcesses:
+                p.join()
+
+            print('Collecting results of data_set_sample_counting across {} dictionaries'.format(numProcessors))
+            master_counter = Counter()
+            for n in range(numProcessors):
+                master_counter += Counter(dict(list_of_dicts_for_processors[N]))
+            print('Verifying that {} == {}'.format(num_data_set_sample_sequence_objects, len(master_counter.items())))
+            print('Collection complete. Summing...')
+            print('{} sequences collected for clade A\n\n'.format(sum(master_counter.values())))
+
+            # # Sort counter dict by abundance
+            # sortedIntraCounter = sorted(intraCounter.items(), key=operator.itemgetter(1), reverse=True)
+
+            # sort the counter
+            counter_dict = dict(master_counter)
+            sortedIntraCounter = [a[0] for a in sorted(counter_dict.items(), key=lambda x: x[0], reverse=True)]
 
         # Add the refSeqNames to the master cladeAbundanceOrderedRefSeqList
-        cladeAbundanceOrderedRefSeqList.extend([a[0] for a in sortedIntraCounter])
+        cladeAbundanceOrderedRefSeqList.extend(sortedIntraCounter)
 
     # Create the two output tables as lists
     intraAbundCountTable = []
