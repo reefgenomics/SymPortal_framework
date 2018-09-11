@@ -966,40 +966,42 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
 
     # Here we have the tables populated and ready to output
+    date_time_string = str(datetime.now()).replace(' ', '_')
     if analysis_obj_id:
-        path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id, data_analysis_obj.]))
+        path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
+                                                                      data_analysis_obj.name, date_time_string)
     else:
-        path_to_div_absolute = '{}/{}.DIVs.absolute.txt'.format(output_dir,
-                                                                '_'.join([str(a) for a in dataSubmissionsToOutput]))
-    writeListToDestination(path_to_div_absolute, intraAbundCountTable)
+        path_to_div_absolute = '{}/{}.DIVs.absolute.txt'.format(output_dir, date_time_string)
+
+    output_df_absolute.to_csv(path_to_div_absolute, sep="\t")
     output_path_list.append(path_to_div_absolute)
 
     if analysis_obj_id:
-        path_to_div_relative = '{}/{}_{}.DIVs.relative.txt'.format(output_dir, analysis_obj_id,
-                                                                   '_'.join([str(a) for a in dataSubmissionsToOutput]))
+        path_to_div_relative = '{}/{}_{}_{}.DIVs.relative.txt'.format(output_dir, analysis_obj_id,
+                                                                      data_analysis_obj.name, date_time_string)
     else:
-        path_to_div_relative = '{}/{}.DIVs.relative.txt'.format(output_dir,
-                                                                '_'.join([str(a) for a in dataSubmissionsToOutput]))
+        path_to_div_relative = '{}/{}.DIVs.relative.txt'.format(output_dir, date_time_string)
 
-    writeListToDestination(path_to_div_relative, intraAbundPropTable)
+    output_df_relative.to_csv(path_to_div_relative, sep="\t")
     output_path_list.append(path_to_div_relative)
 
     # Output a .fasta for of all of the sequences found in the analysis
     fasta_output_list = []
-    for ref_seq_name in [a for a in cladeAbundanceOrderedRefSeqList if '_' not in a]:
-        ref_seq = reference_sequence.objects.get(name=ref_seq_name)
-        fasta_output_list.append('>{}'.format(ref_seq_name))
-        fasta_output_list.append(ref_seq.sequence)
-    for ref_seq_name in [a for a in cladeAbundanceOrderedRefSeqList if '_' in a]:
-        ref_seq = reference_sequence.objects.get(id=int(ref_seq_name.split('_')[0]))
+    for ref_seq_name in cladeAbundanceOrderedRefSeqList:
+        if '_' in ref_seq_name:
+            ref_seq = reference_sequence.objects.get(id=int(ref_seq_name.split('_')[0]))
+        else:
+            ref_seq = reference_sequence.objects.get(name=ref_seq_name)
         fasta_output_list.append('>{}'.format(ref_seq_name))
         fasta_output_list.append(ref_seq.sequence)
 
+
     if analysis_obj_id:
-        fasta_path = '{}/{}_{}.DIVs.fasta'.format(output_dir, analysis_obj_id,
-                                                  '_'.join([str(a) for a in dataSubmissionsToOutput]))
+        fasta_path = '{}/{}_{}_{}.DIVs.fasta'.format(output_dir, analysis_obj_id,
+                                                                      data_analysis_obj.name, date_time_string)
     else:
-        fasta_path = '{}/{}.DIVs.fasta'.format(output_dir, '_'.join([str(a) for a in dataSubmissionsToOutput]))
+        fasta_path = '{}/{}.DIVs.fasta'.format(output_dir, date_time_string)
+
     writeListToDestination(fasta_path, fasta_output_list)
     output_path_list.append(fasta_path)
 
