@@ -49,21 +49,11 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
         at.add(cct.analysisTypeOf)
     at = list(at)
 
-    # at = analysis_type.objects.filter(dataAnalysisFrom=analysisObj)
-    IDs = [att.id for att in at]
-    outputTableOne = []
-    outputTableTwo = []
+
     # Need to get a list of Samples that are part of the dataAnalysis
     # listOfDataSetSamples = list(data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=[int(a) for a in analysisObj.listOfDataSubmissions.split(',')])))
     listOfDataSetSamples = list(
         data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=dataSubmissionsToOutput)))
-    # The header row for the table
-    # outputTableOne.append('ITS2 type profile UID\tClade\tSpeciesGrp\tType_Profile\tMajority ITS2 Seq\tAssociated Species\tType abund local\tType abund DB\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
-    # outputTableTwo.append('ITS2 type profile UID\tClade\tSpeciesGrp\tType_Profile\tMajority ITS2 Seq\tAssociated Species\tType abund local\tType abund DB\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
-
-    # I am making some changes to the output format for the SP manuscript
-    # outputTableOne.append('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
-    # outputTableTwo.append('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format('\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples])))
 
     # Now go through the types, firstly by clade and then by the number of cladeCollections they were found in
     # Populate a 2D list of types with a list per clade
@@ -398,8 +388,9 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
         meta_info_string_items = [
             'Stand_alone output by {} on {}; '
             'data_analysis ID: {}; '
-            'Number of data_set objects as part of output = {}'
-                .format(output_user, str(datetime.now()).replace(' ', '_').replace(':', '-'), analysisobj.id, len(querySetOfDataSubmissions))]
+            'Number of data_set objects as part of output = {}; Number of data_set objects as part of analysis = {}'
+                .format(output_user, str(datetime.now()).replace(' ', '_').replace(':', '-'), analysisobj.id,
+                        len(querySetOfDataSubmissions), len(analysisobj.listOfDataSubmissions.split(',')))]
         temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]], name='meta_info_summary')
         df_absolute = df_absolute.append(temp_series)
         df_relative = df_relative.append(temp_series)
@@ -936,7 +927,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             'Output as part of data_analysis ID: {}; '
             'Number of data_set objects as part of analysis = {}; '
             'submitting_user: {}; time_stamp: {}'.format(
-                data_analysis_obj.id, len(querySetOfDataSubmissions), data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
+                data_analysis_obj.id, len(data_analysis_obj.listOfDataSubmissions), data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
         temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
         output_df_absolute = output_df_absolute.append(temp_series)
         output_df_relative = output_df_relative.append(temp_series)
@@ -1051,6 +1042,7 @@ def generate_ordered_sample_list(managedSampleOutputDict, output_header):
     # create a df from the managedSampleOutputDict. We will use the relative values here
     output_df_relative = pd.DataFrame(columns=output_header)
     for smp, series_list in managedSampleOutputDict.items():
+        sys.stdout.write('\rPopulating DataFrame for sorting: {}'.format(smp))
         output_df_relative = output_df_relative.append(series_list[1])
 
     non_seq_columns = ['raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',

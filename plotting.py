@@ -759,6 +759,10 @@ def plot_between_its2_type_prof_dist_scatter(csv_path):
     # plot the points
     ax.scatter(x_values, y_values, c='black', marker='o')
 
+    # label the points
+    for i, txt in enumerate(plotting_df.index.values.tolist()[:-1]):
+        ax.annotate(txt, (x_values[i], y_values[i]))
+
     # add axes labels
     ax.set_xlabel('PC1; explained = {}'.format('%.3f' % plotting_df['PC1'][-1]))
     ax.set_ylabel('PC2; explained = {}'.format('%.3f' % plotting_df['PC2'][-1]))
