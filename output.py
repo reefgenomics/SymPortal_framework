@@ -379,7 +379,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
         meta_info_string_items = ['Output as part of data_analysis ID: {}; '
                                   'Number of data_set objects as part of analysis = {}; '
                                   'submitting_user: {}; '
-                                  'time_stamp {}'
+                                  'time_stamp: {}'
                                       .format(analysisobj.id,
                                               len(querySetOfDataSubmissions),
                                               analysisobj.submittingUser,
@@ -404,7 +404,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             'Stand_alone output by {} on {}; '
             'data_analysis ID: {}; '
             'Number of data_set objects as part of output = {}'
-                .format(output_user, str(datetime.now()).replace(' ', '_'), analysisobj.id, len(querySetOfDataSubmissions))]
+                .format(output_user, str(datetime.now()).replace(' ', '_').replace(':', '-'), analysisobj.id, len(querySetOfDataSubmissions))]
         temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]], name='meta_info_summary')
         df_absolute = df_absolute.append(temp_series)
         df_relative = df_relative.append(temp_series)
@@ -419,15 +419,15 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             df_absolute = df_absolute.append(temp_series)
             df_relative = df_relative.append(temp_series)
 
-    date_time_string = str(datetime.now()).replace(' ', '_')
+    date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
     path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
-    df_absolute.to_csv(path_to_profiles_absolute, sep="\t")
+    df_absolute.to_csv(path_to_profiles_absolute, sep="\t", header=False)
     output_files_list.append(path_to_profiles_absolute)
 
     del df_absolute
 
     path_to_profiles_rel = '{}/{}_{}_{}.profiles.relative.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
-    df_relative.to_csv(path_to_profiles_rel, sep="\t")
+    df_relative.to_csv(path_to_profiles_rel, sep="\t", header=False)
     # writeListToDestination(path_to_profiles_rel, outputTableTwo)
     output_files_list.append(path_to_profiles_rel)
 
@@ -689,21 +689,28 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     sys.stdout.write('\n')
 
-
-
-    # This counter dict will have key = sequence name (either the sequence name, if named, or 'id_clade' if not)
-    # value = the abundnace of the reference sequence across all of the samples in the output
+    # The manager that we will build all of the shared dictionaries from below.
     worker_manager = Manager()
-    intraCounter = worker_manager.dict()
 
-    dsssQueue = Queue()
+    sampleList = data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions)
+
+    # Dictionary that will hold the list of data_set_sample_sequences for each sample
+    sample_to_dsss_list_shared_dict = worker_manager.dict()
+    print('Creating sample to data_set_sample_sequence dict:')
+    for dss in sampleList:
+        sys.stdout.write('\r{}'.format(dss.name))
+        sample_to_dsss_list_shared_dict[dss.id] = list(
+            data_set_sample_sequence.objects.filter(data_set_sample_from=dss))
+
+    # Queue that will hold the data set samples for the MP
+    dssQueue = Queue()
 
     # I will have a set of three dictionaries to pass into worker 2
     # 1 - Seqname to cumulative abundance of relative abundances (for getting the over lying order of ref seqs)
     # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
     # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
 
-    refSeq_names_annotated = [refSeq.name if refSeq.hasName else refSeq.id + '_{}'.format(refSeq.clade) for refSeq in refSeqsInDSs]
+    refSeq_names_annotated = [refSeq.name if refSeq.hasName else str(refSeq.id) + '_{}'.format(refSeq.clade) for refSeq in refSeqsInDSs]
     generic_seq_to_abund_dict = {refSeq_name:0 for refSeq_name in refSeq_names_annotated}
 
     list_of_dicts_for_processors = []
@@ -711,10 +718,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         list_of_dicts_for_processors.append((worker_manager.dict(generic_seq_to_abund_dict), worker_manager.dict(), worker_manager.dict()))
 
     for dss in querySetOfDataSubmissions:
-        dsssQueue.put(dss)
+        dssQueue.put(dss)
 
     for N in range(numProcessors):
-        dsssQueue.put('STOP')
+        dssQueue.put('STOP')
 
     allProcesses = []
 
@@ -724,10 +731,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
 
     for n in range(numProcessors):
-        p = Process(target=outputWorkerTwo, args=(dsssQueue, list_of_dicts_for_processors[n][0],
+        p = Process(target=outputWorkerTwo, args=(dssQueue, list_of_dicts_for_processors[n][0],
                                                   list_of_dicts_for_processors[n][1],
-                                                  list_of_dicts_for_processors[n][2], sub_clade_list,
-                                                  refSeq_names_annotated))
+                                                  list_of_dicts_for_processors[n][2],
+                                                  refSeq_names_annotated, sample_to_dsss_list_shared_dict))
         allProcesses.append(p)
         p.start()
 
@@ -747,8 +754,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         master_smple_seq_dict.update(dict(list_of_dicts_for_processors[n][1]))
         master_smple_noName_clade_summary.update(dict(list_of_dicts_for_processors[n][2]))
 
-    print('Collection complete. Summing...')
-    print('{} sequences collected\n\n'.format(sum(master_seq_abundance_counter.values())))
+    print('Collection complete.')
 
 
     # we now need to separate by clade and sort within the clade
@@ -758,7 +764,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         for seq_name, abund_val in master_seq_abundance_counter.items():
             if seq_name.startswith(sub_clade_list[i]) or seq_name[-2:] == '_{}'.format(sub_clade_list[i]):
                 # then this is a seq of the clade in Q and we should add to the temp list
-                temp_within_clade_list_for_sorting.append(seq_name, abund_val)
+                temp_within_clade_list_for_sorting.append(str(seq_name, abund_val))
         # now sort the temp_within_clade_list_for_sorting and add to the cladeAbundanceOrderedRefSeqList
         sorted_within_clade = [a[0] for a in sorted(temp_within_clade_list_for_sorting, key=lambda x: x[1], reverse=True)]
         cladeAbundanceOrderedRefSeqList.extend(sorted_within_clade)
@@ -767,27 +773,22 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     del master_seq_abundance_counter
 
     ###### WORKER THREE DOMAIN
-    # Create the two output tables as lists
-    intraAbundCountTable = []
-    intraAbundPropTable = []
-    # Create the header line one for prop one for count
-    # add the cladal noName categories directly to the header
-    # do not add them to the cladeAbundanceOrderedRefSeqList so that we don't append 0s to them
-    # we will add the abundances in the outputWorkerThree method below
+
+    # we will eventually have the outputs stored in pandas dataframes.
+    # in the worker below we will create a set of pandas.Series for each of the samples which will hold the abundances
+    # one for the absoulte abundance and one for the relative abundances.
 
     # we will put together the headers piece by piece
-
-    # 1 - the sample header and the named sequence headers
-    headerPre = '\t'.join(cladeAbundanceOrderedRefSeqList)
-    no_name_summary_strings = '\t'.join(['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']])
-    qc_stats = '\t'.join(['raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
+    headerPre = cladeAbundanceOrderedRefSeqList
+    no_name_summary_strings = ['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']]
+    qc_stats = ['raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
                           'post_taxa_id_absolute_symbiodinium_seqs', 'post_taxa_id_unique_symbiodinium_seqs',
                           'size_screening_violation_absolute', 'size_screening_violation_unique',
                           'post_taxa_id_absolute_non_symbiodinium_seqs',
-                          'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique'])
+                          'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique']
 
     # append the noName sequences as individual sequence abundances
-    output_header = '\t'.join([qc_stats, no_name_summary_strings, headerPre]).split('\t')
+    output_header = qc_stats + no_name_summary_strings + headerPre
 
 
     ######################################################################################
@@ -797,8 +798,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # create the dataframes that will hold the tables to be output
     output_df_absolute = pd.DataFrame(columns=output_header)
     output_df_relative = pd.DataFrame(columns=output_header)
-    # For every sample
-    sampleList = data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions)
+
 
     # In order to MP this we will have to pay attention to the order. As we can't keep the order as we work with the
     # MPs we will do as we did above for the profies outputs and have an output dict that will have the sample as key
@@ -846,13 +846,12 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # If there is a sorted sample list, make sure that it matches the samples that we are outputting
 
     if sorted_sample_list:
-        sorted_sample_list_names = [a.name for a in sorted_sample_list]
 
-        if len(sorted_sample_list_names) != len(sampleList):
+        if len(sorted_sample_list) != len(sampleList):
             sys.exit('Name in sorted_sample_list do not match those to be outputted!')
 
         provided_name_to_samp_name_dict = {}
-        for provided_name in sorted_sample_list_names:
+        for provided_name in sorted_sample_list:
             match_list = []
             for smp in sampleList:
                 if provided_name == smp.name:
@@ -866,10 +865,9 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
         # if we got to here then the sorted_sample_list looks good
 
-        for provided_name in sorted_sample_list_names:
-            dss = provided_name_to_samp_name_dict[provided_name]
-            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss][0])
-            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss][1])
+        for dss_name in sorted_sample_list:
+            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss_name][0])
+            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss_name][1])
     else:
         # this returns a list which is simply the names of the samples
         # This will order the samples according to which sequence is their most abundant.
@@ -886,6 +884,13 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss][0])
             output_df_relative = output_df_relative.append(managedSampleOutputDict[dss][1])
 
+    # when adding the accession numbers below, we have to go through every sequence and look up its object
+    # We also have to do this when we are outputting the fasta.
+    # to prevent us having to make every look up twice, we should also make the fasta at the same time
+    # Output a .fasta for of all of the sequences found in the analysis
+    # we will write out the fasta right at the end.
+    fasta_output_list = []
+
     # Now add the accesion number / UID for each of the DIVs
     temp_series = pd.Series(name='DIV_accession')
     output_df_absolute = output_df_absolute.append(temp_series)
@@ -895,13 +900,19 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # else do nothing and a blank should be automatically added for us.
     for col_name in list(output_df_relative):
         if col_name in cladeAbundanceOrderedRefSeqList:
-            ref_seq = reference_sequence.objects.get(name=col_name)
+            if col_name[-2] == '_':
+                ref_seq = reference_sequence.objects.get(id=int(col_name[:-2]))
+            else:
+                ref_seq = reference_sequence.objects.get(name=col_name)
+
             if ref_seq.accession and ref_seq.accession != 'None':
                 ref_seq_accession = ref_seq.accession
             else:
                 ref_seq_accession = str(ref_seq.id)
             output_df_absolute.loc['DIV_accession', col_name] = ref_seq_accession
-
+            output_df_relative.loc['DIV_accession', col_name] = ref_seq_accession
+            fasta_output_list.append('>{}'.format(col_name))
+            fasta_output_list.append(ref_seq.sequence)
 
     # Now append the meta infromation for each of the data_sets that make up the output contents
     # this is information like the submitting user, what the IDs of the datasets are etc.
@@ -929,7 +940,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         meta_info_string_items = [
             'Output as part of data_analysis ID: {}; '
             'Number of data_set objects as part of analysis = {}; '
-            'submitting_user: {}; time_stamp {}'.format(
+            'submitting_user: {}; time_stamp: {}'.format(
                 data_analysis_obj.id, len(querySetOfDataSubmissions), data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
         temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
         output_df_absolute = output_df_absolute.append(temp_series)
@@ -949,7 +960,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         meta_info_string_items = [
             'Stand_alone output by {} on {}; '
             'Number of data_set objects as part of output = {}'
-                .format(output_user, str(datetime.now()).replace(' ', '_'), len(querySetOfDataSubmissions))]
+                .format(output_user, str(datetime.now()).replace(' ', '_').replace(':', '-'), len(querySetOfDataSubmissions))]
         temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
         output_df_absolute = output_df_absolute.append(temp_series)
         output_df_relative = output_df_relative.append(temp_series)
@@ -966,7 +977,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
 
     # Here we have the tables populated and ready to output
-    date_time_string = str(datetime.now()).replace(' ', '_')
+    date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
     if analysis_obj_id:
         path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
                                                                       data_analysis_obj.name, date_time_string)
@@ -985,15 +996,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     output_df_relative.to_csv(path_to_div_relative, sep="\t")
     output_path_list.append(path_to_div_relative)
 
-    # Output a .fasta for of all of the sequences found in the analysis
-    fasta_output_list = []
-    for ref_seq_name in cladeAbundanceOrderedRefSeqList:
-        if '_' in ref_seq_name:
-            ref_seq = reference_sequence.objects.get(id=int(ref_seq_name.split('_')[0]))
-        else:
-            ref_seq = reference_sequence.objects.get(name=ref_seq_name)
-        fasta_output_list.append('>{}'.format(ref_seq_name))
-        fasta_output_list.append(ref_seq.sequence)
+
 
 
     if analysis_obj_id:
@@ -1002,6 +1005,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     else:
         fasta_path = '{}/{}.DIVs.fasta'.format(output_dir, date_time_string)
 
+    # we created the fasta above.
     writeListToDestination(fasta_path, fasta_output_list)
     output_path_list.append(fasta_path)
 
@@ -1011,18 +1015,13 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     return output_path_list
 
-def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_summary_dict, sub_clade_list,
-                    refSeq_names_annotated):
+def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_summary_dict,
+                    refSeq_names_annotated, sample_to_dsss_list_shared_dict):
     # 1 - Seqname to cumulative abundance of relative abundances (for getting the over lying order of ref seqs)
     # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
     # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
     for dss in iter(input.get, 'STOP'):
         sys.stdout.write('\rCounting seqs for {}'.format(dss))
-        # the first dict will hold the absolute abundances, whilst the second will hold the relative abundances
-        clade_summary_absolute_dict = {clade:0 for clade in sub_clade_list}
-        clade_summary_relative_dict = {clade:0 for clade in sub_clade_list}
-        smple_seq_count_aboslute_dict = {seq_name:0 for seq_name in refSeq_names_annotated}
-        smple_seq_count_relative_dict = {seq_name: 0 for seq_name in refSeq_names_annotated}
 
         cladalAbundances = [int(a) for a in json.loads(dss.cladalSeqTotals)]
 
@@ -1031,16 +1030,27 @@ def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_
         if dss.errorInProcessing or sampleSeqTot == 0:
             continue
 
-        dsssInSample = data_set_sample_sequence.objects.filter(data_set_sample_from=dss)
+
+        # the first dict will hold the absolute abundances, whilst the second will hold the relative abundances
+        clade_summary_absolute_dict = {clade:0 for clade in list('ABCDEFGHI')}
+        clade_summary_relative_dict = {clade:0 for clade in list('ABCDEFGHI')}
+        smple_seq_count_aboslute_dict = {seq_name:0 for seq_name in refSeq_names_annotated}
+        smple_seq_count_relative_dict = {seq_name: 0 for seq_name in refSeq_names_annotated}
+
+        dsssInSample = sample_to_dsss_list_shared_dict[dss.id]
 
         for dsss in dsssInSample:
-
+            # determine what the name of the seq will be in the output
             if not dsss.referenceSequenceOf.hasName:
                 name_unit = str(dsss.referenceSequenceOf.id) + '_{}'.format(dsss.referenceSequenceOf.clade)
-                seq_rel_abund_dict[name_unit] += dsss.abundance / sampleSeqTot
             else:
                 name_unit = dsss.referenceSequenceOf.name
-                seq_rel_abund_dict[name_unit] += dsss.abundance / sampleSeqTot
+
+            seq_rel_abund_dict[name_unit] += dsss.abundance / sampleSeqTot
+            clade_summary_absolute_dict[dsss.referenceSequenceOf.clade] += dsss.abundance
+            clade_summary_relative_dict[dsss.referenceSequenceOf.clade] += dsss.abundance/sampleSeqTot
+            smple_seq_count_aboslute_dict[name_unit] += dsss.abundance
+            smple_seq_count_relative_dict[name_unit] += dsss.abundance / sampleSeqTot
 
         smpl_noName_clade_summary_dict[dss.name] = [clade_summary_absolute_dict, clade_summary_relative_dict]
         smpl_seq_dict[dss.name] = [smple_seq_count_aboslute_dict, smple_seq_count_relative_dict]
@@ -1103,7 +1113,7 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
 def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList, output_header,
                                                      smpl_abund_dicts_dict,
                                                      smpl_clade_summary_dicts_dict):
-    cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    cladeList = list('ABCDEFGHI')
     for dss in iter(input.get, 'STOP'):
 
         sys.stdout.write('\rOutputting DIV data for {}'.format(dss.name))
@@ -1164,7 +1174,7 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
 
         # Here we need to add the string to the outputDict rather than the intraAbund table objects
         sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
-        sample_series_relative = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
+        sample_series_relative = pd.Series(sampleRowDataProps, index=output_header, name=dss.name)
 
         outDict[dss.name] = [sample_series_absolute, sample_series_relative]
 

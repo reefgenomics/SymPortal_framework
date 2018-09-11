@@ -324,8 +324,6 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     # get a list of tups that are the seq names and the abundances zipped together
     type_profile_to_abund_tup_list = [(name, int(abund)) for name, abund in zip(sp_output_df.iloc[1][1:].values.tolist(), sp_output_df.iloc[0][1:].values.tolist())]
 
-    # add  to the header 0 position
-    sp_output_df.columns = [lab if i != 0 else 'Samples' for i, lab in enumerate(sp_output_df.iloc[0].values.tolist())]
 
     # convert the names that are numbers into int strings rather than float strings.
     int_temp_list = []

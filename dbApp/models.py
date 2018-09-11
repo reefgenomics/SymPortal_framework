@@ -755,7 +755,7 @@ class data_set_sample_sequence(models.Model):
         if self.referenceSequenceOf.hasName:
             return self.referenceSequenceOf.name
         else:
-            return 'ID=' + self.id
+            return 'ID=' + str(self.id)
 
 
 
