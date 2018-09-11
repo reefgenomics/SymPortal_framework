@@ -1088,11 +1088,11 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
     ordered_sample_list = []
     sys.stdout.write('\nGoing clade by clade sorting by abundance\n')
     for clade in list('ABCDEFGHI'):
-        sys.stdout.write('clade: {}'.format(clade))
+        sys.stdout.write('\rGetting clade {} seqs'.format(clade))
         tup_list_of_clade = []
         # get the clade specific list of the max_seq_ddict
         for k, v in max_seq_ddict.items():
-            sys.stdout.write('\rseq: {}'.format(k))
+            sys.stdout.write('\r{}'.format(k))
             if k.startswith(clade) or k[-2:] == '_{}'.format(clade):
                 tup_list_of_clade.append((k, v))
 
@@ -1104,7 +1104,7 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
         ordered_sequence_of_clade_list = [x[0] for x in sorted(tup_list_of_clade, key=lambda x: x[1], reverse=True)]
 
         for seq_to_order_samples_by in ordered_sequence_of_clade_list:
-            sys.stdout.write('\rseq: {}'.format(seq_to_order_samples_by))
+            sys.stdout.write('\r{}'.format(seq_to_order_samples_by))
             tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_dict[seq_to_order_samples_by]
             ordered_list_of_samples_for_seq_ordered = \
                 [x[0] for x in
