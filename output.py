@@ -192,12 +192,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # now we can sort this list according to the abundance and this will give us the order of types that we want
     sorted_analysis_type_abundance_list = [a[0] for a in sorted(type_to_abund_list, key=lambda x: x[1], reverse=True)]
 
-    # TODO I think we should try to improve this as it is currently horrifically slow.
-    # currently for each sample we collect the abundances of the types for each type. Not sure why
-    # then for each analysis type we go through these samples and pull out the samples
-    # that had it as it maj type. We then sort these samples based on the abundance of that type. crazy.
-    # I think we can pandas this.
-    # we already have the
+
 
     # need to work with proportions here so that we can compare type abundances betweeen samples
     list_for_df_absolute = []
@@ -640,14 +635,7 @@ def getAbundStr(totlist, sdlist, majlist):
 
 def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir, call_type,
                                                            sorted_sample_list=None, analysis_obj_id=None, output_user=None ):
-    # TODO at the moment we have a bit of an odd strucutre for our output in that we have all of the named sequences,
-    # followed by the summary stats, followed by qc stats followed by the unamed sequences.
-    # I would like to change it so that all of the stats are listed first
-    # then all of the sequences in order of their abundance irrespective of whether they are named or not.
 
-    # print out the user and time stamp and dataID if from a submission
-    # This function will take in a list of dataSubmissions from which
-    # to output the ITS2 sequence information of the samples
 
     ########################## ITS2 INTRA ABUND COUNT TABLE ################################
     # This is where we're going to have to work with the sequences that aren't part of a type.
@@ -678,7 +666,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         cladeSet.add(refSeq.clade)
 
     # Order the list of clades alphabetically
-    #TODO the only purpuse of this worker 2 is to end up with a set of sequences ordered by clade and then
+    # the only purpuse of this worker 2 is to end up with a set of sequences ordered by clade and then
     # by abundance across all samples.
     # I was doing this on a clade by clade basis on a sequence by sequence basis.
     # but now we should get rid of the clade sorting and just do that afterwards.
@@ -752,8 +740,11 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # for the seqName counter we simply need to add to the master counter as we were doing before
     # for both of the sample-centric dictionaries we simply need to update a master dictionary
     for n in range(len(list_of_dicts_for_processors)):
+        sys.stdout.write('\rdictionary {}(0)/{}'.format(n, numProcessors))
         master_seq_abundance_counter += Counter(dict(list_of_dicts_for_processors[n][0]))
+        sys.stdout.write('\rdictionary {}(1)/{}'.format(n, numProcessors))
         master_smple_seq_dict.update(dict(list_of_dicts_for_processors[n][1]))
+        sys.stdout.write('\rdictionary {}(2)/{}'.format(n, numProcessors))
         master_smple_noName_clade_summary.update(dict(list_of_dicts_for_processors[n][2]))
 
     print('Collection complete.')
@@ -880,6 +871,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # of the output so that we minimise the number of 0's in the top left of the output
         # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
         # discounting clade. THis is what we do for the clade order when plotting.
+        sys.stdout.write('Generating ordered sample list')
         ordered_sample_list = generate_ordered_sample_list(managedSampleOutputDict, output_header)
 
         for dss in ordered_sample_list:
@@ -901,6 +893,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # then get the accession and add to the accession_list
     # else do nothing and a blank should be automatically added for us.
     for col_name in list(output_df_relative):
+        sys.stdout.write('\rAppending accession info and creating fasta {}'.format(col_name))
         if col_name in cladeAbundanceOrderedRefSeqList:
             if col_name[-2] == '_':
                 ref_seq = reference_sequence.objects.get(id=int(col_name[:-2]))
@@ -1077,34 +1070,47 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
     seq_to_samp_dict = defaultdict(list)
 
     # for each sample get the columns name of the max value of a div
+    no_maj_samps = []
     for sample_to_sort in sequence_only_df_relative.index.values.tolist():
+        sys.stdout.write('\rGetting maj seq for sample {}'.format(sample_to_sort))
         max_abund_seq = sequence_only_df_relative.loc[sample_to_sort].idxmax()
         max_rel_abund = sequence_only_df_relative.loc[sample_to_sort].max()
-        # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
-        seq_to_samp_dict[max_abund_seq].append((sample_to_sort, max_rel_abund))
-        # add this to the ddict count
-        max_seq_ddict[max_abund_seq] += 1
+        if not max_rel_abund > 0:
+            no_maj_samps.append(sample_to_sort)
+        else:
+            # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
+            seq_to_samp_dict[max_abund_seq].append((sample_to_sort, max_rel_abund))
+            # add this to the ddict count
+            max_seq_ddict[max_abund_seq] += 1
 
     # then once we have compelted this for all sequences go clade by clade
     # and generate the sample order
     ordered_sample_list = []
+    sys.stdout.write('\nGoing clade by clade sorting by abundance\n')
     for clade in list('ABCDEFGHI'):
+        sys.stdout.write('clade: {}'.format(clade))
         tup_list_of_clade = []
         # get the clade specific list of the max_seq_ddict
         for k, v in max_seq_ddict.items():
+            sys.stdout.write('\rseq: {}'.format(k))
             if k.startswith(clade) or k[-2:] == '_{}'.format(clade):
                 tup_list_of_clade.append((k, v))
+
         if not tup_list_of_clade:
             continue
         # now get an ordered list of the sequences for this clade
+        sys.stdout.write('\rOrdering clade {} seqs'.format(clade))
+
         ordered_sequence_of_clade_list = [x[0] for x in sorted(tup_list_of_clade, key=lambda x: x[1], reverse=True)]
 
         for seq_to_order_samples_by in ordered_sequence_of_clade_list:
+            sys.stdout.write('\rseq: {}'.format(seq_to_order_samples_by))
             tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_dict[seq_to_order_samples_by]
             ordered_list_of_samples_for_seq_ordered = \
                 [x[0] for x in
                  sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
             ordered_sample_list.extend(ordered_list_of_samples_for_seq_ordered)
+    ordered_sample_list.extend(no_maj_samps)
     return ordered_sample_list
 
 def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList, output_header,
