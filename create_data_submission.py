@@ -696,7 +696,9 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     ####### COUNT TABLE OUTPUT ########
     # We are going to make the sequence count table output as part of the dataSubmission
+    sys.stdout.write('\nGenerating count tables\n')
     outputDir = os.path.join(os.path.dirname(__file__), 'outputs/data_set_submissions/{}'.format(dSID))
+    os.makedirs(outputDir, exist_ok=True)
     # the below method will create the tab delimited output table and print out the output file paths
     # it will also return these paths so that we can use them to grab the data for figure plotting
     output_path_list = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),
@@ -822,7 +824,7 @@ def make_evalue_screening_fasta_no_clade(dSID, e_value_multiP_dict, wkd):
 
 def perform_sequence_drop():
     sequence_drop_file = generate_sequence_drop_file()
-    sequence_drop_path = os.path.dirname(__file__) + '/dbBackUp/seq_dumps/seq_dump_' + str(datetime.now())
+    sequence_drop_path = os.path.dirname(__file__) + '/dbBackUp/seq_dumps/seq_dump_' + str(datetime.now()).replace(' ', '_',).replace(':','-')
     sys.stdout.write('\n\nBackup of named reference_sequences output to {}\n'.format(sequence_drop_path))
     writeListToDestination(sequence_drop_path, sequence_drop_file)
 

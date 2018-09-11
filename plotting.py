@@ -24,12 +24,12 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
 
 
     # read in the SymPortal relative abundance output
-    sp_output_df = pd.read_csv(path_to_tab_delim_count, sep='\t', lineterminator='\n', header=0)
+    sp_output_df = pd.read_csv(path_to_tab_delim_count, sep='\t', lineterminator='\n', header=0, index_col=0)
 
     # In order to be able to drop the DIV row at the end and the meta information rows, we should
     # drop all rows that are after the DIV column. We will pass in an index value to the .drop
     # that is called here. To do this we need to work out which index we are working with
-    index_values_as_list = sp_output_df['Samples'].values.tolist()
+    index_values_as_list = sp_output_df.index.values.tolist()
     for i in range(-1, -(len(index_values_as_list)), -1):
         if index_values_as_list[i].startswith('DIV'):
             # then this is the index (in negative notation) that we need to cut from

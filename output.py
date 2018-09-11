@@ -420,6 +420,8 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             df_relative = df_relative.append(temp_series)
 
     date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+    os.makedirs(outputDir, exist_ok=True)
+
     path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
     df_absolute.to_csv(path_to_profiles_absolute, sep="\t", header=False)
     output_files_list.append(path_to_profiles_absolute)
@@ -921,7 +923,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # part of an analysis output: call_type = analysis
     # or stand alone: call_type = 'stand_alone'
     # we should have an output for each scenario
-    data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
+
     if call_type=='submission':
         data_set_object = querySetOfDataSubmissions[0]
         # there will only be one data_set object
@@ -936,7 +938,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         output_df_absolute = output_df_absolute.append(temp_series)
         output_df_relative = output_df_relative.append(temp_series)
     elif call_type=='analysis':
-
+        data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
         meta_info_string_items = [
             'Output as part of data_analysis ID: {}; '
             'Number of data_set objects as part of analysis = {}; '
@@ -979,31 +981,26 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # Here we have the tables populated and ready to output
     date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
     if analysis_obj_id:
+        data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
         path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
                                                                       data_analysis_obj.name, date_time_string)
-    else:
-        path_to_div_absolute = '{}/{}.DIVs.absolute.txt'.format(output_dir, date_time_string)
-
-    output_df_absolute.to_csv(path_to_div_absolute, sep="\t")
-    output_path_list.append(path_to_div_absolute)
-
-    if analysis_obj_id:
         path_to_div_relative = '{}/{}_{}_{}.DIVs.relative.txt'.format(output_dir, analysis_obj_id,
                                                                       data_analysis_obj.name, date_time_string)
+        fasta_path = '{}/{}_{}_{}.DIVs.fasta'.format(output_dir, analysis_obj_id,
+                                                     data_analysis_obj.name, date_time_string)
+
     else:
+        path_to_div_absolute = '{}/{}.DIVs.absolute.txt'.format(output_dir, date_time_string)
         path_to_div_relative = '{}/{}.DIVs.relative.txt'.format(output_dir, date_time_string)
+        fasta_path = '{}/{}.DIVs.fasta'.format(output_dir, date_time_string)
+
+    os.makedirs(output_dir, exist_ok=True)
+    output_df_absolute.to_csv(path_to_div_absolute, sep="\t")
+    output_path_list.append(path_to_div_absolute)
 
     output_df_relative.to_csv(path_to_div_relative, sep="\t")
     output_path_list.append(path_to_div_relative)
 
-
-
-
-    if analysis_obj_id:
-        fasta_path = '{}/{}_{}_{}.DIVs.fasta'.format(output_dir, analysis_obj_id,
-                                                                      data_analysis_obj.name, date_time_string)
-    else:
-        fasta_path = '{}/{}.DIVs.fasta'.format(output_dir, date_time_string)
 
     # we created the fasta above.
     writeListToDestination(fasta_path, fasta_output_list)
