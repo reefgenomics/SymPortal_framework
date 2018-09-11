@@ -49,7 +49,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
                                ], index=sp_output_df.index[range(meta_index_to_cut_from, 0, 1)]
                       , inplace=True)
 
-    sp_output_df = sp_output_df.set_index(keys='Samples', drop=True).astype('float')
+    sp_output_df = sp_output_df.astype('float')
 
     # In theory the output should already be somewhat ordered in that the samples should be in order of similarity.
     # However, these have the artifical clade ordering so for the plotting it will probably be better to get a new

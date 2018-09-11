@@ -719,7 +719,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for n in range(numProcessors):
         list_of_dicts_for_processors.append((worker_manager.dict(generic_seq_to_abund_dict), worker_manager.dict(), worker_manager.dict()))
 
-    for dss in querySetOfDataSubmissions:
+    for dss in sampleList:
         dssQueue.put(dss)
 
     for N in range(numProcessors):
@@ -766,7 +766,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         for seq_name, abund_val in master_seq_abundance_counter.items():
             if seq_name.startswith(sub_clade_list[i]) or seq_name[-2:] == '_{}'.format(sub_clade_list[i]):
                 # then this is a seq of the clade in Q and we should add to the temp list
-                temp_within_clade_list_for_sorting.append(str(seq_name, abund_val))
+                temp_within_clade_list_for_sorting.append((seq_name, abund_val))
         # now sort the temp_within_clade_list_for_sorting and add to the cladeAbundanceOrderedRefSeqList
         sorted_within_clade = [a[0] for a in sorted(temp_within_clade_list_for_sorting, key=lambda x: x[1], reverse=True)]
         cladeAbundanceOrderedRefSeqList.extend(sorted_within_clade)
