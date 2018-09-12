@@ -395,7 +395,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
 
     colour_dict = {}
     for i in range(len(sorted_type_prof_names_by_local_abund)):
-        if i < len(num_leg_cells):
+        if i < num_leg_cells:
             colour_dict[sorted_type_prof_names_by_local_abund[i]] = colour_palette_pas[i]
         else:
             grey_index = i%len(grey_palette)
@@ -554,12 +554,12 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
                 leg_box_y = row_increment * y_coord_increments
                 axarr[-1].add_patch(Rectangle((leg_box_x, leg_box_y),
                                               width=leg_box_width, height=leg_box_depth,
-                                              color=colour_dict[list(sp_output_df)[its2_profile_count]]))
+                                              color=colour_dict[sorted_type_prof_names_by_local_abund[its2_profile_count]]))
 
                 # add the text
                 text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
                 text_y = leg_box_y + (0.5 * leg_box_depth)
-                axarr[-1].text(text_x, text_y, list(sp_output_df)[its2_profile_count], verticalalignment='center',
+                axarr[-1].text(text_x, text_y, sorted_type_prof_names_by_local_abund[its2_profile_count], verticalalignment='center',
                                fontsize=8)
 
                 # increase the sequence count
@@ -572,12 +572,12 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
                 leg_box_y = row_increment * y_coord_increments
                 axarr[-1].add_patch(Rectangle((leg_box_x, leg_box_y),
                                               width=leg_box_width, height=leg_box_depth,
-                                              color=colour_dict[list(sp_output_df)[its2_profile_count]]))
+                                              color=colour_dict[sorted_type_prof_names_by_local_abund[its2_profile_count]]))
 
                 # add the text
                 text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
                 text_y = leg_box_y + (0.5 * leg_box_depth)
-                axarr[-1].text(text_x, text_y, list(sp_output_df)[its2_profile_count], verticalalignment='center',
+                axarr[-1].text(text_x, text_y, sorted_type_prof_names_by_local_abund[its2_profile_count], verticalalignment='center',
                                fontsize=8)
 
                 # Increase the sequences count
