@@ -1033,12 +1033,13 @@ def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_
             # determine what the name of the seq will be in the output
             if not dsss.referenceSequenceOf.hasName:
                 name_unit = str(dsss.referenceSequenceOf.id) + '_{}'.format(dsss.referenceSequenceOf.clade)
+                # the clade summries are only for the noName seqs
+                clade_summary_absolute_dict[dsss.referenceSequenceOf.clade] += dsss.abundance
+                clade_summary_relative_dict[dsss.referenceSequenceOf.clade] += dsss.abundance / sampleSeqTot
             else:
                 name_unit = dsss.referenceSequenceOf.name
 
             seq_rel_abund_dict[name_unit] += dsss.abundance / sampleSeqTot
-            clade_summary_absolute_dict[dsss.referenceSequenceOf.clade] += dsss.abundance
-            clade_summary_relative_dict[dsss.referenceSequenceOf.clade] += dsss.abundance/sampleSeqTot
             smple_seq_count_aboslute_dict[name_unit] += dsss.abundance
             smple_seq_count_relative_dict[name_unit] += dsss.abundance / sampleSeqTot
 
