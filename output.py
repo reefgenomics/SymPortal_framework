@@ -885,8 +885,9 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # then get the accession and add to the accession_list
     # else do nothing and a blank should be automatically added for us.
     accession_list = []
-    for col_name in list(output_df_relative):
-        sys.stdout.write('\rAppending accession info and creating fasta {}'.format(col_name))
+    num_cols = len(list(output_df_relative))
+    for i, col_name in enumerate(list(output_df_relative)):
+        sys.stdout.write('\rAppending accession info and creating fasta {}: {}/{}'.format(col_name, i, num_cols))
         if col_name in cladeAbundanceOrderedRefSeqList:
             if col_name[-2] == '_':
                 ref_seq = reference_sequence.objects.get(id=int(col_name[:-2]))
