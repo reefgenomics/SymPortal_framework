@@ -13,6 +13,7 @@ import pandas as pd
 from plotting import generate_stacked_bar_data_analysis_type_profiles
 import pickle
 from collections import Counter
+import numpy as np
 
 def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, noFig=False, output_user=None):
     analysisObj = analysisobj
@@ -818,6 +819,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for p in allProcesses:
         p.join()
 
+    print('\nDIV output complete\n')
 
     #### DEVELOPMENT ####
     # So that we can inspect the managedSampleOutputDict
@@ -862,7 +864,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # of the output so that we minimise the number of 0's in the top left of the output
         # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
         # discounting clade. THis is what we do for the clade order when plotting.
-        sys.stdout.write('Generating ordered sample list')
+        sys.stdout.write('\nGenerating ordered sample list\n')
         ordered_sample_list = generate_ordered_sample_list(managedSampleOutputDict, output_header)
 
         for dss in ordered_sample_list:
@@ -877,12 +879,12 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     fasta_output_list = []
 
     # Now add the accesion number / UID for each of the DIVs
-    temp_series = pd.Series(name='DIV_accession')
-    output_df_absolute = output_df_absolute.append(temp_series)
-    output_df_relative = output_df_relative.append(temp_series)
+    sys.stdout.write('\nGenerating accession and fasta\n')
+
     # go column name by column name and if the col name is in seq_annotated_name
     # then get the accession and add to the accession_list
     # else do nothing and a blank should be automatically added for us.
+    accession_list = []
     for col_name in list(output_df_relative):
         sys.stdout.write('\rAppending accession info and creating fasta {}'.format(col_name))
         if col_name in cladeAbundanceOrderedRefSeqList:
@@ -895,10 +897,16 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
                 ref_seq_accession = ref_seq.accession
             else:
                 ref_seq_accession = str(ref_seq.id)
-            output_df_absolute.loc['DIV_accession', col_name] = ref_seq_accession
-            output_df_relative.loc['DIV_accession', col_name] = ref_seq_accession
+
+            accession_list.append(ref_seq_accession)
             fasta_output_list.append('>{}'.format(col_name))
             fasta_output_list.append(ref_seq.sequence)
+        else:
+            accession_list.append(np.nan)
+
+    temp_series = pd.Series(accession_list, name='DIV_accession', index=list(output_df_relative))
+    output_df_absolute = output_df_absolute.append(temp_series)
+    output_df_relative = output_df_relative.append(temp_series)
 
     # Now append the meta infromation for each of the data_sets that make up the output contents
     # this is information like the submitting user, what the IDs of the datasets are etc.
