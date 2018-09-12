@@ -386,15 +386,20 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
 
     # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
     # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
-    sorted_type_prof_names_by_local_abund = [a[0] for a in sorted(type_profile_to_abund_tup_list, key=lambda x: x[0], reverse=True)]
+    sorted_type_prof_names_by_local_abund = [a[0] for a in sorted(type_profile_to_abund_tup_list, key=lambda x: x[1], reverse=True)]
+
+    max_n_cols = 5
+    max_n_rows = 10
+    num_leg_cells = max_n_cols * max_n_rows
+
 
     colour_dict = {}
     for i in range(len(sorted_type_prof_names_by_local_abund)):
-        if i < len(colour_palette_pas):
-            colour_dict[list(sorted_type_prof_names_by_local_abund)[i]] = colour_palette_pas[i]
+        if i < len(num_leg_cells):
+            colour_dict[sorted_type_prof_names_by_local_abund[i]] = colour_palette_pas[i]
         else:
             grey_index = i%len(grey_palette)
-            colour_dict[list(sorted_type_prof_names_by_local_abund)[i]] = grey_palette[grey_index]
+            colour_dict[sorted_type_prof_names_by_local_abund[i]] = grey_palette[grey_index]
 
     # we should consider doing a plot per clade but for the time being lets start by doing a single plot that will
     # contain all of the clades
@@ -495,8 +500,8 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     # Let's plot the boxes and text that are going to make up the legend in another subplot that we will put underneath
     # the one we currenty have. So.. we will add a subplot when we initially create the figure. We will make the axis
     # 100 by 100 just to make our coordinate easy to work with. We can get rid of all of the axes lines and ticks
-    max_n_cols = 5
-    max_n_rows = 10
+
+
     # The type names are generally quite long so we will cut the type legends down to 4 x 8
     # we should start plotting in the top left working right and then down
     # until we have completed 100 sequences.
@@ -518,11 +523,15 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
 
     # go column by column
     # we can now calculate the actual number of columns and rows we are going to need.
-    if len(list(sp_output_df)) % max_n_cols != 0:
-        n_rows = int(len(list(sp_output_df)) / max_n_cols) + 1
+    if len(sorted_type_prof_names_by_local_abund) < num_leg_cells:
+        if len(sorted_type_prof_names_by_local_abund) % max_n_cols != 0:
+            n_rows = int(len(sorted_type_prof_names_by_local_abund) / max_n_cols) + 1
+        else:
+            n_rows = int(len(sorted_type_prof_names_by_local_abund) / max_n_cols)
+        last_row_len = len(sorted_type_prof_names_by_local_abund) % max_n_cols
     else:
-        n_rows = int(len(list(sp_output_df)) / max_n_cols)
-    last_row_len = len(list(sp_output_df)) % max_n_cols
+        n_rows = max_n_rows
+        last_row_len = max_n_cols
 
     its2_profile_count = 0
 

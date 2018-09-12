@@ -375,10 +375,10 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
         df_relative = df_relative.append(temp_series)
 
         for data_set_object in querySetOfDataSubmissions:
-            data_set_meta_list = ['Data_set ID: {}; '
+            data_set_meta_list = ['Data_set ID: {}; Data_set name: {}; '
                                   'submitting_user: {}; '
                                   'time_stamp: {}'
-                                      .format(data_set_object.id,
+                                      .format(data_set_object.id, data_set_object.name,
                                               data_set_object.submittingUser,
                                               data_set_object.timeStamp)]
             temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]], name='data_set_info')
@@ -396,10 +396,10 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
         df_absolute = df_absolute.append(temp_series)
         df_relative = df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
-            data_set_meta_list = ['Data_set ID: {}; '
+            data_set_meta_list = ['Data_set ID: {}; Data_set name: {}; '
                                   'submitting_user: {}; '
                                   'time_stamp: {}'
-                                      .format(data_set_object.id,
+                                      .format(data_set_object.id, data_set_object.name,
                                               data_set_object.submittingUser,
                                               data_set_object.timeStamp)]
             temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]], name='data_set_info')
@@ -941,10 +941,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         output_df_absolute = output_df_absolute.append(temp_series)
         output_df_relative = output_df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
-            data_set_meta_list = ['Data_set ID: {}; '
+            data_set_meta_list = ['Data_set ID: {}; Data_set name: {}; '
                                   'submitting_user: {}; '
                                   'time_stamp: {}'
-                                      .format(data_set_object.id,
+                                      .format(data_set_object.id, data_set_object.name,
                                               data_set_object.submittingUser,
                                               data_set_object.timeStamp)]
             temp_series = pd.Series(data_set_meta_list, index=[list(output_df_absolute)[0]], name='data_set_info')
@@ -960,10 +960,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         output_df_absolute = output_df_absolute.append(temp_series)
         output_df_relative = output_df_relative.append(temp_series)
         for data_set_object in querySetOfDataSubmissions:
-            data_set_meta_list = ['Data_set ID: {}; '
+            data_set_meta_list = ['Data_set ID: {}; Data_set name: {}; '
                                           'submitting_user: {}; '
                                           'time_stamp: {}'
-                                          .format(data_set_object.id,
+                                          .format(data_set_object.id, data_set_object.name,
                                                   data_set_object.submittingUser,
                                                   data_set_object.timeStamp)]
             temp_series = pd.Series(data_set_meta_list, index=[list(output_df_absolute)[0]], name='data_set_info')
