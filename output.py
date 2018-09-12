@@ -213,7 +213,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     type_to_sample_abund_dict = defaultdict(list)
     typeless_samples_list = []
     for i in range(7, 7 + len(listOfDataSetSamples)):
-        print('Getting type abundance information for {}'.format(listOfDataSetSamples[i - 7]))
+        sys.stdout.write('\rGetting type abundance information for {}'.format(listOfDataSetSamples[i - 7]))
         sample_series = df_relative.iloc[:,i].astype('float')
         max_type_label = sample_series.idxmax()
         rel_abund_of_max_type = sample_series[max_type_label]
@@ -470,7 +470,7 @@ def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_
     num_samples = len(listOfDataSetSample_IDs)
     for anType in iter(input.get, 'STOP'):  # Within each type go through each of the samples
 
-        print('Processing ITS2 type profile: {}'.format(anType))
+        sys.stdout.write('\rProcessing ITS2 type profile: {}'.format(anType))
 
         ###### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
         # For each type we want to calculate the average proportions of the defining seqs in that type
@@ -1156,6 +1156,7 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
 
         # now add the clade divided summaries of the clades
         for clade in cladeList:
+            sys.stdout.write('\rOutputting DIV data for {}: clade summary {}'.format(dss.name, clade))
             sampleRowDataCounts.append(smpl_clade_summary_absolute_dict[clade])
             sampleRowDataProps.append(smpl_clade_summary_relative_dict[clade])
 
@@ -1163,6 +1164,7 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
         # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
         # the sampleRowDataCounts and the sampleRowDataProps
         for seq_name in cladeAbundanceOrderedRefSeqList:
+            sys.stdout.write('\rOutputting DIV data for {}: sequence {}'.format(dss.name, seq_name))
             sampleRowDataCounts.append(smpl_seq_abund_absolute_dict[seq_name])
             sampleRowDataProps.append(smpl_seq_abund_relative_dict[seq_name])
 

@@ -4013,7 +4013,7 @@ def namingRefSeqsUsedInDefs():
         # This fasta should simply be the named sequences already in the SP database
         # lets call the fasta 'named_seqs_in_SP_remote_db.fa'
 
-        # create the fasta
+        # create the fasta to query against which is all of the names sequences.
         named_seqs_in_SP_remote_db_fasta_list = []
         for rs in reference_sequence.objects.filter(hasName=True):
             named_seqs_in_SP_remote_db_fasta_list.extend(['>{}'.format(rs.name), rs.sequence])
