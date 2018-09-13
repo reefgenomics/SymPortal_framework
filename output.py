@@ -817,11 +817,6 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     ############ POPULATE TABLE WITH CC DATA #############
 
-    # create the dataframes that will hold the tables to be output
-    output_df_absolute = pd.DataFrame(columns=output_header)
-    output_df_relative = pd.DataFrame(columns=output_header)
-
-
     # In order to MP this we will have to pay attention to the order. As we can't keep the order as we work with the
     # MPs we will do as we did above for the profies outputs and have an output dict that will have the sample as key
     # and its corresponding data row as the value. Then when we have finished the MPing we will go through the
@@ -881,7 +876,9 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             sys.exit('Sample list passed in does not match sample list from db query')
 
         # if we got to here then the sorted_sample_list looks good
+        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a second...')
         output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()], axis=1)
+        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a second...')
         output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict.values()], axis=1)
 
         # now transpose
@@ -909,18 +906,22 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         ordered_sample_list_by_ID = generate_ordered_sample_list(managedSampleOutputDict)
 
         # if we got to here then the sorted_sample_list looks good
+        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a second...')
         output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()],
                                        axis=1)
+        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a second...')
         output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict.values()],
                                        axis=1)
 
         # now transpose
+        sys.stdout.write('\rTransposing...')
         output_df_absolute = output_df_absolute.T
         output_df_relative = output_df_relative.T
 
 
 
         # now make sure that the order is correct.
+        sys.stdout.write('\rReordering index...')
         output_df_absolute = output_df_absolute.reindex(ordered_sample_list_by_ID)
         output_df_relative = output_df_relative.reindex(ordered_sample_list_by_ID)
 
@@ -937,24 +938,37 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # go column name by column name and if the col name is in seq_annotated_name
     # then get the accession and add to the accession_list
     # else do nothing and a blank should be automatically added for us.
+    #TODO this is painfully slow because we are doing individual calls to the dictionary
+    # I think this will be much faster if do two queries of the db to get the named and
+    # non named refseqs and then make two dicts for each of these and use these to populate the below
+    refSeqsInDSs_noName = reference_sequence.objects.filter(
+        data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions,
+        hasName=False).distinct()
+    refSeqsInDSs_hasName = reference_sequence.objects.filter(
+        data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=querySetOfDataSubmissions,
+        hasName=True).distinct()
+    # no name dict should be a dict of id to sequence
+    no_name_dict = {rs.id: rs.sequence for rs in refSeqsInDSs_noName}
+    # has name dict should be a dict of name to sequence
+    has_name_dict = {rs.name: (rs.id, rs.sequence) for rs in refSeqsInDSs_hasName}
+
+    # for the time being we are going to ignore whether a refseq has an assession as we have not put this
+    # into use yet.
     accession_list = []
     num_cols = len(list(output_df_relative))
     for i, col_name in enumerate(list(output_df_relative)):
         sys.stdout.write('\rAppending accession info and creating fasta {}: {}/{}'.format(col_name, i, num_cols))
         if col_name in cladeAbundanceOrderedRefSeqList:
             if col_name[-2] == '_':
-                ref_seq = reference_sequence.objects.get(id=int(col_name[:-2]))
+                col_name_id = int(col_name[:-2])
+                accession_list.append(str(col_name_id))
+                fasta_output_list.append('>{}'.format(col_name))
+                fasta_output_list.append(no_name_dict[col_name_id])
             else:
-                ref_seq = reference_sequence.objects.get(name=col_name)
-
-            if ref_seq.accession and ref_seq.accession != 'None':
-                ref_seq_accession = ref_seq.accession
-            else:
-                ref_seq_accession = str(ref_seq.id)
-
-            accession_list.append(ref_seq_accession)
-            fasta_output_list.append('>{}'.format(col_name))
-            fasta_output_list.append(ref_seq.sequence)
+                col_name_tup = has_name_dict[col_name]
+                accession_list.append(str(col_name_tup[0]))
+                fasta_output_list.append('>{}'.format(col_name))
+                fasta_output_list.append(col_name_tup[1])
         else:
             accession_list.append(np.nan)
 
@@ -989,7 +1003,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             'Output as part of data_analysis ID: {}; '
             'Number of data_set objects as part of analysis = {}; '
             'submitting_user: {}; time_stamp: {}'.format(
-                data_analysis_obj.id, len(data_analysis_obj.listOfDataSubmissions), data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
+                data_analysis_obj.id, len(data_analysis_obj.listOfDataSubmissions.split(',')), data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
         temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
         output_df_absolute = output_df_absolute.append(temp_series)
         output_df_relative = output_df_relative.append(temp_series)
