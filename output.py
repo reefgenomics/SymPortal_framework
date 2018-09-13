@@ -1224,8 +1224,8 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
                 sampleRowDataProps.append(0)
 
             # Here we need to add the string to the outputDict rather than the intraAbund table objects
-            sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
-            sample_series_relative = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
+            sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.id)
+            sample_series_relative = pd.Series(sampleRowDataCounts, index=output_header, name=dss.id)
 
             outDict[dss.id] = [sample_series_absolute, sample_series_relative]
             continue
