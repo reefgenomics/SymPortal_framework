@@ -38,7 +38,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
 
     # now lets drop the QC columns from the SP output df and also drop the clade summation columns
     # we will be left with just clumns for each one of the sequences found in the samples
-    sp_output_df.drop(columns=['noName Clade A', 'noName Clade B', 'noName Clade C', 'noName Clade D',
+    sp_output_df.drop(columns=[ 'sample_name','noName Clade A', 'noName Clade B', 'noName Clade C', 'noName Clade D',
                                'noName Clade E', 'noName Clade F', 'noName Clade G', 'noName Clade H',
                                'noName Clade I', 'raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
                                'post_taxa_id_absolute_symbiodinium_seqs', 'post_taxa_id_unique_symbiodinium_seqs',
