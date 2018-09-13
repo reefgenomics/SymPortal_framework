@@ -180,7 +180,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
         type_to_abund_list.append(
             (analysis_type_obj, int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[4])))
 
-    # now we can sort this list according to the abundance and this will give us the order of types that we want
+    # now we can sort this list according to the local abundance and this will give us the order of types that we want
     sorted_analysis_type_abundance_list = [a[0] for a in sorted(type_to_abund_list, key=lambda x: x[1], reverse=True)]
 
     # for the purposes of doing the sample sorting we will work with the relative df so that we can
@@ -1131,7 +1131,7 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
 
     # then once we have compelted this for all sequences go clade by clade
     # and generate the sample order
-        ordered_sample_list_by_ID = []
+    ordered_sample_list_by_ID = []
     sys.stdout.write('\nGoing clade by clade sorting by abundance\n')
     for clade in list('ABCDEFGHI'):
         sys.stdout.write('\rGetting clade {} seqs'.format(clade))
@@ -1156,6 +1156,7 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
                 [x[0] for x in
                  sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
             ordered_sample_list_by_ID.extend(ordered_list_of_samples_for_seq_ordered)
+        # finally add in the samples that didn't have a maj sequence
         ordered_sample_list_by_ID.extend(no_maj_samps)
     return ordered_sample_list_by_ID
 
