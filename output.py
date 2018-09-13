@@ -196,11 +196,11 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # get list for the relative df
     # need to make sure that this is ordered according to across_clade_sorted_type_order
     for an_type in across_clade_sorted_type_order:
-        an_type.append(across_clade_type_sample_abund_dict[an_type][1].split('\t'))
+        list_for_df_relative.append(across_clade_type_sample_abund_dict[an_type][1].split('\t'))
 
     # headers can be same for each
     pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence', 'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
-    sample_headers = [dataSamp.name for dataSamp in listOfDataSetSamples]
+    sample_headers = [dataSamp.id for dataSamp in listOfDataSetSamples]
     post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
     columns_for_df = pre_headers + sample_headers + post_headers
 
@@ -216,47 +216,49 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # (i.e not sample headers) and then puts an ID value for the samples
     # this seires works because we rely on the fact that it will just automatically
     # put nan values for all of the headers after the samples
-    data_list_for_sample_id_series = [np.nan if i < len(pre_headers) else listOfDataSetSamples[i].id
-                                      for i in range(len(pre_headers) + len(sample_headers))]
-    sample_id_series = pd.Series(
-                        name='sample_id',
-                        data=data_list_for_sample_id_series,
-                        index=list(df_absolute)[:len(data_list_for_sample_id_series)])
+    data_list_for_sample_name_series = [np.nan if i < len(pre_headers) else listOfDataSetSamples[i - len(pre_headers)].name for i in range(len(pre_headers) + len(sample_headers))]
+    sample_name_series = pd.Series(
+                        name='sample_name',
+                        data=data_list_for_sample_name_series,
+                        index=list(df_absolute)[:len(data_list_for_sample_name_series)])
 
 
+    # it turns out that you cannot have duplicate header values (which makes sense). So we're going to have to
+    # work with the sample IDs as the header values and put the sample_name in as the secondary series
 
     # now add the series to the df and then re order the df
-    df_absolute.append(sample_id_series)
-    df_relative.append(sample_id_series)
+    df_absolute.append(sample_name_series)
+    df_relative.append(sample_name_series)
 
     # now reorder the index so that the sample_id_series is on top
     index_list = df_absolute.index.values.tolist()
-    df_absolute = df_absolute.reindex([index_list[-1] + index_list[:-1]])
-    df_relative = df_relative.reindex([index_list[-1] + index_list[:-1]])
+    re_index_index = index_list[-1] + index_list[:-1]
+    df_absolute = df_absolute.reindex(re_index_index)
+    df_relative = df_relative.reindex(re_index_index)
 
     # at this point we have both of the dfs. We will use the relative df for getting the ordered smpl list
     # now go sample by sample find the samples max type and add to the dictionary where key is types, and value
     # is list of tups, one for each sample which is sample name and rel_abund of the given type
     # We should also produce a dict that holds the ID to sample_name for reordering purposes later on.
-    sample_id_to_sample_name_dict = {}
+    # sample_id_to_sample_name_dict = {}
     type_to_sample_abund_dict = defaultdict(list)
     typeless_samples_list_by_ID = []
     for i in range(len(pre_headers), len(pre_headers) + len(listOfDataSetSamples)):
-        sys.stdout.write('\rGetting type abundance information for {}'.format(listOfDataSetSamples[i - 7]))
+        sys.stdout.write('\rGetting type abundance information for {}'.format(listOfDataSetSamples[i - len(pre_headers)]))
         sample_series = df_relative.iloc[:,i]
-        sample_abundances_series = sample_series[:1].astype('float')
+        sample_abundances_series = sample_series[1:].astype('float')
         max_type_label = sample_abundances_series.idxmax()
         rel_abund_of_max_type = sample_abundances_series[max_type_label]
         if not rel_abund_of_max_type > 0:
             # append the ID of the sample to the list
-            smpl_id = sample_series['sample_id']
+            smpl_id = sample_series.name
             typeless_samples_list_by_ID.append(smpl_id)
-            sample_id_to_sample_name_dict[smpl_id] = sample_series.name
+            # sample_id_to_sample_name_dict[smpl_id] = sample_series['sample_name']
         else:
             # append a tuple that is (sample_id, rel abundance of the max type)
-            smpl_id = sample_series['sample_id']
+            smpl_id = sample_series.name
             type_to_sample_abund_dict[max_type_label].append((smpl_id, rel_abund_of_max_type))
-            sample_id_to_sample_name_dict[smpl_id] = sample_series.name
+            # sample_id_to_sample_name_dict[smpl_id] = sample_series.name
 
     # here we have the dictionary populated. We can now go type by type according
     # to the sorted_analysis_type_abundance_list and put the samples that had the given type as their most abundant
@@ -282,7 +284,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
 
 
     # rearange the sample columns so that they are in the new order
-    new_sample_headers = [typeless_samples_list_by_ID[smp_id] for smp_id in samples_by_ID_that_have_been_sorted]
+    new_sample_headers = samples_by_ID_that_have_been_sorted
     new_cols = pre_headers + new_sample_headers + post_headers
 
     df_absolute = df_absolute[new_cols]
@@ -460,7 +462,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
     div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
                                                            numProcessors=numProcessors, output_dir=outputDir,
-                                                           sorted_sample_list=samples_by_ID_that_have_been_sorted,
+                                                           sorted_sample_ID_list=samples_by_ID_that_have_been_sorted,
                                                            analysis_obj_id=analysisobj.id, call_type='analysis')
 
     print('ITS2 type profile output files:')
@@ -808,7 +810,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
                           'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique']
 
     # append the noName sequences as individual sequence abundances
-    output_header = ['sample_id'] + qc_stats + no_name_summary_strings + headerPre
+    output_header = ['sample_name'] + qc_stats + no_name_summary_strings + headerPre
 
 
     ######################################################################################
@@ -1094,12 +1096,9 @@ def generate_ordered_sample_list(managedSampleOutputDict, output_header):
         sys.stdout.write('\rPopulating DataFrame for sorting: {}'.format(smp))
         output_df_relative = output_df_relative.append(series_list[1])
 
-    # change the index to be the sample_id
-    # We end results will bea  list of IDs
-    output_df_relative.set_index('sample_id', inplace=True, drop=True)
 
     # now remove the rest of the non abundance columns
-    non_seq_columns = ['raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',
+    non_seq_columns = ['sample_name', 'raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',
                        'post_qc_unique_seqs',
                        'post_taxa_id_unique_non_symbiodinium_seqs', 'post_taxa_id_absolute_symbiodinium_seqs',
                        'post_taxa_id_unique_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique',
@@ -1177,9 +1176,9 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
             #Then this sample had a problem in the sequencing and we need to just output 0s across the board
             # QC
 
-            # Append the ID of the dss for when we have samples of the same name
-            sampleRowDataCounts.append(dss.id)
-            sampleRowDataProps.append(dss.id)
+            # Append the name of the dss for when we have samples of the same name
+            sampleRowDataCounts.append(dss.name)
+            sampleRowDataProps.append(dss.name)
 
             populate_QC_data_of_failed_sample(dss, sampleRowDataCounts, sampleRowDataProps)
 
@@ -1211,9 +1210,9 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
         # For the relative counts we will report these as proportions of the sampleSeqTot.
         # I.e. we will have numbers larger than 1 for many of the values and the symbiodinium seqs should be 1
 
-        # Append the ID of the dss for when we have samples of the same name
-        sampleRowDataCounts.append(dss.id)
-        sampleRowDataProps.append(dss.id)
+        # Append the name of the dss for when we have samples of the same name
+        sampleRowDataCounts.append(dss.name)
+        sampleRowDataProps.append(dss.name)
 
         populate_QC_data_of_successful_sample(dss, sampleRowDataCounts, sampleRowDataProps, sampleSeqTot)
 
@@ -1233,8 +1232,8 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
 
 
         # Here we need to add the string to the outputDict rather than the intraAbund table objects
-        sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
-        sample_series_relative = pd.Series(sampleRowDataProps, index=output_header, name=dss.name)
+        sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.id)
+        sample_series_relative = pd.Series(sampleRowDataProps, index=output_header, name=dss.id)
 
         outDict[dss.id] = [sample_series_absolute, sample_series_relative]
 
