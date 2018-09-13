@@ -882,15 +882,13 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
         # if we got to here then the sorted_sample_list looks good
         output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()], axis=1)
-        output_df_relative = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()], axis=1)
+        output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict.values()], axis=1)
 
         # now transpose
         output_df_absolute = output_df_absolute.T
         output_df_relative = output_df_relative.T
 
-        # now update the column names
-        output_df_absolute.columns = output_header
-        output_df_relative.columns = output_header
+
 
         # now make sure that the order is correct.
         output_df_absolute = output_df_absolute.reindex(sorted_sample_ID_list)
@@ -908,21 +906,19 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
         # discounting clade. THis is what we do for the clade order when plotting.
         sys.stdout.write('\nGenerating ordered sample list and ordering dataframe accordingly\n')
-        ordered_sample_list_by_ID = generate_ordered_sample_list(managedSampleOutputDict, output_header)
+        ordered_sample_list_by_ID = generate_ordered_sample_list(managedSampleOutputDict)
 
         # if we got to here then the sorted_sample_list looks good
         output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()],
                                        axis=1)
-        output_df_relative = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()],
+        output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict.values()],
                                        axis=1)
 
         # now transpose
         output_df_absolute = output_df_absolute.T
         output_df_relative = output_df_relative.T
 
-        # now update the column names
-        output_df_absolute.columns = output_header
-        output_df_relative.columns = output_header
+
 
         # now make sure that the order is correct.
         output_df_absolute = output_df_absolute.reindex(ordered_sample_list_by_ID)
@@ -1105,9 +1101,13 @@ def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_
 
 
 
-def generate_ordered_sample_list(managedSampleOutputDict, output_header):
+def generate_ordered_sample_list(managedSampleOutputDict):
     # create a df from the managedSampleOutputDict. We will use the relative values here
-    output_df_relative = pd.DataFrame(columns=output_header)
+
+    output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict.values()],
+                                   axis=1)
+    output_df_relative = output_df_relative.T
+
     for smp, series_list in managedSampleOutputDict.items():
         sys.stdout.write('\rPopulating DataFrame for sorting: {}'.format(smp))
         output_df_relative = output_df_relative.append(series_list[1])
@@ -1134,8 +1134,9 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
     no_maj_samps = []
     for sample_to_sort_ID in sequence_only_df_relative.index.values.tolist():
         sys.stdout.write('\rGetting maj seq for sample {}'.format(sample_to_sort_ID))
-        max_abund_seq = sequence_only_df_relative.loc[sample_to_sort_ID].idxmax()
-        max_rel_abund = sequence_only_df_relative.loc[sample_to_sort_ID].max()
+        series_as_float = sequence_only_df_relative.loc[sample_to_sort_ID].astype('float')
+        max_abund_seq = series_as_float.idxmax()
+        max_rel_abund = series_as_float.max()
         if not max_rel_abund > 0:
             no_maj_samps.append(sample_to_sort_ID)
         else:
