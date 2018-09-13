@@ -227,12 +227,12 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # work with the sample IDs as the header values and put the sample_name in as the secondary series
 
     # now add the series to the df and then re order the df
-    df_absolute.append(sample_name_series)
-    df_relative.append(sample_name_series)
+    df_absolute = df_absolute.append(sample_name_series)
+    df_relative = df_relative.append(sample_name_series)
 
     # now reorder the index so that the sample_id_series is on top
     index_list = df_absolute.index.values.tolist()
-    re_index_index = index_list[-1] + index_list[:-1]
+    re_index_index = [index_list[-1]] + index_list[:-1]
     df_absolute = df_absolute.reindex(re_index_index)
     df_relative = df_relative.reindex(re_index_index)
 
@@ -872,28 +872,30 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # accoring to the IDs of the samples
 
     if sorted_sample_ID_list:
-
+        sys.stdout.write('\nValidating sorted sample list and ordering dataframe accordingly\n')
         if len(sorted_sample_ID_list) != len(sampleList):
             sys.exit('Number of items in sorted_sample_list do not match those to be outputted!')
-
-        provided_name_to_samp_name_dict = {}
-        for provided_smpl_id in sorted_sample_ID_list:
-            match_list = []
-            for smp in sampleList:
-                if provided_smpl_id == smp.id:
-                    match_list.append(smp.name)
-                    provided_name_to_samp_name_dict[provided_smpl_id] = smp
-            if len(match_list) > 1:
-                sys.exit('Sample name {} matches more than one output sample ({}).'.format(provided_smpl_id,
-                                                                                           '\t'.join(match_list)))
-            if len(match_list) == 0:
-                sys.exit('Sample name {} does not match any output sample.'.format(provided_smpl_id))
+        if list(set(sorted_sample_ID_list).difference(set([s.id for s in sampleList]))):
+            # then there is a sample that doesn't match up from the sorted_sample_ID_list that
+            # has been passed in and the unordered sample list that we are working with in the code
+            sys.exit('Sample list passed in does not match sample list from db query')
 
         # if we got to here then the sorted_sample_list looks good
+        output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()], axis=1)
+        output_df_relative = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()], axis=1)
 
-        for dss_id in sorted_sample_ID_list:
-            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss_id][0])
-            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss_id][1])
+        # now transpose
+        output_df_absolute = output_df_absolute.T
+        output_df_relative = output_df_relative.T
+
+        # now update the column names
+        output_df_absolute.columns = output_header
+        output_df_relative.columns = output_header
+
+        # now make sure that the order is correct.
+        output_df_absolute = output_df_absolute.reindex(sorted_sample_ID_list)
+        output_df_relative = output_df_relative.reindex(sorted_sample_ID_list)
+
     else:
         # TODO we should aim to work with IDs here.
         # this returns a list which is simply the names of the samples
@@ -905,12 +907,26 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # of the output so that we minimise the number of 0's in the top left of the output
         # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
         # discounting clade. THis is what we do for the clade order when plotting.
-        sys.stdout.write('\nGenerating ordered sample list\n')
+        sys.stdout.write('\nGenerating ordered sample list and ordering dataframe accordingly\n')
         ordered_sample_list_by_ID = generate_ordered_sample_list(managedSampleOutputDict, output_header)
 
-        for dss_id in ordered_sample_list_by_ID:
-            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss_id][0])
-            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss_id][1])
+        # if we got to here then the sorted_sample_list looks good
+        output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()],
+                                       axis=1)
+        output_df_relative = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()],
+                                       axis=1)
+
+        # now transpose
+        output_df_absolute = output_df_absolute.T
+        output_df_relative = output_df_relative.T
+
+        # now update the column names
+        output_df_absolute.columns = output_header
+        output_df_relative.columns = output_header
+
+        # now make sure that the order is correct.
+        output_df_absolute = output_df_absolute.reindex(ordered_sample_list_by_ID)
+        output_df_relative = output_df_relative.reindex(ordered_sample_list_by_ID)
 
     # when adding the accession numbers below, we have to go through every sequence and look up its object
     # We also have to do this when we are outputting the fasta.
