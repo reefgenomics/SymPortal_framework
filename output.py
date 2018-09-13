@@ -183,23 +183,26 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # now we can sort this list according to the abundance and this will give us the order of types that we want
     sorted_analysis_type_abundance_list = [a[0] for a in sorted(type_to_abund_list, key=lambda x: x[1], reverse=True)]
 
-
-
-    # need to work with proportions here so that we can compare type abundances betweeen samples
+    # for the purposes of doing the sample sorting we will work with the relative df so that we can
+    # compare the abundance of types across samples
     list_for_df_absolute = []
     list_for_df_relative = []
 
     # get list for the aboslute df
-    for an_type_key in across_clade_type_sample_abund_dict.keys():
-        list_for_df_absolute.append(across_clade_type_sample_abund_dict[an_type_key][0].split('\t'))
+    # need to make sure that this is ordered according to across_clade_sorted_type_order
+    for an_type in across_clade_sorted_type_order:
+        list_for_df_absolute.append(across_clade_type_sample_abund_dict[an_type][0].split('\t'))
 
     # get list for the relative df
-    for an_type_key in across_clade_type_sample_abund_dict.keys():
-        list_for_df_relative.append(across_clade_type_sample_abund_dict[an_type_key][1].split('\t'))
+    # need to make sure that this is ordered according to across_clade_sorted_type_order
+    for an_type in across_clade_sorted_type_order:
+        an_type.append(across_clade_type_sample_abund_dict[an_type][1].split('\t'))
 
     # headers can be same for each
-    columns_for_df =('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-            '\t'.join([dataSamp.name for dataSamp in listOfDataSetSamples]))).split('\t')
+    pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence', 'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
+    sample_headers = [dataSamp.name for dataSamp in listOfDataSetSamples]
+    post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
+    columns_for_df = pre_headers + sample_headers + post_headers
 
     # make absolute
     df_absolute = pd.DataFrame(list_for_df_absolute, columns=columns_for_df)
@@ -208,33 +211,65 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     df_relative = pd.DataFrame(list_for_df_relative, columns=columns_for_df)
     df_relative.set_index('ITS2 type profile', drop=False, inplace=True)
 
+    # add a series that gives us the IDs of the samples incase we have samples that have the same names
+    # this rather complex comprehension puts an nan into the list for the pre_header headers
+    # (i.e not sample headers) and then puts an ID value for the samples
+    # this seires works because we rely on the fact that it will just automatically
+    # put nan values for all of the headers after the samples
+    data_list_for_sample_id_series = [np.nan if i < len(pre_headers) else listOfDataSetSamples[i].id
+                                      for i in range(len(pre_headers) + len(sample_headers))]
+    sample_id_series = pd.Series(
+                        name='sample_id',
+                        data=data_list_for_sample_id_series,
+                        index=list(df_absolute)[:len(data_list_for_sample_id_series)])
+
+
+
+    # now add the series to the df and then re order the df
+    df_absolute.append(sample_id_series)
+    df_relative.append(sample_id_series)
+
+    # now reorder the index so that the sample_id_series is on top
+    index_list = df_absolute.index.values.tolist()
+    df_absolute = df_absolute.reindex([index_list[-1] + index_list[:-1]])
+    df_relative = df_relative.reindex([index_list[-1] + index_list[:-1]])
+
     # at this point we have both of the dfs. We will use the relative df for getting the ordered smpl list
     # now go sample by sample find the samples max type and add to the dictionary where key is types, and value
     # is list of tups, one for each sample which is sample name and rel_abund of the given type
+    # We should also produce a dict that holds the ID to sample_name for reordering purposes later on.
+    sample_id_to_sample_name_dict = {}
     type_to_sample_abund_dict = defaultdict(list)
-    typeless_samples_list = []
-    for i in range(7, 7 + len(listOfDataSetSamples)):
+    typeless_samples_list_by_ID = []
+    for i in range(len(pre_headers), len(pre_headers) + len(listOfDataSetSamples)):
         sys.stdout.write('\rGetting type abundance information for {}'.format(listOfDataSetSamples[i - 7]))
-        sample_series = df_relative.iloc[:,i].astype('float')
-        max_type_label = sample_series.idxmax()
-        rel_abund_of_max_type = sample_series[max_type_label]
+        sample_series = df_relative.iloc[:,i]
+        sample_abundances_series = sample_series[:1].astype('float')
+        max_type_label = sample_abundances_series.idxmax()
+        rel_abund_of_max_type = sample_abundances_series[max_type_label]
         if not rel_abund_of_max_type > 0:
-            typeless_samples_list.append(sample_series.name)
+            # append the ID of the sample to the list
+            smpl_id = sample_series['sample_id']
+            typeless_samples_list_by_ID.append(smpl_id)
+            sample_id_to_sample_name_dict[smpl_id] = sample_series.name
         else:
-            type_to_sample_abund_dict[max_type_label].append((sample_series.name, rel_abund_of_max_type))
+            # append a tuple that is (sample_id, rel abundance of the max type)
+            smpl_id = sample_series['sample_id']
+            type_to_sample_abund_dict[max_type_label].append((smpl_id, rel_abund_of_max_type))
+            sample_id_to_sample_name_dict[smpl_id] = sample_series.name
 
     # here we have the dictionary populated. We can now go type by type according
     # to the sorted_analysis_type_abundance_list and put the samples that had the given type as their most abundant
     # type, into the sorted sample list, addtionaly sorted by how abund the type was in each of the samples
-    samples_that_have_been_sorted = []
+    samples_by_ID_that_have_been_sorted = []
     # we are only concerned with the types that had samples that had them as most abundant
     for an_type_name in [at.name for at in sorted_analysis_type_abundance_list if at.name in type_to_sample_abund_dict.keys()]:
-        samples_that_have_been_sorted.extend([a[0] for a in sorted(type_to_sample_abund_dict[an_type_name], key=lambda x: x[1], reverse=True)])
+        samples_by_ID_that_have_been_sorted.extend([a[0] for a in sorted(type_to_sample_abund_dict[an_type_name], key=lambda x: x[1], reverse=True)])
 
     # here we should have a list of samples that have been sorted according to the types they were found to
     # have as their most abundant
     # now we just need to add the samples that didn't have a type in them to be associated to. Negative etc.
-    samples_that_have_been_sorted.extend(typeless_samples_list)
+    samples_by_ID_that_have_been_sorted.extend(typeless_samples_list_by_ID)
 
     # now pickle out the samples_that_have_been_sorted list if we are running on the remote system
     outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
@@ -242,20 +277,20 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
         config_dict = json.load(f)
     local_or_remote = config_dict['system_type']
     if local_or_remote == 'remote':
-        pickle.dump(samples_that_have_been_sorted,
+        pickle.dump(samples_by_ID_that_have_been_sorted,
                     open("{}/samples_that_have_been_sorted.pickle".format(outputDir), "wb"))
 
 
     # rearange the sample columns so that they are in the new order
-    new_cols = ('ITS2 type profile UID\tClade\tMajority ITS2 sequence\tAssociated species\tITS2 type abundance local\tITS2 type abundance DB\tITS2 type profile\t{0}\tSequence accession / SymPortal UID\tAverage defining sequence proportions and [stdev]'.format(
-            '\t'.join(samples_that_have_been_sorted))).split('\t')
+    new_sample_headers = [typeless_samples_list_by_ID[smp_id] for smp_id in samples_by_ID_that_have_been_sorted]
+    new_cols = pre_headers + new_sample_headers + post_headers
+
     df_absolute = df_absolute[new_cols]
     df_relative = df_relative[new_cols]
 
     # transpose
     df_absolute = df_absolute.T
     df_relative = df_relative.T
-
 
 
     outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
@@ -425,7 +460,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
     div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
                                                            numProcessors=numProcessors, output_dir=outputDir,
-                                                           sorted_sample_list=samples_that_have_been_sorted,
+                                                           sorted_sample_list=samples_by_ID_that_have_been_sorted,
                                                            analysis_obj_id=analysisobj.id, call_type='analysis')
 
     print('ITS2 type profile output files:')
@@ -626,7 +661,7 @@ def getAbundStr(totlist, sdlist, majlist):
     return abundOutputStr
 
 def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir, call_type,
-                                                           sorted_sample_list=None, analysis_obj_id=None, output_user=None ):
+                                                           sorted_sample_ID_list=None, analysis_obj_id=None, output_user=None ):
 
 
     ########################## ITS2 INTRA ABUND COUNT TABLE ################################
@@ -773,7 +808,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
                           'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique']
 
     # append the noName sequences as individual sequence abundances
-    output_header = qc_stats + no_name_summary_strings + headerPre
+    output_header = ['sample_id'] + qc_stats + no_name_summary_strings + headerPre
 
 
     ######################################################################################
@@ -831,30 +866,34 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # if there is one.
     # If there is a sorted sample list, make sure that it matches the samples that we are outputting
 
-    if sorted_sample_list:
+    # TODO we are having an issue with data_sets having the same names. To fix this, we should do our ordering
+    # accoring to the IDs of the samples
 
-        if len(sorted_sample_list) != len(sampleList):
-            sys.exit('Name in sorted_sample_list do not match those to be outputted!')
+    if sorted_sample_ID_list:
+
+        if len(sorted_sample_ID_list) != len(sampleList):
+            sys.exit('Number of items in sorted_sample_list do not match those to be outputted!')
 
         provided_name_to_samp_name_dict = {}
-        for provided_name in sorted_sample_list:
+        for provided_smpl_id in sorted_sample_ID_list:
             match_list = []
             for smp in sampleList:
-                if provided_name == smp.name:
+                if provided_smpl_id == smp.id:
                     match_list.append(smp.name)
-                    provided_name_to_samp_name_dict[provided_name] = smp
+                    provided_name_to_samp_name_dict[provided_smpl_id] = smp
             if len(match_list) > 1:
-                sys.exit('Sample name {} matches more than one output sample ({}).'.format(provided_name,
+                sys.exit('Sample name {} matches more than one output sample ({}).'.format(provided_smpl_id,
                                                                                            '\t'.join(match_list)))
             if len(match_list) == 0:
-                sys.exit('Sample name {} does not match any output sample.'.format(provided_name))
+                sys.exit('Sample name {} does not match any output sample.'.format(provided_smpl_id))
 
         # if we got to here then the sorted_sample_list looks good
 
-        for dss_name in sorted_sample_list:
-            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss_name][0])
-            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss_name][1])
+        for dss_id in sorted_sample_ID_list:
+            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss_id][0])
+            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss_id][1])
     else:
+        # TODO we should aim to work with IDs here.
         # this returns a list which is simply the names of the samples
         # This will order the samples according to which sequence is their most abundant.
         # I.e. samples found to have the sequence which is most abundant in the largest number of sequences
@@ -865,11 +904,11 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
         # discounting clade. THis is what we do for the clade order when plotting.
         sys.stdout.write('\nGenerating ordered sample list\n')
-        ordered_sample_list = generate_ordered_sample_list(managedSampleOutputDict, output_header)
+        ordered_sample_list_by_ID = generate_ordered_sample_list(managedSampleOutputDict, output_header)
 
-        for dss in ordered_sample_list:
-            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss][0])
-            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss][1])
+        for dss_id in ordered_sample_list_by_ID:
+            output_df_absolute = output_df_absolute.append(managedSampleOutputDict[dss_id][0])
+            output_df_relative = output_df_relative.append(managedSampleOutputDict[dss_id][1])
 
     # when adding the accession numbers below, we have to go through every sequence and look up its object
     # We also have to do this when we are outputting the fasta.
@@ -1043,8 +1082,8 @@ def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_
             smple_seq_count_aboslute_dict[name_unit] += dsss.abundance
             smple_seq_count_relative_dict[name_unit] += dsss.abundance / sampleSeqTot
 
-        smpl_noName_clade_summary_dict[dss.name] = [clade_summary_absolute_dict, clade_summary_relative_dict]
-        smpl_seq_dict[dss.name] = [smple_seq_count_aboslute_dict, smple_seq_count_relative_dict]
+        smpl_noName_clade_summary_dict[dss.id] = [clade_summary_absolute_dict, clade_summary_relative_dict]
+        smpl_seq_dict[dss.id] = [smple_seq_count_aboslute_dict, smple_seq_count_relative_dict]
 
 
 
@@ -1055,6 +1094,11 @@ def generate_ordered_sample_list(managedSampleOutputDict, output_header):
         sys.stdout.write('\rPopulating DataFrame for sorting: {}'.format(smp))
         output_df_relative = output_df_relative.append(series_list[1])
 
+    # change the index to be the sample_id
+    # We end results will bea  list of IDs
+    output_df_relative.set_index('sample_id', inplace=True, drop=True)
+
+    # now remove the rest of the non abundance columns
     non_seq_columns = ['raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',
                        'post_qc_unique_seqs',
                        'post_taxa_id_unique_non_symbiodinium_seqs', 'post_taxa_id_absolute_symbiodinium_seqs',
@@ -1073,21 +1117,21 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
 
     # for each sample get the columns name of the max value of a div
     no_maj_samps = []
-    for sample_to_sort in sequence_only_df_relative.index.values.tolist():
-        sys.stdout.write('\rGetting maj seq for sample {}'.format(sample_to_sort))
-        max_abund_seq = sequence_only_df_relative.loc[sample_to_sort].idxmax()
-        max_rel_abund = sequence_only_df_relative.loc[sample_to_sort].max()
+    for sample_to_sort_ID in sequence_only_df_relative.index.values.tolist():
+        sys.stdout.write('\rGetting maj seq for sample {}'.format(sample_to_sort_ID))
+        max_abund_seq = sequence_only_df_relative.loc[sample_to_sort_ID].idxmax()
+        max_rel_abund = sequence_only_df_relative.loc[sample_to_sort_ID].max()
         if not max_rel_abund > 0:
-            no_maj_samps.append(sample_to_sort)
+            no_maj_samps.append(sample_to_sort_ID)
         else:
             # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
-            seq_to_samp_dict[max_abund_seq].append((sample_to_sort, max_rel_abund))
+            seq_to_samp_dict[max_abund_seq].append((sample_to_sort_ID, max_rel_abund))
             # add this to the ddict count
             max_seq_ddict[max_abund_seq] += 1
 
     # then once we have compelted this for all sequences go clade by clade
     # and generate the sample order
-    ordered_sample_list = []
+        ordered_sample_list_by_ID = []
     sys.stdout.write('\nGoing clade by clade sorting by abundance\n')
     for clade in list('ABCDEFGHI'):
         sys.stdout.write('\rGetting clade {} seqs'.format(clade))
@@ -1111,9 +1155,9 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
             ordered_list_of_samples_for_seq_ordered = \
                 [x[0] for x in
                  sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
-            ordered_sample_list.extend(ordered_list_of_samples_for_seq_ordered)
-    ordered_sample_list.extend(no_maj_samps)
-    return ordered_sample_list
+            ordered_sample_list_by_ID.extend(ordered_list_of_samples_for_seq_ordered)
+        ordered_sample_list_by_ID.extend(no_maj_samps)
+    return ordered_sample_list_by_ID
 
 def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList, output_header,
                                                      smpl_abund_dicts_dict,
@@ -1132,6 +1176,10 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
             #Then this sample had a problem in the sequencing and we need to just output 0s across the board
             # QC
 
+            # Append the ID of the dss for when we have samples of the same name
+            sampleRowDataCounts.append(dss.id)
+            sampleRowDataProps.append(dss.id)
+
             populate_QC_data_of_failed_sample(dss, sampleRowDataCounts, sampleRowDataProps)
 
             # no name clade summaries get 0.
@@ -1148,21 +1196,25 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
             sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
             sample_series_relative = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
 
-            outDict[dss.name] = [sample_series_absolute, sample_series_relative]
+            outDict[dss.id] = [sample_series_absolute, sample_series_relative]
             continue
 
         # get the list of sample specific dicts that contain the clade summaries and the seq abundances
-        smpl_seq_abund_absolute_dict = smpl_abund_dicts_dict[dss.name][0]
-        smpl_seq_abund_relative_dict = smpl_abund_dicts_dict[dss.name][1]
-        smpl_clade_summary_absolute_dict = smpl_clade_summary_dicts_dict[dss.name][0]
-        smpl_clade_summary_relative_dict = smpl_clade_summary_dicts_dict[dss.name][1]
+        smpl_seq_abund_absolute_dict = smpl_abund_dicts_dict[dss.id][0]
+        smpl_seq_abund_relative_dict = smpl_abund_dicts_dict[dss.id][1]
+        smpl_clade_summary_absolute_dict = smpl_clade_summary_dicts_dict[dss.id][0]
+        smpl_clade_summary_relative_dict = smpl_clade_summary_dicts_dict[dss.id][1]
 
         # Here we add in the post qc and post-taxa id counts
         # For the absolute counts we will report the absolute seq number
         # For the relative counts we will report these as proportions of the sampleSeqTot.
         # I.e. we will have numbers larger than 1 for many of the values and the symbiodinium seqs should be 1
-        populate_QC_data_of_successful_sample(dss, sampleRowDataCounts, sampleRowDataProps, sampleSeqTot)
 
+        # Append the ID of the dss for when we have samples of the same name
+        sampleRowDataCounts.append(dss.id)
+        sampleRowDataProps.append(dss.id)
+
+        populate_QC_data_of_successful_sample(dss, sampleRowDataCounts, sampleRowDataProps, sampleSeqTot)
 
         # now add the clade divided summaries of the clades
         for clade in cladeList:
@@ -1183,7 +1235,7 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
         sample_series_absolute = pd.Series(sampleRowDataCounts, index=output_header, name=dss.name)
         sample_series_relative = pd.Series(sampleRowDataProps, index=output_header, name=dss.name)
 
-        outDict[dss.name] = [sample_series_absolute, sample_series_relative]
+        outDict[dss.id] = [sample_series_absolute, sample_series_relative]
 
 
 
@@ -1242,6 +1294,7 @@ def populate_QC_data_of_failed_sample(dss, sampleRowDataCounts, sampleRowDataPro
     # For the proportions we will have to add zeros as we cannot do proportions
     # CONTIGS
     # This is the absolute number of sequences after make.contigs
+
     if dss.initialTotSeqNum:
         contig_num = dss.initialTotSeqNum
         sampleRowDataCounts.append(contig_num)
