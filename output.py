@@ -274,7 +274,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     samples_by_ID_that_have_been_sorted.extend(typeless_samples_list_by_ID)
 
     # now pickle out the samples_that_have_been_sorted list if we are running on the remote system
-    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
+    outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id)))
     with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
         config_dict = json.load(f)
     local_or_remote = config_dict['system_type']
@@ -295,7 +295,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     df_relative = df_relative.T
 
 
-    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id))
+    outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id)))
     os.makedirs(outputDir, exist_ok=True)
     os.chdir(outputDir)
 

@@ -68,18 +68,14 @@ def main():
                                                                '(pairwise distances and PCoA coordinates) '
                                                                'pass the --noOrd flag')
 
-
-    group.add_argument('--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
-
-
     group.add_argument('--analyse', metavar='data_set IDs', help='Analyse one or more data_set objects '
-                                                                       'together. Enter comma separated '
-                                                                       'IDs of the data_set IDs you which to '
-                                                                       'analyse. e.g.: 43,44,45. '
-                                                           'If you wish to use all available dataSubmissions,'
-                                                                       'you may pass \'all\' as an argument. '
-                                                           'To display all data_sets currently submitted to the '
-                                                           'framework\'s database, including their ids, use the \'show_data_sets\' command\n'
+                                                                 'together. Enter comma separated '
+                                                                 'IDs of the data_set IDs you which to '
+                                                                 'analyse. e.g.: 43,44,45. '
+                                                                 'If you wish to use all available dataSubmissions,'
+                                                                 'you may pass \'all\' as an argument. '
+                                                                 'To display all data_sets currently submitted to the '
+                                                                 'framework\'s database, including their ids, use the \'show_data_sets\' command\n'
                                                                  'To skip the generation of figures pass the '
                                                                  '--noFig flag.\n'
                                                                  'To skip the generation of ordination files '
@@ -87,6 +83,13 @@ def main():
                                                                  'pass the --noOrd flag')
 
 
+    group.add_argument('--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
+
+    group.add_argument('--display_analyses', action='store_true', help=' Display data_analysis objects currently '
+                                                                       'stored in the framework\'s database')
+
+    group.add_argument('--print_output_seqs', metavar='data_set IDs',
+                       help='Use this function to output ITS2 sequence count tables for given data_set instances')
 
     group.add_argument('--print_output_types', metavar='data_set IDs, analysis ID', help='Use this function to output the '
                                                                                        'ITS2 sequence and ITS2 type profile count tables for '
@@ -102,18 +105,17 @@ def main():
                                                                                        '--noFig flag.')
 
 
-    group.add_argument('--display_analyses', action='store_true', help=' Display data_analysis objects currently '
-                                                                       'stored in the framework\'s database')
+
     group.add_argument('--between_type_distances',
                        metavar='data_set IDs, analysis ID',
                        help='Use this function to output UniFrac pairwise distances '
                             'between ITS2 type profiles clade separated')
+
     group.add_argument('--between_sample_distances',
                        metavar='data_set IDs',
                        help='Use this function to output UniFrac pairwise distances '
                             'between samples clade separated')
-    group.add_argument('--print_output_seqs', metavar='data_set IDs',
-                       help='Use this function to output ITS2 sequence count tables for given data_set instances')
+
 
     # Additional arguments
     parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
@@ -262,16 +264,29 @@ def main():
             dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
             method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
 
+    
     elif args.print_output_seqs:
         # this is a stand_alone and output and we should grab the user who is requresting it from the config file
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
             config_dict = json.load(f)
         new_data_set_submitting_user = config_dict['user_name']
 
-        outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
-        output.div_output_pre_analysis_new_meta_and_new_dss_structure(
+        outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
+        output_file_list = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
             datasubstooutput=args.print_output_seqs, numProcessors=args.num_proc, output_dir=outputDir,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
+        for item in output_file_list:
+            if 'relative' in item:
+                svg_path, png_path = plotting.\
+                    generate_stacked_bar_data_submission(path_to_tab_delim_count=item,
+                                                       output_directory=outputDir,
+                                                       data_sub_id_str=args.print_output_seqs)
+                print('Output figs:')
+                print(svg_path)
+                print(png_path)
+                break
+
+
 
     elif args.vacuumDatabase:
         print('Vacuuming database')
