@@ -1084,8 +1084,8 @@ def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_
 
         sampleSeqTot = sum(cladalAbundances)
 
-        if dss.errorInProcessing or sampleSeqTot == 0:
-            continue
+        # if dss.errorInProcessing or sampleSeqTot == 0:
+        #     continue
 
 
         # the first dict will hold the absolute abundances, whilst the second will hold the relative abundances
@@ -1181,8 +1181,8 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
                 [x[0] for x in
                  sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
             ordered_sample_list_by_ID.extend(ordered_list_of_samples_for_seq_ordered)
-        # finally add in the samples that didn't have a maj sequence
-        ordered_sample_list_by_ID.extend(no_maj_samps)
+    # finally add in the samples that didn't have a maj sequence
+    ordered_sample_list_by_ID.extend(no_maj_samps)
     return ordered_sample_list_by_ID
 
 def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList, output_header,
