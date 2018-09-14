@@ -15,6 +15,7 @@ import datetime
 plt.ioff()
 
 def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None):
+    print('Generating stacked bar data submission')
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
     # Here we will generate our standard stacked bar output.
@@ -311,6 +312,8 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
            '{}_seq_abundance_stacked_bar_plot.png'.format(fig_output_base)
 
 def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, output_directory, analysis_obj_id, time_date_str=None):
+    print('Generating stacked bar type profiles')
+
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
     # Here we will generate our standard stacked bar output.

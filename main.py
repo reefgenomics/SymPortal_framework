@@ -252,19 +252,35 @@ def main():
 
     elif args.between_type_distances:
         if args.data_analysis_id:
-            data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+            pcoa_path_list = data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
                 data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
                 data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', bootstrap_value=args.bootstrap)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
 
+        for pcoa_path in pcoa_path_list:
+            if 'PCoA_coords' in pcoa_path:
+                sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(
+                    os.path.dirname(pcoa_path).split('/')[-1]))
+                # then this is a pcoa csv that we should plot
+                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path)
+
+
+
     elif args.between_sample_distances:
-        distance.generate_within_clade_UniFrac_distances_samples(
+        PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
             dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
             method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
 
 
+        for pcoa_path in PCoA_paths_list:
+            if 'PCoA_coords' in pcoa_path:
+                # then this is a full path to one of the .csv files that contains the coordinates that we can plot
+                # we will get the output directory from the passed in pcoa_path
+                sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
+                    os.path.dirname(pcoa_path).split('/')[-1]))
+                plotting.plot_between_sample_distance_scatter(pcoa_path)
     elif args.print_output_seqs:
         # this is a stand_alone and output and we should grab the user who is requresting it from the config file
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
