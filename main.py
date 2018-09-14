@@ -264,7 +264,7 @@ def main():
             dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
             method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
 
-    
+
     elif args.print_output_seqs:
         # this is a stand_alone and output and we should grab the user who is requresting it from the config file
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
@@ -272,15 +272,14 @@ def main():
         new_data_set_submitting_user = config_dict['user_name']
 
         outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
-        output_file_list = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
+        output_file_list, date_time_str = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
             datasubstooutput=args.print_output_seqs, numProcessors=args.num_proc, output_dir=outputDir,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
         for item in output_file_list:
             if 'relative' in item:
                 svg_path, png_path = plotting.\
                     generate_stacked_bar_data_submission(path_to_tab_delim_count=item,
-                                                       output_directory=outputDir,
-                                                       data_sub_id_str=args.print_output_seqs)
+                                                       output_directory=outputDir, time_date_str=date_time_str)
                 print('Output figs:')
                 print(svg_path)
                 print(png_path)

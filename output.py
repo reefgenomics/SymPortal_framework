@@ -10,12 +10,12 @@ import operator
 from general import writeListToDestination
 from collections import defaultdict
 import pandas as pd
-from plotting import generate_stacked_bar_data_analysis_type_profiles
+from plotting import generate_stacked_bar_data_analysis_type_profiles, generate_stacked_bar_data_submission
 import pickle
 from collections import Counter
 import numpy as np
 
-def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, noFig=False, output_user=None):
+def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, noFig=False, output_user=None, time_date_str=None):
     analysisObj = analysisobj
     # This is one of the last things to do before we can use our first dataset
     # The table will have types as columns and rows as samples
@@ -443,7 +443,10 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
             df_absolute = df_absolute.append(temp_series)
             df_relative = df_relative.append(temp_series)
 
-    date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+    if time_date_str:
+        date_time_string = time_date_str
+    else:
+        date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
     os.makedirs(outputDir, exist_ok=True)
 
     path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
@@ -460,16 +463,17 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     del df_relative
 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
-    div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
+    div_output_file_list, date_time_string = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
                                                            numProcessors=numProcessors, output_dir=outputDir,
                                                            sorted_sample_ID_list=samples_by_ID_that_have_been_sorted,
-                                                           analysis_obj_id=analysisobj.id, call_type='analysis')
+                                                           analysis_obj_id=analysisobj.id, call_type='analysis', time_date_str=date_time_string)
 
     print('ITS2 type profile output files:')
     for output_file in output_files_list:
         print(output_file)
         if 'relative' in output_file:
             output_to_plot = output_file
+            break
 
     # Finally lets produce output plots for the dataoutput. For the time being this should just be a
     # plot for the ITS2 type profiles and one for the sequences
@@ -478,11 +482,26 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     if not noFig:
         svg_path, png_path = generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
                                                          output_directory=output_dir,
-                                                         data_set_id_str=datasubstooutput,
-                                                         analysis_obj_id=analysisobj.id)
-    print('Figure output files:')
-    print(svg_path)
-    print(png_path)
+                                                                              analysis_obj_id=analysisobj.id,
+                                                                              time_date_str=date_time_string)
+        print('Figure output files:')
+        print(svg_path)
+        print(png_path)
+
+        for file in div_output_file_list:
+            if 'relative' in file:
+                path_to_plot = file
+                break
+
+        svg_path, png_path = generate_stacked_bar_data_submission(path_to_tab_delim_count=path_to_plot,
+                                                                  output_directory=output_dir, time_date_str=date_time_string)
+
+        print('Figure output files:')
+        print(svg_path)
+        print(png_path)
+
+
+
 
     return output_dir
 
@@ -663,7 +682,7 @@ def getAbundStr(totlist, sdlist, majlist):
     return abundOutputStr
 
 def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir, call_type,
-                                                           sorted_sample_ID_list=None, analysis_obj_id=None, output_user=None ):
+                                                           sorted_sample_ID_list=None, analysis_obj_id=None, output_user=None, time_date_str=None ):
 
 
     ########################## ITS2 INTRA ABUND COUNT TABLE ################################
@@ -1039,7 +1058,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
 
     # Here we have the tables populated and ready to output
-    date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+    if not time_date_str:
+        date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+    else:
+        date_time_string = time_date_str
     if analysis_obj_id:
         data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
         path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
@@ -1070,7 +1092,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for path_item in output_path_list:
         print(path_item)
 
-    return output_path_list
+    return output_path_list, date_time_string
 
 def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_summary_dict,
                     refSeq_names_annotated, sample_to_dsss_list_shared_dict):

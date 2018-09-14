@@ -701,7 +701,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     os.makedirs(outputDir, exist_ok=True)
     # the below method will create the tab delimited output table and print out the output file paths
     # it will also return these paths so that we can use them to grab the data for figure plotting
-    output_path_list = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),
+    output_path_list, date_time_str = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),
                                                            numProcessors=numProc,
                                                            output_dir=outputDir, call_type='submission')
 
@@ -720,7 +720,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             if 'relative' in path:
                 path_to_rel_abund_data = path
 
-        svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, dSID)
+        svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, time_date_str=date_time_str)
         sys.stdout.write('\nFigure generation complete')
         sys.stdout.write('\nFigures output to:')
         sys.stdout.write('\n{}'.format(svg_path))

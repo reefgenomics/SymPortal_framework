@@ -11,9 +11,10 @@ import random
 import os
 import numpy as np
 import sys
+import datetime
 plt.ioff()
 
-def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, data_sub_id_str):
+def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None):
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
     # Here we will generate our standard stacked bar output.
@@ -294,8 +295,13 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     axarr[-1].get_xaxis().set_visible(False)
     axarr[-1].get_yaxis().set_visible(False)
 
+    if time_date_str:
+        date_time_str = time_date_str
+    else:
+        date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+
     plt.tight_layout()
-    fig_output_base = '{0}/{1}'.format(output_directory, data_sub_id_str)
+    fig_output_base = '{0}/{1}'.format(output_directory, date_time_str)
     sys.stdout.write('\nsaving as .svg\n')
     plt.savefig('{}_seq_abundance_stacked_bar_plot.svg'.format(fig_output_base))
     sys.stdout.write('\nsaving as .png\n')
@@ -304,8 +310,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     return '{}_seq_abundance_stacked_bar_plot.svg'.format(fig_output_base), \
            '{}_seq_abundance_stacked_bar_plot.png'.format(fig_output_base)
 
-def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, output_directory,
-                                                     data_set_id_str, analysis_obj_id):
+def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, output_directory, analysis_obj_id, time_date_str=None):
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
     # Here we will generate our standard stacked bar output.
@@ -599,8 +604,12 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     axarr[-1].get_xaxis().set_visible(False)
     axarr[-1].get_yaxis().set_visible(False)
 
+    if time_date_str:
+        date_time_str = time_date_str
+    else:
+        date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
     plt.tight_layout()
-    fig_output_base = '{}/{}_{}'.format(output_directory, analysis_obj_id, data_set_id_str.replace(',', '_'))
+    fig_output_base = '{}/{}_{}'.format(output_directory, analysis_obj_id, date_time_str)
     sys.stdout.write('\nsaving as .svg\n')
     svg_path = '{}_its2_type_profile_abundance_stacked_bar_plot.svg'.format(fig_output_base)
     plt.savefig(svg_path)
