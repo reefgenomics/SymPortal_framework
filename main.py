@@ -88,12 +88,12 @@ def main():
 
 
 
-    group.add_argument('--print_output', metavar='data_set IDs, analysis ID', help='Use this function to output the '
+    group.add_argument('--print_output_types', metavar='data_set IDs, analysis ID', help='Use this function to output the '
                                                                                        'ITS2 sequence and ITS2 type profile count tables for '
                                                                                        'a given set of data_sets '
                                                                                        'that have been run in a given analysis. Give the data_set IDs '
                                                                                        'that you wish to make outputs for as '
-                                                                                       'arguments to the --print_output flag. To output for multiple data_set objects, '
+                                                                                       'arguments to the --print_output_types flag. To output for multiple data_set objects, '
                                                                                        'comma separate the IDs of the data_set objects, '
                                                                                        'e.g. 44,45,46.'
                                                                                        'Give the ID of the analysis you wish to '
@@ -112,7 +112,7 @@ def main():
                        metavar='data_set IDs',
                        help='Use this function to output UniFrac pairwise distances '
                             'between samples clade separated')
-    group.add_argument('--print_output_no_types', metavar='data_set IDs',
+    group.add_argument('--print_output_seqs', metavar='data_set IDs',
                        help='Use this function to output ITS2 sequence count tables for given data_set instances')
 
     # Additional arguments
@@ -225,14 +225,14 @@ def main():
         data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd)
         print('return code: 0\nAnalysis complete')
 
-    elif args.print_output:
+    elif args.print_output_types:
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
             config_dict = json.load(f)
         new_data_set_submitting_user = config_dict['user_name']
         if args.data_analysis_id:
             data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id),
                                                      numProcessors=args.num_proc, call_type='stand_alone',
-                                                     datasubstooutput=args.print_output, noFig=args.noFig,
+                                                     datasubstooutput=args.print_output_types, noFig=args.noFig,
                                                      output_user=new_data_set_submitting_user)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
@@ -262,7 +262,7 @@ def main():
             dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
             method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
 
-    elif args.print_output_no_types:
+    elif args.print_output_seqs:
         # this is a stand_alone and output and we should grab the user who is requresting it from the config file
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
             config_dict = json.load(f)
@@ -270,7 +270,7 @@ def main():
 
         outputDir = os.path.join(os.path.dirname(__file__), 'outputs/non_analysis/')
         output.div_output_pre_analysis_new_meta_and_new_dss_structure(
-            datasubstooutput=args.print_output_no_types, numProcessors=args.num_proc, output_dir=outputDir,
+            datasubstooutput=args.print_output_seqs, numProcessors=args.num_proc, output_dir=outputDir,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
 
     elif args.vacuumDatabase:

@@ -1122,11 +1122,6 @@ def generate_ordered_sample_list(managedSampleOutputDict):
                                    axis=1)
     output_df_relative = output_df_relative.T
 
-    for smp, series_list in managedSampleOutputDict.items():
-        sys.stdout.write('\rPopulating DataFrame for sorting: {}'.format(smp))
-        output_df_relative = output_df_relative.append(series_list[1])
-
-
     # now remove the rest of the non abundance columns
     non_seq_columns = ['sample_name', 'raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',
                        'post_qc_unique_seqs',
