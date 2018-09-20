@@ -176,7 +176,7 @@ def main():
 
 
         # If working on the remote server a difference reference_fasta_database_used can be used.
-        new_data_set = data_set(name = name_for_data_set, timeStamp=str(datetime.now()),
+        new_data_set = data_set(name = name_for_data_set, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
                                 reference_fasta_database_used='symClade.fa',
                                 submittingUser=new_data_set_submitting_user,
                                 submitting_user_email=new_data_set_user_email)
@@ -220,7 +220,7 @@ def main():
 
         new_analysis_object = data_analysis(listOfDataSubmissions=str(custom_data_set_ids),
                                          withinCladeCutOff=float(within_clade_cutoff), name=args.name,
-                                            timeStamp=str(datetime.now()), submittingUser=new_data_set_submitting_user,
+                                            timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'), submittingUser=new_data_set_submitting_user,
                                             submitting_user_email=new_data_set_user_email)
         new_analysis_object.description = args.description
         new_analysis_object.save()

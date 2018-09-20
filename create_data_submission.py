@@ -976,7 +976,7 @@ def create_symClade_backup(dSID):
     back_up_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'symClade_backup'))
     os.makedirs(back_up_dir, exist_ok=True)
     src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/symClade.fa'
-    time_stamp = str(datetime.now())
+    time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
     dst_fasta_path = back_up_dir + '/symClade_{}.fa'.format(time_stamp)
     dst_readme_path = back_up_dir + '/symClade_{}.readme'.format(time_stamp)
     # then write a copy to it.
