@@ -480,7 +480,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
     output_dir = os.path.dirname(output_to_plot)
     if not noFig:
-        svg_path, png_path = generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
+        svg_path, png_path, sorted_sample_id_list = generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
                                                          output_directory=output_dir,
                                                                               analysis_obj_id=analysisobj.id,
                                                                               time_date_str=date_time_string)
@@ -494,7 +494,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
                 break
 
         svg_path, png_path = generate_stacked_bar_data_submission(path_to_tab_delim_count=path_to_plot,
-                                                                  output_directory=output_dir, time_date_str=date_time_string)
+                                                                  output_directory=output_dir, time_date_str=date_time_string, sample_id_order_list=sorted_sample_id_list)
 
         print('Figure output files:')
         print(svg_path)

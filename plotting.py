@@ -14,7 +14,7 @@ import sys
 import datetime
 plt.ioff()
 
-def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None):
+def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
     print('Generating stacked bar data submission')
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
@@ -103,10 +103,16 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     # we should consider doing a plot per clade but for the time being lets start by doing a single plot that will
     # contain all of the clades
 
-    # At this stage we have the ordered list of seqs we now need to order the samples
-    # this method will return us the names of the samples in order that they should be plotted
-    ordered_sample_list = get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sp_output_df)
+    # if we are plotting this in companion with an ITS2 type profile output then we will be passed a
+    # sample_order_list. It is very useful to have the ITS2 type profile output figure and the seq figure
+    # in the same sample order for direct comparison
+    if not sample_id_order_list:
+        # At this stage we have the ordered list of seqs we now need to order the samples
+        # this method will return us the names of the samples in order that they should be plotted
 
+        ordered_sample_list = get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sp_output_df)
+    else:
+        ordered_sample_list = sample_id_order_list
     # let's reorder the columns and rows of the sp_output_df according to the sequence sample and sequence
     # order so that plotting the data is easier
     sp_output_df = sp_output_df[ordered_list_of_seqs]
@@ -459,7 +465,8 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
 
         its_type_in_this_plot = len(sp_output_df.index.values.tolist()[i * its_type_per_plot:end_slice])
         x_tick_label_list = []
-        for sample_id in sp_output_df.index.values.tolist()[i * its_type_per_plot:end_slice]:
+        sample_id_list = sp_output_df.index.values.tolist()
+        for sample_id in sample_id_list[i * its_type_per_plot:end_slice]:
             sys.stdout.write('\rPlotting sample: {}'.format(sample_id))
             x_tick_label_list.append(smp_ID_to_smp_name[sample_id])
             # for each sample we will start at 0 for the y and then add the height of each bar to this
@@ -621,7 +628,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     plt.savefig(png_path)
     # plt.show()
     return '{}_its2_type_profile_abundance_stacked_bar_plot.svg'.format(fig_output_base), \
-           '{}_its2_type_profile_abundance_stacked_bar_plot.png'.format(fig_output_base)
+           '{}_its2_type_profile_abundance_stacked_bar_plot.png'.format(fig_output_base), sample_id_list
 
 def get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sequence_only_df_relative):
     max_seq_ddict = defaultdict(int)
