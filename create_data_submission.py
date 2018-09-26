@@ -71,6 +71,10 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
             # this will be inside the wkd directory (the temp data directory for the data_set submission)
             os.makedirs(currentDir, exist_ok=True)
 
+            # We also need to make the same sample by sample directories for the pre MED sequence dump
+            os.makedirs(currentDir.replace('tempData', 'pre_MED_seqs'), exist_ok=True)
+
+
 
             stabilityFile = [contigPair]
             stabilityFileName = r'{0}{1}'.format(sampleName, 'stability.files')
@@ -1459,12 +1463,27 @@ def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, dat
             for temp_line in temp_name:
                 total_debug_absolute += len(temp_line.split('\t')[1].split(','))
             ####
+
+            # These are the files that we are going to want to put into the pre_MED_seqs directory
+            # By doing this, people will be able to work without the MED component of the SP QC
             writeListToDestination(
                 r'{0}{1}/{2}.QCed.clade{1}.fasta'.format(currentDir, someclade, rootName.replace('stability', '')),
                 cladeFastas[someclade][0])
             writeListToDestination(
                 r'{0}{1}/{2}.QCed.clade{1}.names'.format(currentDir, someclade, rootName.replace('stability', '')),
                 cladeFastas[someclade][1])
+
+            # write the files into the
+            wkd.replace('tempData', 'pre_MED_seqs')
+
+
+            writeListToDestination(
+                r'{0}{1}/{2}.QCed.clade{1}.fasta'.format(currentDir.replace('tempData', 'pre_MED_seqs'), someclade, rootName.replace('stability', '')),
+                cladeFastas[someclade][0])
+            writeListToDestination(
+                r'{0}{1}/{2}.QCed.clade{1}.names'.format(currentDir.replace('tempData', 'pre_MED_seqs'), someclade, rootName.replace('stability', '')),
+                cladeFastas[someclade][1])
+
         pickle.dump(nameDict, open("{}/name_dict.pickle".format(currentDir), "wb"))
     return
 
@@ -1918,7 +1937,15 @@ def copy_file_to_wkd(dSID, pathToInputFile):
     # if the directory already exists remove it and start from scratch
     if os.path.exists(wkd):
         shutil.rmtree(wkd)
+
+    # create the directory that will act as the working directory for doing all of the QCing and MED in
     os.makedirs(wkd)
+
+    # also create a directory that will be used for the pre MED QCed sequences dump
+    # Within this directory we will have sample folders which will contain clade separated name and fasta pairs
+    os.makedirs(wkd.replace('tempData', 'pre_MED_seqs'), exist_ok=True)
+
+
     # Check to see if the files are already decompressed
     # If so then simply copy the files over to the destination folder
     # we do this copying so that we don't corrupt the original files
