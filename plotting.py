@@ -27,9 +27,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     # read in the SymPortal relative abundance output
     sp_output_df = pd.read_csv(path_to_tab_delim_count, sep='\t', lineterminator='\n', header=0, index_col=0)
 
-    # create sample id to sample name dict
-    smp_id_to_smp_name_dict = {ID: nm for ID, nm in
-                               zip(sp_output_df.index.values.tolist(), sp_output_df['sample_name'].values.tolist())}
+
 
     # In order to be able to drop the DIV row at the end and the meta information rows, we should
     # drop all rows that are after the DIV column. We will pass in an index value to the .drop
@@ -41,8 +39,19 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
             meta_index_to_cut_from = i
             break
 
+
     # now lets drop the QC columns from the SP output df and also drop the clade summation columns
     # we will be left with just clumns for each one of the sequences found in the samples
+
+    # we need to drop the rows first before we can make the smp_id_to_smp_name_dict else
+    # we will have the final row names in the index which are not convertable to int
+
+    sp_output_df.drop(index=sp_output_df.index[range(meta_index_to_cut_from, 0, 1)], inplace=True)
+
+    # create sample id to sample name dict
+    smp_id_to_smp_name_dict = {int(ID): nm for ID, nm in zip(sp_output_df.index.values.tolist(),
+                                                                        sp_output_df['sample_name'].values.tolist())}
+
     sp_output_df.drop(columns=['sample_name', 'noName Clade A', 'noName Clade B', 'noName Clade C', 'noName Clade D',
                                'noName Clade E', 'noName Clade F', 'noName Clade G', 'noName Clade H',
                                'noName Clade I', 'raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
@@ -51,10 +60,11 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
                                'post_taxa_id_unique_non_symbiodinium_seqs',
                                'size_screening_violation_absolute', 'size_screening_violation_unique',
                                'post_med_absolute', 'post_med_unique'
-                               ], index=sp_output_df.index[range(meta_index_to_cut_from, 0, 1)]
-                      , inplace=True)
+                               ], inplace=True)
 
     sp_output_df = sp_output_df.astype('float')
+
+    sp_output_df.index = sp_output_df.index.astype('int')
 
     # In theory the output should already be somewhat ordered in that the samples should be in order of similarity.
     # However, these have the artifical clade ordering so for the plotting it will probably be better to get a new
@@ -116,7 +126,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     # let's reorder the columns and rows of the sp_output_df according to the sequence sample and sequence
     # order so that plotting the data is easier
     sp_output_df = sp_output_df[ordered_list_of_seqs]
-    sp_output_df = sp_output_df.reindex(ordered_sample_list)
+    sp_output_df = sp_output_df.reindex([int(a) for a in ordered_sample_list])
 
     # At this stage we are ready to plot
     # The three following links show how we should be able to construct a list of matplotlib
