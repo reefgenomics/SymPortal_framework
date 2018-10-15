@@ -395,7 +395,7 @@ def deuniqueWorker(input, output):
         # We should also take care that M doesn't go below 4, so we should use a max choice for the M
         M_value = max(4, int(0.004 * (len(deuniquedFasta)/2)))
         completedProcess = subprocess.run(
-            [r'decompose', '-M', M_value, '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
+            [r'decompose', '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
              MEDOutDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         sys.stdout.write('{}: MED complete\n'.format(sampleName))
 
