@@ -591,9 +591,15 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
                                                   sorted_type_prof_names_by_local_abund[its2_profile_count]]))
 
                 # add the text
+                # the its2 type profile names can be quite long and so they sometimes obsucre next intem
+                # in the legen list. Let's limit the name to 18 characters and then add ...
+                if len(sorted_type_prof_names_by_local_abund[its2_profile_count]) > 18:
+                    label_text = sorted_type_prof_names_by_local_abund[its2_profile_count][:18] + '...'
+                else:
+                    label_text = sorted_type_prof_names_by_local_abund[its2_profile_count]
                 text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
                 text_y = leg_box_y + (0.5 * leg_box_depth)
-                axarr[-1].text(text_x, text_y, sorted_type_prof_names_by_local_abund[its2_profile_count],
+                axarr[-1].text(text_x, text_y, label_text,
                                verticalalignment='center',
                                fontsize=8)
 
@@ -611,9 +617,13 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
                                                   sorted_type_prof_names_by_local_abund[its2_profile_count]]))
 
                 # add the text
+                if len(sorted_type_prof_names_by_local_abund[its2_profile_count]) > 18:
+                    label_text = sorted_type_prof_names_by_local_abund[its2_profile_count][:18] + '...'
+                else:
+                    label_text = sorted_type_prof_names_by_local_abund[its2_profile_count]
                 text_x = leg_box_x + leg_box_width + (0.2 * leg_box_width)
                 text_y = leg_box_y + (0.5 * leg_box_depth)
-                axarr[-1].text(text_x, text_y, sorted_type_prof_names_by_local_abund[its2_profile_count],
+                axarr[-1].text(text_x, text_y, label_text,
                                verticalalignment='center',
                                fontsize=8)
 
