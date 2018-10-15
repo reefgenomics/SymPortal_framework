@@ -386,8 +386,16 @@ def deuniqueWorker(input, output):
         MEDOutDir = '{}/{}/'.format(cwd, 'MEDOUT')
         os.makedirs(MEDOutDir, exist_ok=True)
         sys.stdout.write('{}: running MED\n'.format(sampleName))
+        # Here we need to make sure that the M value is defined dynamically
+        # the M value is a cutoff that looks at the abundance of the most abundant unique sequence in a node
+        # if the abundance is lower than M then the node is discarded
+        # we have been working recently with an M that equivaltes to 0.4% of 0.004. This was
+        # calculated when working with a modelling project where I was subsampling to 1000 sequences. In this
+        # scenario the M was set to 4.
+        # We should also take care that M doesn't go below 4, so we should use a max choice for the M
+        M_value = max(4, (0.004 * (len(deuniquedFasta)/2)))
         completedProcess = subprocess.run(
-            [r'decompose', '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
+            [r'decompose', '-M', M_value, '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
              MEDOutDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         sys.stdout.write('{}: MED complete\n'.format(sampleName))
 
