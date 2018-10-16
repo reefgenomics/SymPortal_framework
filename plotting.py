@@ -11,7 +11,7 @@ import random
 import os
 import numpy as np
 import sys
-import datetime
+from datetime import datetime
 plt.ioff()
 
 def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
