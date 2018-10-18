@@ -658,6 +658,10 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     dataSubmissionInQ = data_set.objects.get(id=dSID)
     cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    # we will create the output dire early on so that we can use it to write out the sample by sample
+    # thrown away seqs.
+    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/data_set_submissions/{}'.format(dSID))
+    os.makedirs(outputDir, exist_ok=True)
     if dataSubmissionInQ.initialDataProcessed == False:
 
         # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
@@ -666,9 +670,9 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     ################### PERFORM pre-MED QC #################
         if screen_sub_evalue:
-            new_seqs_added_count, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue)
+            new_seqs_added_count, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir=outputDir)
         else:
-            fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue)
+            fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir=outputDir)
 
 
     # This function now performs the MEDs sample by sample, clade by clade.
@@ -709,8 +713,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     ####### COUNT TABLE OUTPUT ########
     # We are going to make the sequence count table output as part of the dataSubmission
     sys.stdout.write('\nGenerating count tables\n')
-    outputDir = os.path.join(os.path.dirname(__file__), 'outputs/data_set_submissions/{}'.format(dSID))
-    os.makedirs(outputDir, exist_ok=True)
+
     # the below method will create the tab delimited output table and print out the output file paths
     # it will also return these paths so that we can use them to grab the data for figure plotting
     output_path_list, date_time_str = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),
@@ -866,14 +869,14 @@ def processed_samples_status(dataSubmissionInQ, pathToInputFile):
 
 
 
-def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list, screen_sub_e):
+def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list, screen_sub_e, output_dir):
     sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
 
     # If we will be screening the seuqences
     # At this point we should create a back up of the current symClade db.
     # if not screening. no need to back up.
     if screen_sub_e:
-        # TODO we should be able to make this much fasta by having a list that keeps track of which samples have
+        # we should be able to make this much fasta by having a list that keeps track of which samples have
         # already reported having 0 sequences thrown out due to being too divergent from reference sequences
         # we should populate this list when we are checking a sample in execute_worker_taxa_screening
         checked_samples = []
@@ -929,7 +932,7 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
                                                                                         e_value_multiP_dict, wkd)
 
 
-    #input_q, wkd, dataSubID
+    # input_q, wkd, dataSubID
     # worker_taxonomy_write_out
     # Create the queues that will hold the sample information
     input_q = Queue()
@@ -938,11 +941,20 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
     worker_manager = Manager()
     error_sample_list_shared = worker_manager.list(error_sample_list)
 
-    # TODO we want to collect all of the discarded sequences so that we can print this to a fasta and
+    # we want to collect all of the discarded sequences so that we can print this to a fasta and
     # output this in the data_set's submission output directory
     # to do this we'll need a list that we can use to collect all of these sequences
     # once we have collected them all we can then set them and use this to make a fasta to output
+    # we want to do this on a sample by sample basis, so we now write out directly from
+    # the worker as well as doing the 'total' method.
+    # we have already created the output dir early on and I will pass it down to here so that we can pass
+    # it to the below method
     list_of_discarded_sequences = worker_manager.list()
+
+    # create the directory that will be used for the output for the output of the throw away sequences on
+    # a sample by sample basis (one fasta and one name file per sample)
+    throw_away_seqs_dir = '{}/throw_awayseqs'.format(output_dir)
+    os.makedirs(throw_away_seqs_dir, exist_ok=True)
 
     # load up the input q
     for contigPair in sampleFastQPairs:
@@ -960,7 +972,7 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
 
 
     for n in range(numProc):
-        p = Process(target=worker_taxonomy_write_out, args=(input_q, error_sample_list_shared, wkd, dSID, list_of_discarded_sequences))
+        p = Process(target=worker_taxonomy_write_out, args=(input_q, error_sample_list_shared, wkd, dSID, list_of_discarded_sequences, throw_away_seqs_dir))
         allProcesses.append(p)
         p.start()
 
@@ -1275,7 +1287,7 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
         pickle.dump(blastDict, open("{}/blast_dict.pickle".format(currentDir), "wb"))
 
 
-def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, dataSubID, list_of_discarded_seqs):
+def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, dataSubID, list_of_discarded_seqs, throw_away_seqs_dir):
     dataSubInQ = data_set.objects.get(id=dataSubID)
     for contigPair in iter(input_q.get, 'STOP'):
         sampleName = contigPair.split('\t')[0].replace('[dS]', '-')
@@ -1297,10 +1309,32 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, dataSubID,
         # our meta-analysis reporting. This will be fixed by working with sets of the throwaway sequences
         # Also create a fasta that can be output which will contain the binned sequences so that they can
         # be checked if needs be
+
+        # also here generate a fasta a name file of the throwAwaySeqs that will be written out on a sample by sample
+        # basis in the output directory. This will allow us to analyses the samples that have been thrown away
         temp_count = 0
+        throw_away_fasta = []
+        throw_away_name = []
         for seq_name in list(set(throwAwaySeqs)):
             temp_count += len(nameDict[seq_name].split('\t')[1].split(','))
             list_of_discarded_seqs.append(fastaDict[seq_name])
+            throw_away_fasta.append('>{}'.format(seq_name))
+            throw_away_fasta.append('{}'.format(fastaDict(seq_name)))
+            throw_away_name.append(nameDict[seq_name])
+
+        # now write out the throw_away fasta and name files
+        # make sure that the sample specific throwaway seq dir exists
+        if throw_away_fasta:
+            sample_throw_away_seqs_dir = '{}/{}'.format(throw_away_seqs_dir, sampleName)
+            os.makedirs(sample_throw_away_seqs_dir, exist_ok=True)
+
+            with open('{}/{}_throw_away_seqs.fasta'.format(sample_throw_away_seqs_dir, sampleName), 'w') as f:
+                for line in throw_away_fasta:
+                    f.write('{}\n'.format(line))
+
+            with open('{}/{}_throw_away_seqs.name'.format(sample_throw_away_seqs_dir, sampleName), 'w') as f:
+                for line in throw_away_name:
+                    f.write('{}\n'.format(line))
 
         dataSetSampleInstanceInQ.non_sym_absolute_num_seqs = temp_count
         # Add details of non-symbiodinium unique seqs
@@ -1637,7 +1671,7 @@ def worker_associate_QC_meta_data_to_samples(input_q, error_sample_list, wkd, da
         sys.stdout.write('{}: pre-MED processing completed\n'.format(sampleName))
     return
 
-def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue):
+def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir):
     # check to see whether the reference_fasta_database_used has been created
     # we no longer by default have the blast binaries already made so that we don't have to have them up on
     # github. As such if this is the first time or if there has been an update of something
@@ -1657,11 +1691,11 @@ def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue):
     if screen_sub_evalue:
         new_seqs_added_count, discarded_seqs_fasta = taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd,
                                                    numProc=numProc, error_sample_list=error_sample_list,
-                                                   screen_sub_e=screen_sub_evalue)
+                                                   screen_sub_e=screen_sub_evalue, output_dir=output_dir)
     else:
         fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta = \
             taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd, numProc=numProc,
-                                error_sample_list=error_sample_list, screen_sub_e=screen_sub_evalue)
+                                error_sample_list=error_sample_list, screen_sub_e=screen_sub_evalue, output_dir=output_dir)
 
     # At this point we should have the fasta names and group files written out.
     # now do the size screening
