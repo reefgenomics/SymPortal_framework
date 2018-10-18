@@ -1319,7 +1319,7 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, dataSubID,
             temp_count += len(nameDict[seq_name].split('\t')[1].split(','))
             list_of_discarded_seqs.append(fastaDict[seq_name])
             throw_away_fasta.append('>{}'.format(seq_name))
-            throw_away_fasta.append('{}'.format(fastaDict(seq_name)))
+            throw_away_fasta.append('{}'.format(fastaDict[seq_name]))
             throw_away_name.append(nameDict[seq_name])
 
         # now write out the throw_away fasta and name files
