@@ -510,8 +510,23 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
         os.makedirs(clade_wkd, exist_ok=True)
         dist_out_path = '{}/bray_curtis_within_clade_sample_distances.dist'.format(clade_wkd)
 
+        # for the output version lets also append the sample name to each line so that we can see which sample it is
+        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
+        dist_with_sample_name = [distance_out_file[0]]
+        list_of_sample_ids = [int(line.split('\t')[0]) for line in dist_out_path[1:]]
+        dss_of_outputs = list(data_set_sample.objects.filter(id__in=list_of_sample_ids))
+        dict_of_dss_id_to_name = {dss.id:dss.name for dss in dss_of_outputs}
+        for line in distance_out_file[1:]:
+            temp_list = []
+            sample_id = int(line.split('\t')[0])
+            sample_name = dict_of_dss_id_to_name[sample_id]
+            temp_list.append(sample_name)
+            temp_list.extend(line.split('\t'))
+            new_line = '\t'.join(temp_list)
+            dist_with_sample_name.append(new_line)
+
         with open(dist_out_path, 'w') as f:
-            for line in distance_out_file:
+            for line in dist_with_sample_name:
                 f.write('{}\n'.format(line))
 
 
@@ -630,7 +645,7 @@ def generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(data_submissio
         # from this dict we can produce the distance file that can be passed into the generate_PCoA_coords method
         distance_out_file = [len(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade)]
         for type_outer in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
-            temp_clade_type_string = [type_outer.id]
+            temp_clade_type_string = [type_outer.name]
 
             for type_inner in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
                 if type_outer == type_inner:
