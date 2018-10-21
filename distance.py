@@ -530,6 +530,142 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, num_p
 
     return PCoA_path_lists
 
+def generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(data_submission_id_str, num_processors, data_analysis_id,
+                                                               method, call_type, bootstrap_value=100, noFig=False, output_dir=None):
+    ''' This will produce distance matrices between ITS2 type profiles of the same clade.
+    It will use exactly the same suite of programs as the generate_within_clade_UniFrac_distances_samples method
+    The only difference will be that this will be calculated across ITS2 Type Profiles rather than samples.
+    As such, this will require a data_set set and dataAnalysis.
+    The average DIV abundances for each of the ITS2 type profiles should first be calculated from which the distances
+    can then be calcualated'''
+
+    output_file_paths = []
+
+    if call_type == 'stand_alone':
+        wkd = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs',
+                                           'ordination', '_'.join(str(data_submission_id_str).split(',')),
+                                           'between_profiles'))
+    else:
+        # call_type = 'analysis'
+        wkd = '{}/{}'.format(output_dir, 'between_its2_type_profile_distances')
+
+    # get the dataSubmissions
+    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
+
+    # get the dataAnalysis
+    data_analysis_obj = data_analysis.objects.get(id=data_analysis_id)
+
+    # go clade by clade
+    ITS2_type_profiles_of_data_subs_and_analysis = analysis_type.objects.filter(
+        clade_collection_type__cladeCollectionFoundIn__dataSetSampleFrom__dataSubmissionFrom__in=
+        data_submissions, dataAnalysisFrom=data_analysis_obj).distinct()
+
+    clade_list = list(set([type_profile.clade for type_profile in ITS2_type_profiles_of_data_subs_and_analysis]))
+
+    # list for storing the paths to the PCoA .csv that will be produced
+    PCoA_path_lists = []
+    for clade in clade_list:
+        # convert query to a list so that we can iterate over twice in exactly the same order
+        ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade = list(
+            ITS2_type_profiles_of_data_subs_and_analysis.filter(clade=clade))
+
+        if len(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade) < 2:
+            continue
+
+        clade_wkd = wkd + '/{}'.format(clade)
+        # we will need to get a list of all of the sequences that are found in the above ITS2 type profiles
+        # we will then need to align these.
+        # we will also need to produce a group file, a name file and a unique fasta file
+        # this will be similar to what we have in the generate_within_clade_UniFrac_distances_samples
+        # from this point on it should be easy for us to use the same set up as we have in the other method
+        # we already have the ratios of each of the divs
+        list_of_type_profile_rel_abundance_dicts = []
+        for at in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
+            sys.stdout.write('\rProcessing {}'.format(at))
+            list_of_div_ids = [int(b) for b in at.orderedFootprintList.split(',')]
+            foot_print_ratio_array = pd.DataFrame(at.getRatioList())
+            rel_abundance_of_divs_dict = {list_of_div_ids[i]: int(foot_print_ratio_array[i].mean())
+                                                 for i in range(len(list_of_div_ids))}
+            list_of_type_profile_rel_abundance_dicts.append(rel_abundance_of_divs_dict)
+
+        # here we have a dict for each of the ITS2 type profiles of the clade
+        # we can now do pairwise comparisons just like we did for the samples
+        # then we can simply do a pairwise comparison of the clade collections and create distances
+        within_clade_distances_dict = {}
+        for type_one, type_two in itertools.combinations(list(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade), 2):
+            # let's work to a virtual subsample of 100 000
+            clade_col_one_seq_rel_abundance_dict = list_of_type_profile_rel_abundance_dicts[
+                type_one]
+            clade_col_two_seq_rel_abundance_dict = list_of_type_profile_rel_abundance_dicts[
+                type_two]
+
+            # for each comparison. Get a set of all of the sequence and convert this to a list.
+            set_of_sequences = set(list(clade_col_one_seq_rel_abundance_dict.keys()))
+            set_of_sequences.update(list(clade_col_two_seq_rel_abundance_dict.keys()))
+            list_of_sequences = list(set_of_sequences)
+
+            # then iter through the list to get the rel abundances for each of the samples, putting 0 if not found in
+            # the sample.
+            seq_abundance_list_one = []
+            seq_abundance_list_two = []
+            for seq in list_of_sequences:
+                # populate the abundance list cc one
+                if seq in clade_col_one_seq_rel_abundance_dict:
+                    seq_abundance_list_one.append(int(100000 * clade_col_one_seq_rel_abundance_dict[seq]))
+                else:
+                    seq_abundance_list_one.append(0)
+
+                # populate the abundance list cc two
+                if seq in clade_col_two_seq_rel_abundance_dict:
+                    seq_abundance_list_two.append(int(100000 * clade_col_two_seq_rel_abundance_dict[seq]))
+                else:
+                    seq_abundance_list_two.append(0)
+
+            distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
+            # once you have this we should simply be able to crunch the bray-curtis.
+            # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
+            within_clade_distances_dict[
+                '{}_{}'.format(type_one, type_two)] = distance
+            within_clade_distances_dict[
+                '{}_{}'.format(type_two, type_one)] = distance
+
+        # from this dict we can produce the distance file that can be passed into the generate_PCoA_coords method
+        distance_out_file = [len(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade)]
+        for type_outer in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
+            temp_clade_type_string = [type_outer]
+
+            for type_inner in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
+                if type_outer == type_inner:
+                    temp_clade_type_string.append(0)
+                else:
+                    temp_clade_type_string.append(within_clade_distances_dict[
+                                                     '{}_{}'.format(type_outer,
+                                                                    type_inner)])
+            distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_type_string]))
+        # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
+        # written out to the clade_wkd.
+        os.makedirs(clade_wkd, exist_ok=True)
+        dist_out_path = '{}/bray_curtis_within_clade_sample_distances.dist'.format(clade_wkd)
+
+        with open(dist_out_path, 'w') as f:
+            for line in distance_out_file:
+                f.write('{}\n'.format(line))
+
+
+        PCoA_path = generate_PCoA_coords(clade_wkd, distance_out_file)
+
+        output_file_paths.append(PCoA_path)
+        output_file_paths.append(dist_out_path)
+
+        PCoA_path_lists.append(PCoA_path)
+
+    # output the paths of the new files created
+    print('\n\nOutput files:\n')
+    for path_of_output_file in output_file_paths:
+        print(path_of_output_file)
+
+    return PCoA_path_lists
+
 
 def mafft_align_fasta(clade_wkd, num_proc):
     # now mafft align the fasta
