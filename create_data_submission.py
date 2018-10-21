@@ -17,7 +17,7 @@ import sys
 import pandas as pd
 from output import div_output_pre_analysis_new_meta_and_new_dss_structure
 from general import *
-from distance import generate_within_clade_UniFrac_distances_samples
+from distance import generate_within_clade_UniFrac_distances_samples, generate_within_clade_BrayCurtis_distances_samples
 from plotting import generate_stacked_bar_data_submission, plot_between_sample_distance_scatter
 
 
@@ -651,7 +651,7 @@ def create_data_set_sample_sequences_from_MED_nodes(wkd, ID, MEDDirs):
 
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload',
-         data_sheet_path=None, noFig=False, noOrd=False):
+         data_sheet_path=None, noFig=False, noOrd=False, distance_method='braycurtis'):
 
 
     ############### UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE ##################
@@ -746,8 +746,11 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     ####### between sample distances ######
     if not noOrd:
         print('Calculating between sample pairwise distances')
-        PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
-                                                        method='mothur', call_type='submission', output_dir=outputDir)
+        if distance_method == 'unifrac':
+            PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
+                                                            method='mothur', call_type='submission', output_dir=outputDir)
+        elif distance_method == 'braycrutis':
+            PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', output_dir=outputDir)
         ####### distance plotting #############
         if not noFig:
             for pcoa_path in PCoA_paths_list:

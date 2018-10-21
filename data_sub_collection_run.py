@@ -23,7 +23,7 @@ import pickle
 import shutil
 import sys
 from general import writeListToDestination, readDefinedFileToList
-from distance import generate_within_clade_UniFrac_distances_ITS2_type_profiles
+from distance import generate_within_clade_UniFrac_distances_ITS2_type_profiles, generate_within_clade_BrayCurtis_distances_ITS2_type_profiles
 from output import formatOutput_ord
 from plotting import plot_between_its2_type_prof_dist_scatter
 
@@ -4121,7 +4121,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores, noFig=False, noOrd=False):
+def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method='braycurtis'):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
@@ -4202,12 +4202,18 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False):
     ######## Between type ordination analysis ##########
     if not noOrd:
         sys.stdout.write('\nCalculating pairwise distances\n')
-        pcoa_path_list = generate_within_clade_UniFrac_distances_ITS2_type_profiles(
-            data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
-            data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
+        if distance_method == 'unifrac':
+            pcoa_path_list = generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+                data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
+                data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
+        elif distance_method == 'braycurtis':
+            pcoa_path_list = generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
+                data_submission_id_str=analysisObj.listOfDataSubmissions,
+                data_analysis_id=analysisObj.id,
+                call_type='analysis',
+                output_dir=output_dir)
 
         if not noFig:
-
             for pcoa_path in pcoa_path_list:
                 if 'PCoA_coords' in pcoa_path:
                     sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))

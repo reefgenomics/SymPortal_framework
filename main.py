@@ -128,6 +128,9 @@ def main():
     parser.add_argument('--data_sheet', help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
     parser.add_argument('--noFig', action='store_true', help='Skip figure production')
     parser.add_argument('--noOrd', action='store_true', help='Skip ordination analysis')
+    parser.add_argument('--distance_method', help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. '
+                                                  'The method to use when calculating distances between its2 '
+                                                  'type profiles or samples.', default='braycurtis')
     # when run as remote
     parser.add_argument('--submitting_user_name', help='Only for use when running as remote'
                                                        '\nallows the association of a different user_name '
@@ -190,12 +193,12 @@ def main():
             if os.path.isfile(args.data_sheet):
                 create_data_submission.main(input_dir, new_data_set.id, num_proc,
                                             screen_sub_evalue=screen_sub_evalue_bool,
-                                            data_sheet_path=args.data_sheet, noFig=args.noFig, noOrd=args.noOrd)
+                                            data_sheet_path=args.data_sheet, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method)
             else:
                 sys.exit('{} not found'.format(args.data_sheet))
         else:
             create_data_submission.main(input_dir, new_data_set.id, num_proc,
-                                        screen_sub_evalue=screen_sub_evalue_bool, noFig=args.noFig, noOrd=args.noOrd)
+                                        screen_sub_evalue=screen_sub_evalue_bool, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method)
 
     elif args.analyse:
         if args.name == 'noName':
@@ -224,7 +227,7 @@ def main():
                                             submitting_user_email=new_data_set_user_email)
         new_analysis_object.description = args.description
         new_analysis_object.save()
-        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd)
+        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method)
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output_types:
@@ -252,9 +255,14 @@ def main():
 
     elif args.between_type_distances:
         if args.data_analysis_id:
-            pcoa_path_list = data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
-                data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
-                data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', bootstrap_value=args.bootstrap)
+            if args.distance_method == 'unifrac':
+                pcoa_path_list = data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+                    data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
+                    data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', bootstrap_value=args.bootstrap)
+            elif args.distance_method == 'braycurtis':
+                pcoa_path_list = distance.generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
+                    data_submission_id_str=args.between_type_distances,
+                    data_analysis_id=args.data_analysis_id, call_type = 'stand_alone')
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
@@ -269,10 +277,14 @@ def main():
 
 
     elif args.between_sample_distances:
-        PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
-            dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
-            method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
-
+        # we are swaping to bray curtis for the time being
+        if args.data_analysis_id:
+                if args.distance_method == 'unifrac':
+                    PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
+                        dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
+                        method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
+                elif args.distance_method == 'braycurtis':
+                    PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone')
 
         for pcoa_path in PCoA_paths_list:
             if 'PCoA_coords' in pcoa_path:
