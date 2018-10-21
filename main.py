@@ -278,13 +278,12 @@ def main():
 
     elif args.between_sample_distances:
         # we are swaping to bray curtis for the time being
-        if args.data_analysis_id:
-                if args.distance_method == 'unifrac':
-                    PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
-                        dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
-                        method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
-                elif args.distance_method == 'braycurtis':
-                    PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone')
+        if args.distance_method == 'unifrac':
+            PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
+                dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
+                method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
+        elif args.distance_method == 'braycurtis':
+            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone')
 
         for pcoa_path in PCoA_paths_list:
             if 'PCoA_coords' in pcoa_path:
