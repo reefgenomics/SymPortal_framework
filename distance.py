@@ -513,7 +513,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
         # for the output version lets also append the sample name to each line so that we can see which sample it is
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
         dist_with_sample_name = [distance_out_file[0]]
-        list_of_sample_ids = [int(line.split('\t')[0]) for line in dist_out_path[1:]]
+        list_of_sample_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
         dss_of_outputs = list(data_set_sample.objects.filter(id__in=list_of_sample_ids))
         dict_of_dss_id_to_name = {dss.id:dss.name for dss in dss_of_outputs}
         for line in distance_out_file[1:]:
