@@ -245,13 +245,25 @@ def main():
 
     elif args.display_data_sets:
         # Then print out all of the dataSubmissions with names and IDs in the db
-        for ds in data_set.objects.all():
-            print('{}: {}\t{}'.format(ds.id, ds.name, ds.timeStamp))
+        # Let's sort this by id when outputting
+        # When just printing the raw query the order is somewhat random
+        data_set_id_to_obj_dict = {ds.id: ds for ds in list(data_set.objects.all())}
+        sorted_list_of_ids = sorted(list(data_set_id_to_obj_dict.keys()))
+
+        for ds_id in sorted_list_of_ids:
+            ds_in_q = data_set_id_to_obj_dict[ds_id]
+            print('{}: {}\t{}'.format(ds_in_q.id, ds_in_q.name, ds_in_q.timeStamp))
 
     elif args.display_analyses:
         # Then print out all of the dataAnalysisTwos with names and IDs in the db
-        for da in data_analysis.objects.all():
-            print('{}: {}\t{}'.format(da.id, da.name, da.timeStamp))
+        # Let's sort this by id when outputting
+        # When just printing the raw query the order is somewhat random
+        data_analysis_id_to_obj_dict = {da.id: da for da in list(data_analysis.objects.all())}
+        sorted_list_of_ids = sorted(list(data_analysis_id_to_obj_dict.keys()))
+
+        for da_id in sorted_list_of_ids:
+            da_in_q = data_analysis_id_to_obj_dict[da_id]
+            print('{}: {}\t{}'.format(da_in_q.id, da_in_q.name, da_in_q.timeStamp))
 
     elif args.between_type_distances:
         if args.data_analysis_id:
