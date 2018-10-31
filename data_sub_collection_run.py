@@ -4178,6 +4178,8 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
         print('Automatic sequence name generation is currently disabled for local instances of SymPortal.\n'
               'This is to prevent naming conlifcts between the remote and the '
               'local instances of SymPortal from arising\n')
+        analysisObj.refSeqsNamed = True
+        analysisObj.save()
     ####################################
 
     ####### SPECIES ASSIGNMENT #########

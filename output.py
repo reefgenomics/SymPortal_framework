@@ -883,7 +883,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # if there is one.
     # If there is a sorted sample list, make sure that it matches the samples that we are outputting
 
-    # TODO we are having an issue with data_sets having the same names. To fix this, we should do our ordering
+    # We were having an issue with data_sets having the same names. To fix this, we should do our ordering
     # accoring to the IDs of the samples
 
     if sorted_sample_ID_list:
@@ -896,10 +896,16 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
             sys.exit('Sample list passed in does not match sample list from db query')
 
         # if we got to here then the sorted_sample_list looks good
-        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a second...')
-        output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()], axis=1)
-        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a second...')
-        output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict.values()], axis=1)
+        # I was originally performing the concat directly on the managedSampleOutputDict but this was starting
+        # to produce errors. Starting to work on the managedSampleOutputDict_dict seems to not produce these
+        # errors.
+        # it may be a good idea to break this down to series by series instead of a one liner so that we can
+        # print out progress
+        # we can use the
+        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a while...')
+        output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict_dict.values()], axis=1)
+        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a while...')
+        output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict_dict.values()], axis=1)
 
         # now transpose
         output_df_absolute = output_df_absolute.T
@@ -912,7 +918,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         output_df_relative = output_df_relative.reindex(sorted_sample_ID_list)
 
     else:
-        # TODO we should aim to work with IDs here.
+
         # this returns a list which is simply the names of the samples
         # This will order the samples according to which sequence is their most abundant.
         # I.e. samples found to have the sequence which is most abundant in the largest number of sequences
@@ -923,14 +929,17 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
         # discounting clade. THis is what we do for the clade order when plotting.
         sys.stdout.write('\nGenerating ordered sample list and ordering dataframe accordingly\n')
-        ordered_sample_list_by_ID = generate_ordered_sample_list(managedSampleOutputDict)
+        ordered_sample_list_by_ID = generate_ordered_sample_list(managedSampleOutputDict_dict)
 
         # if we got to here then the sorted_sample_list looks good
-        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a second...')
-        output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict.values()],
+        # I was originally performing the concat directly on the managedSampleOutputDict but this was starting
+        # to produce errors. Starting to work on the managedSampleOutputDict_dict seems to not produce these
+        # errors.
+        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a while...')
+        output_df_absolute = pd.concat([list_of_series[0] for list_of_series in managedSampleOutputDict_dict.values()],
                                        axis=1)
-        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a second...')
-        output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict.values()],
+        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a while...')
+        output_df_relative = pd.concat([list_of_series[1] for list_of_series in managedSampleOutputDict_dict.values()],
                                        axis=1)
 
         # now transpose
@@ -958,7 +967,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # go column name by column name and if the col name is in seq_annotated_name
     # then get the accession and add to the accession_list
     # else do nothing and a blank should be automatically added for us.
-    #TODO this is painfully slow because we are doing individual calls to the dictionary
+    # This was painfully slow because we were doing individual calls to the dictionary
     # I think this will be much faster if do two queries of the db to get the named and
     # non named refseqs and then make two dicts for each of these and use these to populate the below
     refSeqsInDSs_noName = reference_sequence.objects.filter(
