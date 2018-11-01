@@ -243,10 +243,10 @@ class analysis_type(models.Model):
     # The list of cladeCollections in which the type was defined from
     listOfCladeCollectionsFoundInInitially = models.CharField(max_length=5000, null=True)
     # The list of cladeCollections that the type was associated with after one iteration of assigningTypes
-    listOfCladeCollections = models.CharField(max_length=10000, null=True)
+    listOfCladeCollections = models.CharField(max_length=100000, null=True)
     # This is a 2D list, a list for each clade collection in order of the listofCladeCollections
     # Within each list the absolute abundances of the defining seqs in order of orderedFootprintList
-    footprintSeqAbundances = models.CharField(max_length=10000, null=True)
+    footprintSeqAbundances = models.CharField(max_length=100000, null=True)
     # Same as above but the relative abundance of the seq in Q as a function of all of the sequences in the cladeCollection
     footprintSeqRatios = models.CharField(max_length=100000, null=True)
     clade = models.CharField(max_length=1)
@@ -254,7 +254,7 @@ class analysis_type(models.Model):
 
     name = models.CharField(max_length=1000, null=True)
     # [(max,min) for refseq in ordered footprint list]
-    maxMinRatios = models.CharField(max_length=10000, null=True)
+    maxMinRatios = models.CharField(max_length=100000, null=True)
     # The list of speceis that this type is associated with
     species = models.CharField(max_length=200, null=True)
 
