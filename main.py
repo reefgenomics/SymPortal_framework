@@ -128,6 +128,7 @@ def main():
     parser.add_argument('--data_sheet', help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
     parser.add_argument('--noFig', action='store_true', help='Skip figure production')
     parser.add_argument('--noOrd', action='store_true', help='Skip ordination analysis')
+    parser.add_argument('--noOutput', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
     parser.add_argument('--distance_method', help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. '
                                                   'The method to use when calculating distances between its2 '
                                                   'type profiles or samples.', default='braycurtis')
@@ -227,7 +228,7 @@ def main():
                                             submitting_user_email=new_data_set_user_email)
         new_analysis_object.description = args.description
         new_analysis_object.save()
-        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method)
+        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method, noOutput=args.noOutput)
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output_types:

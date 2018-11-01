@@ -4121,7 +4121,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method='braycurtis'):
+def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method='braycurtis', noOutput=False):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))
@@ -4198,30 +4198,31 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
     ### It doesn't make sense to automatically make an output from an analysis as we don't know which
     # data_sets we want to output for.
     # actually yes it does because we will simply output all data_sets as a default.
-    output_dir = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions,
-                                  call_type='analysis', numProcessors=cores, noFig=noFig)
+    if not noOutput:
+        output_dir = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions,
+                                      call_type='analysis', numProcessors=cores, noFig=noFig)
 
-    ######## Between type ordination analysis ##########
-    if not noOrd:
-        sys.stdout.write('\nCalculating pairwise distances\n')
-        if distance_method == 'unifrac':
-            pcoa_path_list = generate_within_clade_UniFrac_distances_ITS2_type_profiles(
-                data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
-                data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
-        elif distance_method == 'braycurtis':
-            pcoa_path_list = generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
-                data_submission_id_str=analysisObj.listOfDataSubmissions,
-                data_analysis_id=analysisObj.id,
-                call_type='analysis',
-                output_dir=output_dir)
+        ######## Between type ordination analysis ##########
+        if not noOrd:
+            sys.stdout.write('\nCalculating pairwise distances\n')
+            if distance_method == 'unifrac':
+                pcoa_path_list = generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+                    data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
+                    data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
+            elif distance_method == 'braycurtis':
+                pcoa_path_list = generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
+                    data_submission_id_str=analysisObj.listOfDataSubmissions,
+                    data_analysis_id=analysisObj.id,
+                    call_type='analysis',
+                    output_dir=output_dir)
 
-        if not noFig:
-            for pcoa_path in pcoa_path_list:
-                if 'PCoA_coords' in pcoa_path:
-                    sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
-                    # then this is a pcoa csv that we should plot
-                    plot_between_its2_type_prof_dist_scatter(pcoa_path)
-    ####################################################
+            if not noFig:
+                for pcoa_path in pcoa_path_list:
+                    if 'PCoA_coords' in pcoa_path:
+                        sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
+                        # then this is a pcoa csv that we should plot
+                        plot_between_its2_type_prof_dist_scatter(pcoa_path)
+        ####################################################
 
     print('data_analysis ID is: {}'.format(analysisObj.id))
 #################################################
