@@ -36,7 +36,7 @@ def logQCErrorAndContinue(datasetsampleinstanceinq, samplename, errorreason):
 
 
 def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
-    # TODO 030918 I am going to make it so that we do all of the screening of the below evalue cutoff seqs
+    # I am going to make it so that we do all of the screening of the below evalue cutoff seqs
     # inline with the submission rather than spitting the sequences out at the end and having to re-do submissions.
     # We will constantly update the symClade.fa and make a backup at each stage we update it. This can simply be
     # a time stamped fasta.
@@ -113,7 +113,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
                     currentDir, rootName)
             ]
 
-            #Write out the batch file
+            # Write out the batch file
             mBatchFilePath = r'{0}{1}{2}'.format(currentDir, 'mBatchFile', sampleName)
             writeListToDestination(mBatchFilePath, mBatchFile)
 
@@ -749,7 +749,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         if distance_method == 'unifrac':
             PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
                                                             method='mothur', call_type='submission', output_dir=outputDir)
-        elif distance_method == 'braycrutis':
+        elif distance_method == 'braycurtis':
             PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', output_dir=outputDir)
         ####### distance plotting #############
         if not noFig:
