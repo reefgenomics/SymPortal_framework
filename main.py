@@ -237,8 +237,10 @@ def main():
         new_data_set_submitting_user = config_dict['user_name']
         if args.data_analysis_id:
             analysis_object = data_analysis.objects.get(id=args.data_analysis_id)
-            list_of_sample_ids = [int(x) for x in analysis_object.listOfDataSubmissions.split(',')]
-            num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=list_of_sample_ids))
+            dataSubmissionsToOutput = [int(a) for a in args.print_output_types.split(',')]
+            querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
+            num_samples = data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions)
+
             data_sub_collection_run.formatOutput_ord(analysisobj=analysis_object,
                                                      numProcessors=args.num_proc, call_type='stand_alone', num_samples=num_samples,
                                                      datasubstooutput=args.print_output_types, noFig=args.noFig,
