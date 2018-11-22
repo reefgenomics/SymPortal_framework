@@ -251,9 +251,10 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     if len(ordered_list_of_seqs) < num_leg_cells:
         if len(ordered_list_of_seqs) % max_n_cols != 0:
             n_rows = int(len(ordered_list_of_seqs) / max_n_cols) + 1
+            last_row_len = len(ordered_list_of_seqs) % max_n_cols
         else:
             n_rows = int(len(ordered_list_of_seqs) / max_n_cols)
-        last_row_len = len(ordered_list_of_seqs) % max_n_cols
+            last_row_len = max_n_cols
     else:
         n_rows = max_n_rows
         last_row_len = max_n_cols
