@@ -665,7 +665,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     if dataSubmissionInQ.initialDataProcessed == False:
 
         # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
-        wkd = generate_new_stability_file_and_data_set_sample_objects(cladeList, dSID, dataSubmissionInQ,
+        wkd, num_samples = generate_new_stability_file_and_data_set_sample_objects(cladeList, dSID, dataSubmissionInQ,
                                                                       data_sheet_path, pathToInputFile)
 
     ################### PERFORM pre-MED QC #################
@@ -730,16 +730,19 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     # here we will create a stacked bar
     # I think it is easiest if we directly pass in the path of the above count table output
     if not noFig:
-        sys.stdout.write('\nGenerating sequence count table figures\n')
-        for path in output_path_list:
-            if 'relative' in path:
-                path_to_rel_abund_data = path
+        if num_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(num_samples))
+        else:
+            sys.stdout.write('\nGenerating sequence count table figures\n')
+            for path in output_path_list:
+                if 'relative' in path:
+                    path_to_rel_abund_data = path
 
-        svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, time_date_str=date_time_str)
-        sys.stdout.write('\nFigure generation complete')
-        sys.stdout.write('\nFigures output to:')
-        sys.stdout.write('\n{}'.format(svg_path))
-        sys.stdout.write('\n{}\n'.format(png_path))
+            svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, outputDir, time_date_str=date_time_str)
+            sys.stdout.write('\nFigure generation complete')
+            sys.stdout.write('\nFigures output to:')
+            sys.stdout.write('\n{}'.format(svg_path))
+            sys.stdout.write('\n{}\n'.format(png_path))
 
 
 
@@ -753,12 +756,15 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
             PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', output_dir=outputDir)
         ####### distance plotting #############
         if not noFig:
-            for pcoa_path in PCoA_paths_list:
-                if 'PCoA_coords' in pcoa_path:
-                    # then this is a full path to one of the .csv files that contains the coordinates that we can plot
-                    # we will get the output directory from the passed in pcoa_path
-                    sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
-                    plot_between_sample_distance_scatter(pcoa_path)
+            if num_samples > 1000:
+                print('Too many samples ({}) to generate plots'.format(num_samples))
+            else:
+                for pcoa_path in PCoA_paths_list:
+                    if 'PCoA_coords' in pcoa_path:
+                        # then this is a full path to one of the .csv files that contains the coordinates that we can plot
+                        # we will get the output directory from the passed in pcoa_path
+                        sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
+                        plot_between_sample_distance_scatter(pcoa_path)
         ####################################
     #######################################
 
@@ -1793,7 +1799,7 @@ def generate_new_stability_file_and_data_set_sample_objects(cladeList, dSID, dat
                                                                                               wkd)
     # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
     smpls = data_set_sample.objects.bulk_create(list_of_sample_objects)
-    return wkd
+    return wkd, len(list_of_sample_objects)
 
 
 def generate_stability_file_and_data_set_sample_objects_inferred(cladeList, dataSubmissionInQ, wkd):

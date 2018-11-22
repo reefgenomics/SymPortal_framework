@@ -15,7 +15,7 @@ import pickle
 from collections import Counter
 import numpy as np
 
-def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, noFig=False, output_user=None, time_date_str=None):
+def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numProcessors=1, noFig=False, output_user=None, time_date_str=None):
     analysisObj = analysisobj
     # This is one of the last things to do before we can use our first dataset
     # The table will have types as columns and rows as samples
@@ -481,25 +481,28 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, numProcessors=1, 
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
     output_dir = os.path.dirname(output_to_plot)
     if not noFig:
-        svg_path, png_path, sorted_sample_id_list = generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
-                                                         output_directory=output_dir,
-                                                                              analysis_obj_id=analysisobj.id,
-                                                                              time_date_str=date_time_string)
-        print('Figure output files:')
-        print(svg_path)
-        print(png_path)
+        if num_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(num_samples))
+        else:
+            svg_path, png_path, sorted_sample_id_list = generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count=output_to_plot,
+                                                             output_directory=output_dir,
+                                                                                  analysis_obj_id=analysisobj.id,
+                                                                                  time_date_str=date_time_string)
+            print('Figure output files:')
+            print(svg_path)
+            print(png_path)
 
-        for file in div_output_file_list:
-            if 'relative' in file:
-                path_to_plot = file
-                break
+            for file in div_output_file_list:
+                if 'relative' in file:
+                    path_to_plot = file
+                    break
 
-        svg_path, png_path = generate_stacked_bar_data_submission(path_to_tab_delim_count=path_to_plot,
-                                                                  output_directory=output_dir, time_date_str=date_time_string, sample_id_order_list=sorted_sample_id_list)
+            svg_path, png_path = generate_stacked_bar_data_submission(path_to_tab_delim_count=path_to_plot,
+                                                                      output_directory=output_dir, time_date_str=date_time_string, sample_id_order_list=sorted_sample_id_list)
 
-        print('Figure output files:')
-        print(svg_path)
-        print(png_path)
+            print('Figure output files:')
+            print(svg_path)
+            print(png_path)
 
 
 
