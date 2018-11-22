@@ -716,7 +716,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     # the below method will create the tab delimited output table and print out the output file paths
     # it will also return these paths so that we can use them to grab the data for figure plotting
-    output_path_list, date_time_str = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),
+    output_path_list, date_time_str, num_samples = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=str(dSID),
                                                            numProcessors=numProc,
                                                            output_dir=outputDir, call_type='submission')
 

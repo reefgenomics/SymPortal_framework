@@ -464,7 +464,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
     del df_relative
 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
-    div_output_file_list, date_time_string = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
+    div_output_file_list, date_time_string, numSamples = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
                                                            numProcessors=numProcessors, output_dir=outputDir,
                                                            sorted_sample_ID_list=samples_by_ID_that_have_been_sorted,
                                                            analysis_obj_id=analysisobj.id, call_type='analysis', time_date_str=date_time_string)
@@ -1105,7 +1105,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for path_item in output_path_list:
         print(path_item)
 
-    return output_path_list, date_time_string
+    return output_path_list, date_time_string, len(sampleList)
 
 def outputWorkerTwo(input, seq_rel_abund_dict, smpl_seq_dict, smpl_noName_clade_summary_dict,
                     refSeq_names_annotated, sample_to_dsss_list_shared_dict):
