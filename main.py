@@ -239,7 +239,7 @@ def main():
             analysis_object = data_analysis.objects.get(id=args.data_analysis_id)
             dataSubmissionsToOutput = [int(a) for a in args.print_output_types.split(',')]
             querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
-            num_samples = data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions)
+            num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions))
 
             data_sub_collection_run.formatOutput_ord(analysisobj=analysis_object,
                                                      numProcessors=args.num_proc, call_type='stand_alone', num_samples=num_samples,
