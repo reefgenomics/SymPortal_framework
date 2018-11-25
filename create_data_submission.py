@@ -206,16 +206,15 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID, debug):
 
             mBatchFilePath = r'{0}{1}{2}'.format(currentDir, 'mBatchFile', sampleName)
             writeListToDestination(mBatchFilePath, mBatchFileContinued)
-            if not debug:
-                completedProcess = subprocess.run(
-                    ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            completedProcess = subprocess.run(
+                ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
 
-            elif debug:
-                completedProcess = subprocess.run(
-                    ['mothur', r'{0}'.format(mBatchFilePath)])
 
             if completedProcess.returncode == 1 or 'ERROR' in completedProcess.stdout.decode('utf-8'):
+                if debug:
+                    print(completedProcess.stdout.decode('utf-8'))
                 errorReason = 'error in inital QC'
                 logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
                 error_sample_list.append(sampleName)
@@ -1511,13 +1510,14 @@ def worker_screen_size(input_q, error_sample_list, wkd, dataSubID, debug ):
 
 
         writeListToDestination(mBatchFilePath, secondmBatchFile)
-        if not debug:
-            completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE,
-                                              stderr=subprocess.PIPE)
-        elif debug:
-            completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)])
+
+        completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE,
+                                          stderr=subprocess.PIPE)
+
 
         if completedProcess.returncode == 1 or 'ERROR' in completedProcess.stdout.decode('utf-8'):
+            if debug:
+                print(completedProcess.stdout.decode('utf-8'))
             errorReason = 'No Symbiodinium sequences left after size screening'
             logQCErrorAndContinue(dataSetSampleInstanceInQ, sampleName, errorReason)
             error_sample_list.put(sampleName)
