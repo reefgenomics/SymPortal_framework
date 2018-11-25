@@ -1515,7 +1515,7 @@ def worker_screen_size(input_q, error_sample_list, wkd, dataSubID, debug ):
             completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE,
                                               stderr=subprocess.PIPE)
         elif debug:
-            subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)])
+            completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)])
 
         if completedProcess.returncode == 1 or 'ERROR' in completedProcess.stdout.decode('utf-8'):
             errorReason = 'No Symbiodinium sequences left after size screening'
