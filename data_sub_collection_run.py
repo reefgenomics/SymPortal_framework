@@ -4121,7 +4121,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method='braycurtis', noOutput=False):
+def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method='braycurtis', noOutput=False, debug=False):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))

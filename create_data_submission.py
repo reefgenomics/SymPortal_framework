@@ -35,7 +35,7 @@ def logQCErrorAndContinue(datasetsampleinstanceinq, samplename, errorreason):
 
 
 
-def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
+def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID, debug):
     # I am going to make it so that we do all of the screening of the below evalue cutoff seqs
     # inline with the submission rather than spitting the sequences out at the end and having to re-do submissions.
     # We will constantly update the symClade.fa and make a backup at each stage we update it. This can simply be
@@ -127,7 +127,8 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
                 # and any other error that may be arising
                 # if found, log error.
                 for line in p.stdout:
-                    # print(line)
+                    if debug:
+                        print(line)
                     if '[WARNING]: Blank fasta name, ignoring read.' in line:
                         p.terminate()
                         errorReason = 'Blank fasta name'
@@ -165,16 +166,22 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
                 # write out RC batch file
                 writeListToDestination(mBatchFilePath, mBatchRev)
 
-                completedProcess = subprocess.run(
-                    ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-                # At this point the sequences will be reversed and they will have been renamed so we
-                # can just change the name of the .rc file to the orignal .fasta file that we inputted with
-                # This way we don't need to change the rest of the mothur pipe.
-                subprocess.run(
-                    [r'mv', r'{0}{1}.trim.contigs.good.unique.abund.rc.pcr.fasta'.format(currentDir, rootName),
-                     r'{0}{1}.trim.contigs.good.unique.abund.pcr.fasta'.format(currentDir, rootName)],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                if not debug:
+                    completedProcess = subprocess.run(
+                        ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                    # At this point the sequences will be reversed and they will have been renamed so we
+                    # can just change the name of the .rc file to the orignal .fasta file that we inputted with
+                    # This way we don't need to change the rest of the mothur pipe.
+                    subprocess.run(
+                        [r'mv', r'{0}{1}.trim.contigs.good.unique.abund.rc.pcr.fasta'.format(currentDir, rootName),
+                         r'{0}{1}.trim.contigs.good.unique.abund.pcr.fasta'.format(currentDir, rootName)],
+                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+                elif debug:
+                    completedProcess = subprocess.run(
+                        ['mothur', r'{0}'.format(mBatchFilePath)])
+                    subprocess.run(
+                        [r'mv', r'{0}{1}.trim.contigs.good.unique.abund.rc.pcr.fasta'.format(currentDir, rootName),
+                         r'{0}{1}.trim.contigs.good.unique.abund.pcr.fasta'.format(currentDir, rootName)])
 
             # Check again to see if the RC has fixed the problem of having an empty fasta
             # If this file is still empty, then the problem was not solved by reverse complementing
@@ -199,8 +206,14 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
 
             mBatchFilePath = r'{0}{1}{2}'.format(currentDir, 'mBatchFile', sampleName)
             writeListToDestination(mBatchFilePath, mBatchFileContinued)
-            completedProcess = subprocess.run(
-                ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if not debug:
+                completedProcess = subprocess.run(
+                    ['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+
+            elif debug:
+                completedProcess = subprocess.run(
+                    ['mothur', r'{0}'.format(mBatchFilePath)])
 
             if completedProcess.returncode == 1 or 'ERROR' in completedProcess.stdout.decode('utf-8'):
                 errorReason = 'error in inital QC'
@@ -252,7 +265,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, dataSubID):
 
     return
 
-def perform_MED(wkd, ID, numProc):
+def perform_MED(wkd, ID, numProc, debug):
 
     # Create mothur batch for each .fasta .name pair to be deuniqued
     # Put in directory list, run via multiprocessing
@@ -309,7 +322,7 @@ def perform_MED(wkd, ID, numProc):
 
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
     for n in range(numProc):
-        p = Process(target=deuniqueWorker, args=(taskQueue, doneQueue))
+        p = Process(target=deuniqueWorker, args=(taskQueue, doneQueue, debug))
         allProcesses.append(p)
         p.start()
 
@@ -325,7 +338,7 @@ def perform_MED(wkd, ID, numProc):
 
     return listOfDeuniquedFastaPaths
 
-def deuniqueWorker(input, output):
+def deuniqueWorker(input, output, debug):
 
     # This currently works through a list of paths to batch files to be uniques.
     # But at each of these locations once the modified deuniqued file has been written we can then perform the MED
@@ -342,8 +355,10 @@ def deuniqueWorker(input, output):
         found = True
 
         # Run the dunique
-        completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
+        if not debug:
+            completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        elif debug:
+            subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)])
         # Modify the deuniqued fasta to append sample name to all of the sequences
         # Get list of files in directory
         deuniquedFasta = []
@@ -365,6 +380,12 @@ def deuniqueWorker(input, output):
         deuniquedFasta = ['{0}{1}_{2}'.format(a[0],sampleName,a[1:].replace('_','-')) if a[0] == '>' else a for a in deuniquedFasta]
         #write the modified deuniquedFasta to list
         writeListToDestination(pathToFile, deuniquedFasta)
+        if debug:
+            if deuniquedFasta:
+                if len(deuniquedFasta) < 100:
+                    print('WARNING the dequniqed fasta for {} is less than {} lines'.format(sampleName, len(deuniquedFasta)))
+            else:
+                print('deuniqued fasta for {} is empty'.format(sampleName))
         # Put the path to the deuniqued fasta into the output list for use in MED analyses
         output.put('{}/{}/'.format(os.path.dirname(pathToFile), 'MEDOUT'))
 
@@ -394,9 +415,15 @@ def deuniqueWorker(input, output):
         # scenario the M was set to 4.
         # We should also take care that M doesn't go below 4, so we should use a max choice for the M
         M_value = max(4, int(0.004 * (len(deuniquedFasta)/2)))
-        completedProcess = subprocess.run(
-            [r'decompose', '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
-             MEDOutDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if not debug:
+            completedProcess = subprocess.run(
+                [r'decompose', '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
+                 MEDOutDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        elif debug:
+            subprocess.run(
+                [r'decompose', '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html',
+                 '--skip-check-input', '-o',
+                 MEDOutDir, pathToFile])
         sys.stdout.write('{}: MED complete\n'.format(sampleName))
 
 
@@ -459,7 +486,7 @@ def collateFilesForMed(listofdeuniquedfastapaths, wkd):
     return
 
 
-def create_data_set_sample_sequences_from_MED_nodes(wkd, ID, MEDDirs):
+def create_data_set_sample_sequences_from_MED_nodes(wkd, ID, MEDDirs, debug):
     ''' Here we have modified the original method processMEDDataDirectCCDefinition'''
     # We are going to change this so that we go to each of the MEDDirs, which represent the clades within samples
     # that have had MED analyses run in them and we are going to use the below code to populate sequences to
@@ -495,6 +522,8 @@ def create_data_set_sample_sequences_from_MED_nodes(wkd, ID, MEDDirs):
             nodeFile = readDefinedFileToList('NODE-REPRESENTATIVES.fasta')
         except:
             # if no node file found move on to the next directory
+            if debug:
+                print('Could not locate NODE-REP file for {}'.format(dir))
             continue
         nodeFile = [line.replace('-', '') if line[0] != '>' else line for line in nodeFile]
 
@@ -504,6 +533,9 @@ def create_data_set_sample_sequences_from_MED_nodes(wkd, ID, MEDDirs):
         ############ ASSOCIATE MED NODES TO EXISITING REFSEQS OR CREATE NEW REFSEQS #########
         # Look up seq of each of the MED nodes with reference_sequence table
         # See if the seq in Q matches a reference_sequence, if so, associate
+        if debug:
+            if len(nodeFile) < 10:
+                print('WARNING node file for {} is only {} lines'.format(dir, len(nodeFile)))
         listOfRefSeqs = []
         for i in range(len(nodeFile)):
             # We were having a problem here where some of the seqs were 1bp shorter than the reference seqs
@@ -651,7 +683,7 @@ def create_data_set_sample_sequences_from_MED_nodes(wkd, ID, MEDDirs):
 
 def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
          full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload',
-         data_sheet_path=None, noFig=False, noOrd=False, distance_method='braycurtis'):
+         data_sheet_path=None, noFig=False, noOrd=False, distance_method='braycurtis', debug=False):
 
 
     ############### UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE ##################
@@ -670,17 +702,22 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
     ################### PERFORM pre-MED QC #################
         if screen_sub_evalue:
-            new_seqs_added_count, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir=outputDir)
+            new_seqs_added_count, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir=outputDir, debug=debug)
         else:
-            fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir=outputDir)
+            fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta = preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir=outputDir, debug=debug)
 
 
     # This function now performs the MEDs sample by sample, clade by clade.
     # The list of outputed paths lead to the MED directories where node info etc can be found
     sys.stdout.write('\n\nStarting MED analysis\n')
-    MEDDirs = perform_MED(dataSubmissionInQ.workingDirectory, dataSubmissionInQ.id, numProc)
+    MEDDirs = perform_MED(dataSubmissionInQ.workingDirectory, dataSubmissionInQ.id, numProc, debug)
 
-    create_data_set_sample_sequences_from_MED_nodes(dataSubmissionInQ.workingDirectory, dataSubmissionInQ.id, MEDDirs)
+    if debug:
+        print('MED dirs:')
+        for dir in MEDDirs:
+            print(dir)
+
+    create_data_set_sample_sequences_from_MED_nodes(dataSubmissionInQ.workingDirectory, dataSubmissionInQ.id, MEDDirs, debug)
 
     # dataSubmissionInQ.dataProcessed = True
     dataSubmissionInQ.currentlyBeingProcessed = False
@@ -786,13 +823,13 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
 
 
 
-def generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ, e_value_multiP_dict, wkd):
+def generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ, e_value_multiP_dict, wkd, debug):
     # make fasta from the dict
     fasta_out = make_evalue_screening_fasta_no_clade(dSID, e_value_multiP_dict, wkd)
     # we need to know what clade each of the sequences are
     # fastest way to do this is likely to run another blast on the symbiodinium clade reference dict
     if fasta_out:
-        fasta_out_with_clade = make_evalue_screening_fasta_with_clade(dataSubmissionInQ, fasta_out, wkd)
+        fasta_out_with_clade = make_evalue_screening_fasta_with_clade(dataSubmissionInQ, fasta_out, wkd, debug)
         # this will return a new fasta containing only the sequences that were 'Symbiodinium' matches
         # we can then output this dictionary
         path_to_fasta_out_with_clade = wkd + '/below_e_cutoff_seqs_{}.fasta'.format(dSID)
@@ -802,7 +839,7 @@ def generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ,
         return fasta_out, None
 
 
-def make_evalue_screening_fasta_with_clade(dataSubmissionInQ, fasta_out, wkd):
+def make_evalue_screening_fasta_with_clade(dataSubmissionInQ, fasta_out, wkd, debug):
     ncbircFile = []
     db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
     ncbircFile.extend(["[BLAST]", "BLASTDB={}".format(db_path)])
@@ -814,12 +851,25 @@ def make_evalue_screening_fasta_with_clade(dataSubmissionInQ, fasta_out, wkd):
     os.chdir(wkd)
     # Run local blast
     # completedProcess = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
-    completedProcess = subprocess.run(
-        ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db',
-         dataSubmissionInQ.reference_fasta_database_used, '-max_target_seqs', '1', '-num_threads', '1'],
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    if not debug:
+        completedProcess = subprocess.run(
+            ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db',
+             dataSubmissionInQ.reference_fasta_database_used, '-max_target_seqs', '1', '-num_threads', '1'],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    elif debug:
+        subprocess.run(
+            ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db',
+             dataSubmissionInQ.reference_fasta_database_used, '-max_target_seqs', '1', '-num_threads', '1'])
+
     # Read in blast output
     blast_output_file = readDefinedFileToList(r'{}/blast.out'.format(wkd))
+    if debug:
+        if not blast_output_file:
+            print('WARNING blast output file is empty for evalue screening')
+        else:
+            if len(blast_output_file) < 10:
+                print('WARNING blast output file for evalue screening has only {} lines'.format(len(blast_output_file)))
+
     # now create a below_e_cutoff_seq to clade dictionary
     sub_e_seq_to_clade_dict = {a.split('\t')[0]: a.split('\t')[1][-1] for a in blast_output_file}
     # print out the fasta with the clades appended to the end
@@ -878,7 +928,7 @@ def processed_samples_status(dataSubmissionInQ, pathToInputFile):
 
 
 
-def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list, screen_sub_e, output_dir):
+def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list, screen_sub_e, output_dir, debug):
     sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
 
     # If we will be screening the seuqences
@@ -901,7 +951,7 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
         while found :
             # everytime that the execute_worker is run it pickles out the files needed for the next worker
             e_value_multiP_dict, checked_samples = execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
-                                                                sampleFastQPairs, wkd, checked_samples)
+                                                                sampleFastQPairs, wkd, debug=debug, checked_samples=checked_samples)
             if len(e_value_multiP_dict) == 0:
                 # then there are no sub_e_seqs to screen and we can exit
                 break
@@ -919,7 +969,7 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
             # This function will reuturn False if we end up with no sequences to screen
             # It will outherwise reutrn the list that is the fasta that was written out.
             fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ,
-                                                                                       e_value_multiP_dict, wkd)
+                                                                                       e_value_multiP_dict, wkd, debug)
             # we only need to screen if we have a fasta to screen
             if fasta_out:
                 # here found represents whether we found any of the seqs to be symbiodinium
@@ -935,10 +985,10 @@ def taxonomic_screening(wkd, dSID, numProc, dataSubmissionInQ, error_sample_list
         # we can also run the generate_and_write_below... function to write out a fast of significant sequences
         # we can then report to the user using that object
         e_value_multiP_dict = execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
-                                                            sampleFastQPairs, wkd)
+                                                            sampleFastQPairs, wkd, debug=debug)
 
         fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(dSID, dataSubmissionInQ,
-                                                                                        e_value_multiP_dict, wkd)
+                                                                                        e_value_multiP_dict, wkd, debug)
 
 
     # input_q, wkd, dataSubID
@@ -1125,7 +1175,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,  full_p
         return False, 0
 
 
-def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc, sampleFastQPairs, wkd, checked_samples=None):
+def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc, sampleFastQPairs, wkd, debug, checked_samples=None ):
     # The error sample list is a list that houses the sample names that failed in the inital mothur QC worker
 
     # Create the queues that will hold the sample information
@@ -1163,11 +1213,11 @@ def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
         if checked_samples != None:
             p = Process(target=worker_taxonomy_screening,
                         args=(input_q, wkd, dataSubmissionInQ.reference_fasta_database_used,
-                              e_value_multiP_dict, error_sample_list_shared, checked_samples_shared))
+                              e_value_multiP_dict, error_sample_list_shared, debug, checked_samples_shared))
         else:
             p = Process(target=worker_taxonomy_screening,
                         args=(input_q, wkd, dataSubmissionInQ.reference_fasta_database_used,
-                              e_value_multiP_dict, error_sample_list_shared))
+                              e_value_multiP_dict, error_sample_list_shared, debug))
         allProcesses.append(p)
         p.start()
     for p in allProcesses:
@@ -1178,7 +1228,7 @@ def execute_worker_taxa_screening(dataSubmissionInQ, error_sample_list, numProc,
         return e_value_multiP_dict
 
 
-def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_dict, err_smpl_list, checked_samples=None):
+def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_dict, err_smpl_list, debug, checked_samples=None ):
 
     for contigPair in iter(input_q.get, 'STOP'):
         sampleName = contigPair.split('\t')[0].replace('[dS]','-')
@@ -1225,12 +1275,23 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
 
         # Run local blast
         # completedProcess = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
-        completedProcess = subprocess.run(
-            ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', reference_db_name,
-             '-max_target_seqs', '1', '-num_threads', '1'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if not debug:
+            completedProcess = subprocess.run(
+                ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', reference_db_name,
+                 '-max_target_seqs', '1', '-num_threads', '1'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        elif debug:
+            subprocess.run(
+                ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', reference_db_name,
+                 '-max_target_seqs', '1', '-num_threads', '1'])
         sys.stdout.write('{}: BLAST complete\n'.format(sampleName))
         # Read in blast output
         blastOutputFile = readDefinedFileToList(r'{}blast.out'.format(currentDir))
+        if debug:
+            if not blastOutputFile:
+                print('WARNING blast output file is empty for {}'.format(sampleName))
+            else:
+                if len(blastOutputFile) < 10:
+                    print('WARNING blast output file for {} is only {} lines long'.format(sampleName, len(blastOutputFile)))
 
         # this is a clade dict. I'm not sure why I called it blast Dict. It is sequences name to clade.
         blastDict = {a.split('\t')[0]: a.split('\t')[1][-1] for a in blastOutputFile}
@@ -1398,7 +1459,7 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, dataSubID,
         writeByteObjectToDefinedDirectory('{0}{1}.cladeDict.dict'.format(currentDir, rootName), cladalDict)
     return
 
-def worker_screen_size(input_q, error_sample_list, wkd, dataSubID ):
+def worker_screen_size(input_q, error_sample_list, wkd, dataSubID, debug ):
     dataSubInQ = data_set.objects.get(id=dataSubID)
     for contigPair in iter(input_q.get, 'STOP'):
         sampleName = contigPair.split('\t')[0].replace('[dS]', '-')
@@ -1450,8 +1511,11 @@ def worker_screen_size(input_q, error_sample_list, wkd, dataSubID ):
 
 
         writeListToDestination(mBatchFilePath, secondmBatchFile)
-        completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE,
-                                          stderr=subprocess.PIPE)
+        if not debug:
+            completedProcess = subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)], stdout=subprocess.PIPE,
+                                              stderr=subprocess.PIPE)
+        elif debug:
+            subprocess.run(['mothur', r'{0}'.format(mBatchFilePath)])
 
         if completedProcess.returncode == 1 or 'ERROR' in completedProcess.stdout.decode('utf-8'):
             errorReason = 'No Symbiodinium sequences left after size screening'
@@ -1538,7 +1602,7 @@ def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, dat
         pickle.dump(nameDict, open("{}/name_dict.pickle".format(currentDir), "wb"))
     return
 
-def execute_size_screening(wkd, numProc, dSID, error_sample_list):
+def execute_size_screening(wkd, numProc, dSID, error_sample_list, debug):
     sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
     # Create the queues that will hold the sample information
     input_q = Queue()
@@ -1561,7 +1625,7 @@ def execute_size_screening(wkd, numProc, dSID, error_sample_list):
     sys.stdout.write('\nPerforming QC\n')
 
     for n in range(numProc):
-        p = Process(target=worker_screen_size, args=(input_q, error_sample_list_shared, wkd, dSID ))
+        p = Process(target=worker_screen_size, args=(input_q, error_sample_list_shared, wkd, dSID, debug ))
         allProcesses.append(p)
         p.start()
 
@@ -1680,19 +1744,19 @@ def worker_associate_QC_meta_data_to_samples(input_q, error_sample_list, wkd, da
         sys.stdout.write('{}: pre-MED processing completed\n'.format(sampleName))
     return
 
-def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir):
+def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_dir, debug):
     # check to see whether the reference_fasta_database_used has been created
     # we no longer by default have the blast binaries already made so that we don't have to have them up on
     # github. As such if this is the first time or if there has been an update of something
     # we should create the bast dictionary from the .fa
-    validate_taxon_screening_ref_blastdb(dataSubmissionInQ)
+    validate_taxon_screening_ref_blastdb(dataSubmissionInQ, debug)
     # this method will perform the bulk of the QC (everything before MED). The output e_value_mltiP_dict
     # will be used for screening the sequences that were found in multiple samples but were not close enough
     # to a sequence in the refreence database to be included outright in the analysis.
 
     #First execute the initial mothur QC. This should leave us with a set of fastas, name and groupfiles etc in
     # a directory from each sample.
-    error_sample_list = execute_worker_initial_mothur(dSID, numProc, wkd)
+    error_sample_list = execute_worker_initial_mothur(dSID, numProc, wkd, debug)
 
     # Now do the iterative screening
     # this should contain two parts, the screening and the handling of the screening results
@@ -1700,15 +1764,15 @@ def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_d
     if screen_sub_evalue:
         new_seqs_added_count, discarded_seqs_fasta = taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd,
                                                    numProc=numProc, error_sample_list=error_sample_list,
-                                                   screen_sub_e=screen_sub_evalue, output_dir=output_dir)
+                                                   screen_sub_e=screen_sub_evalue, output_dir=output_dir, debug=debug)
     else:
         fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta = \
             taxonomic_screening(dSID=dSID, dataSubmissionInQ=dataSubmissionInQ, wkd=wkd, numProc=numProc,
-                                error_sample_list=error_sample_list, screen_sub_e=screen_sub_evalue, output_dir=output_dir)
+                                error_sample_list=error_sample_list, screen_sub_e=screen_sub_evalue, output_dir=output_dir , debug=debug)
 
     # At this point we should have the fasta names and group files written out.
     # now do the size screening
-    execute_size_screening(dSID=dSID, numProc=numProc, wkd=wkd, error_sample_list=error_sample_list)
+    execute_size_screening(dSID=dSID, numProc=numProc, wkd=wkd, error_sample_list=error_sample_list, debug=debug)
 
     # Now write out the clade separated fastas from the size screened seqs
     # These will be used in MED
@@ -1726,8 +1790,11 @@ def preMED_QC(dSID, dataSubmissionInQ, numProc, wkd, screen_sub_evalue, output_d
         return fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta
 
 
-def execute_worker_initial_mothur(dSID, numProc, wkd):
+def execute_worker_initial_mothur(dSID, numProc, wkd, debug):
     sampleFastQPairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    if not sampleFastQPairs:
+        sys.exit('sample fastq pairs list empty')
+
     # Create the queues that will hold the sample information
     input_q = Queue()
 
@@ -1752,7 +1819,7 @@ def execute_worker_initial_mothur(dSID, numProc, wkd):
 
 
     for n in range(numProc):
-        p = Process(target=worker_initial_mothur, args=(input_q, error_sample_list, wkd, dSID))
+        p = Process(target=worker_initial_mothur, args=(input_q, error_sample_list, wkd, dSID, debug))
         allProcesses.append(p)
         p.start()
 
@@ -1763,7 +1830,7 @@ def execute_worker_initial_mothur(dSID, numProc, wkd):
 
 
 
-def validate_taxon_screening_ref_blastdb(dataSubmissionInQ):
+def validate_taxon_screening_ref_blastdb(dataSubmissionInQ, debug):
     list_of_binaries = [dataSubmissionInQ.reference_fasta_database_used + extension for extension in
                         ['.nhr', '.nin', '.nsq']]
     sym_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
@@ -1776,11 +1843,24 @@ def validate_taxon_screening_ref_blastdb(dataSubmissionInQ):
     if binary_count != 3:
         # then some of the binaries are not present and we need to regenerate the blast dictionary
         # generate the blast dictionary again
-        completed_process = subprocess.run(
-            ['makeblastdb', '-in', dataSubmissionInQ.reference_fasta_database_used, '-dbtype', 'nucl', '-title',
-             dataSubmissionInQ.reference_fasta_database_used.replace('.fa', '')], stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE)
+        if not debug:
+            completed_process = subprocess.run(
+                ['makeblastdb', '-in', dataSubmissionInQ.reference_fasta_database_used, '-dbtype', 'nucl', '-title',
+                 dataSubmissionInQ.reference_fasta_database_used.replace('.fa', '')], stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE)
+        elif debug:
+            subprocess.run(
+                ['makeblastdb', '-in', dataSubmissionInQ.reference_fasta_database_used, '-dbtype', 'nucl', '-title',
+                 dataSubmissionInQ.reference_fasta_database_used.replace('.fa', '')])
 
+        # now verify that the binaries have been successfully created
+        list_of_dir = os.listdir(sym_dir)
+        binary_count = 0
+        for item in list_of_dir:
+            if item in list_of_binaries:
+                binary_count += 1
+        if binary_count != 3:
+            sys.exit('Failure in creating blast binaries')
 
 def generate_new_stability_file_and_data_set_sample_objects(cladeList, dSID, dataSubmissionInQ, data_sheet_path,
                                                             pathToInputFile):

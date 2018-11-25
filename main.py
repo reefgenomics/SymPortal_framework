@@ -128,6 +128,7 @@ def main():
     parser.add_argument('--data_sheet', help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
     parser.add_argument('--noFig', action='store_true', help='Skip figure production')
     parser.add_argument('--noOrd', action='store_true', help='Skip ordination analysis')
+    parser.add_argument('--debug', action='store_true', help='Present additional stdout output', default=False)
     parser.add_argument('--noOutput', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
     parser.add_argument('--distance_method', help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. '
                                                   'The method to use when calculating distances between its2 '
@@ -194,12 +195,14 @@ def main():
             if os.path.isfile(args.data_sheet):
                 create_data_submission.main(input_dir, new_data_set.id, num_proc,
                                             screen_sub_evalue=screen_sub_evalue_bool,
-                                            data_sheet_path=args.data_sheet, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method)
+                                            data_sheet_path=args.data_sheet, noFig=args.noFig, noOrd=args.noOrd,
+                                            distance_method=args.distance_method, debug=args.debug)
             else:
                 sys.exit('{} not found'.format(args.data_sheet))
         else:
             create_data_submission.main(input_dir, new_data_set.id, num_proc,
-                                        screen_sub_evalue=screen_sub_evalue_bool, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method)
+                                        screen_sub_evalue=screen_sub_evalue_bool, noFig=args.noFig, noOrd=args.noOrd,
+                                        distance_method=args.distance_method, debug=args.debug)
 
     elif args.analyse:
         if args.name == 'noName':
@@ -228,7 +231,9 @@ def main():
                                             submitting_user_email=new_data_set_user_email)
         new_analysis_object.description = args.description
         new_analysis_object.save()
-        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig, noOrd=args.noOrd, distance_method=args.distance_method, noOutput=args.noOutput)
+        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig,
+                                     noOrd=args.noOrd, distance_method=args.distance_method, noOutput=args.noOutput,
+                                     debug=args.debug)
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output_types:
