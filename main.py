@@ -236,8 +236,13 @@ def main():
             config_dict = json.load(f)
         new_data_set_submitting_user = config_dict['user_name']
         if args.data_analysis_id:
-            data_sub_collection_run.formatOutput_ord(data_analysis.objects.get(id=args.data_analysis_id),
-                                                     numProcessors=args.num_proc, call_type='stand_alone',
+            analysis_object = data_analysis.objects.get(id=args.data_analysis_id)
+            dataSubmissionsToOutput = [int(a) for a in args.print_output_types.split(',')]
+            querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
+            num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions))
+
+            data_sub_collection_run.formatOutput_ord(analysisobj=analysis_object,
+                                                     numProcessors=args.num_proc, call_type='stand_alone', num_samples=num_samples,
                                                      datasubstooutput=args.print_output_types, noFig=args.noFig,
                                                      output_user=new_data_set_submitting_user)
         else:
@@ -312,18 +317,21 @@ def main():
         new_data_set_submitting_user = config_dict['user_name']
 
         outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
-        output_file_list, date_time_str = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
+        output_file_list, date_time_str, num_samples = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
             datasubstooutput=args.print_output_seqs, numProcessors=args.num_proc, output_dir=outputDir,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
-        for item in output_file_list:
-            if 'relative' in item:
-                svg_path, png_path = plotting.\
-                    generate_stacked_bar_data_submission(path_to_tab_delim_count=item,
-                                                       output_directory=outputDir, time_date_str=date_time_str)
-                print('Output figs:')
-                print(svg_path)
-                print(png_path)
-                break
+        if num_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(num_samples))
+        else:
+            for item in output_file_list:
+                if 'relative' in item:
+                    svg_path, png_path = plotting.\
+                        generate_stacked_bar_data_submission(path_to_tab_delim_count=item,
+                                                           output_directory=outputDir, time_date_str=date_time_str)
+                    print('Output figs:')
+                    print(svg_path)
+                    print(png_path)
+                    break
 
 
 

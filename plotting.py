@@ -173,7 +173,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
         x_tick_label_list = []
         for sample in sp_output_df.index.values.tolist()[i * smp_per_plot:end_slice]:
             sys.stdout.write('\rPlotting sample: {}'.format(sample))
-            x_tick_label_list.append(smp_id_to_smp_name_dict[sample])
+            x_tick_label_list.append(smp_id_to_smp_name_dict[int(sample)])
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
             # for each sequence, create a rect patch
@@ -251,9 +251,10 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     if len(ordered_list_of_seqs) < num_leg_cells:
         if len(ordered_list_of_seqs) % max_n_cols != 0:
             n_rows = int(len(ordered_list_of_seqs) / max_n_cols) + 1
+            last_row_len = len(ordered_list_of_seqs) % max_n_cols
         else:
             n_rows = int(len(ordered_list_of_seqs) / max_n_cols)
-        last_row_len = len(ordered_list_of_seqs) % max_n_cols
+            last_row_len = max_n_cols
     else:
         n_rows = max_n_rows
         last_row_len = max_n_cols
@@ -364,7 +365,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
 
     # need to drop the rows that contain the sequence accession and species descriptions
     for i, row_name in enumerate(sp_output_df.iloc[:, 0]):
-        if 'Sequence accession' in row_name:
+        if 'Sequence accession' in str(row_name):
             # then we want to drop all rows from here until the end
             index_to_drop_from = i
             break
@@ -372,7 +373,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     sp_output_df = sp_output_df.iloc[:index_to_drop_from]
 
     # now make a dict of id to sample name so that we can work with IDs
-    smp_ID_to_smp_name = {ID: nm for ID, nm in zip(sp_output_df.iloc[2:, 0], sp_output_df.iloc[2:, 1])}
+    smp_ID_to_smp_name = {int(ID): nm for ID, nm in zip(sp_output_df.iloc[2:, 0], sp_output_df.iloc[2:, 1])}
 
     # now drop the sample name columns
     sp_output_df.drop(columns=1, inplace=True)
@@ -478,7 +479,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
         sample_id_list = sp_output_df.index.values.tolist()
         for sample_id in sample_id_list[i * its_type_per_plot:end_slice]:
             sys.stdout.write('\rPlotting sample: {}'.format(sample_id))
-            x_tick_label_list.append(smp_ID_to_smp_name[sample_id])
+            x_tick_label_list.append(smp_ID_to_smp_name[int(sample_id)])
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
             # for each sequence, create a rect patch

@@ -4198,9 +4198,13 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
     ### It doesn't make sense to automatically make an output from an analysis as we don't know which
     # data_sets we want to output for.
     # actually yes it does because we will simply output all data_sets as a default.
+
+    # We will not do any plotting if there are more than 1000 samples in the data_analysis
+    list_of_sample_ids = [int(x) for x in analysisObj.listOfDataSubmissions.split(',')]
+    num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=list_of_sample_ids))
     if not noOutput:
         output_dir = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions,
-                                      call_type='analysis', numProcessors=cores, noFig=noFig)
+                                      call_type='analysis', num_samples=num_samples, numProcessors=cores, noFig=noFig)
 
         ######## Between type ordination analysis ##########
         if not noOrd:
@@ -4217,11 +4221,14 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
                     output_dir=output_dir)
 
             if not noFig:
-                for pcoa_path in pcoa_path_list:
-                    if 'PCoA_coords' in pcoa_path:
-                        sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
-                        # then this is a pcoa csv that we should plot
-                        plot_between_its2_type_prof_dist_scatter(pcoa_path)
+                if num_samples > 1000:
+                    print('Too many samples ({}) to generate plots'.format(num_samples))
+                else:
+                    for pcoa_path in pcoa_path_list:
+                        if 'PCoA_coords' in pcoa_path:
+                            sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
+                            # then this is a pcoa csv that we should plot
+                            plot_between_its2_type_prof_dist_scatter(pcoa_path)
         ####################################################
 
     print('data_analysis ID is: {}'.format(analysisObj.id))
