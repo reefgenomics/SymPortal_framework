@@ -10,7 +10,6 @@ import pandas as pd
 from django import db
 import subprocess
 import re
-import matplotlib.pyplot as plt
 import numpy as np
 from skbio.stats.ordination import pcoa
 from general import writeListToDestination, readDefinedFileToList, convert_interleaved_to_sequencial_fasta
@@ -971,67 +970,6 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
     sys.stdout.write('\rwriting out tree')
     writeListToDestination(tree_out_file_fconsense, new_tree_file)
 
-
-def plotPCoA(full_path_to_coords):
-    PCoA_coord_array = pd.read_csv(full_path_to_coords)
-
-    # I'm going to assume that the sample order is the same in the PCoA output
-    colours = []
-    for smp in PCoA_coord_array['sample']:
-        if smp[0] == 'Y':
-            colours.append('blue')
-        elif smp[0] == 'A':
-            colours.append('black')
-        elif smp[0] == 'C':
-            colours.append('green')
-
-    # convert back to numpy array for easy plotting
-    # the last item in the series is the proportion explained
-    PC1_plot_value = PCoA_coord_array['PC1'].tolist()[:-1]
-    PC2_plot_value = PCoA_coord_array['PC2'].tolist()[:-1]
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlabel('PC1 {0:.2f}%'.format(PCoA_coord_array['PC1'].iloc[-1]))
-    ax.set_ylabel('PC2 {0:.2f}%'.format(PCoA_coord_array['PC2'].iloc[-1]))
-
-    ax.scatter(PC1_plot_value, PC2_plot_value, color=colours)
-    for i, label in enumerate(PCoA_coord_array['sample']):
-        ax.annotate(label, (PC1_plot_value[i], PC2_plot_value[i]))
-
-    fig.show()
-
-
-def plotPCoA_types(full_path_to_coords):
-    PCoA_coord_array = pd.read_csv(full_path_to_coords)
-
-    # I'm going to assume that the sample order is the same in the PCoA output
-    colours = []
-    for smp in PCoA_coord_array['sample']:
-        if 'C115c' in smp:
-            colours.append('blue')
-        elif 'C3aq' in smp:
-            colours.append('black')
-        elif 'C3am' in smp:
-            colours.append('green')
-        elif smp == 'C3_C3c_C3gulf':
-            colours.append('grey')
-
-    # convert back to numpy array for easy plotting
-    # the last item in the series is the proportion explained
-    PC1_plot_value = PCoA_coord_array['PC1'].tolist()[:-1]
-    PC2_plot_value = PCoA_coord_array['PC2'].tolist()[:-1]
-
-    fig, ax = plt.subplots()
-
-    ax.set_xlabel('PC1 {0:.2f}%'.format(PCoA_coord_array['PC1'].iloc[-1]))
-    ax.set_ylabel('PC2 {0:.2f}%'.format(PCoA_coord_array['PC2'].iloc[-1]))
-
-    ax.scatter(PC1_plot_value, PC2_plot_value, color=colours)
-    for i, label in enumerate(PCoA_coord_array['sample']):
-        ax.annotate(label, (PC1_plot_value[i], PC2_plot_value[i]))
-
-    fig.show()
 
 
 # mothur method
