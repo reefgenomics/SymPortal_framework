@@ -4,10 +4,7 @@ from dbApp.models import data_set, reference_sequence, data_set_sample_sequence,
 # import math
 import itertools
 import numpy as np
-# https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
-import matplotlib as mpl
-mpl.use('TkAgg')
-import matplotlib.pyplot as plt
+
 from scipy.stats import gaussian_kde
 import operator
 import subprocess
@@ -3732,15 +3729,15 @@ def multiModalDetection(initialRun):
     return
 
 
-def plotHists(pdf, x_grid, newlist, typename):
-    plt.interactive(False)
-    fig, ax = plt.subplots(2, sharex=True)
-    ax[0].hist(newlist, 100)
-    ax[0].set_title(typename)
-    ax[0].set_xlim([-2, 4])
-    ax[1].plot(x_grid, pdf, color='blue', alpha=0.5, lw=3)
-    plt.show()
-    return
+# def plotHists(pdf, x_grid, newlist, typename):
+#     plt.interactive(False)
+#     fig, ax = plt.subplots(2, sharex=True)
+#     ax[0].hist(newlist, 100)
+#     ax[0].set_title(typename)
+#     ax[0].set_xlim([-2, 4])
+#     ax[1].plot(x_grid, pdf, color='blue', alpha=0.5, lw=3)
+#     plt.show()
+#     return
 
 
 ###############################
@@ -4121,7 +4118,7 @@ def createNewRefSeqName(closestMatch, listofseqnamesthatalreadyexist):
 
 
 ###### MAIN ######
-def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method='braycurtis', noOutput=False):
+def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method='braycurtis', noOutput=False, debug=False):
     ##### CLEAN UP tempData FOLDER ####
     if os.path.exists(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp'))):
         shutil.rmtree(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')))

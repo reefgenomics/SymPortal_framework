@@ -1,6 +1,11 @@
 # Rectangle is used despite it being greyed out in pycharm
 from matplotlib.patches import Rectangle
 from matplotlib.collections import PatchCollection
+# https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
+import matplotlib as mpl
+mpl.use('TkAgg')
+import matplotlib.pyplot as plt
+plt.ioff()
 import matplotlib.pyplot as plt
 # from matplotlib.pyplot import *
 from matplotlib.colors import ListedColormap
