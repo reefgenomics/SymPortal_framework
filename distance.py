@@ -439,7 +439,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
 
         if len(clade_collections_of_clade) < 2:
             continue
-        # TODO this is where we should start to work with the bray curtis method
+        # this is where we should start to work with the bray curtis method
         # first thing to do will be to go through each of the clade collections and create a dict
         # that has key as the actual sequence and relative abundance of that sequence
         # we can then store these dict in a dict where the key is the sample ID.
