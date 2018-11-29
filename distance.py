@@ -842,7 +842,8 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     # setup fseqboot arguments
     in_file_seqboot = out_file
     out_file_seqboot = in_file_seqboot + '.fseqboot'
-    fseqboot = local["fseqboot"]
+    fseqboot_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fseqboot')
+    fseqboot = local[fseqboot_path]
     # run fseqboot
     sys.stdout.write('\rGenerating multiple datasets')
     (fseqboot['-sequence', in_file_seqboot, '-outfile', out_file_seqboot, '-test', 'b', '-reps', num_reps])()
@@ -1064,15 +1065,16 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 # phylip method
 def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
     ### PHYLIP METHOD ###
-    fdnadist = local["fdnadist"]
+    fdnadist_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fdnadist')
+    fdnadist = local[fdnadist_path]
     for p in range(num_reps):
         # run dnadist
         in_file_dnadist_rep = '{}{}'.format(fseqboot_base, p)
         out_file_dnadist_rep = '{}out_{}'.format(fseqboot_base, p)
         print('calculating distances rep {}'.format(p))
         (fdnadist['-sequence', in_file_dnadist_rep, '-outfile', out_file_dnadist_rep, '-method', 'j'])()
-
-    fneighbor = local["fneighbor"]
+    fneighbor_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fneighbor')
+    fneighbor = local[fneighbor_path]
     list_of_tree_paths = []
     for p in range(num_reps):
         print('generating trees rep {}'.format(p))
@@ -1146,8 +1148,11 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 
 
 def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
-    fdnadist = local["fdnadist"]
-    fneighbor = local["fneighbor"]
+    fdnadist_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fdnadist')
+    fdnadist = local[fdnadist_path]
+
+    fneighbor_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fneighbor')
+    fneighbor = local[fneighbor_path]
     for p in iter(input.get, 'STOP'):
         # run dnadist
         in_file_dnadist_rep = '{}{}'.format(fseqboot_base, p)
