@@ -19,7 +19,7 @@ from output import div_output_pre_analysis_new_meta_and_new_dss_structure
 from general import *
 from distance import generate_within_clade_UniFrac_distances_samples, generate_within_clade_BrayCurtis_distances_samples
 from plotting import generate_stacked_bar_data_submission, plot_between_sample_distance_scatter
-from lib.med_decompose import decompose
+
 
 def logQCErrorAndContinue(datasetsampleinstanceinq, samplename, errorreason):
     print('Error in processing sample: {}'.format(samplename))
