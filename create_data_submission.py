@@ -1918,7 +1918,7 @@ def generate_stability_file_and_data_set_sample_objects_inferred(cladeList, data
 
 def generate_stability_file_and_data_set_sample_objects_data_sheet(cladeList, dataSubmissionInQ, data_sheet_path, wkd):
     # Create a pandas df from the data_sheet if it was provided
-    sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+    sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, skiprows=[0])
     # if we are given a data_sheet then use these sample names given as the data_set_sample object names
     fastq_file_to_sample_name_dict, list_of_names = identify_sample_names_data_sheet(sample_meta_df, wkd)
     # Make a batch file for mothur, set input and output dir and create a .file file
