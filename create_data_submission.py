@@ -391,9 +391,10 @@ def deuniqueWorker(input, output, debug):
 
         # The fasta that we want to pad and MED is the 'file'
         sys.stdout.write('{}: padding alignment\n'.format(sampleName))
-        completedProcess = subprocess.run([r'o-pad-with-gaps', r'{}'.format(pathToFile)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if completedProcess.returncode == 1:
-            pear = 'appe;'
+        path_to_med_padding = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/o_pad_with_gaps.py')
+
+        subprocess.run([path_to_med_padding, r'{}'.format(pathToFile)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
         # Now run MED
         listOfFiles = []
         for (dirpath, dirnames, filenames) in os.walk(cwd):
@@ -414,13 +415,14 @@ def deuniqueWorker(input, output, debug):
         # scenario the M was set to 4.
         # We should also take care that M doesn't go below 4, so we should use a max choice for the M
         M_value = max(4, int(0.004 * (len(deuniquedFasta)/2)))
+        path_to_med_decompose = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/decompose.py')
         if not debug:
-            completedProcess = subprocess.run(
-                [r'decompose', '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
+            subprocess.run(
+                [path_to_med_decompose, '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o',
                  MEDOutDir, pathToFile], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         elif debug:
             subprocess.run(
-                [r'decompose', '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html',
+                [path_to_med_decompose, '-M', str(M_value), '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html',
                  '--skip-check-input', '-o',
                  MEDOutDir, pathToFile])
         sys.stdout.write('{}: MED complete\n'.format(sampleName))
