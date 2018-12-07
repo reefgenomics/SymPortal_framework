@@ -842,8 +842,19 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     # setup fseqboot arguments
     in_file_seqboot = out_file
     out_file_seqboot = in_file_seqboot + '.fseqboot'
-    fseqboot_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fseqboot')
-    fseqboot = local[fseqboot_path]
+    # give the option to install the new phylip suite from their executables
+    # or simply download the executables form us and install into the lib/phylipnew/folder
+    is_installed = subprocess.call(['which', 'fseqboot'])
+    if is_installed == 0:
+        fseqboot = local["fseqboot"]
+    else:
+        fseqboot_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fseqboot')
+        if os.path.isfile(fseqboot_path):
+            fseqboot = local[fseqboot_path]
+        else:
+            sys.exit('Cannot find fseqboot in PATH or in local installation at ./lib/phylipnew/fseqboot\n'
+                     'For instructions on installing the phylipnew dependencies please visit the SymPortal'
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
     # run fseqboot
     sys.stdout.write('\rGenerating multiple datasets')
     (fseqboot['-sequence', in_file_seqboot, '-outfile', out_file_seqboot, '-test', 'b', '-reps', num_reps])()
@@ -1065,16 +1076,42 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 # phylip method
 def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
     ### PHYLIP METHOD ###
-    fdnadist_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fdnadist')
-    fdnadist = local[fdnadist_path]
+    # give the option to install the new phylip suite from their executables
+    # or simply download the executables form us and install into the ./lib/phylipnew folder
+    is_installed = subprocess.call(['which', 'fdnadist'])
+    if is_installed == 0:
+        fdnadist = local["fdnadist"]
+    else:
+        fdnadist_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fdnadist')
+        if os.path.isfile(fdnadist_path):
+            fdnadist = local[fdnadist_path]
+        else:
+            sys.exit('Cannot find fdnadist in PATH or in local installation at ./lib/phylipnew/fdnadist\n'
+                     'For instructions on installing the phylipnew dependencies please visit the SymPortal'
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
+
     for p in range(num_reps):
         # run dnadist
         in_file_dnadist_rep = '{}{}'.format(fseqboot_base, p)
         out_file_dnadist_rep = '{}out_{}'.format(fseqboot_base, p)
         print('calculating distances rep {}'.format(p))
         (fdnadist['-sequence', in_file_dnadist_rep, '-outfile', out_file_dnadist_rep, '-method', 'j'])()
-    fneighbor_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fneighbor')
-    fneighbor = local[fneighbor_path]
+
+    # give the option to install the new phylip suite from their executables
+    # or simply download the executables form us and install into the ./lib/phylipnew folder
+    is_installed = subprocess.call(['which', 'fneighbor'])
+    if is_installed == 0:
+        fneighbor = local["fneighbor"]
+    else:
+        fneighbor_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fneighbor')
+        if os.path.isfile(fneighbor_path):
+            fneighbor = local[fneighbor_path]
+        else:
+            sys.exit('Cannot find fneighbor in PATH or in local installation at ./lib/phylipnew/fneighbor\n'
+                     'For instructions on installing the phylipnew dependencies please visit the SymPortal'
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
+
+
     list_of_tree_paths = []
     for p in range(num_reps):
         print('generating trees rep {}'.format(p))
@@ -1148,11 +1185,34 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 
 
 def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
-    fdnadist_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fdnadist')
-    fdnadist = local[fdnadist_path]
+    # give the option to install the new phylip suite from their executables
+    # or simply download the executables form us and install into the ./lib/phylipnew folder
+    is_installed = subprocess.call(['which', 'fdnadist'])
+    if is_installed == 0:
+        fdnadist = local["fdnadist"]
+    else:
+        fdnadist_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fdnadist')
+        if os.path.isfile(fdnadist_path):
+            fdnadist = local[fdnadist_path]
+        else:
+            sys.exit('Cannot find fdnadist in PATH or in local installation at ./lib/phylipnew/fdnadist\n'
+                     'For instructions on installing the phylipnew dependencies please visit the SymPortal'
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
 
-    fneighbor_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fneighbor')
-    fneighbor = local[fneighbor_path]
+    # give the option to install the new phylip suite from their executables
+    # or simply download the executables form us and install into the ./lib/phylipnew folder
+    is_installed = subprocess.call(['which', 'fneighbor'])
+    if is_installed == 0:
+        fneighbor = local["fneighbor"]
+    else:
+        fneighbor_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fneighbor')
+        if os.path.isfile(fneighbor_path):
+            fneighbor = local[fneighbor_path]
+        else:
+            sys.exit('Cannot find fneighbor in PATH or in local installation at ./lib/phylipnew/fneighbor\n'
+                     'For instructions on installing the phylipnew dependencies please visit the SymPortal'
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
+
     for p in iter(input.get, 'STOP'):
         # run dnadist
         in_file_dnadist_rep = '{}{}'.format(fseqboot_base, p)
