@@ -4200,7 +4200,7 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
     list_of_sample_ids = [int(x) for x in analysisObj.listOfDataSubmissions.split(',')]
     num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=list_of_sample_ids))
     if not noOutput:
-        output_dir = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions,
+        output_dir, date_time_string = formatOutput_ord(analysisobj = analysisObj, datasubstooutput=analysisObj.listOfDataSubmissions,
                                       call_type='analysis', num_samples=num_samples, numProcessors=cores, noFig=noFig)
 
         ######## Between type ordination analysis ##########
@@ -4209,12 +4209,12 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
             if distance_method == 'unifrac':
                 pcoa_path_list = generate_within_clade_UniFrac_distances_ITS2_type_profiles(
                     data_submission_id_str=analysisObj.listOfDataSubmissions, num_processors=cores,
-                    data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', noFig=noFig, output_dir=output_dir)
+                    data_analysis_id=analysisObj.id, method='mothur', call_type='analysis', date_time_string=date_time_string, noFig=noFig, output_dir=output_dir)
             elif distance_method == 'braycurtis':
                 pcoa_path_list = generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
                     data_submission_id_str=analysisObj.listOfDataSubmissions,
                     data_analysis_id=analysisObj.id,
-                    call_type='analysis',
+                    call_type='analysis', date_time_string=date_time_string,
                     output_dir=output_dir)
 
             if not noFig:
@@ -4225,7 +4225,7 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
                         if 'PCoA_coords' in pcoa_path:
                             sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
                             # then this is a pcoa csv that we should plot
-                            plot_between_its2_type_prof_dist_scatter(pcoa_path)
+                            plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=date_time_string)
         ####################################################
 
     print('data_analysis ID is: {}'.format(analysisObj.id))

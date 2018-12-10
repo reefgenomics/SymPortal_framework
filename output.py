@@ -507,7 +507,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
 
 
 
-    return output_dir
+    return output_dir, date_time_string
 
 def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_types,
                                                               clade_collection_types_in_current_output):

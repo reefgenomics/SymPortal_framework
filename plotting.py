@@ -770,7 +770,7 @@ def get_colour_list():
                   "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
     return colour_list
 
-def plot_between_sample_distance_scatter(csv_path, date_time_str):
+def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     # the directory where we should put the output plot
     output_directory = os.path.dirname(csv_path)
 
@@ -790,6 +790,11 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str):
 
     # plot the points
     ax.scatter(x_values, y_values, c='black', marker='o')
+
+    # add point labels if labels == True
+    if labels:
+        for i, txt in enumerate(plotting_df.index.values.tolist()[:-1]):
+            ax.annotate(txt, (x_values[i], y_values[i]))
 
     # add axes labels
     ax.set_xlabel('PC1; explained = {}'.format('%.3f' % plotting_df['PC1'][-1]))
@@ -811,7 +816,7 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str):
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
 
-def plot_between_its2_type_prof_dist_scatter(csv_path):
+def plot_between_its2_type_prof_dist_scatter(csv_path, date_time_str):
     # the directory where we should put the output plot
     output_directory = os.path.dirname(csv_path)
 
@@ -844,7 +849,7 @@ def plot_between_its2_type_prof_dist_scatter(csv_path):
     # set axis title
     ax.set_title('between its2 type profile distances clade {}'.format(clade_in_q))
 
-    fig_output_base = '{}/between_its2_type_prof_dist_clade_{}'.format(output_directory, clade_in_q)
+    fig_output_base = '{}/{}_between_its2_type_prof_dist_clade_{}'.format(output_directory, date_time_str, clade_in_q)
 
     plt.tight_layout()
     sys.stdout.write('\rsaving as .svg')

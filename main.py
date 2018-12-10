@@ -281,15 +281,16 @@ def main():
             print('{}: {}\t{}'.format(da_in_q.id, da_in_q.name, da_in_q.timeStamp))
 
     elif args.between_type_distances:
+        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         if args.data_analysis_id:
             if args.distance_method == 'unifrac':
                 pcoa_path_list = data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
                     data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
-                    data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', bootstrap_value=args.bootstrap)
+                    data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', date_time_string=dts, bootstrap_value=args.bootstrap)
             elif args.distance_method == 'braycurtis':
                 pcoa_path_list = distance.generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
                     data_submission_id_str=args.between_type_distances,
-                    data_analysis_id=args.data_analysis_id, call_type = 'stand_alone')
+                    data_analysis_id=args.data_analysis_id, call_type = 'stand_alone', date_time_string=dts)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
@@ -299,7 +300,7 @@ def main():
                 sys.stdout.write('\nPlotting between its2 type profile distances clade {}\n'.format(
                     os.path.dirname(pcoa_path).split('/')[-1]))
                 # then this is a pcoa csv that we should plot
-                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path)
+                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=dts)
 
 
 
@@ -326,11 +327,14 @@ def main():
         # than data_set IDs. Currently it is only written into unifrac. Once we have this running
         # we can then apply it to BrayCurtis
         dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples_sample_list_input(
-            smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
-            method='mothur', bootstrap_value=args.bootstrap,
-            date_time_string=dts)
-
+        if args.distance_method == 'unifrac':
+            PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples_sample_list_input(
+                smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
+                method='mothur', bootstrap_value=args.bootstrap,
+                date_time_string=dts)
+        elif args.distance_method == 'braycurtis':
+            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples_sample_list_input(
+                smpl_id_list_str=args.between_sample_distances_sample_set, date_time_string=dts)
         for pcoa_path in PCoA_paths_list:
             if 'PCoA_coords' in pcoa_path:
                 # then this is a full path to one of the .csv files that contains the coordinates that we can plot
