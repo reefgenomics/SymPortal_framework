@@ -565,9 +565,10 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     if len(sorted_type_prof_names_by_local_abund) < num_leg_cells:
         if len(sorted_type_prof_names_by_local_abund) % max_n_cols != 0:
             n_rows = int(len(sorted_type_prof_names_by_local_abund) / max_n_cols) + 1
+            last_row_len = len(sorted_type_prof_names_by_local_abund) % max_n_cols
         else:
             n_rows = int(len(sorted_type_prof_names_by_local_abund) / max_n_cols)
-        last_row_len = len(sorted_type_prof_names_by_local_abund) % max_n_cols
+            last_row_len = max_n_cols
     else:
         n_rows = max_n_rows
         last_row_len = max_n_cols
