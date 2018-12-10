@@ -789,9 +789,9 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         print('Calculating between sample pairwise distances')
         if distance_method == 'unifrac':
             PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
-                                                            method='mothur', call_type='submission', output_dir=outputDir)
+                                                            method='mothur', call_type='submission', date_time_str=date_time_str, output_dir=outputDir)
         elif distance_method == 'braycurtis':
-            PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', output_dir=outputDir)
+            PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', date_time_str=date_time_str, output_dir=outputDir)
         ####### distance plotting #############
         if not noFig:
             if num_samples > 1000:

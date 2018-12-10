@@ -339,7 +339,7 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
     return PCoA_path_lists
 
 def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors,
-                                                    method, call_type, bootstrap_value=100, output_dir=None):
+                                                    method, call_type, date_time_string, bootstrap_value=100, output_dir=None):
 
     # The call_type argument will be used to determine which setting this method is being called from.
     # if it is being called as part of the initial submission call_type='submission', then we will always be working with a single
@@ -516,12 +516,12 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
 
         if method == 'mothur':
             unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
-                                                                    bootstrap_value, num_processors)
+                                                                    bootstrap_value, num_processors, date_time_string=date_time_string)
         elif method == 'phylip':
             unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
                                                                     bootstrap_value, num_processors)
 
-        PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist)
+        PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist, date_time_string=date_time_string)
         PCoA_path_lists.append(PCoA_path)
         # Delete the tempDataFolder and contents
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
@@ -677,7 +677,7 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
         # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
         # written out to the clade_wkd.
         os.makedirs(clade_wkd, exist_ok=True)
-        dist_out_path = '{}/{}.bray_curtis_within_clade_sample_distances.dist'.format(date_time_string, clade_wkd)
+        dist_out_path = '{}/{}.bray_curtis_within_clade_sample_distances.dist'.format(clade_wkd, date_time_string)
 
         # for the output version lets also append the sample name to each line so that we can see which sample it is
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
@@ -713,7 +713,7 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
 
     return PCoA_path_lists
 
-def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_type, output_dir=None):
+def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_type, date_time_str, output_dir=None):
     # The call_type argument will be used to determine which setting this method is being called from.
     # if it is being called as part of the initial submission call_type='submission', then we will always be working with a single
     # data_set. In this case we should output to the same folder that the submission results were output
@@ -848,7 +848,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
         # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
         # written out to the clade_wkd.
         os.makedirs(clade_wkd, exist_ok=True)
-        dist_out_path = '{}/bray_curtis_within_clade_sample_distances.dist'.format(clade_wkd)
+        dist_out_path = '{}/{}_bray_curtis_within_clade_sample_distances.dist'.format(clade_wkd, date_time_str)
 
         # for the output version lets also append the sample name to each line so that we can see which sample it is
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
@@ -1363,7 +1363,7 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
     output.put('kill')
 
 
-def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc, date_time_string=None):
+def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc, date_time_string):
     # setup MP
     # Create the queues that will hold the cc information
     taskQueue = Queue()
