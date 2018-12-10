@@ -620,7 +620,7 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
             total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
             for dsss in data_set_sample_sequences_of_clade_col:
                 temp_dict[dsss.referenceSequenceOf.sequence] = dsss.abundance / total_seqs_ind_clade_col
-            data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col.dataSetSampleFrom.id] = temp_dict
+            data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col.id] = temp_dict
 
 
 
@@ -628,9 +628,9 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
         within_clade_distances_dict = {}
         for clade_col_one, clade_col_two in itertools.combinations(list(clade_collections_of_clade), 2):
             # let's work to a virtual subsample of 100 000
-            clade_col_one_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col_one.dataSetSampleFrom.id]
+            clade_col_one_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col_one.id]
             clade_col_two_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[
-                clade_col_two.dataSetSampleFrom.id]
+                clade_col_two.id]
 
             # for each comparison. Get a set of all of the sequence and convert this to a list.
             set_of_sequences = set(list(clade_col_one_seq_rel_abundance_dict.keys()))
@@ -658,21 +658,21 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
             distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
             # once you have this we should simply be able to crunch the bray-curtis.
             # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
-            within_clade_distances_dict['{}_{}'.format(clade_col_one.dataSetSampleFrom.id, clade_col_two.dataSetSampleFrom.id)] = distance
-            within_clade_distances_dict['{}_{}'.format(clade_col_two.dataSetSampleFrom.id, clade_col_one.dataSetSampleFrom.id)] = distance
+            within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
+            within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
 
 
 
         # from this dict we can produce the distance file that can be passed into the generate_PCoA_coords method
         distance_out_file = [len(clade_collections_of_clade)]
         for clade_col_outer in clade_collections_of_clade:
-            temp_clade_col_string = [clade_col_outer.dataSetSampleFrom.id]
+            temp_clade_col_string = [clade_col_outer.id]
 
             for clade_col_inner in clade_collections_of_clade:
                 if clade_col_outer == clade_col_inner:
                     temp_clade_col_string.append(0)
                 else:
-                    temp_clade_col_string.append(within_clade_distances_dict['{}_{}'.format(clade_col_outer.dataSetSampleFrom.id, clade_col_inner.dataSetSampleFrom.id)])
+                    temp_clade_col_string.append(within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
             distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_col_string ]))
         # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
         # written out to the clade_wkd.
@@ -791,7 +791,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
             total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
             for dsss in data_set_sample_sequences_of_clade_col:
                 temp_dict[dsss.referenceSequenceOf.sequence] = dsss.abundance / total_seqs_ind_clade_col
-            data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col.dataSetSampleFrom.id] = temp_dict
+            data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col.id] = temp_dict
 
 
 
@@ -799,9 +799,9 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
         within_clade_distances_dict = {}
         for clade_col_one, clade_col_two in itertools.combinations(list(clade_collections_of_clade), 2):
             # let's work to a virtual subsample of 100 000
-            clade_col_one_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col_one.dataSetSampleFrom.id]
+            clade_col_one_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col_one.id]
             clade_col_two_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[
-                clade_col_two.dataSetSampleFrom.id]
+                clade_col_two.id]
 
             # for each comparison. Get a set of all of the sequence and convert this to a list.
             set_of_sequences = set(list(clade_col_one_seq_rel_abundance_dict.keys()))
@@ -829,21 +829,21 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
             distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
             # once you have this we should simply be able to crunch the bray-curtis.
             # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
-            within_clade_distances_dict['{}_{}'.format(clade_col_one.dataSetSampleFrom.id, clade_col_two.dataSetSampleFrom.id)] = distance
-            within_clade_distances_dict['{}_{}'.format(clade_col_two.dataSetSampleFrom.id, clade_col_one.dataSetSampleFrom.id)] = distance
+            within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
+            within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
 
 
 
         # from this dict we can produce the distance file that can be passed into the generate_PCoA_coords method
         distance_out_file = [len(clade_collections_of_clade)]
         for clade_col_outer in clade_collections_of_clade:
-            temp_clade_col_string = [clade_col_outer.dataSetSampleFrom.id]
+            temp_clade_col_string = [clade_col_outer.id]
 
             for clade_col_inner in clade_collections_of_clade:
                 if clade_col_outer == clade_col_inner:
                     temp_clade_col_string.append(0)
                 else:
-                    temp_clade_col_string.append(within_clade_distances_dict['{}_{}'.format(clade_col_outer.dataSetSampleFrom.id, clade_col_inner.dataSetSampleFrom.id)])
+                    temp_clade_col_string.append(within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
             distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_col_string ]))
         # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
         # written out to the clade_wkd.

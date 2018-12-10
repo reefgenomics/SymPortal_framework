@@ -793,7 +793,7 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     ax.scatter(x_values, y_values, c='black', marker='o')
 
     # add point labels if labels == True
-    
+
 
     if labels:
         sample_names = [str(clade_collection.objects.get(id=int(ID))) for ID in plotting_df.index.values.tolist()[:-1]]
