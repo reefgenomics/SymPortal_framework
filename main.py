@@ -114,7 +114,11 @@ def main():
     group.add_argument('--between_sample_distances',
                        metavar='data_set IDs',
                        help='Use this function to output UniFrac pairwise distances '
-                            'between samples clade separated')
+                            'between samples clade separated from a given collection of data_set objects')
+    group.add_argument('--between_sample_distances_sample_set',
+                       metavar='data_set_sample IDs',
+                       help='Use this function to output UniFrac pairwise distances '
+                            'between samples clade separated from a given collection of data_set_sample objects')
 
 
     # Additional arguments
@@ -301,6 +305,7 @@ def main():
 
     elif args.between_sample_distances:
         # we are swaping to bray curtis for the time being
+        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         if args.distance_method == 'unifrac':
             PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
                 dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
@@ -314,7 +319,26 @@ def main():
                 # we will get the output directory from the passed in pcoa_path
                 sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
                     os.path.dirname(pcoa_path).split('/')[-1]))
-                plotting.plot_between_sample_distance_scatter(pcoa_path)
+                plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
+
+    elif args.between_sample_distances_sample_set:
+        # this is a variation of the between_sample_distances where a set of sample IDs are input rather
+        # than data_set IDs. Currently it is only written into unifrac. Once we have this running
+        # we can then apply it to BrayCurtis
+        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples_sample_list_input(
+            smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
+            method='mothur', bootstrap_value=args.bootstrap,
+            date_time_string=dts)
+
+        for pcoa_path in PCoA_paths_list:
+            if 'PCoA_coords' in pcoa_path:
+                # then this is a full path to one of the .csv files that contains the coordinates that we can plot
+                # we will get the output directory from the passed in pcoa_path
+                sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
+                    os.path.dirname(pcoa_path).split('/')[-1]))
+                plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
+
     elif args.print_output_seqs:
         # this is a stand_alone and output and we should grab the user who is requresting it from the config file
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:

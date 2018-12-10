@@ -15,6 +15,7 @@ from skbio.stats.ordination import pcoa
 from general import writeListToDestination, readDefinedFileToList, convert_interleaved_to_sequencial_fasta
 import itertools
 from scipy.spatial.distance import braycurtis
+from datetime import datetime
 
 
 ##### DISTANCE MATRICES #####
@@ -165,6 +166,177 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
 
     return group_file, name_file, unique_fasta
 
+def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_list_str, num_processors,
+                                                    method, bootstrap_value=100, date_time_string=None):
+
+
+
+    '''
+    This method will be used to generate another .dist file and PCoA coordinates file for a specific set of
+    samples. This is super useful when you want to further investigate resolutions according to the distance data.
+    TODO We will first implement this in the UniFrac methodology so that we can use this for the SP MS but then
+    we should also implement with the BrayCurtis method.
+    '''
+
+    output_file_paths = []
+    
+    smpl_id_list = [int(str_id) for str_id in smpl_id_list_str.split(',')]
+    sample_list = data_set_sample.objects.filter(id__in=smpl_id_list)
+    clade_collection_list_of_samples = clade_collection.objects.filter(
+        dataSetSampleFrom__in=sample_list)
+
+    clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_samples]))
+
+
+    wkd = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', 'custom_sample_list',
+                     'between_samples'))
+
+    # for each clade found in the dataSubmissions' samples
+    PCoA_path_lists = []
+    for clade_in_question in clades_of_clade_collections:
+
+        clade_wkd = wkd + '/{}'.format(clade_in_question)
+        clade_collections_of_clade = clade_collection_list_of_samples.filter(clade=clade_in_question)
+        if len(clade_collections_of_clade) < 2:
+            continue
+        # directly make a name file and unique fasta file
+
+        # NB the MP that we will be writing below is complex and cannot be completed entirely within the worker
+        # we will out put to the output queue live and process this in the main thread to create the master
+        # fasta and name file
+
+        sys.stdout.write('Creating .name and .fasta files')
+
+        # setup MP
+        # Create the queues that will hold the cc information
+        taskQueue = Queue()
+
+        # output queue to put the dictionaries that will make the fasta and name files
+        outputQueue = Queue()
+
+        # populate the input queue
+        for cc in clade_collections_of_clade:
+            taskQueue.put(cc)
+
+        # place the stop cues
+        for n in range(num_processors):
+            taskQueue.put('STOP')
+
+        allProcesses = []
+        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+        db.connections.close_all()
+        for n in range(num_processors):
+            p = Process(target=uni_frac_worker_two, args=(taskQueue, outputQueue))
+            allProcesses.append(p)
+            p.start()
+
+        # have an output pipe that gets processed as we go along. I.e. before we call wait.
+        master_fasta_dict = {}
+        master_unique_fasta_seq_list = []
+        master_name_dict = {}
+        master_group_list = []
+        # this dict will link the ref_seq ID to the name of the instance of the ref_seq_id that was used
+        master_name_unique_id_dict = {}
+
+        # we will have the worker of each process put a 'STOP' into its output que when it has finished
+        # this way we can count how many 'STOP's we have had output and when this equals the number of processors
+        # we started then we know that they have all finished and we have processed all of the outputs
+        stop_count = 0
+        # the fasta_name_set ouput by the worker can simply be a tuple containing
+        # (temp_fasta_dict, temp_name_dict, temp_group_list, list_of_IDs, proc_name)
+        for fasta_name_set in iter(outputQueue.get, 'STOP'):
+            if fasta_name_set == 'EXIT':
+                stop_count += 1
+                if stop_count == num_processors:
+                    break
+            else:
+                proc_fasta_dict = fasta_name_set[0]
+                proc_name_dict = fasta_name_set[1]
+                proc_group_list = fasta_name_set[2]
+                proc_seq_list = fasta_name_set[3]
+                cc_id = fasta_name_set[4]
+                cc_name = fasta_name_set[5]
+                sys.stdout.write('\rAdding {} to master fasta and name files'.format(cc_name))
+                master_group_list += proc_group_list
+                for seq_id in proc_seq_list:
+                    seq_name = '{}_id{}_0'.format(seq_id, cc_id)
+                    if seq_id not in master_unique_fasta_seq_list:
+                        master_unique_fasta_seq_list.append(seq_id)
+                        # then this ref seq has not yet been added to the fasta and it needs to be
+                        # populate the master fasta
+                        master_fasta_dict[seq_name] = proc_fasta_dict[seq_name]
+                        # update the master_name_unique_id_dict to keep track of which sequence name represents the ref_seq_id
+                        master_name_unique_id_dict[seq_id] = seq_name
+                        # create a name dict entry
+                        master_name_dict[seq_name] = proc_name_dict[seq_name]
+                        # extend the master_group_list
+                    else:
+                        # then this ref seq is already in the fasta so we just need to update the master name
+                        # and the group file
+                        # look up what the name file key is for the given seq_id
+                        master_name_dict[master_name_unique_id_dict[seq_id]] += proc_name_dict[seq_name]
+
+        # process the outputs of the sub processess before we pause to wait for them to complete.
+        for p in allProcesses:
+            p.join()
+
+        # Now make the fasta file
+        fasta_file = []
+        for key, value in master_fasta_dict.items():
+            fasta_file.extend(['>{}'.format(key), value])
+
+        # Now make the name file
+        name_file = []
+        for key, value in master_name_dict.items():
+            name_file.append('{}\t{}'.format(key, ','.join(value)))
+
+        # output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
+        writeListToDestination('{}/unique.fasta'.format(clade_wkd), fasta_file)
+        writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
+        writeListToDestination('{}/group_file.groups'.format(clade_wkd), master_group_list)
+
+        out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
+
+        ### I am really struglling to get the jmodeltest to run through python.
+        # I will therefore work with a fixed model that has been chosen by running jmodeltest on the command line
+        # phyml  -i /tmp/jmodeltest7232692498672152838.phy -d nt -n 1 -b 0 --run_id TPM1uf+I -m 012210 -f m -v e -c 1 --no_memory_check -o tlr -s BEST
+        # The production of an ML tree is going to be unrealistic with the larger number of sequences
+        # it will simply take too long to compute.
+        # Instead I will create an NJ consnsus tree.
+        # This will involve using the embassy version of the phylip executables
+
+        # First I will have to create random data sets
+        fseqboot_base = generate_fseqboot_alignments(clade_wkd, bootstrap_value, out_file)
+
+        if method == 'mothur':
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+                                                                    bootstrap_value, num_processors, date_time_string)
+        elif method == 'phylip':
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+                                                                    bootstrap_value, num_processors)
+
+        PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist, date_time_string)
+        PCoA_path_lists.append(PCoA_path)
+        # Delete the tempDataFolder and contents
+        file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
+        shutil.rmtree(path=file_to_del)
+
+        output_file_paths.append(PCoA_path)
+        output_file_paths.append(unifrac_path)
+
+        # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
+        list_of_dir = os.listdir(clade_wkd)
+        for item in list_of_dir:
+            if '.csv' not in item and '.dist' not in item:
+                os.remove(os.path.join(clade_wkd, item))
+
+    # Print output files
+    sys.stdout.write('\n\nBetween sample distances output files:\n')
+    for path_of_output_file in output_file_paths:
+        print(path_of_output_file)
+
+    return PCoA_path_lists
 
 def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors,
                                                     method, call_type, bootstrap_value=100, output_dir=None):
@@ -811,7 +983,7 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     return tree_out_file_fconsense_sumtrees
 
 
-def generate_PCoA_coords(clade_wkd, raw_dist_file):
+def generate_PCoA_coords(clade_wkd, raw_dist_file, date_time_string=None):
     # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
     # a twoD list and then convert to a numpy array
     temp_two_D_list = []
@@ -822,7 +994,7 @@ def generate_PCoA_coords(clade_wkd, raw_dist_file):
         temp_two_D_list.append([float(a) for a in temp_elements[1:]])
     uni_frac_dist_array = np.array(temp_two_D_list)
     sys.stdout.write('\rcalculating PCoA coordinates')
-    pcoA_full_path = clade_wkd + '/PCoA_coords.csv'
+    pcoA_full_path = clade_wkd + '/{}.PCoA_coords.csv'.format(date_time_string)
     this = pcoa(uni_frac_dist_array)
 
     # rename the dataframe index as the sample names
@@ -1022,7 +1194,7 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
     output.put('kill')
 
 
-def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc):
+def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc, date_time_string=None):
     # setup MP
     # Create the queues that will hold the cc information
     taskQueue = Queue()
@@ -1068,8 +1240,13 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     dist_file_path = '{}/{}'.format(clade_wkd,
                                     tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
 
-    raw_dist_file = readDefinedFileToList(dist_file_path)
-    return raw_dist_file, dist_file_path
+    # here add a date_time_string element to it to make it unique
+    dist_file_path_dts = dist_file_path.replace('1.weighted.phylip', date_time_string)
+
+    subprocess.run(['mv', dist_file_path, dist_file_path_dts])
+
+    raw_dist_file = readDefinedFileToList(dist_file_path_dts)
+    return raw_dist_file, dist_file_path_dts
 
 
 
