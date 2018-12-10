@@ -190,7 +190,7 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
 
     wkd = os.path.abspath(
         os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', 'custom_sample_list',
-                     'between_samples'))
+                     'between_samples', date_time_string))
 
     # for each clade found in the dataSubmissions' samples
     PCoA_path_lists = []
@@ -596,7 +596,7 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
 
     wkd = os.path.abspath(
         os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', 'custom_sample_list',
-                     'between_samples'))
+                     'between_samples', date_time_string))
 
 
     # for each clade found in the dataSubmissions' samples

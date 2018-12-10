@@ -310,9 +310,9 @@ def main():
         if args.distance_method == 'unifrac':
             PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
                 dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
-                method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
+                method='mothur', call_type='stand_alone', date_time_string=dts, bootstrap_value=args.bootstrap)
         elif args.distance_method == 'braycurtis':
-            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone')
+            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone', date_time_string=dts)
 
         for pcoa_path in PCoA_paths_list:
             if 'PCoA_coords' in pcoa_path:
