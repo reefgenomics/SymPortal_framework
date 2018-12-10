@@ -1066,7 +1066,7 @@ def uni_frac_worker_two(input, output):
             temp_ref_seq_id_list.append(ref_seq_id)
             unique_seq_name_base = '{}_id{}'.format(ref_seq_id, cc.id)
 
-            smp_name = str(cc).replace('-', '_')
+            smp_name = str(cc.id)
             temp_fasta_dict['{}_{}'.format(unique_seq_name_base, 0)] = data_set_sample_seq.referenceSequenceOf.sequence
             temp_name_list = []
 

@@ -17,6 +17,7 @@ import os
 import numpy as np
 import sys
 from datetime import datetime
+from dbApp.models import clade_collection
 plt.ioff()
 
 def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
@@ -792,8 +793,11 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     ax.scatter(x_values, y_values, c='black', marker='o')
 
     # add point labels if labels == True
+    
+
     if labels:
-        for i, txt in enumerate(plotting_df.index.values.tolist()[:-1]):
+        sample_names = [str(clade_collection.objects.get(id=int(ID))) for ID in plotting_df.index.values.tolist()[:-1]]
+        for i, txt in enumerate(sample_names):
             ax.annotate(txt, (x_values[i], y_values[i]))
 
     # add axes labels
