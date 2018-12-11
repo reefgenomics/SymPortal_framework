@@ -79,7 +79,7 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
 
         if method == 'mothur':
             unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
-                                                                    bootstrap_value, num_processors)
+                                                                    bootstrap_value, num_processors, date_time_string=date_time_string)
         elif method == 'phylip':
             unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
                                                                     bootstrap_value, num_processors)
@@ -870,7 +870,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
                 f.write('{}\n'.format(line))
 
 
-        PCoA_path = generate_PCoA_coords(clade_wkd, distance_out_file)
+        PCoA_path = generate_PCoA_coords(clade_wkd, distance_out_file, date_time_string=date_time_str)
         PCoA_path_lists.append(PCoA_path)
         # Delete the tempDataFolder and contents
 
