@@ -738,6 +738,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     # get rid of the entire temp folder rather than just the individual wkd for this data submission
     # just in case multiple
     print('Cleaning up temp folders')
+    os.chdir(os.path.abspath(os.path.dirname(__file__)))
     dir_to_del = os.path.abspath('{}/tempData'.format(pathToInputFile))
     if os.path.exists(dir_to_del):
         shutil.rmtree(dir_to_del)

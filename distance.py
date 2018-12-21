@@ -525,6 +525,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         PCoA_path_lists.append(PCoA_path)
         # Delete the tempDataFolder and contents
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
+        os.chdir(os.path.abspath(os.path.dirname(__file__)))
         shutil.rmtree(path=file_to_del)
 
         output_file_paths.append(PCoA_path)
@@ -682,13 +683,13 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
         # for the output version lets also append the sample name to each line so that we can see which sample it is
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
         dist_with_sample_name = [distance_out_file[0]]
-        list_of_sample_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
-        dss_of_outputs = list(data_set_sample.objects.filter(id__in=list_of_sample_ids))
-        dict_of_dss_id_to_name = {dss.id:dss.name for dss in dss_of_outputs}
+        list_of_cc_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
+        cc_of_outputs = list(clade_collection.objects.filter(id__in=list_of_cc_ids))
+        dict_of_cc_id_to_sample_name = {cc.id: cc.dataSetSampleFrom.name for cc in cc_of_outputs}
         for line in distance_out_file[1:]:
             temp_list = []
-            sample_id = int(line.split('\t')[0])
-            sample_name = dict_of_dss_id_to_name[sample_id]
+            cc_id = int(line.split('\t')[0])
+            sample_name = dict_of_cc_id_to_sample_name[cc_id]
             temp_list.append(sample_name)
             temp_list.extend(line.split('\t'))
             new_line = '\t'.join(temp_list)
@@ -853,13 +854,13 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
         # for the output version lets also append the sample name to each line so that we can see which sample it is
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
         dist_with_sample_name = [distance_out_file[0]]
-        list_of_sample_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
-        dss_of_outputs = list(data_set_sample.objects.filter(id__in=list_of_sample_ids))
-        dict_of_dss_id_to_name = {dss.id:dss.name for dss in dss_of_outputs}
+        list_of_cc_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
+        cc_of_outputs = list(clade_collection.objects.filter(id__in=list_of_cc_ids))
+        dict_of_cc_id_to_sample_name = {cc.id:cc.dataSetSampleFrom.name for cc in cc_of_outputs}
         for line in distance_out_file[1:]:
             temp_list = []
-            sample_id = int(line.split('\t')[0])
-            sample_name = dict_of_dss_id_to_name[sample_id]
+            cc_id = int(line.split('\t')[0])
+            sample_name = dict_of_cc_id_to_sample_name[cc_id]
             temp_list.append(sample_name)
             temp_list.extend(line.split('\t'))
             new_line = '\t'.join(temp_list)
