@@ -4229,4 +4229,5 @@ def main(dataanalysistwoobject, cores, noFig=False, noOrd=False, distance_method
         ####################################################
 
     print('data_analysis ID is: {}'.format(analysisObj.id))
+    return analysisObj.id
 #################################################
