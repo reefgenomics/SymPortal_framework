@@ -789,7 +789,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         print('Calculating between sample pairwise distances')
         if distance_method == 'unifrac':
             PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
-                                                            method='mothur', call_type='submission', date_time_str=date_time_str, output_dir=outputDir)
+                                                            method='mothur', call_type='submission', date_time_string=date_time_str, output_dir=outputDir)
         elif distance_method == 'braycurtis':
             PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', date_time_str=date_time_str, output_dir=outputDir)
         ####### distance plotting #############
@@ -802,7 +802,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                         # then this is a full path to one of the .csv files that contains the coordinates that we can plot
                         # we will get the output directory from the passed in pcoa_path
                         sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
-                        plot_between_sample_distance_scatter(pcoa_path)
+                        plot_between_sample_distance_scatter(csv_path=pcoa_path, date_time_str=date_time_str)
         ####################################
     #######################################
 
