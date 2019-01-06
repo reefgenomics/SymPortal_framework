@@ -1,0 +1,10 @@
+biopython==1.71
+Django==1.11.4
+matplotlib==2.0.2
+numpy==1.13.1
+pandas==0.23.1
+plumbum==1.6.6
+scikit-bio==0.5.2
+scipy==0.19.1
+sklearn==0.0
+xlrd==1.1.0

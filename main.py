@@ -114,7 +114,11 @@ def main():
     group.add_argument('--between_sample_distances',
                        metavar='data_set IDs',
                        help='Use this function to output UniFrac pairwise distances '
-                            'between samples clade separated')
+                            'between samples clade separated from a given collection of data_set objects')
+    group.add_argument('--between_sample_distances_sample_set',
+                       metavar='data_set_sample IDs',
+                       help='Use this function to output UniFrac pairwise distances '
+                            'between samples clade separated from a given collection of data_set_sample objects')
 
 
     # Additional arguments
@@ -181,28 +185,19 @@ def main():
 
 
         # If working on the remote server a difference reference_fasta_database_used can be used.
-        new_data_set = data_set(name = name_for_data_set, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-                                reference_fasta_database_used='symClade.fa',
-                                submittingUser=new_data_set_submitting_user,
-                                submitting_user_email=new_data_set_user_email)
-        new_data_set.save()
+        new_data_set = create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user,
+                                                              new_data_set_user_email)
 
         # only perform sub_evalue_screening when working on the remote system
 
+        data_sheet_arg = args.data_sheet
+        no_fig_arg = args.noFig
+        no_ord_arg = args.noOrd
+        debug_bool = args.debug
+        distance_method_arg = args.distance_method
 
-
-        if args.data_sheet:
-            if os.path.isfile(args.data_sheet):
-                create_data_submission.main(input_dir, new_data_set.id, num_proc,
-                                            screen_sub_evalue=screen_sub_evalue_bool,
-                                            data_sheet_path=args.data_sheet, noFig=args.noFig, noOrd=args.noOrd,
-                                            distance_method=args.distance_method, debug=args.debug)
-            else:
-                sys.exit('{} not found'.format(args.data_sheet))
-        else:
-            create_data_submission.main(input_dir, new_data_set.id, num_proc,
-                                        screen_sub_evalue=screen_sub_evalue_bool, noFig=args.noFig, noOrd=args.noOrd,
-                                        distance_method=args.distance_method, debug=args.debug)
+        start_data_submission(data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set,
+                              no_fig_arg, no_ord_arg, num_proc, screen_sub_evalue_bool)
 
     elif args.analyse:
         if args.name == 'noName':
@@ -277,15 +272,16 @@ def main():
             print('{}: {}\t{}'.format(da_in_q.id, da_in_q.name, da_in_q.timeStamp))
 
     elif args.between_type_distances:
+        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         if args.data_analysis_id:
             if args.distance_method == 'unifrac':
                 pcoa_path_list = data_sub_collection_run.generate_within_clade_UniFrac_distances_ITS2_type_profiles(
                     data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
-                    data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', bootstrap_value=args.bootstrap)
+                    data_analysis_id=args.data_analysis_id, method='mothur', call_type = 'stand_alone', date_time_string=dts, bootstrap_value=args.bootstrap)
             elif args.distance_method == 'braycurtis':
                 pcoa_path_list = distance.generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
                     data_submission_id_str=args.between_type_distances,
-                    data_analysis_id=args.data_analysis_id, call_type = 'stand_alone')
+                    data_analysis_id=args.data_analysis_id, call_type = 'stand_alone', date_time_string=dts)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'argument. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
@@ -295,18 +291,19 @@ def main():
                 sys.stdout.write('\nPlotting between its2 type profile distances clade {}\n'.format(
                     os.path.dirname(pcoa_path).split('/')[-1]))
                 # then this is a pcoa csv that we should plot
-                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path)
+                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=dts)
 
 
 
     elif args.between_sample_distances:
         # we are swaping to bray curtis for the time being
+        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         if args.distance_method == 'unifrac':
             PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
                 dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
-                method='mothur', call_type='stand_alone', bootstrap_value=args.bootstrap)
+                method='mothur', call_type='stand_alone', date_time_string=dts, bootstrap_value=args.bootstrap)
         elif args.distance_method == 'braycurtis':
-            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone')
+            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone', date_time_str=dts)
 
         for pcoa_path in PCoA_paths_list:
             if 'PCoA_coords' in pcoa_path:
@@ -314,7 +311,29 @@ def main():
                 # we will get the output directory from the passed in pcoa_path
                 sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
                     os.path.dirname(pcoa_path).split('/')[-1]))
-                plotting.plot_between_sample_distance_scatter(pcoa_path)
+                plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
+
+    elif args.between_sample_distances_sample_set:
+        # this is a variation of the between_sample_distances where a set of sample IDs are input rather
+        # than data_set IDs. Currently it is only written into unifrac. Once we have this running
+        # we can then apply it to BrayCurtis
+        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        if args.distance_method == 'unifrac':
+            PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples_sample_list_input(
+                smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
+                method='mothur', bootstrap_value=args.bootstrap,
+                date_time_string=dts)
+        elif args.distance_method == 'braycurtis':
+            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples_sample_list_input(
+                smpl_id_list_str=args.between_sample_distances_sample_set, date_time_string=dts)
+        for pcoa_path in PCoA_paths_list:
+            if 'PCoA_coords' in pcoa_path:
+                # then this is a full path to one of the .csv files that contains the coordinates that we can plot
+                # we will get the output directory from the passed in pcoa_path
+                sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
+                    os.path.dirname(pcoa_path).split('/')[-1]))
+                plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
+
     elif args.print_output_seqs:
         # this is a stand_alone and output and we should grab the user who is requresting it from the config file
         with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
@@ -345,7 +364,45 @@ def main():
         vacuum_db()
         print('Vacuuming complete')
 
+def create_analysis_obj_and_run_analysis(analysis_name, description_arg, custom_data_set_ids, debug_bool, distance_method_arg,
+                                         new_data_set_submitting_user, new_data_set_user_email, no_fig_arg, no_ord_arg,
+                                         no_output_arg, num_proc, within_clade_cutoff):
+    new_analysis_object = data_analysis(listOfDataSubmissions=str(custom_data_set_ids),
+                                        withinCladeCutOff=float(within_clade_cutoff), name=analysis_name,
+                                        timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+                                        submittingUser=new_data_set_submitting_user,
+                                        submitting_user_email=new_data_set_user_email)
+    new_analysis_object.description = description_arg
+    new_analysis_object.save()
+    analysis_id = data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=no_fig_arg,
+                                 noOrd=no_ord_arg, distance_method=distance_method_arg, noOutput=no_output_arg,
+                                 debug=debug_bool)
+    return analysis_id
 
+def start_data_submission(data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg,
+                          no_ord_arg, num_proc, screen_sub_evalue_bool):
+    if data_sheet_arg:
+        if os.path.isfile(data_sheet_arg):
+            data_sub_id =create_data_submission.main(input_dir, new_data_set.id, num_proc,
+                                        screen_sub_evalue=screen_sub_evalue_bool,
+                                        data_sheet_path=data_sheet_arg, noFig=no_fig_arg, noOrd=no_ord_arg,
+                                        distance_method=distance_method_arg, debug=debug_bool)
+        else:
+            sys.exit('{} not found'.format(data_sheet_arg))
+    else:
+        data_sub_id = create_data_submission.main(input_dir, new_data_set.id, num_proc,
+                                    screen_sub_evalue=screen_sub_evalue_bool, noFig=no_fig_arg, noOrd=no_ord_arg,
+                                    distance_method=distance_method_arg, debug=debug_bool)
+    return data_sub_id
+
+def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user, new_data_set_user_email):
+
+    new_data_set = data_set(name=name_for_data_set, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+                            reference_fasta_database_used='symClade.fa',
+                            submittingUser=new_data_set_submitting_user,
+                            submitting_user_email=new_data_set_user_email)
+    new_data_set.save()
+    return new_data_set
 
 def vacuum_db():
     from django.db import connection

@@ -738,6 +738,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     # get rid of the entire temp folder rather than just the individual wkd for this data submission
     # just in case multiple
     print('Cleaning up temp folders')
+    os.chdir(os.path.abspath(os.path.dirname(__file__)))
     dir_to_del = os.path.abspath('{}/tempData'.format(pathToInputFile))
     if os.path.exists(dir_to_del):
         shutil.rmtree(dir_to_del)
@@ -789,9 +790,9 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
         print('Calculating between sample pairwise distances')
         if distance_method == 'unifrac':
             PCoA_paths_list = generate_within_clade_UniFrac_distances_samples(dataSubmission_str=dSID, num_processors=numProc,
-                                                            method='mothur', call_type='submission', output_dir=outputDir)
+                                                            method='mothur', call_type='submission', date_time_string=date_time_str, output_dir=outputDir)
         elif distance_method == 'braycurtis':
-            PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', output_dir=outputDir)
+            PCoA_paths_list = generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=dSID, call_type='submission', date_time_str=date_time_str, output_dir=outputDir)
         ####### distance plotting #############
         if not noFig:
             if num_samples > 1000:
@@ -802,7 +803,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
                         # then this is a full path to one of the .csv files that contains the coordinates that we can plot
                         # we will get the output directory from the passed in pcoa_path
                         sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(os.path.dirname(pcoa_path).split('/')[-1]))
-                        plot_between_sample_distance_scatter(pcoa_path)
+                        plot_between_sample_distance_scatter(csv_path=pcoa_path, date_time_str=date_time_str)
         ####################################
     #######################################
 

@@ -17,6 +17,7 @@ import os
 import numpy as np
 import sys
 from datetime import datetime
+from dbApp.models import clade_collection
 plt.ioff()
 
 def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
@@ -565,9 +566,10 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     if len(sorted_type_prof_names_by_local_abund) < num_leg_cells:
         if len(sorted_type_prof_names_by_local_abund) % max_n_cols != 0:
             n_rows = int(len(sorted_type_prof_names_by_local_abund) / max_n_cols) + 1
+            last_row_len = len(sorted_type_prof_names_by_local_abund) % max_n_cols
         else:
             n_rows = int(len(sorted_type_prof_names_by_local_abund) / max_n_cols)
-        last_row_len = len(sorted_type_prof_names_by_local_abund) % max_n_cols
+            last_row_len = max_n_cols
     else:
         n_rows = max_n_rows
         last_row_len = max_n_cols
@@ -769,7 +771,7 @@ def get_colour_list():
                   "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
     return colour_list
 
-def plot_between_sample_distance_scatter(csv_path):
+def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     # the directory where we should put the output plot
     output_directory = os.path.dirname(csv_path)
 
@@ -790,6 +792,14 @@ def plot_between_sample_distance_scatter(csv_path):
     # plot the points
     ax.scatter(x_values, y_values, c='black', marker='o')
 
+    # add point labels if labels == True
+
+
+    if labels:
+        sample_names = [str(clade_collection.objects.get(id=int(ID))) for ID in plotting_df.index.values.tolist()[:-1]]
+        for i, txt in enumerate(sample_names):
+            ax.annotate(txt, (x_values[i], y_values[i]))
+
     # add axes labels
     ax.set_xlabel('PC1; explained = {}'.format('%.3f' % plotting_df['PC1'][-1]))
     ax.set_ylabel('PC2; explained = {}'.format('%.3f' % plotting_df['PC2'][-1]))
@@ -797,7 +807,7 @@ def plot_between_sample_distance_scatter(csv_path):
     # set axis title
     ax.set_title('between sample distances clade {}'.format(clade_in_q))
 
-    fig_output_base = '{}/between_sample_distances_clade_{}'.format(output_directory, clade_in_q)
+    fig_output_base = '{}/{}_between_sample_distances_clade_{}'.format(output_directory, date_time_str, clade_in_q)
 
     plt.tight_layout()
     sys.stdout.write('\rsaving as .svg')
@@ -810,7 +820,7 @@ def plot_between_sample_distance_scatter(csv_path):
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
 
-def plot_between_its2_type_prof_dist_scatter(csv_path):
+def plot_between_its2_type_prof_dist_scatter(csv_path, date_time_str):
     # the directory where we should put the output plot
     output_directory = os.path.dirname(csv_path)
 
@@ -843,7 +853,7 @@ def plot_between_its2_type_prof_dist_scatter(csv_path):
     # set axis title
     ax.set_title('between its2 type profile distances clade {}'.format(clade_in_q))
 
-    fig_output_base = '{}/between_its2_type_prof_dist_clade_{}'.format(output_directory, clade_in_q)
+    fig_output_base = '{}/{}_between_its2_type_prof_dist_clade_{}'.format(output_directory, date_time_str, clade_in_q)
 
     plt.tight_layout()
     sys.stdout.write('\rsaving as .svg')
