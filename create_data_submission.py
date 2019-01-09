@@ -814,7 +814,7 @@ def main(pathToInputFile, dSID, numProc, screen_sub_evalue=False,
     else:
         if fasta_of_sig_sub_e_seqs:
             sys.stdout.write('{} distinct sequences from your submission were of questionable taxonomic origin.'
-                             '\nSymPortal can\'t be sure that they are of Symbiodinium/Symbiodiniaceae origin despit them showing some degree of similarity to the reference sequences.'
+                             '\nSymPortal can\'t be sure that they are of Symbiodinium/Symbiodiniaceae origin despite them showing some degree of similarity to the reference sequences.'
                              '\nA .fasta has been output which contains these sequences here:'
                              '\n{}\n'.format(len(fasta_of_sig_sub_e_seqs), fasta_of_sig_sub_e_seqs_path))
         else:
