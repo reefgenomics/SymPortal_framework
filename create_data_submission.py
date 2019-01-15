@@ -2051,6 +2051,7 @@ def identify_sample_names_data_sheet(sample_meta_df, wkd):
     for fastq in list_of_meta_gz_files:
         if fastq not in list_of_gz_files_in_wkd:
             sys.exit('{} listed in data_sheet not found'.format(fastq, wkd))
+            #todo delete the current data_submission before exiting
     # now make the dictionary
     fastq_file_to_sample_name_dict = {}
     for sample_index in sample_meta_df.index.values.tolist():
