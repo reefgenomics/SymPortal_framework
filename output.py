@@ -788,7 +788,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     master_smple_seq_dict = dict()
     master_smple_noName_clade_summary = dict()
 
-    # now we need to do different actions for each of the three dictionary sets. One set for each numProc
+    # now we need to do different actions for each of the three dictionary sets. One set for each num_proc
     # for the seqName counter we simply need to add to the master counter as we were doing before
     # for both of the sample-centric dictionaries we simply need to update a master dictionary
     for n in range(len(list_of_dicts_for_processors)):

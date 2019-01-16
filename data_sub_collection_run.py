@@ -3998,10 +3998,10 @@ def namingRefSeqsUsedInDefs():
         writeDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/unnamedRefSeqs.fasta'
         writeListToDestination(writeDir, fastaToBlast)
 
-        blastOutputPath = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/blast.out'
+        blast_output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/blast.out'
 
-        outputFmt = '6 qseqid sseqid evalue pident qcovs'
-        inputPath = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/unnamedRefSeqs.fasta'
+        output_format = '6 qseqid sseqid evalue pident qcovs'
+        input_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/unnamedRefSeqs.fasta'
 
         os.chdir(os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')))
 
@@ -4026,24 +4026,24 @@ def namingRefSeqsUsedInDefs():
              'named_seqs_in_SP_remote_db'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Run local blast
-        # completed_process = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
+        # completed_process = subprocess.run([blastnPath, '-out', blast_output_path, '-outfmt', output_format, '-query', input_path, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
         completed_process = subprocess.run(
-            ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'named_seqs_in_SP_remote_db.fa',
+            ['blastn', '-out', blast_output_path, '-outfmt', output_format, '-query', input_path, '-db', 'named_seqs_in_SP_remote_db.fa',
              '-max_target_seqs', '1', '-num_threads', '3'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Read in blast output
-        blastOutputFile = readDefinedFileToList(blastOutputPath)
+        blastOutputFile = readDefinedFileToList(blast_output_path)
 
         # Now assign names to those that aren't exact matches
         for bo in blastOutputFile:
             splitEl = bo.split('\t')
             refSeqInQ = reference_sequence.objects.get(id=int(splitEl[0]))
             if not refSeqInQ.hasName:
-                newName = createNewRefSeqName(splitEl[1], listOfSeqNamesThatAlreadyExist)
-                refSeqInQ.name = newName
+                new_name = createNewRefSeqName(splitEl[1], listOfSeqNamesThatAlreadyExist)
+                refSeqInQ.name = new_name
                 refSeqInQ.hasName = True
                 refSeqInQ.save()
-                listOfSeqNamesThatAlreadyExist.append(newName)
+                listOfSeqNamesThatAlreadyExist.append(new_name)
 
         # Finally update the type names
         # This only needs to be done if the sequence names have been changed

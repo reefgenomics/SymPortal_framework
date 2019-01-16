@@ -299,13 +299,13 @@ def main():
         # we are swaping to bray curtis for the time being
         dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         if args.distance_method == 'unifrac':
-            PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
+            pcoa_paths_list = distance.generate_within_clade_UniFrac_distances_samples(
                 dataSubmission_str=args.between_sample_distances, num_processors=args.num_proc,
                 method='mothur', call_type='stand_alone', date_time_string=dts, bootstrap_value=args.bootstrap)
         elif args.distance_method == 'braycurtis':
-            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone', date_time_str=dts)
+            pcoa_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str=args.between_sample_distances, call_type='stand_alone', date_time_str=dts)
 
-        for pcoa_path in PCoA_paths_list:
+        for pcoa_path in pcoa_paths_list:
             if 'PCoA_coords' in pcoa_path:
                 # then this is a full path to one of the .csv files that contains the coordinates that we can plot
                 # we will get the output directory from the passed in pcoa_path
@@ -319,14 +319,14 @@ def main():
         # we can then apply it to BrayCurtis
         dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         if args.distance_method == 'unifrac':
-            PCoA_paths_list = distance.generate_within_clade_UniFrac_distances_samples_sample_list_input(
+            pcoa_paths_list = distance.generate_within_clade_UniFrac_distances_samples_sample_list_input(
                 smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
                 method='mothur', bootstrap_value=args.bootstrap,
                 date_time_string=dts)
         elif args.distance_method == 'braycurtis':
-            PCoA_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples_sample_list_input(
+            pcoa_paths_list = distance.generate_within_clade_BrayCurtis_distances_samples_sample_list_input(
                 smpl_id_list_str=args.between_sample_distances_sample_set, date_time_string=dts)
-        for pcoa_path in PCoA_paths_list:
+        for pcoa_path in pcoa_paths_list:
             if 'PCoA_coords' in pcoa_path:
                 # then this is a full path to one of the .csv files that contains the coordinates that we can plot
                 # we will get the output directory from the passed in pcoa_path
@@ -385,13 +385,13 @@ def start_data_submission(data_sheet_arg, debug_bool, distance_method_arg, input
         if os.path.isfile(data_sheet_arg):
             data_sub_id =create_data_submission.main(input_dir, new_data_set.id, num_proc,
                                         screen_sub_evalue=screen_sub_evalue_bool,
-                                        data_sheet_path=data_sheet_arg, noFig=no_fig_arg, noOrd=no_ord_arg,
+                                        data_sheet_path=data_sheet_arg, no_fig=no_fig_arg, no_ord=no_ord_arg,
                                         distance_method=distance_method_arg, debug=debug_bool)
         else:
             sys.exit('{} not found'.format(data_sheet_arg))
     else:
         data_sub_id = create_data_submission.main(input_dir, new_data_set.id, num_proc,
-                                    screen_sub_evalue=screen_sub_evalue_bool, noFig=no_fig_arg, noOrd=no_ord_arg,
+                                    screen_sub_evalue=screen_sub_evalue_bool, no_fig=no_fig_arg, no_ord=no_ord_arg,
                                     distance_method=distance_method_arg, debug=debug_bool)
     return data_sub_id
 
