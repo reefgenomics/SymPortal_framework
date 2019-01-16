@@ -36,7 +36,7 @@ else:
 def profileDiscovery(nProcessors):
     if not analysisObj.initialTypeDiscoComplete:
         ############# FIND RAW FOOTPRINTS ###############
-        cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+        clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
         # Get the cladeCollections that are found in the listof datasubmissions that are found in the analysisObj
         cladeCollectionsOfAnalysis = analysisObj.getCladeCollections()
@@ -44,26 +44,26 @@ def profileDiscovery(nProcessors):
         # List that will hold a dictionary for each clade
         # Each dictionary will hold key = footprint (set of sequences) value = [[] []] where []0 = list of cladeCollections containing given footprint
         # and []1 = list of majority sequence for given sample
-        masterCladalListOfFootprintDicts = [{} for clade in cladeList]
+        masterCladalListOfFootprintDicts = [{} for clade in clade_list]
 
         # For each clade Collection add its footprint to the count dict
         # by associating the majority sequence and sample to the corect cladal dict
 
         # This queue will have the cladeCollections to be processed
-        taskQueue = Queue()
+        task_queue = Queue()
         # This will hold the outputted results from the CC being processed
         outputQueue = Queue()
         # This queue will be used to fetch the output dict list from the second listenerworker
         dictResultQueue = Queue()
 
         for cladecollection in cladeCollectionsOfAnalysis:
-            taskQueue.put(cladecollection)
+            task_queue.put(cladecollection)
 
         numProcessors = nProcessors
         for N in range(numProcessors):
-            taskQueue.put('STOP')
+            task_queue.put('STOP')
 
-        allProcesses = []
+        all_processes = []
 
         # close all connections to the db so that they are automatically recreated for each process
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
@@ -73,8 +73,8 @@ def profileDiscovery(nProcessors):
         # workerDiscoveryTwoListener will work on
         # Finally workerDiscoveryTwoListener will output its results to the third queue
         for N in range(numProcessors):
-            p = Process(target=workerDiscoveryTwoWorker, args=(taskQueue, outputQueue, analysisObj.withinCladeCutOff))
-            allProcesses.append(p)
+            p = Process(target=workerDiscoveryTwoWorker, args=(task_queue, outputQueue, analysisObj.withinCladeCutOff))
+            all_processes.append(p)
             p.start()
 
         # Process the output of the multiprocessing
@@ -116,7 +116,7 @@ def profileDiscovery(nProcessors):
                     masterCladalListOfFootprintDicts[passedElement[1]][passedElement[0]][1].append([passedElement[3]])
 
         # First wait for the workers to finish
-        for p in allProcesses:
+        for p in all_processes:
             p.join()
         ################################################
 
@@ -196,7 +196,7 @@ def profileDiscovery(nProcessors):
                 timeOne = 0
                 timeTwo = 0
                 print('\n\nCreating analysis types clade {}'.format(
-                    cladeList[masterCladalListOfFootprintDicts.index(footPrintDict)]))
+                    clade_list[masterCladalListOfFootprintDicts.index(footPrintDict)]))
                 for initialType in collapsedFootPrintDict:
                     footPrintNameString = ','.join([str(refseq) for refseq in initialType.profile])
 
@@ -215,7 +215,7 @@ def profileDiscovery(nProcessors):
 
                         # the Counter class (from collections import Counter) may be useful
                         # http://stackoverflow.com/questions/2600191/how-can-i-count-the-occurrences-of-a-list-item-in-python
-                        newAnalysisType = analysis_type(coDom=True, dataAnalysisFrom=analysisObj, clade=cladeList[
+                        newAnalysisType = analysis_type(coDom=True, dataAnalysisFrom=analysisObj, clade=clade_list[
                             masterCladalListOfFootprintDicts.index(footPrintDict)])
 
                         newAnalysisType.setMajRefSeqSet(initialType.set_of_maj_ref_seqs)
@@ -226,7 +226,7 @@ def profileDiscovery(nProcessors):
                     else:
                         coDom = False
                         newAnalysisType = analysis_type(coDom=False, dataAnalysisFrom=analysisObj,
-                                                        clade=cladeList[
+                                                        clade=clade_list[
                                                             masterCladalListOfFootprintDicts.index(footPrintDict)])
                         newAnalysisType.setMajRefSeqSet(initialType.set_of_maj_ref_seqs)
                         newAnalysisType.initTypeAttributes(initialType.cladeCollection_list, initialType.profile)
@@ -346,11 +346,11 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
     allTypesFromDataAnalysis = analysis_type.objects.filter(dataAnalysisFrom=analysisObj)
 
     # Get list of clades that are represented by the types
-    cladeList = set()
+    clade_list = set()
     for at in allTypesFromDataAnalysis:
-        cladeList.add(at.clade)
+        clade_list.add(at.clade)
 
-    for currentClade in cladeList:
+    for currentClade in clade_list:
         checked = []
         while 1:
             restart = False
@@ -383,18 +383,18 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
 
                         listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections() if cc.clade == currentClade]
 
-                        taskQueue = Queue()
+                        task_queue = Queue()
                         supportListMan = Manager()
                         supportList = supportListMan.list()
                         # outputQueue = Queue()
 
                         for CC in listOfCCsToCheck:
-                            taskQueue.put(CC)
+                            task_queue.put(CC)
 
                         for N in range(cores):
-                            taskQueue.put('STOP')
+                            task_queue.put('STOP')
 
-                        allProcesses = []
+                        all_processes = []
 
                         # In this case the db.connections were not being recreated and I think this might have something
                         # to do with a connection only being created when there is writing to be done.
@@ -407,12 +407,12 @@ def reassessSupportOfArtefactDIVContainingTypes(CCToTotalSeqsDict, CCToRefSeqLis
 
                         for N in range(cores):
                             p = Process(target=workerArtefactTwo, args=(
-                            taskQueue, supportList, CCToInitialTypeDict, typeToCheckID, CCToRefSeqListAndAbundances,
+                            task_queue, supportList, CCToInitialTypeDict, typeToCheckID, CCToRefSeqListAndAbundances,
                             refSeqObjsOfTypeList, requirementDict))
-                            allProcesses.append(p)
+                            all_processes.append(p)
                             p.start()
 
-                        for p in allProcesses:
+                        for p in all_processes:
                             p.join()
 
                         if supportList:
@@ -925,28 +925,28 @@ def checkTypePairingForArtefactType(typeA, typeB, typefootprintdict, clade, ccto
 
     ############# NEW MP CODE #############
 
-    taskQueue = Queue()
+    task_queue = Queue()
     supportListManager = Manager()
     supportList = supportListManager.list()
     # outputQueue = Queue()
 
     for CC in listOfCCsToCheck:
-        taskQueue.put(CC)
+        task_queue.put(CC)
 
     for N in range(cores):
-        taskQueue.put('STOP')
+        task_queue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
 
     db.connections.close_all()
 
     for N in range(cores):
         p = Process(target=workerArtefactOne,
-                    args=(taskQueue, supportList, cctorefabunddict, pnt, cctocurrentinitialtypedict))
-        allProcesses.append(p)
+                    args=(task_queue, supportList, cctorefabunddict, pnt, cctocurrentinitialtypedict))
+        all_processes.append(p)
         p.start()
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     #######################################
@@ -1311,8 +1311,8 @@ def makeNewTypeAndAssociateCCsAndUpdateDicts(cctocurrentinitialtypedict, clade, 
                                              typefootprintdict):
     newAnalysisType = analysis_type(dataAnalysisFrom=analysisObj, clade=clade)
     listOfCCs = list(strandedCCs)
-    listOfRefSeqs = intrasInCommonList
-    newAnalysisType.initTypeAttributes(listOfCCs, listOfRefSeqs)
+    list_of_ref_seqs = intrasInCommonList
+    newAnalysisType.initTypeAttributes(listOfCCs, list_of_ref_seqs)
 
     # newAnalysisType.save()
     print('Creating new type: {} from {} residual cladeCollections'.format(newAnalysisType, len(strandedCCs)))
@@ -1459,18 +1459,18 @@ def createTotalSeqsDictForAllCCs(cores):
 
         listOfCCsToCheck = [cc for cc in analysisObj.getCladeCollections()]
 
-        taskQueue = Queue()
+        task_queue = Queue()
         CCToTotalSeqstManager = Manager()
         CCToTotalSeqsDict = CCToTotalSeqstManager.dict()
         # outputQueue = Queue()
 
         for CC in listOfCCsToCheck:
-            taskQueue.put(CC)
+            task_queue.put(CC)
 
         for N in range(cores):
-            taskQueue.put('STOP')
+            task_queue.put('STOP')
 
-        allProcesses = []
+        all_processes = []
 
         # In this case the db.connections were not being recreated and I think this might have something
         # to do with a connection only being created when there is writing to be done.
@@ -1482,11 +1482,11 @@ def createTotalSeqsDictForAllCCs(cores):
         # DONE. I have changed the settings.py file so that the DB location is now relative to the position of the settings.py file
 
         for N in range(cores):
-            p = Process(target=workerCCToTotalSeqsDict, args=(taskQueue, CCToTotalSeqsDict))
-            allProcesses.append(p)
+            p = Process(target=workerCCToTotalSeqsDict, args=(task_queue, CCToTotalSeqsDict))
+            all_processes.append(p)
             p.start()
 
-        for p in allProcesses:
+        for p in all_processes:
             p.join()
         # For the time being I will not dump here but dump all four dicts at the end
         # pickle.dump(CCToTotalSeqsDict, open("CCToTotalSeqsDict_{}".format(analysisObj.id), "wb"))
@@ -1520,27 +1520,27 @@ def createRefSeqRelAbundsForAllCCsDict(CCToTotalSeqsDict, cores):
 
         # Start the multithreading
 
-        taskQueue = Queue()
+        task_queue = Queue()
         CCToRefSeqListAndAbundancesManager = Manager()
         CCToRefSeqListAndAbundancesDict = CCToRefSeqListAndAbundancesManager.dict()
 
         for CC in listOfCCsToCheck:
-            taskQueue.put(CC)
+            task_queue.put(CC)
 
         for N in range(cores):
-            taskQueue.put('STOP')
+            task_queue.put('STOP')
 
-        allProcesses = []
+        all_processes = []
 
         db.connections.close_all()
 
         for N in range(cores):
             p = Process(target=workerCCToRefSeqListAndAbundances,
-                        args=(taskQueue, CCToTotalSeqsDict, CCToRefSeqListAndAbundancesDict))
-            allProcesses.append(p)
+                        args=(task_queue, CCToTotalSeqsDict, CCToRefSeqListAndAbundancesDict))
+            all_processes.append(p)
             p.start()
 
-        for p in allProcesses:
+        for p in all_processes:
             p.join()
         # For the time being I will not pcikle here but instead pickle all four of the dicts when they are done
         # pickle.dump(CCToRefSeqListAndAbundancesDict, open("CCToRefSeqListAndAbundances_{}".format(analysisObj.id), "wb"))
@@ -1651,9 +1651,9 @@ def checkForAdditionalArtefactTypes(cores):
     allTypesFromDataAnalysis = analysis_type.objects.filter(dataAnalysisFrom=analysisObj)
 
     # Get list of clades that are represented by the types
-    cladeList = set()
+    clade_list = set()
     for at in allTypesFromDataAnalysis:
-        cladeList.add(at.clade)
+        clade_list.add(at.clade)
 
     # Create dict for each type of refSeqs, artefact and non-artefact DIVs, and footprint
     typeFootPrintDict = createTypeArtefactDivInfoDict(allTypesFromDataAnalysis, cores)
@@ -1667,7 +1667,7 @@ def checkForAdditionalArtefactTypes(cores):
     # I have gone through all of the remaining code in this function and fixed the cc to initial type dict
     # so that it is compatible with ccts having multiple types.
     # we still need to do the other artefact checking
-    for clade in cladeList:
+    for clade in clade_list:
         allTypesFromDataAnalysis = analysis_type.objects.filter(dataAnalysisFrom=analysisObj, clade=clade)
 
         staticListOfTypes = list(analysis_type.objects.filter(dataAnalysisFrom=analysisObj, clade=clade))
@@ -1768,7 +1768,7 @@ def workerCCToTotalSeqsDict(input, cctototalseqsdict):
 
 
 def workerDiscoveryTwoWorker(input, output, withncladecutoff):
-    cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
     for cladecollection in iter(input.get, 'STOP'):
         clade = cladecollection.clade
@@ -1776,7 +1776,7 @@ def workerDiscoveryTwoWorker(input, output, withncladecutoff):
 
         CCMaj = cladecollection.maj()
         # pass queuetwo (footprintInQ, index, CC, CC.maj())
-        output.put((footPrintInQ, cladeList.index(clade), cladecollection, CCMaj))
+        output.put((footPrintInQ, clade_list.index(clade), cladecollection, CCMaj))
         print('\rFound footprint {}'.format(footPrintInQ), end='')
         # print('Found footprint {}'.format(footPrintInQ))
     output.put('kill')
@@ -2561,26 +2561,26 @@ def collapsePotentialProfiles_initType_objects(footprintList, reqsupport, nproce
                     # Create the queues that will hold the sample information
                     print('\rstarting to generate Synthetic footprints for collapse', end='')
 
-                    taskQueue = Queue()
+                    task_queue = Queue()
                     collapseNMerDictManager = Manager()
                     collapseNMerDict = collapseNMerDictManager.dict()
                     # outputQueue = Queue()
 
                     for nLengthType in listOfTypesOfLengthN:
-                        taskQueue.put(nLengthType.profile)
+                        task_queue.put(nLengthType.profile)
 
                     numProcessors = nprocessors
                     for N in range(numProcessors):
-                        taskQueue.put('STOP')
+                        task_queue.put('STOP')
 
-                    allProcesses = []
+                    all_processes = []
 
                     for N in range(numProcessors):
-                        p = Process(target=workerDiscoveryOne, args=(taskQueue, collapseNMerDict, n))
-                        allProcesses.append(p)
+                        p = Process(target=workerDiscoveryOne, args=(task_queue, collapseNMerDict, n))
+                        all_processes.append(p)
                         p.start()
 
-                    for p in allProcesses:
+                    for p in all_processes:
                         p.join()
                     # The manager(dict) object was not behaving correctly when I was trying to append items to the list
                     # values. However, when converting to a dict, it does.
@@ -3037,7 +3037,7 @@ def profileAssignment(nProcessors):
     sequences is assigned to the cladeCollection. We use DIV proportions are considered in relation to the total
     abundance of the DIV sequences in the CC rather than all seqs in the CC'''
 
-    cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     print('Running inferFinalSymbiodiniumTypes()')
 
     # Get a list of all of the analysisTypes that have been discovered in the type discovery
@@ -3066,7 +3066,7 @@ def profileAssignment(nProcessors):
     for N in range(numProcessors):
         CCInputQueue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
 
     # close all connections to the db so that they are automatically recreated for each process
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
@@ -3077,10 +3077,10 @@ def profileAssignment(nProcessors):
     # Finally workerDiscoveryTwoListener will output its results to the third queue
     for N in range(numProcessors):
         p = Process(target=workerAssignmentOne, args=(CCInputQueue, CCfootprintDict))
-        allProcesses.append(p)
+        all_processes.append(p)
         p.start()
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     #################################################################
@@ -3099,7 +3099,7 @@ def profileAssignment(nProcessors):
     for N in range(numProcessors):
         CCInputQueue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
 
     # close all connections to the db so that they are automatically recreated for each process
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
@@ -3107,10 +3107,10 @@ def profileAssignment(nProcessors):
 
     for N in range(numProcessors):
         p = Process(target=workerAssignmentTwo, args=(CCInputQueue, CCRefSeqAbundDict))
-        allProcesses.append(p)
+        all_processes.append(p)
         p.start()
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     apples = 'pausePoint'
@@ -3149,7 +3149,7 @@ def profileAssignment(nProcessors):
     for process in range(nProcessors):
         profileAssignmentInputQueue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
     # CCRefSeqAbundDict is a manager dict that was created and populated earlier, as is CCfootprintDict
     # BulkCreateList and typeCladeColDict are managed objects that our outputs go into
     # We will then use these to bulk process at the end of the profile assignment
@@ -3160,10 +3160,10 @@ def profileAssignment(nProcessors):
         p = Process(target=workerAssignmentThree, args=(
         profileAssignmentInputQueue, CCRefSeqAbundDict, CCfootprintDict, bulkCreateList, analysisTypesIDs,
         anTypeFootprintDict))
-        allProcesses.append(p)
+        all_processes.append(p)
         p.start()
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     ######################################################
@@ -3874,11 +3874,11 @@ def assignSpecies():
         for i in range(len(averageAbundanceList)):
             averageAbundanceList[i] = averageAbundanceList[i] / len(footprintAbunInfo)
         # Now we have the averge abundance proportions we make dict to the refseq name
-        listOfRefSeqs = []
+        list_of_ref_seqs = []
 
         for i in range(len(refSeqIDsList)):
-            listOfRefSeqs.append(reference_sequence.objects.get(id=refSeqIDsList[i]))
-        listOfAllDefSeqNames = [refseq.name for refseq in listOfRefSeqs]
+            list_of_ref_seqs.append(reference_sequence.objects.get(id=refSeqIDsList[i]))
+        listOfAllDefSeqNames = [refseq.name for refseq in list_of_ref_seqs]
         proportionDict = {L: K for L, K in zip(listOfAllDefSeqNames, averageAbundanceList)}
         majSeqs = [refSeq.name for refSeq in reference_sequence.objects.filter(id__in=att.MajRefSeqSet.split(','))]
         # Now we have all of the info we need to work out which species to associate to the type
@@ -4026,8 +4026,8 @@ def namingRefSeqsUsedInDefs():
              'named_seqs_in_SP_remote_db'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Run local blast
-        # completedProcess = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
-        completedProcess = subprocess.run(
+        # completed_process = subprocess.run([blastnPath, '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'symbiodinium.fa', '-max_target_seqs', '1', '-num_threads', '1'])
+        completed_process = subprocess.run(
             ['blastn', '-out', blastOutputPath, '-outfmt', outputFmt, '-query', inputPath, '-db', 'named_seqs_in_SP_remote_db.fa',
              '-max_target_seqs', '1', '-num_threads', '3'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 

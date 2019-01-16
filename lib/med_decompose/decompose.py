@@ -18,11 +18,11 @@ from Oligotyping.utils.utils import ConfigError
 from Oligotyping.utils import parsers
 
 
-# MEDOutDir = '/Users/humebc/phylogenetic_software/med_hume'
-# pathToFile = '/Users/humebc/phylogenetic_software/med_hume/test_fasta.fasta'
+# med_out_dir = '/Users/humebc/phylogenetic_software/med_hume'
+# path_to_file = '/Users/humebc/phylogenetic_software/med_hume/test_fasta.fasta'
 
-# ['-M', '4', '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o', MEDOutDir,
-#  pathToFile]
+# ['-M', '4', '--skip-gexf-files', '--skip-gen-figures', '--skip-gen-html', '--skip-check-input', '-o', med_out_dir,
+#  path_to_file]
 parser = parsers.decomposer()
 decomposer = Decomposer(parser.parse_args())
 

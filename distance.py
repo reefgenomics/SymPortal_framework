@@ -210,25 +210,25 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
 
         # setup MP
         # Create the queues that will hold the cc information
-        taskQueue = Queue()
+        task_queue = Queue()
 
         # output queue to put the dictionaries that will make the fasta and name files
         outputQueue = Queue()
 
         # populate the input queue
         for cc in clade_collections_of_clade:
-            taskQueue.put(cc)
+            task_queue.put(cc)
 
         # place the stop cues
         for n in range(num_processors):
-            taskQueue.put('STOP')
+            task_queue.put('STOP')
 
-        allProcesses = []
+        all_processes = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         for n in range(num_processors):
-            p = Process(target=uni_frac_worker_two, args=(taskQueue, outputQueue))
-            allProcesses.append(p)
+            p = Process(target=uni_frac_worker_two, args=(task_queue, outputQueue))
+            all_processes.append(p)
             p.start()
 
         # have an output pipe that gets processed as we go along. I.e. before we call wait.
@@ -278,7 +278,7 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
                         master_name_dict[master_name_unique_id_dict[seq_id]] += proc_name_dict[seq_name]
 
         # process the outputs of the sub processess before we pause to wait for them to complete.
-        for p in allProcesses:
+        for p in all_processes:
             p.join()
 
         # Now make the fasta file
@@ -415,25 +415,25 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
 
         # setup MP
         # Create the queues that will hold the cc information
-        taskQueue = Queue()
+        task_queue = Queue()
 
         # output queue to put the dictionaries that will make the fasta and name files
         outputQueue = Queue()
 
         # populate the input queue
         for cc in clade_collections_of_clade:
-            taskQueue.put(cc)
+            task_queue.put(cc)
 
         # place the stop cues
         for n in range(num_processors):
-            taskQueue.put('STOP')
+            task_queue.put('STOP')
 
-        allProcesses = []
+        all_processes = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         for n in range(num_processors):
-            p = Process(target=uni_frac_worker_two, args=(taskQueue, outputQueue))
-            allProcesses.append(p)
+            p = Process(target=uni_frac_worker_two, args=(task_queue, outputQueue))
+            all_processes.append(p)
             p.start()
 
         # have an output pipe that gets processed as we go along. I.e. before we call wait.
@@ -483,7 +483,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
                         master_name_dict[master_name_unique_id_dict[seq_id]] += proc_name_dict[seq_name]
 
         # process the outputs of the sub processess before we pause to wait for them to complete.
-        for p in allProcesses:
+        for p in all_processes:
             p.join()
 
         # Now make the fasta file
@@ -1236,12 +1236,12 @@ def perform_unifrac(clade_wkd, tree_path):
     writeListToDestination(mothur_batch_path, mothur_batch_WU)
     # now run the batch file with mothur
     sys.stdout.write('\rcalculating unifrac distances')
-    completedProcess = \
+    completed_process = \
         subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    if completedProcess.returncode == 0:
+    if completed_process.returncode == 0:
         sys.stdout.write('\rUnifrac successful')
     else:
-        sys.stdout.write('\rERROR: {}'.format(completedProcess.sterr.decode('utf-8')))
+        sys.stdout.write('\rERROR: {}'.format(completed_process.sterr.decode('utf-8')))
     return
 
 
@@ -1344,7 +1344,7 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
 
         # now run the batch file with mothur
         sys.stdout.write('\rCalculating distances...')
-        completedProcess = \
+        completed_process = \
             subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         sys.stdout.write('\rDone.')
         # now run in clearcut
@@ -1357,7 +1357,7 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
         mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_clearcut_{}'.format(clade_wkd, p)
         writeListToDestination(mothur_batch_path, mothur_batch_clearcut)
         sys.stdout.write('\rGenerating NJ tree from distances')
-        completedProcess = \
+        completed_process = \
             subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         sys.stdout.write('\rDone')
         output.put(input.replace('.dist', '.tre'))
@@ -1367,24 +1367,24 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
 def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc, date_time_string):
     # setup MP
     # Create the queues that will hold the cc information
-    taskQueue = Queue()
+    task_queue = Queue()
 
     # output queue to put the dictionaries that will make the fasta and name files
     outputQueue = Queue()
 
     # populate the input queue
     for p in range(num_reps):
-        taskQueue.put(p)
+        task_queue.put(p)
 
     # place the stop cues
     for n in range(num_proc):
-        taskQueue.put('STOP')
+        task_queue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
 
     for n in range(num_proc):
-        p = Process(target=mothur_unifrac_pipeline_MP_worker, args=(taskQueue, outputQueue, fseqboot_base, clade_wkd))
-        allProcesses.append(p)
+        p = Process(target=mothur_unifrac_pipeline_MP_worker, args=(task_queue, outputQueue, fseqboot_base, clade_wkd))
+        all_processes.append(p)
         p.start()
 
     # Get list of tree paths from the output queue
@@ -1399,7 +1399,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
         else:
             list_of_tree_paths.append(passedElement)
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     # Create consensus
@@ -1484,24 +1484,24 @@ def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
 def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc):
     # setup MP
     # Create the queues that will hold the cc information
-    taskQueue = Queue()
+    task_queue = Queue()
 
     # output queue to put the dictionaries that will make the fasta and name files
     outputQueue = Queue()
 
     # populate the input queue
     for p in range(num_reps):
-        taskQueue.put(p)
+        task_queue.put(p)
 
     # place the stop cues
     for n in range(num_proc):
-        taskQueue.put('STOP')
+        task_queue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
 
     for n in range(num_proc):
-        p = Process(target=phylip_unifrac_pipeline_MP_worker, args=(taskQueue, outputQueue, fseqboot_base))
-        allProcesses.append(p)
+        p = Process(target=phylip_unifrac_pipeline_MP_worker, args=(task_queue, outputQueue, fseqboot_base))
+        all_processes.append(p)
         p.start()
 
     # Get list of tree paths from the output queue
@@ -1516,7 +1516,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
         else:
             list_of_tree_paths.append(passedElement)
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     tree_out_file_fconsense_sumtrees = create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file)

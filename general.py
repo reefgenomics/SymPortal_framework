@@ -84,8 +84,8 @@ def createNewFile(pathtofile):
 
     open(pathtofile, mode='w')
 
-def writeLinesToFile(pathToFile, listoflines):
-    with open(pathToFile, mode='a') as f:
+def writeLinesToFile(path_to_file, listoflines):
+    with open(path_to_file, mode='a') as f:
         for line in listoflines:
             f.write(line + '\n')
 

@@ -29,7 +29,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
     # The date the database was accessed and the version should also be noted
     # The formal species descriptions which correspond to the found ITS2 type will be noted for each type
     # Finally the AccessionNumber of each of the defining reference species will also be noted
-    cladeList = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+    clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
     # List of the paths to the files that have been output
     output_files_list = []
@@ -58,11 +58,11 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
 
     # Now go through the types, firstly by clade and then by the number of cladeCollections they were found in
     # Populate a 2D list of types with a list per clade
-    typesCladalList = [[] for clade in cladeList]
+    typesCladalList = [[] for clade in clade_list]
     for att in at:
         try:
             if len(att.listOfCladeCollections) > 0:
-                typesCladalList[cladeList.index(att.clade)].append(att)
+                typesCladalList[clade_list.index(att.clade)].append(att)
         except:
             pass
 
@@ -72,7 +72,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
     # Go clade by clade
     for i in range(len(typesCladalList)):
         if typesCladalList[i]:
-            cladeInQ = cladeList[i]
+            cladeInQ = clade_list[i]
             ###### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
             #     # For each type we want to calculate the average proportions of the defining seqs in that type
             #     # We will also calculate an SD.
@@ -135,20 +135,20 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
             for N in range(numProcessors):
                 typeInputQueue.put('STOP')
 
-            allProcesses = []
+            all_processes = []
 
             # close all connections to the db so that they are automatically recreated for each process
             # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
             db.connections.close_all()
 
-            sys.stdout.write('\nCalculating ITS2 type profile abundances clade {}\n'.format(cladeList[i]))
+            sys.stdout.write('\nCalculating ITS2 type profile abundances clade {}\n'.format(clade_list[i]))
             for N in range(numProcessors):
                 p = Process(target=outputWorkerOne,
                             args=(typeInputQueue, sample_IDs_list, typeOutputManagedDict, sample_ID_to_cc_IDs_of_clade))
-                allProcesses.append(p)
+                all_processes.append(p)
                 p.start()
 
-            for p in allProcesses:
+            for p in all_processes:
                 p.join()
 
             # So we have the current list of samples stored in a mangaed list that is the listOfDataSetSamplesManaged
@@ -765,7 +765,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for N in range(numProcessors):
         dssQueue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
 
     # close all connections to the db so that they are automatically recreated for each process
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
@@ -777,10 +777,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
                                                   list_of_dicts_for_processors[n][1],
                                                   list_of_dicts_for_processors[n][2],
                                                   refSeq_names_annotated, sample_to_dsss_list_shared_dict))
-        allProcesses.append(p)
+        all_processes.append(p)
         p.start()
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     print('\nCollecting results of data_set_sample_counting across {} dictionaries'.format(numProcessors))
@@ -857,7 +857,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for N in range(numProcessors):
         dssQueue.put('STOP')
 
-    allProcesses = []
+    all_processes = []
 
     # close all connections to the db so that they are automatically recreated for each process
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
@@ -868,10 +868,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
         p = Process(target=outputWorkerThree_pre_analysis_new_dss_structure, args=(
             dssQueue, managedSampleOutputDict, cladeAbundanceOrderedRefSeqList, output_header,
             master_smple_seq_dict, master_smple_noName_clade_summary))
-        allProcesses.append(p)
+        all_processes.append(p)
         p.start()
 
-    for p in allProcesses:
+    for p in all_processes:
         p.join()
 
     print('\nDIV output complete\n')
@@ -1223,7 +1223,7 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
 def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbundanceOrderedRefSeqList, output_header,
                                                      smpl_abund_dicts_dict,
                                                      smpl_clade_summary_dicts_dict):
-    cladeList = list('ABCDEFGHI')
+    clade_list = list('ABCDEFGHI')
     for dss in iter(input.get, 'STOP'):
 
         sys.stdout.write('\rOutputting DIV data for {}'.format(dss.name))
@@ -1244,7 +1244,7 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
             populate_QC_data_of_failed_sample(dss, sampleRowDataCounts, sampleRowDataProps)
 
             # no name clade summaries get 0.
-            for cl in cladeList:
+            for cl in clade_list:
                 sampleRowDataCounts.append(0)
                 sampleRowDataProps.append(0)
 
@@ -1278,7 +1278,7 @@ def outputWorkerThree_pre_analysis_new_dss_structure(input, outDict, cladeAbunda
         populate_QC_data_of_successful_sample(dss, sampleRowDataCounts, sampleRowDataProps, sampleSeqTot)
 
         # now add the clade divided summaries of the clades
-        for clade in cladeList:
+        for clade in clade_list:
             sys.stdout.write('\rOutputting DIV data for {}: clade summary {}'.format(dss.name, clade))
             sampleRowDataCounts.append(smpl_clade_summary_absolute_dict[clade])
             sampleRowDataProps.append(smpl_clade_summary_relative_dict[clade])
