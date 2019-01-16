@@ -213,7 +213,7 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
         task_queue = Queue()
 
         # output queue to put the dictionaries that will make the fasta and name files
-        outputQueue = Queue()
+        output_queue = Queue()
 
         # populate the input queue
         for cc in clade_collections_of_clade:
@@ -227,7 +227,7 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         for n in range(num_processors):
-            p = Process(target=uni_frac_worker_two, args=(task_queue, outputQueue))
+            p = Process(target=uni_frac_worker_two, args=(task_queue, output_queue))
             all_processes.append(p)
             p.start()
 
@@ -245,7 +245,7 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
         stop_count = 0
         # the fasta_name_set ouput by the worker can simply be a tuple containing
         # (temp_fasta_dict, temp_name_dict, temp_group_list, list_of_IDs, proc_name)
-        for fasta_name_set in iter(outputQueue.get, 'STOP'):
+        for fasta_name_set in iter(output_queue.get, 'STOP'):
             if fasta_name_set == 'EXIT':
                 stop_count += 1
                 if stop_count == num_processors:
@@ -418,7 +418,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         task_queue = Queue()
 
         # output queue to put the dictionaries that will make the fasta and name files
-        outputQueue = Queue()
+        output_queue = Queue()
 
         # populate the input queue
         for cc in clade_collections_of_clade:
@@ -432,7 +432,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         for n in range(num_processors):
-            p = Process(target=uni_frac_worker_two, args=(task_queue, outputQueue))
+            p = Process(target=uni_frac_worker_two, args=(task_queue, output_queue))
             all_processes.append(p)
             p.start()
 
@@ -450,7 +450,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         stop_count = 0
         # the fasta_name_set ouput by the worker can simply be a tuple containing
         # (temp_fasta_dict, temp_name_dict, temp_group_list, list_of_IDs, proc_name)
-        for fasta_name_set in iter(outputQueue.get, 'STOP'):
+        for fasta_name_set in iter(output_queue.get, 'STOP'):
             if fasta_name_set == 'EXIT':
                 stop_count += 1
                 if stop_count == num_processors:
@@ -1370,7 +1370,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     task_queue = Queue()
 
     # output queue to put the dictionaries that will make the fasta and name files
-    outputQueue = Queue()
+    output_queue = Queue()
 
     # populate the input queue
     for p in range(num_reps):
@@ -1383,7 +1383,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     all_processes = []
 
     for n in range(num_proc):
-        p = Process(target=mothur_unifrac_pipeline_MP_worker, args=(task_queue, outputQueue, fseqboot_base, clade_wkd))
+        p = Process(target=mothur_unifrac_pipeline_MP_worker, args=(task_queue, output_queue, fseqboot_base, clade_wkd))
         all_processes.append(p)
         p.start()
 
@@ -1391,13 +1391,13 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     kill_num = 0
     list_of_tree_paths = []
     while 1:
-        passedElement = outputQueue.get()
-        if passedElement == 'kill':
+        passed_element = output_queue.get()
+        if passed_element == 'kill':
             kill_num += 1
             if kill_num == num_proc:
                 break
         else:
-            list_of_tree_paths.append(passedElement)
+            list_of_tree_paths.append(passed_element)
 
     for p in all_processes:
         p.join()
@@ -1487,7 +1487,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     task_queue = Queue()
 
     # output queue to put the dictionaries that will make the fasta and name files
-    outputQueue = Queue()
+    output_queue = Queue()
 
     # populate the input queue
     for p in range(num_reps):
@@ -1500,7 +1500,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     all_processes = []
 
     for n in range(num_proc):
-        p = Process(target=phylip_unifrac_pipeline_MP_worker, args=(task_queue, outputQueue, fseqboot_base))
+        p = Process(target=phylip_unifrac_pipeline_MP_worker, args=(task_queue, output_queue, fseqboot_base))
         all_processes.append(p)
         p.start()
 
@@ -1508,13 +1508,13 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     kill_num = 0
     list_of_tree_paths = []
     while 1:
-        passedElement = outputQueue.get()
-        if passedElement == 'kill':
+        passed_element = output_queue.get()
+        if passed_element == 'kill':
             kill_num += 1
             if kill_num == num_proc:
                 break
         else:
-            list_of_tree_paths.append(passedElement)
+            list_of_tree_paths.append(passed_element)
 
     for p in all_processes:
         p.join()
