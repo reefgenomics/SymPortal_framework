@@ -129,15 +129,15 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
                         print(line)
                     if '[WARNING]: Blank fasta name, ignoring read.' in line:
                         p.terminate()
-                        errorReason = 'Blank fasta name'
-                        log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, errorReason)
+                        error_reason = 'Blank fasta name'
+                        log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
                         error = True
                         error_sample_list.append(sample_name)
                         break
                     if 'ERROR' in line:
                         p.terminate()
-                        errorReason = 'error in inital QC'
-                        log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, errorReason)
+                        error_reason = 'error in inital QC'
+                        log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
                         error = True
                         error_sample_list.append(sample_name)
                         break
@@ -193,8 +193,8 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
                 '{}{}.trim.contigs.good.unique.abund.pcr.fasta'.format(current_directory, root_name))
 
             if len(last_summary) == 0:
-                errorReason = 'error in inital QC'
-                log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, errorReason)
+                error_reason = 'error in inital QC'
+                log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
                 error_sample_list.append(sample_name)
                 continue
 
@@ -217,8 +217,8 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
             if completed_process.returncode == 1 or 'ERROR' in completed_process.stdout.decode('utf-8'):
                 if debug:
                     print(completed_process.stdout.decode('utf-8'))
-                errorReason = 'error in inital QC'
-                log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, errorReason)
+                error_reason = 'error in inital QC'
+                log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
                 error_sample_list.append(sample_name)
                 continue
 
@@ -227,8 +227,8 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
                 last_summary = readDefinedFileToList(
                     '{}{}.trim.contigs.good.unique.abund.pcr.unique.fasta'.format(current_directory, root_name))
                 if len(last_summary) == 0:  # If this file is empty
-                    errorReason = 'error in inital QC'
-                    log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, errorReason)
+                    error_reason = 'error in inital QC'
+                    log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
                     error_sample_list.append(sample_name)
                     continue
             except FileNotFoundError:  # If there is no file then we can assume sample has a problem
@@ -1097,6 +1097,7 @@ def create_symclade_backup(data_set_identification):
     writeListToDestination(dst_readme_path, read_me)
 
 
+# noinspection PyPep8
 def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,
                       full_path_to_nt_database_directory='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload',
                       num_proc=20):
@@ -1349,6 +1350,7 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
             if seq_in_q in already_processed_blast_seq_result:
                 continue
             already_processed_blast_seq_result.append(seq_in_q)
+            # noinspection PyPep8,PyBroadException
             try:
                 evalue_power = int(line.split('\t')[3].split('-')[1])
                 # TODO with the smallest sequences i.e. 185bp it is impossible to get above the 100 threshold
@@ -1385,6 +1387,7 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
         pickle.dump(blast_dict, open("{}/blast_dict.pickle".format(current_directory), "wb"))
 
 
+# noinspection PyBroadException,PyPep8
 def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_id, list_of_discarded_seqs,
                               throw_away_seqs_dir):
     data_sub_in_q = data_set.objects.get(id=data_sub_id)
@@ -1455,6 +1458,7 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_i
                 new_group.append(line)
                 # The fasta_dict is only meant to have the unique seqs in so this will
                 # go to 'except' a lot. This is OK and normal
+                # noinspection PyPep8
                 try:
                     new_fasta.extend(['>{}'.format(sequence), fasta_dict[sequence]])
                 except:
@@ -1472,8 +1476,8 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_i
         # Now write the files out
         if not new_fasta:
             # Then the fasta is blank and we have got no good Symbiodinium seqs
-            errorReason = 'No Symbiodinium sequences left after blast annotation'
-            log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, errorReason)
+            error_reason = 'No Symbiodinium sequences left after blast annotation'
+            log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
             error_sample_list_shared.put(sample_name)
             continue
         sys.stdout.write('{}: non-Symbiodinium sequences binned\n'.format(sample_name))
@@ -1551,8 +1555,8 @@ def worker_screen_size(input_q, error_sample_list, wkd, data_sub_id, debug):
         if completed_process.returncode == 1 or 'ERROR' in completed_process.stdout.decode('utf-8'):
             if debug:
                 print(completed_process.stdout.decode('utf-8'))
-            errorReason = 'No Symbiodinium sequences left after size screening'
-            log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, errorReason)
+            error_reason = 'No Symbiodinium sequences left after size screening'
+            log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
             error_sample_list.put(sample_name)
             continue
     return
@@ -2057,6 +2061,7 @@ def generate_mothur_dotfile_file(wkd):
         r'make.file(inputdir={0}, type=gz, numcols=3)'.format(wkd)
     ]
     writeListToDestination(r'{0}/mothur_batch_file_makeFile'.format(wkd), mothur_batch_file)
+    # noinspection PyPep8
     subprocess.run(['mothur', r'{0}/mothur_batch_file_makeFile'.format(wkd)],
                    stdout=subprocess.PIPE,
                    stderr=subprocess.PIPE)
@@ -2113,6 +2118,7 @@ def identify_sample_names_data_sheet(sample_meta_df, wkd):
     return fastq_file_to_sample_name_dict, list_of_names
 
 
+# noinspection PyPep8
 def copy_file_to_wkd(data_set_identification, path_to_input_file):
     # working directory will be housed in a temp folder within the directory in which the sequencing data
     # is currently housed
