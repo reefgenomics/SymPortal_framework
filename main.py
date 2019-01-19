@@ -48,7 +48,7 @@ def main():
     group = parser.add_mutually_exclusive_group(required=True)
 
     # Mutually exclusive arguments
-    group.add_argument('--submit', metavar='path_to_dir', help='Run this to submit data to the framework\'s database. '
+    group.add_argument('--load', metavar='path_to_dir', help='Run this to load data to the framework\'s database. '
                                                                'The first argument to this command must be an absolute '
                                                                'path to a directory containing  the '
                                                                'paired sequencing reads in .fastq.gz '
@@ -150,7 +150,7 @@ def main():
 
 
     # Code to run the main functionality of SymPortal
-    if args.submit:
+    if args.load:
         if args.name == 'noName':
             sys.exit('Please provide a name using the --name flag. e.g. --name splendid_dataset')
 
@@ -162,7 +162,7 @@ def main():
         num_proc = args.num_proc
 
         # input directory should contain either paired .fastq.gz files of a single .zip file
-        input_dir = args.submit
+        input_dir = args.load
 
         name_for_data_set = args.name
 
