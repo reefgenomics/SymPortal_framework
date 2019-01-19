@@ -1,6 +1,6 @@
 import subprocess
-from dbApp.models import symportal_framework, data_set, reference_sequence, data_set_sample_sequence, \
-    data_set_sample, clade_collection
+from dbApp.models import (symportal_framework, data_set, reference_sequence,
+                          data_set_sample_sequence, data_set_sample, clade_collection)
 from multiprocessing import Queue, Process, Manager
 from django import db
 
@@ -621,7 +621,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                 sys.stdout.write(
                     '\n{} clade {} sequences in {}. Creating clade_collection_object object\n'.format(sum(count_array[i]),
                                                                                                sample_name, clade))
-                new_cc = clade_collection_object(clade=clade, dataSetSampleFrom=data_set_sample_object)
+                new_cc = clade_collection(clade=clade, dataSetSampleFrom=data_set_sample_object)
                 new_cc.save()
             else:
                 sys.stdout.write(
