@@ -1976,7 +1976,17 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
 def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, data_submission_in_q, data_sheet_path,
                                                                    wkd):
     # Create a pandas df from the data_sheet if it was provided
-    sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+    # allow the data_sheet to be in a .csv format or .xlxs format. This is so that we can store a datasheet
+    # in the github repo in a non-binary format
+    # The sample_meta_df that is created from the data_sheet should be identical irrespective of whether a .csv
+    # or a .xlxs is submitted.
+    if data_sheet_path.endswith('.xlxs'):
+        sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+    elif data_sheet_path.endswith('.csv'):
+        sample_meta_df = pd.read_csv(filepath_or_buffer=data_sheet_path, header=0, index_col=0, skiprows=[0])
+    else:
+        sys.exit('Data sheet: {} is in an unrecognised format. '
+                 'Please ensure that it is either in .xlxs or .csv format.')
     # if we are given a data_sheet then use these sample names given as the data_set_sample object names
     fastq_file_to_sample_name_dict, list_of_names = identify_sample_names_data_sheet(sample_meta_df, wkd)
     # Make a batch file for mothur, set input and output dir and create a .file file
