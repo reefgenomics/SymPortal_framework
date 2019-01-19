@@ -15,8 +15,8 @@ import pickle
 from collections import Counter
 import numpy as np
 
-def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numProcessors=1, noFig=False, output_user=None, time_date_str=None):
-    analysisObj = analysisobj
+def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, num_processors=1, no_figures=False, output_user=None, time_date_str=None):
+    analysis_object = analysisobj
     # This is one of the last things to do before we can use our first dataset
     # The table will have types as columns and rows as samples
     # its rows will give various data about each type as well as how much they were present in each sample
@@ -42,7 +42,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
     cladeCollectionsFromDSs = clade_collection.objects.filter(
         dataSetSampleFrom__dataSubmissionFrom__in=querySetOfDataSubmissions)
     cladeCollectionTypesFromThisAnalysisObjAndDataSubmission = clade_collection_type.objects.filter(
-        cladeCollectionFoundIn__in=cladeCollectionsFromDSs, analysisTypeOf__dataAnalysisFrom=analysisObj).distinct()
+        cladeCollectionFoundIn__in=cladeCollectionsFromDSs, analysisTypeOf__dataAnalysisFrom=analysis_object).distinct()
 
     at = set()
     for cct in cladeCollectionTypesFromThisAnalysisObjAndDataSubmission:
@@ -52,7 +52,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
 
 
     # Need to get a list of Samples that are part of the dataAnalysis
-    # listOfDataSetSamples = list(data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=[int(a) for a in analysisObj.listOfDataSubmissions.split(',')])))
+    # listOfDataSetSamples = list(data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=[int(a) for a in analysis_object.listOfDataSubmissions.split(',')])))
     listOfDataSetSamples = list(
         data_set_sample.objects.filter(dataSubmissionFrom__in=data_set.objects.filter(id__in=dataSubmissionsToOutput)))
 
@@ -107,11 +107,11 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
             #NB using shared items was considerably slowing us down so now I will just use copies of items
             # we don't actually need to use managed items as they don't really need to be shared (i.e. input
             # from different processes.
-            # a list that is the IDs of each of the samples in the analyis
+            # a list that is the uids of each of the samples in the analyis
             sample_IDs_list = [smp.id for smp in listOfDataSetSamples]
             # listOfDataSetSampleIDsManagedList = worker_manager.list(sample_IDs_list)
 
-            # A corresponding dictionary that is the list of the clade collection IDs for each of the samples
+            # A corresponding dictionary that is the list of the clade collection uids for each of the samples
             # that are in the ID list above.
             sample_ID_to_cc_IDs_of_clade = {}
             print('\nCreating sample_ID_to_cc_IDs dictionary clade {}'.format(cladeInQ))
@@ -132,7 +132,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
             for anType in sortedListOfTypes:
                 typeInputQueue.put(anType)
 
-            for N in range(numProcessors):
+            for N in range(num_processors):
                 typeInputQueue.put('STOP')
 
             all_processes = []
@@ -142,7 +142,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
             db.connections.close_all()
 
             sys.stdout.write('\nCalculating ITS2 type profile abundances clade {}\n'.format(clade_list[i]))
-            for N in range(numProcessors):
+            for N in range(num_processors):
                 p = Process(target=outputWorkerOne,
                             args=(typeInputQueue, sample_IDs_list, typeOutputManagedDict, sample_ID_to_cc_IDs_of_clade))
                 all_processes.append(p)
@@ -211,7 +211,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
     df_relative = pd.DataFrame(list_for_df_relative, columns=columns_for_df)
     df_relative.set_index('ITS2 type profile', drop=False, inplace=True)
 
-    # add a series that gives us the IDs of the samples incase we have samples that have the same names
+    # add a series that gives us the uids of the samples incase we have samples that have the same names
     # this rather complex comprehension puts an nan into the list for the pre_header headers
     # (i.e not sample headers) and then puts an ID value for the samples
     # this seires works because we rely on the fact that it will just automatically
@@ -224,7 +224,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
 
 
     # it turns out that you cannot have duplicate header values (which makes sense). So we're going to have to
-    # work with the sample IDs as the header values and put the sample_name in as the secondary series
+    # work with the sample uids as the header values and put the sample_name in as the secondary series
 
     # now add the series to the df and then re order the df
     df_absolute = df_absolute.append(sample_name_series)
@@ -274,7 +274,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
     samples_by_ID_that_have_been_sorted.extend(typeless_samples_list_by_ID)
 
     # now pickle out the samples_that_have_been_sorted list if we are running on the remote system
-    outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysisObj.id)))
+    outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysis_object.id)))
     os.makedirs(outputDir, exist_ok=True)
     with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
         config_dict = json.load(f)
@@ -450,13 +450,13 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
         date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
     os.makedirs(outputDir, exist_ok=True)
 
-    path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
+    path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(outputDir, analysis_object.id, analysis_object.name, date_time_string)
     df_absolute.to_csv(path_to_profiles_absolute, sep="\t", header=False)
     output_files_list.append(path_to_profiles_absolute)
 
     del df_absolute
 
-    path_to_profiles_rel = '{}/{}_{}_{}.profiles.relative.txt'.format(outputDir, analysisObj.id, analysisObj.name, date_time_string)
+    path_to_profiles_rel = '{}/{}_{}_{}.profiles.relative.txt'.format(outputDir, analysis_object.id, analysis_object.name, date_time_string)
     df_relative.to_csv(path_to_profiles_rel, sep="\t", header=False)
     # writeListToDestination(path_to_profiles_rel, outputTableTwo)
     output_files_list.append(path_to_profiles_rel)
@@ -465,7 +465,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
     div_output_file_list, date_time_string, numSamples = div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput=datasubstooutput,
-                                                           numProcessors=numProcessors, output_dir=outputDir,
+                                                           num_processors=num_processors, output_dir=outputDir,
                                                            sorted_sample_ID_list=samples_by_ID_that_have_been_sorted,
                                                            analysis_obj_id=analysisobj.id, call_type='analysis', time_date_str=date_time_string)
 
@@ -480,7 +480,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, numP
     # plot for the ITS2 type profiles and one for the sequences
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
     output_dir = os.path.dirname(output_to_plot)
-    if not noFig:
+    if not no_figures:
         if num_samples > 1000:
             print('Too many samples ({}) to generate plots'.format(num_samples))
         else:
@@ -566,13 +566,13 @@ def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_
         # This is counter will end up being the type abund local value
         abundanceCount = 0
 
-        typeInQ = anType
-        clade = typeInQ.clade
+        type_in_question = anType
+        clade = type_in_question.clade
 
         # For each type create a holder that will hold 0s for each sample until populated below
         dataRowRaw = [0 for smpl in range(num_samples)]
         dataRowProp = [0 for smpl in range(num_samples)]
-        typeCCIDs = [int(a) for a in typeInQ.listOfCladeCollections.split(',')]
+        typeCCIDs = [int(a) for a in type_in_question.listOfCladeCollections.split(',')]
 
         # We also need the type abund db value. We can get this from the type cladeCollections
         globalCount = len(typeCCIDs)
@@ -599,10 +599,10 @@ def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_
                 apples = 'asdf'
 
             # The number of sequences that make up the type in q
-            # The index of the CC in the type's listOfCladeCollections
+            # The index of the clade_collection_object in the type's listOfCladeCollections
             CCindexInType = typeCCIDs.index(ccInQ_ID)
-            # List containing the abundances of each of the ref seqs that make up the type in the given CC
-            seqAbundanceInfoForCCandTypeInQ = json.loads(typeInQ.footprintSeqAbundances)[CCindexInType]
+            # List containing the abundances of each of the ref seqs that make up the type in the given clade_collection_object
+            seqAbundanceInfoForCCandTypeInQ = json.loads(type_in_question.footprintSeqAbundances)[CCindexInType]
             # total of the above list, i.e. seqs in type
             sumOfDefRefSeqAbundInType = sum(seqAbundanceInfoForCCandTypeInQ)
             # type abundance as proportion of the total seqs found in the sample
@@ -613,27 +613,27 @@ def outputWorkerOne(input, listOfDataSetSample_IDs, outputDict, sample_ID_to_cc_
             dataRowProp[index_of_sample_ID_in_listOfDataSetSample_IDs] = typeProp
 
         # Type Profile
-        typeID = anType.id
+        type_uid = anType.id
 
-        typeProfile = typeInQ.name
-        species = typeInQ.species
-        typeAbundance = abundanceCount
+        typeProfile = type_in_question.name
+        species = type_in_question.species
+        type_abundance = abundanceCount
         # This is currently putting out the Majs in an odd order due to the fact that the MajRefSeqSet is
         # a set. Instead we should get the Majs from the name.
         # majITS2 = '/'.join([str(refseq) for refseq in sortedListOfTypes[j].getMajRefSeqSet()])
         majITS2, majList = getMajList(anType)
-        typeAbundAndSDString = getAbundStr(TotList, SDList, majList)
+        type_abundAndSDString = getAbundStr(TotList, SDList, majList)
 
-        sequenceAccession = typeInQ.generateName(accession=True)
-        rowOne = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
-                                                             species, str(typeAbundance), str(globalCount), typeProfile,
+        sequenceAccession = type_in_question.generateName(accession=True)
+        rowOne = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(type_uid, clade, majITS2,
+                                                             species, str(type_abundance), str(globalCount), typeProfile,
                                                              '\t'.join([str(a) for a in dataRowRaw]),
-                                                             sequenceAccession, typeAbundAndSDString)
-        rowTwo = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(typeID, clade, majITS2,
-                                                             species, str(typeAbundance), str(globalCount), typeProfile,
+                                                             sequenceAccession, type_abundAndSDString)
+        rowTwo = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(type_uid, clade, majITS2,
+                                                             species, str(type_abundance), str(globalCount), typeProfile,
                                                              '\t'.join(["{:.3f}".format(prop) for prop in
                                                                         dataRowProp]), sequenceAccession,
-                                                             typeAbundAndSDString)
+                                                             type_abundAndSDString)
         # Here we will use the outputDict instead of adding it to the outputTableOne
         # We will then get these elements in the dict into the right order with the types we will then
         # write out each of the type elements in the order of the orderedTypeLists
@@ -685,7 +685,7 @@ def getAbundStr(totlist, sdlist, majlist):
         abundOutputStr = majCompStr
     return abundOutputStr
 
-def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, numProcessors, output_dir, call_type,
+def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num_processors, output_dir, call_type,
                                                            sorted_sample_ID_list=None, analysis_obj_id=None, output_user=None, time_date_str=None ):
 
 
@@ -714,8 +714,8 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     # Get list of clades found
     cladeSet = set()
-    for refSeq in refSeqsInDSs:
-        cladeSet.add(refSeq.clade)
+    for ref_seq in refSeqsInDSs:
+        cladeSet.add(ref_seq.clade)
 
     # Order the list of clades alphabetically
     # the only purpuse of this worker 2 is to end up with a set of sequences ordered by clade and then
@@ -752,17 +752,17 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
     # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
 
-    refSeq_names_annotated = [refSeq.name if refSeq.hasName else str(refSeq.id) + '_{}'.format(refSeq.clade) for refSeq in refSeqsInDSs]
+    refSeq_names_annotated = [ref_seq.name if ref_seq.hasName else str(ref_seq.id) + '_{}'.format(ref_seq.clade) for ref_seq in refSeqsInDSs]
     generic_seq_to_abund_dict = {refSeq_name:0 for refSeq_name in refSeq_names_annotated}
 
     list_of_dicts_for_processors = []
-    for n in range(numProcessors):
+    for n in range(num_processors):
         list_of_dicts_for_processors.append((worker_manager.dict(generic_seq_to_abund_dict), worker_manager.dict(), worker_manager.dict()))
 
     for dss in sampleList:
         dssQueue.put(dss)
 
-    for N in range(numProcessors):
+    for N in range(num_processors):
         dssQueue.put('STOP')
 
     all_processes = []
@@ -772,7 +772,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     db.connections.close_all()
 
 
-    for n in range(numProcessors):
+    for n in range(num_processors):
         p = Process(target=outputWorkerTwo, args=(dssQueue, list_of_dicts_for_processors[n][0],
                                                   list_of_dicts_for_processors[n][1],
                                                   list_of_dicts_for_processors[n][2],
@@ -783,7 +783,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for p in all_processes:
         p.join()
 
-    print('\nCollecting results of data_set_sample_counting across {} dictionaries'.format(numProcessors))
+    print('\nCollecting results of data_set_sample_counting across {} dictionaries'.format(num_processors))
     master_seq_abundance_counter = Counter()
     master_smple_seq_dict = dict()
     master_smple_noName_clade_summary = dict()
@@ -792,11 +792,11 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # for the seqName counter we simply need to add to the master counter as we were doing before
     # for both of the sample-centric dictionaries we simply need to update a master dictionary
     for n in range(len(list_of_dicts_for_processors)):
-        sys.stdout.write('\rdictionary {}(0)/{}'.format(n, numProcessors))
+        sys.stdout.write('\rdictionary {}(0)/{}'.format(n, num_processors))
         master_seq_abundance_counter += Counter(dict(list_of_dicts_for_processors[n][0]))
-        sys.stdout.write('\rdictionary {}(1)/{}'.format(n, numProcessors))
+        sys.stdout.write('\rdictionary {}(1)/{}'.format(n, num_processors))
         master_smple_seq_dict.update(dict(list_of_dicts_for_processors[n][1]))
-        sys.stdout.write('\rdictionary {}(2)/{}'.format(n, numProcessors))
+        sys.stdout.write('\rdictionary {}(2)/{}'.format(n, num_processors))
         master_smple_noName_clade_summary.update(dict(list_of_dicts_for_processors[n][2]))
 
     print('Collection complete.')
@@ -838,7 +838,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
 
     ######################################################################################
 
-    ############ POPULATE TABLE WITH CC DATA #############
+    ############ POPULATE TABLE WITH clade_collection_object DATA #############
 
     # In order to MP this we will have to pay attention to the order. As we can't keep the order as we work with the
     # MPs we will do as we did above for the profies outputs and have an output dict that will have the sample as key
@@ -854,7 +854,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     for dss in sampleList:
         dssQueue.put(dss)
 
-    for N in range(numProcessors):
+    for N in range(num_processors):
         dssQueue.put('STOP')
 
     all_processes = []
@@ -864,7 +864,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     db.connections.close_all()
 
     sys.stdout.write('\n\nOutputting DIV data\n')
-    for N in range(numProcessors):
+    for N in range(num_processors):
         p = Process(target=outputWorkerThree_pre_analysis_new_dss_structure, args=(
             dssQueue, managedSampleOutputDict, cladeAbundanceOrderedRefSeqList, output_header,
             master_smple_seq_dict, master_smple_noName_clade_summary))
@@ -887,7 +887,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     # If there is a sorted sample list, make sure that it matches the samples that we are outputting
 
     # We were having an issue with data_sets having the same names. To fix this, we should do our ordering
-    # accoring to the IDs of the samples
+    # accoring to the uids of the samples
 
     if sorted_sample_ID_list:
         sys.stdout.write('\nValidating sorted sample list and ordering dataframe accordingly\n')
@@ -1009,7 +1009,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(datasubstooutput, num
     output_df_relative = output_df_relative.append(temp_series)
 
     # Now append the meta infromation for each of the data_sets that make up the output contents
-    # this is information like the submitting user, what the IDs of the datasets are etc.
+    # this is information like the submitting user, what the uids of the datasets are etc.
     # There are several ways that this can be called.
     # it can be called as part of the submission: call_type = submission
     # part of an analysis output: call_type = analysis

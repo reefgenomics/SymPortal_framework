@@ -439,10 +439,10 @@ def deunique_worker(input_queue, output, debug):
 def check_if_seq_in_q_had_ref_seq_match(seq_in_q, node_name, ref_seq_id_dict, node_to_ref_dict, ref_seq_id_name_dict):
     # seq_in_q = the MED node sequence in question
     # ref_seq_id_dict = dictionary of all current ref_sequences sequences (KEY) to their ID (VALUE).
-    # We use this to look to see if there is an equivalent refSeq Sequence for the sequence in question
+    # We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
     # This take into account whether the seq_in_q could be a subset or super set of one of the
-    # refSeq.sequences
-    # Will return false if no refSeq match is found
+    # ref_seq.sequences
+    # Will return false if no ref_seq match is found
 
     # first check to see if seq is found
     if seq_in_q in ref_seq_id_dict:  # Found actual seq in dict
@@ -486,13 +486,13 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
     # get the names of reference_sequecnes
     # this is likely quite expensive so I think it will be easier to make a dict for this purpose which is
     # reference_sequence.id (KEY) reference_sequence.name (VALUE)
-    reference_sequence_id_to_name_dict = {refSeq.id: refSeq.name for refSeq in reference_sequence.objects.all()}
+    reference_sequence_id_to_name_dict = {ref_seq.id: ref_seq.name for ref_seq in reference_sequence.objects.all()}
 
     # This is a dict of key = reference_sequence.sequence value = reference_sequence.id for all refseqs
     # currently held in the database
     # We will use this to see if the sequence in question has a match, or is found in (this is key
     # as some of the seqs are one bp smaller than the reference seqs) there reference sequences
-    reference_sequence_sequence_to_id_dict = {refSeq.sequence: refSeq.id for refSeq in reference_sequence.objects.all()}
+    reference_sequence_sequence_to_id_dict = {ref_seq.sequence: ref_seq.id for ref_seq in reference_sequence.objects.all()}
 
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     for directory in med_dirs:  # For each of the directories where we did MED
@@ -561,7 +561,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                                                                                       new_reference_sequence.name))
         ########################################################################################
 
-        # Here we have a refSeq associated to each of the seqs found and we can now create
+        # Here we have a ref_seq associated to each of the seqs found and we can now create
         # dataSetSampleSequences that have associated referenceSequences
         # So at this point we have a reference_sequence associated with each of the nodes
         # Now it is time to define clade collections
@@ -619,13 +619,13 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
             new_cc = None
             if sum(count_array[i]) > 200:
                 sys.stdout.write(
-                    '\n{} clade {} sequences in {}. Creating clade_collection object\n'.format(sum(count_array[i]),
+                    '\n{} clade {} sequences in {}. Creating clade_collection_object object\n'.format(sum(count_array[i]),
                                                                                                sample_name, clade))
-                new_cc = clade_collection(clade=clade, dataSetSampleFrom=data_set_sample_object)
+                new_cc = clade_collection_object(clade=clade, dataSetSampleFrom=data_set_sample_object)
                 new_cc.save()
             else:
                 sys.stdout.write(
-                    '\n{} clade {} sequences in {}. Insufficient sequence to create a clade_collection object\n'.format(
+                    '\n{} clade {} sequences in {}. Insufficient sequence to create a clade_collection_object object\n'.format(
                         sum(count_array[i]), clade, sample_name))
 
             # I want to address a problem we are having here. Now that we have thorough checks to
@@ -635,7 +635,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
             # than the dsss seq, we should consolidate all dsss seqs with the same reference seq
             # so... we will create a counter that will keep track of the cumulative abundance
             # associated with each reference_sequence
-            # and then create a dsss for each refSeq from this.
+            # and then create a dsss for each ref_seq from this.
             ref_seq_abundance_counter = defaultdict(int)
             for j in range(len(nodes)):
                 abundance = count_array[i][j]
@@ -643,30 +643,30 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                     ref_seq_abundance_counter[
                         reference_sequence.objects.get(id=node_to_ref_dict[nodes[j]])] += abundance
 
-            # > 200 associate a CC to the data_set_sample, else, don't
+            # > 200 associate a clade_collection_object to the data_set_sample, else, don't
             # irrespective, associate a data_set_sample_sequences to the data_set_sample
             sys.stdout.write(
                 '\nAssociating clade {} data_set_sample_sequences directly to data_set_sample {}\n'.format(clade,
                                                                                                            sample_name))
             if sum(count_array[i]) > 200:
-                for refSeq in ref_seq_abundance_counter.keys():
-                    dss = data_set_sample_sequence(referenceSequenceOf=refSeq,
+                for ref_seq in ref_seq_abundance_counter.keys():
+                    dss = data_set_sample_sequence(referenceSequenceOf=ref_seq,
                                                    cladeCollectionTwoFoundIn=new_cc,
-                                                   abundance=ref_seq_abundance_counter[refSeq],
+                                                   abundance=ref_seq_abundance_counter[ref_seq],
                                                    data_set_sample_from=data_set_sample_object)
                     dss_list.append(dss)
                 # Save all of the newly created dss
                 data_set_sample_sequence.objects.bulk_create(dss_list)
                 # Get the ids of each of the dss and add create a string of them and store it as cc.footPrint
-                # This way we can quickly get the footprint of the CC.
-                # Sadly we can't get eh IDs from the list so we will need to re-query
+                # This way we can quickly get the footprint of the clade_collection_object.
+                # Sadly we can't get eh uids from the list so we will need to re-query
                 # Instead we add the identification of each refseq in the ref_seq_abundance_counter.keys() list
-                new_cc.footPrint = ','.join([str(refSeq.id) for refSeq in ref_seq_abundance_counter.keys()])
+                new_cc.footPrint = ','.join([str(ref_seq.id) for ref_seq in ref_seq_abundance_counter.keys()])
                 new_cc.save()
             else:
-                for refSeq in ref_seq_abundance_counter.keys():
-                    dss = data_set_sample_sequence(referenceSequenceOf=refSeq,
-                                                   abundance=ref_seq_abundance_counter[refSeq],
+                for ref_seq in ref_seq_abundance_counter.keys():
+                    dss = data_set_sample_sequence(referenceSequenceOf=ref_seq,
+                                                   abundance=ref_seq_abundance_counter[ref_seq],
                                                    data_set_sample_from=data_set_sample_object)
                     dss_list.append(dss)
                 # Save all of the newly created dss
@@ -757,7 +757,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
     # it will also return these paths so that we can use them to grab the data for figure plotting
     output_path_list, date_time_str, num_samples = div_output_pre_analysis_new_meta_and_new_dss_structure(
         datasubstooutput=str(data_set_identification),
-        numProcessors=num_proc,
+        num_processors=num_proc,
         output_dir=output_directory, call_type='submission')
 
     # also write out the fasta of the sequences that were discarded

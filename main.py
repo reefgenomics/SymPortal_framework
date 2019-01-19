@@ -63,24 +63,24 @@ def main():
                                                                '--data_sheet flag and the full path to the .xlxs '
                                                                'data_sheet file (RECOMMENDED). \n'
                                                                'To skip the generation of figures pass the '
-                                                               '--noFig flag.\n'
+                                                               '--no_figures flag.\n'
                                                                'To skip the generation of ordination files '
                                                                '(pairwise distances and PCoA coordinates) '
-                                                               'pass the --noOrd flag')
+                                                               'pass the --no_ordinations flag')
 
-    group.add_argument('--analyse', metavar='data_set IDs', help='Analyse one or more data_set objects '
+    group.add_argument('--analyse', metavar='data_set uids', help='Analyse one or more data_set objects '
                                                                  'together. Enter comma separated '
-                                                                 'IDs of the data_set IDs you which to '
+                                                                 'uids of the data_set uids you which to '
                                                                  'analyse. e.g.: 43,44,45. '
                                                                  'If you wish to use all available dataSubmissions,'
                                                                  'you may pass \'all\' as an argument. '
                                                                  'To display all data_sets currently submitted to the '
                                                                  'framework\'s database, including their ids, use the \'show_data_sets\' command\n'
                                                                  'To skip the generation of figures pass the '
-                                                                 '--noFig flag.\n'
+                                                                 '--no_figures flag.\n'
                                                                  'To skip the generation of ordination files '
                                                                  '(pairwise distances and PCoA coordinates) '
-                                                                 'pass the --noOrd flag')
+                                                                 'pass the --no_ordinations flag')
 
 
     group.add_argument('--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
@@ -88,35 +88,35 @@ def main():
     group.add_argument('--display_analyses', action='store_true', help=' Display data_analysis objects currently '
                                                                        'stored in the framework\'s database')
 
-    group.add_argument('--print_output_seqs', metavar='data_set IDs',
+    group.add_argument('--print_output_seqs', metavar='data_set uids',
                        help='Use this function to output ITS2 sequence count tables for given data_set instances')
 
-    group.add_argument('--print_output_types', metavar='data_set IDs, analysis ID', help='Use this function to output the '
+    group.add_argument('--print_output_types', metavar='data_set uids, analysis ID', help='Use this function to output the '
                                                                                        'ITS2 sequence and ITS2 type profile count tables for '
                                                                                        'a given set of data_sets '
-                                                                                       'that have been run in a given analysis. Give the data_set IDs '
+                                                                                       'that have been run in a given analysis. Give the data_set uids '
                                                                                        'that you wish to make outputs for as '
                                                                                        'arguments to the --print_output_types flag. To output for multiple data_set objects, '
-                                                                                       'comma separate the IDs of the data_set objects, '
+                                                                                       'comma separate the uids of the data_set objects, '
                                                                                        'e.g. 44,45,46.'
                                                                                        'Give the ID of the analysis you wish to '
                                                                                        'output these from using the --data_analysis_id '
                                                                                        'flag.\nTo skip the generation of figures pass the '
-                                                                                       '--noFig flag.')
+                                                                                       '--no_figures flag.')
 
 
 
     group.add_argument('--between_type_distances',
-                       metavar='data_set IDs, analysis ID',
+                       metavar='data_set uids, analysis ID',
                        help='Use this function to output UniFrac pairwise distances '
                             'between ITS2 type profiles clade separated')
 
     group.add_argument('--between_sample_distances',
-                       metavar='data_set IDs',
+                       metavar='data_set uids',
                        help='Use this function to output UniFrac pairwise distances '
                             'between samples clade separated from a given collection of data_set objects')
     group.add_argument('--between_sample_distances_sample_set',
-                       metavar='data_set_sample IDs',
+                       metavar='data_set_sample uids',
                        help='Use this function to output UniFrac pairwise distances '
                             'between samples clade separated from a given collection of data_set_sample objects')
 
@@ -130,10 +130,10 @@ def main():
                                                                      'objects that have been deleted recently')
     parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
     parser.add_argument('--data_sheet', help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
-    parser.add_argument('--noFig', action='store_true', help='Skip figure production')
-    parser.add_argument('--noOrd', action='store_true', help='Skip ordination analysis')
+    parser.add_argument('--no_figures', action='store_true', help='Skip figure production')
+    parser.add_argument('--no_ordinations', action='store_true', help='Skip ordination analysis')
     parser.add_argument('--debug', action='store_true', help='Present additional stdout output', default=False)
-    parser.add_argument('--noOutput', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
+    parser.add_argument('--no_output', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
     parser.add_argument('--distance_method', help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. '
                                                   'The method to use when calculating distances between its2 '
                                                   'type profiles or samples.', default='braycurtis')
@@ -191,8 +191,8 @@ def main():
         # only perform sub_evalue_screening when working on the remote system
 
         data_sheet_arg = args.data_sheet
-        no_fig_arg = args.noFig
-        no_ord_arg = args.noOrd
+        no_fig_arg = args.no_figures
+        no_ord_arg = args.no_ordinations
         debug_bool = args.debug
         distance_method_arg = args.distance_method
 
@@ -226,8 +226,8 @@ def main():
                                             submitting_user_email=new_data_set_user_email)
         new_analysis_object.description = args.description
         new_analysis_object.save()
-        data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=args.noFig,
-                                     noOrd=args.noOrd, distance_method=args.distance_method, noOutput=args.noOutput,
+        data_sub_collection_run.main(data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=args.no_figures,
+                                     no_ordinations=args.no_ordinations, distance_method=args.distance_method, no_output=args.no_output,
                                      debug=args.debug)
         print('return code: 0\nAnalysis complete')
 
@@ -242,15 +242,15 @@ def main():
             num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions))
 
             data_sub_collection_run.formatOutput_ord(analysisobj=analysis_object,
-                                                     numProcessors=args.num_proc, call_type='stand_alone', num_samples=num_samples,
-                                                     datasubstooutput=args.print_output_types, noFig=args.noFig,
+                                                     num_processors=args.num_proc, call_type='stand_alone', num_samples=num_samples,
+                                                     datasubstooutput=args.print_output_types, no_figures=args.no_figures,
                                                      output_user=new_data_set_submitting_user)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'flag. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
 
     elif args.display_data_sets:
-        # Then print out all of the dataSubmissions with names and IDs in the db
+        # Then print out all of the dataSubmissions with names and uids in the db
         # Let's sort this by id when outputting
         # When just printing the raw query the order is somewhat random
         data_set_id_to_obj_dict = {ds.id: ds for ds in list(data_set.objects.all())}
@@ -261,7 +261,7 @@ def main():
             print('{}: {}\t{}'.format(ds_in_q.id, ds_in_q.name, ds_in_q.timeStamp))
 
     elif args.display_analyses:
-        # Then print out all of the dataAnalysisTwos with names and IDs in the db
+        # Then print out all of the dataAnalysisTwos with names and uids in the db
         # Let's sort this by id when outputting
         # When just printing the raw query the order is somewhat random
         data_analysis_id_to_obj_dict = {da.id: da for da in list(data_analysis.objects.all())}
@@ -314,8 +314,8 @@ def main():
                 plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
 
     elif args.between_sample_distances_sample_set:
-        # this is a variation of the between_sample_distances where a set of sample IDs are input rather
-        # than data_set IDs. Currently it is only written into unifrac. Once we have this running
+        # this is a variation of the between_sample_distances where a set of sample uids are input rather
+        # than data_set uids. Currently it is only written into unifrac. Once we have this running
         # we can then apply it to BrayCurtis
         dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         if args.distance_method == 'unifrac':
@@ -342,7 +342,7 @@ def main():
 
         outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
         output_file_list, date_time_str, num_samples = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
-            datasubstooutput=args.print_output_seqs, numProcessors=args.num_proc, output_dir=outputDir,
+            datasubstooutput=args.print_output_seqs, num_processors=args.num_proc, output_dir=outputDir,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
         if num_samples > 1000:
             print('Too many samples ({}) to generate plots'.format(num_samples))
@@ -374,8 +374,8 @@ def create_analysis_obj_and_run_analysis(analysis_name, description_arg, custom_
                                         submitting_user_email=new_data_set_user_email)
     new_analysis_object.description = description_arg
     new_analysis_object.save()
-    analysis_id = data_sub_collection_run.main(dataanalysistwoobject=new_analysis_object, cores=num_proc, noFig=no_fig_arg,
-                                 noOrd=no_ord_arg, distance_method=distance_method_arg, noOutput=no_output_arg,
+    analysis_id = data_sub_collection_run.main(data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=no_fig_arg,
+                                 no_ordinations=no_ord_arg, distance_method=distance_method_arg, no_output=no_output_arg,
                                  debug=debug_bool)
     return analysis_id
 

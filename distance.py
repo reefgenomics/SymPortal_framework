@@ -20,7 +20,7 @@ from datetime import datetime
 
 ##### DISTANCE MATRICES #####
 def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_id_str, num_processors, data_analysis_id,
-                                                               method, call_type, date_time_string, bootstrap_value=100, noFig=False, output_dir=None):
+                                                               method, call_type, date_time_string, bootstrap_value=100, no_figures=False, output_dir=None):
     ''' This will produce distance matrices between ITS2 type profiles of the same clade.
     It will use exactly the same suite of programs as the generate_within_clade_UniFrac_distances_samples method
     The only difference will be that this will be calculated across ITS2 Type Profiles rather than samples.

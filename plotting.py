@@ -378,7 +378,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
 
     sp_output_df = sp_output_df.iloc[:index_to_drop_from]
 
-    # now make a dict of id to sample name so that we can work with IDs
+    # now make a dict of id to sample name so that we can work with uids
     smp_ID_to_smp_name = {int(ID): nm for ID, nm in zip(sp_output_df.iloc[2:, 0], sp_output_df.iloc[2:, 1])}
 
     # now drop the sample name columns

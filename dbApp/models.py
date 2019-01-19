@@ -130,7 +130,7 @@ class data_set_sample(models.Model):
 
 
 class data_analysis(models.Model):
-    # This will be a jsoned list of IDs of the dataSubmissions that are included in this analysis
+    # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
     listOfDataSubmissions = models.CharField(max_length=500, null=True)
     withinCladeCutOff = models.FloatField(default=0.04)
     typeSupport = models.FloatField(default=0.01)
@@ -158,9 +158,9 @@ class data_analysis(models.Model):
 class clade_collection(models.Model):
     dataSetSampleFrom = models.ForeignKey(data_set_sample, on_delete=models.CASCADE, null=True)
     clade = models.CharField(max_length=1)
-    #the method below to get the footprint of the CC is incredibly slow.
+    #the method below to get the footprint of the clade_collection_object is incredibly slow.
     # Hopefully a much faster way will be to store the ID's of the refseqs that make up the footprint
-    # I will therefore store the reference IDs in the field below
+    # I will therefore store the reference uids in the field below
     footPrint = models.CharField(max_length=100000, default=True)
 
 
@@ -185,7 +185,7 @@ class clade_collection(models.Model):
             dsss = list(data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=self).order_by('-abundance'))
             orderedRefSeqs = [ds.referenceSequenceOf for ds in dsss]
         else:
-            # Try is for incase there are not 10 seqs in the CC
+            # Try is for incase there are not 10 seqs in the clade_collection_object
             try:
                 dsss = list(data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=self).order_by('-abundance')[:10])
                 orderedRefSeqs = [ds.referenceSequenceOf for ds in dsss]
@@ -230,10 +230,10 @@ class analysis_type(models.Model):
     analysisGroupOf = models.ForeignKey(analysis_group, on_delete=models.SET_NULL, null=True)
     # This should be a frozen set of referenceSequences
     # As this is not possible in a django field or jsonable
-    # I will instead make it a string of reference sequence IDs
+    # I will instead make it a string of reference sequence uids
     # I will make set and get methods for the footprint
     # This will be a list of refSeqs that make up the footprint in order of their abundance when type first defined
-    # This is a commar separated string of the IDs of the ref seqs that define the type
+    # This is a commar separated string of the uids of the ref seqs that define the type
     orderedFootprintList = models.CharField(max_length=200, null=True)
     # Same for listOfMajs
     # set() of refseqs that are Majs in each of the CCs this type was initially identified in.
@@ -328,7 +328,7 @@ class analysis_type(models.Model):
         # D17 at very low abundances, like 3 or 4 %. As such this difference in these types is representative of an
         # artefact rather than biology. To mitigate this effect when a profile is created, for each of its intras, in
         # each of its CCs, we will see if the intra is found at <= 0.05 retlative abundance i.e. 5%.
-        # If at least one of the intras in one of the CC in the type is found, then we will consider this profile
+        # If at least one of the intras in one of the clade_collection_object in the type is found, then we will consider this profile
         # to be at danger of being effected by the SP cut off artefact effect.
         # In this case, we will lower the lower boundary to 0.5%. From empirical data this seems to include most cases
         # there are some CCs that have hyper low amounds of it but this not turely representative of the sequence.
@@ -340,26 +340,26 @@ class analysis_type(models.Model):
         # we do all of the work that is required for that here anyway.
         # So instead I am going to workout coDom in the type init here.
         # work out the maj seqs here
-        setOfMajRefSeqs = set()
-        for CC in listOfCC:
+        set_of_majority_reference_sequences = set()
+        for clade_collection_object in listOfCC:
             maxAbund = 0
             majRefSeq = None
-            listOfSeqsFromCC = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=CC)
-            for refSeq in footprintlistofrefseqs:
-                sampleSeqOfRefSeqType = listOfSeqsFromCC.get(referenceSequenceOf=refSeq)
+            listOfSeqsFromCC = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_object)
+            for ref_seq in footprintlistofrefseqs:
+                sampleSeqOfRefSeqType = listOfSeqsFromCC.get(referenceSequenceOf=ref_seq)
                 abundanceOfRefSeqInQ = sampleSeqOfRefSeqType.abundance
                 if abundanceOfRefSeqInQ > maxAbund:
                     majRefSeq = sampleSeqOfRefSeqType.referenceSequenceOf
                     maxAbund = sampleSeqOfRefSeqType.abundance
-                countList[listOfCC.index(CC)].append(abundanceOfRefSeqInQ)
-            setOfMajRefSeqs.add(majRefSeq)
+                countList[listOfCC.index(clade_collection_object)].append(abundanceOfRefSeqInQ)
+            set_of_majority_reference_sequences.add(majRefSeq)
 
-        # if setOfMajRefSeqs > 1 then this is coDom
-        if len(setOfMajRefSeqs) > 1:
+        # if set_of_majority_reference_sequences > 1 then this is coDom
+        if len(set_of_majority_reference_sequences) > 1:
             self.coDom = True
         else:
             self.coDom = False
-        self.setMajRefSeqSet(setOfMajRefSeqs)
+        self.setMajRefSeqSet(set_of_majority_reference_sequences)
         # At this point we have the abundance of each sequence for each instance of the type
         # we have 2d array where list are cladeCollections, and items in each list represent sequence
         # Now create counting list to count the abundance of each seq in the footprints refseqs
@@ -375,7 +375,7 @@ class analysis_type(models.Model):
         # This now gives us the abundance order of the refseqs
         # TODO 08/12/17 this is currently working with absolute abundances instead of relative abundances
         # Which strikes me as incorrect. BUT I don't want to start messing with this now.
-        # just so long as we work with the relative abundances as funtion of the type seuences in the CC
+        # just so long as we work with the relative abundances as funtion of the type seuences in the clade_collection_object
 
 
         self.orderedFootprintList = ','.join([str(refseq.id) for refseq in orderedFootprintList])
@@ -428,11 +428,11 @@ class analysis_type(models.Model):
 
         countList = [[] for cc in listOfCC]
 
-        for CC in listOfCC:
-            listOfSeqsFromCC = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=CC)
-            for refSeq in orderedListOfRefSeqsInType:
-                sampleSeqOfRefSeqType = listOfSeqsFromCC.get(referenceSequenceOf=refSeq)
-                countList[listOfCC.index(CC)].append(sampleSeqOfRefSeqType.abundance)
+        for clade_collection_object in listOfCC:
+            listOfSeqsFromCC = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_object)
+            for ref_seq in orderedListOfRefSeqsInType:
+                sampleSeqOfRefSeqType = listOfSeqsFromCC.get(referenceSequenceOf=ref_seq)
+                countList[listOfCC.index(clade_collection_object)].append(sampleSeqOfRefSeqType.abundance)
 
         #Here I will update/initiate self.MajRefSeqSet and self.coDom using the countList info
         MajRefSeqSet = set()
@@ -490,11 +490,11 @@ class analysis_type(models.Model):
         self.generateMaxMinRatios(countListOrdered, orderedFootprintList)
         self.generateRatioList()
 
-    def addCCToCladeCollectionList(self, CC):
+    def addCCToCladeCollectionList(self, clade_collection_object):
         if self.listOfCladeCollections:# If empty then no need to add commar
-            self.listOfCladeCollections += ',{}'.format(CC.id)
+            self.listOfCladeCollections += ',{}'.format(clade_collection_object.id)
         else:
-            self.listOfCladeCollections = str(CC.id)
+            self.listOfCladeCollections = str(clade_collection_object.id)
 
     def addCCListToCladeCollectionList(self, CCidList):
         if self.listOfCladeCollections: # If empty then no need to add commar
@@ -509,9 +509,9 @@ class analysis_type(models.Model):
         self.save()
 
 
-    def removeCCFromCladeCollectionList(self, CC):
+    def removeCCFromCladeCollectionList(self, clade_collection_object):
         listOfIDsAsStr = self.listOfCladeCollections.split(',')
-        listOfIDsAsStr.remove(str(CC.id))
+        listOfIDsAsStr.remove(str(clade_collection_object.id))
         self.listOfCladeCollections =  ','.join(listOfIDsAsStr)
         self.save()
 
@@ -522,7 +522,7 @@ class analysis_type(models.Model):
     def generateRatioList(self):
         newRatioList = []
         footprintSeqAbundancesLoaded = json.loads(self.footprintSeqAbundances)
-        for i in range(len(footprintSeqAbundancesLoaded)):# For each CC the type is associated with
+        for i in range(len(footprintSeqAbundancesLoaded)):# For each clade_collection_object the type is associated with
             newRatioList.append([])
             denominator = sum(footprintSeqAbundancesLoaded[i])
             for j in range(len(footprintSeqAbundancesLoaded[i])):# For each intra in the type
@@ -552,32 +552,26 @@ class analysis_type(models.Model):
                         id__in=[int(x) for x in self.MajRefSeqSet.split(',')])
                     # Start the name with the coDom intras in order of abundance.
                     # Then append the noncoDom intras in order of abundance
-                    orderedListOfMajRefSeqs = [refSeq for refSeq in orderedlistofrefseqsinfootprint if
-                                               refSeq in listOfMajRefSeqs]
+                    orderedListOfMajRefSeqs = [ref_seq for ref_seq in orderedlistofrefseqsinfootprint if
+                                               ref_seq in listOfMajRefSeqs]
 
-                    # temp_list = []
-                    # for refSeq in orderedListOfMajRefSeqs:
-                    #     if refSeq.accession != None:
-                    #         temp_list.append(refSeq.accession)
-                    #     else:
-                    #         temp_list.append(str(refSeq.id))
-                    # name = '/'.join(temp_list)
+
                     name = '/'.join(
-                        [refSeq.accession if refSeq.accession != None else str(refSeq.id) for refSeq in orderedListOfMajRefSeqs])
-                    listOfRemainingRefSeqs = [refSeq for refSeq in orderedlistofrefseqsinfootprint if
-                                              refSeq not in listOfMajRefSeqs]
+                        [ref_seq.accession if ref_seq.accession != None else str(ref_seq.id) for ref_seq in orderedListOfMajRefSeqs])
+                    listOfRemainingRefSeqs = [ref_seq for ref_seq in orderedlistofrefseqsinfootprint if
+                                              ref_seq not in listOfMajRefSeqs]
                     if listOfRemainingRefSeqs:
                         name += '-{}'.format('-'.join(
-                            [refSeq.accession if refSeq.accession != None else str(refSeq.id) for refSeq in
+                            [ref_seq.accession if ref_seq.accession != None else str(ref_seq.id) for ref_seq in
                              listOfRemainingRefSeqs]))
                     return name
                 else:
                     new_list = []
-                    for refSeq in orderedlistofrefseqsinfootprint:
-                        if refSeq.accession and refSeq.accession != None:
-                            new_list.append(refSeq.accession)
+                    for ref_seq in orderedlistofrefseqsinfootprint:
+                        if ref_seq.accession and ref_seq.accession != None:
+                            new_list.append(ref_seq.accession)
                         else:
-                            new_list.append(str(refSeq.id))
+                            new_list.append(str(ref_seq.id))
 
 
                     return '-'.join(new_list)
@@ -591,13 +585,13 @@ class analysis_type(models.Model):
                     listOfMajRefSeqs = reference_sequence.objects.filter(id__in=[int(x) for x in self.MajRefSeqSet.split(',')])
                     # Start the name with the coDom intras in order of abundance.
                     # Then append the noncoDom intras in order of abundance
-                    name = '/'.join([str(refSeq) for refSeq in orderedlistofrefseqsinfootprint if refSeq in listOfMajRefSeqs])
-                    listOfRemainingRefSeqs = [str(refSeq) for refSeq in orderedlistofrefseqsinfootprint if refSeq not in listOfMajRefSeqs]
+                    name = '/'.join([str(ref_seq) for ref_seq in orderedlistofrefseqsinfootprint if ref_seq in listOfMajRefSeqs])
+                    listOfRemainingRefSeqs = [str(ref_seq) for ref_seq in orderedlistofrefseqsinfootprint if ref_seq not in listOfMajRefSeqs]
                     if listOfRemainingRefSeqs:
                         name += '-{}'.format('-'.join(listOfRemainingRefSeqs))
                     return name
                 else:
-                    return '-'.join(str(refSeq) for refSeq in orderedlistofrefseqsinfootprint)
+                    return '-'.join(str(ref_seq) for ref_seq in orderedlistofrefseqsinfootprint)
 
             else:
                 if self.coDom:
@@ -605,13 +599,13 @@ class analysis_type(models.Model):
 
                     #Start the name with the coDom intras in order of abundance.
                     #Then append the noncoDom intras in order of abundance
-                    name = '/'.join([str(refSeq) for refSeq in orderedListOfRefSeqsInFootprint if refSeq in listOfMajRefSeqs])
-                    listOfRemainingRefSeqs = [str(refSeq) for refSeq in orderedListOfRefSeqsInFootprint if refSeq not in listOfMajRefSeqs]
+                    name = '/'.join([str(ref_seq) for ref_seq in orderedListOfRefSeqsInFootprint if ref_seq in listOfMajRefSeqs])
+                    listOfRemainingRefSeqs = [str(ref_seq) for ref_seq in orderedListOfRefSeqsInFootprint if ref_seq not in listOfMajRefSeqs]
                     if listOfRemainingRefSeqs:
                         name += '-{}'.format('-'.join(listOfRemainingRefSeqs))
                     return name
                 else:
-                    return '-'.join(str(refSeq) for refSeq in orderedListOfRefSeqsInFootprint)
+                    return '-'.join(str(ref_seq) for ref_seq in orderedListOfRefSeqsInFootprint)
         return
 
     def generateMaxMinRatios(self, seqCountForDefiningIntrasForEachCC, orderedFootprintList):
@@ -625,7 +619,7 @@ class analysis_type(models.Model):
             maxMinList.append([max, min])
             for i in range(len(seqCountForDefiningIntrasForEachCC)): # for each row/cladecollection
                 sampleTotalSequencesOfIntrasInType = sum(seqCountForDefiningIntrasForEachCC[i])
-                maxminCandidate = seqCountForDefiningIntrasForEachCC[i][j]/sampleTotalSequencesOfIntrasInType # abundance of intra in q / totalseqs in type for CC
+                maxminCandidate = seqCountForDefiningIntrasForEachCC[i][j]/sampleTotalSequencesOfIntrasInType # abundance of intra in q / totalseqs in type for clade_collection_object
                 if maxminCandidate > max:
                     max = maxminCandidate
                     maxMinList[-1][0] = max # Populate the tuple for this refseq with the new max
@@ -633,7 +627,7 @@ class analysis_type(models.Model):
                     # If we find any of the intras at a rel abund of < 5% then we lower the lower limit to 0.5% (0.005)
                     # This way we should hopefully mitigate any artefacts caused by the within cladeCutOff
                     # Additionally we need to note that our 0.03 within clade cutoff may be acting on this intra
-                    # to cause an artefact. To do this we need to add the intra (refSeq.id) to the types
+                    # to cause an artefact. To do this we need to add the intra (ref_seq.id) to the types
                     # artefactIntras list
 
                     if maxminCandidate < 0.06:

@@ -68,13 +68,13 @@ def createNoSpaceFastaFile(fastaList):
     return tempList
 
 def createDictFromFasta(fastaList):
-    tempDict = {}
+    temporary_dictionary = {}
     i = 0
     while i < len(fastaList):
         sequence = fastaList[i][1:]
-        tempDict[sequence] = fastaList[i+1]
+        temporary_dictionary[sequence] = fastaList[i+1]
         i += 2
-    return tempDict
+    return temporary_dictionary
 
 def createNewFile(pathtofile):
     try:
