@@ -476,6 +476,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, num_
             output_to_plot = output_file
             break
 
+    output_files_list.extend(div_output_file_list)
     # Finally lets produce output plots for the dataoutput. For the time being this should just be a
     # plot for the ITS2 type profiles and one for the sequences
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
@@ -491,7 +492,7 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, num_
             print('Figure output files:')
             print(svg_path)
             print(png_path)
-
+            output_files_list.extend([svg_path, png_path])
             for file in div_output_file_list:
                 if 'relative' in file:
                     path_to_plot = file
@@ -503,11 +504,11 @@ def formatOutput_ord(analysisobj, datasubstooutput, call_type, num_samples, num_
             print('Figure output files:')
             print(svg_path)
             print(png_path)
+            output_files_list.extend([svg_path, png_path])
 
 
 
-
-    return output_dir, date_time_string
+    return output_dir, date_time_string, output_files_list
 
 def sort_list_of_types_by_clade_collections_in_current_output(list_of_analysis_types,
                                                               clade_collection_types_in_current_output):

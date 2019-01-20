@@ -819,6 +819,7 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     sys.stdout.write('\rDistance plots output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
+    return [svg_path, png_path]
 
 def plot_between_its2_type_prof_dist_scatter(csv_path, date_time_str):
     # the directory where we should put the output plot
@@ -865,3 +866,4 @@ def plot_between_its2_type_prof_dist_scatter(csv_path, date_time_str):
     sys.stdout.write('\rDistance plots output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
+    return [svg_path, png_path]

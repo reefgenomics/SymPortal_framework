@@ -4099,8 +4099,9 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
     # We will not do any plotting if there are more than 1000 samples in the data_analysis
     list_of_sample_ids = [int(x) for x in analysis_object.listOfDataSubmissions.split(',')]
     num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=list_of_sample_ids))
+    list_of_output_file_paths = []
     if not no_output:
-        output_dir, date_time_string = formatOutput_ord(analysisobj=analysis_object,
+        output_dir, date_time_string, list_of_output_file_paths = formatOutput_ord(analysisobj=analysis_object,
                                                         datasubstooutput=analysis_object.listOfDataSubmissions,
                                                         call_type='analysis', num_samples=num_samples,
                                                         num_processors=num_processors, no_figures=no_figures)
@@ -4120,6 +4121,7 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
                     data_analysis_id=analysis_object.id,
                     call_type='analysis', date_time_string=date_time_string,
                     output_dir=output_dir)
+            list_of_output_file_paths.extend(pcoa_path_list)
 
             if not no_figures:
                 if num_samples > 1000:
@@ -4130,9 +4132,11 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
                             sys.stdout.write('\nPlotting between its2 type profile distances\n'.format(
                                 os.path.dirname(pcoa_path).split('/')[-1]))
                             # then this is a pcoa csv that we should plot
-                            plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=date_time_string)
+                            output_fig_paths_list = plot_between_its2_type_prof_dist_scatter(
+                                pcoa_path, date_time_str=date_time_string)
+                            list_of_output_file_paths.extend(output_fig_paths_list)
         ####################################################
 
     print('data_analysis ID is: {}'.format(analysis_object.id))
-    return analysis_object.id
+    return analysis_object.id, list_of_output_file_paths
 #################################################

@@ -782,6 +782,8 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
 
             svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, output_directory,
                                                                       time_date_str=date_time_str)
+            output_path_list.append(svg_path)
+            output_path_list.append(png_path)
             sys.stdout.write('\nFigure generation complete')
             sys.stdout.write('\nFigures output to:')
             sys.stdout.write('\n{}'.format(svg_path))
@@ -805,6 +807,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
                 date_time_str=date_time_str,
                 output_dir=output_directory)
         # distance plotting
+        output_path_list.extend(pcoa_paths_list)
         if not no_fig:
             if num_samples > 1000:
                 print('Too many samples ({}) to generate plots'.format(num_samples))
@@ -815,7 +818,11 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
                         # coordinates that we can plot we will get the output directory from the passed in pcoa_path
                         sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
                             os.path.dirname(pcoa_path).split('/')[-1]))
-                        plot_between_sample_distance_scatter(csv_path=pcoa_path, date_time_str=date_time_str)
+                        ordination_figure_output_paths_list = plot_between_sample_distance_scatter(
+                            csv_path=pcoa_path,
+                            date_time_str=date_time_str
+                        )
+                        output_path_list.extend(ordination_figure_output_paths_list)
         ####################################
     #######################################
 
@@ -834,7 +841,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
             sys.stdout.write('There were no sub evalue sequences returned - hooray!\n')
 
     print('data_set ID is: {}'.format(data_submission_in_q.id))
-    return data_submission_in_q.id
+    return data_submission_in_q.id, output_path_list
 
 
 def generate_and_write_below_evalue_fasta_for_screening(data_set_identification, data_submission_in_q,

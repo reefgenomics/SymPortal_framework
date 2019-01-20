@@ -1,5 +1,20 @@
+######## Setup Django DB and Models ########
+# Ensure settings are read
+from django.core.wsgi import get_wsgi_application
+application = get_wsgi_application()
+
+# Your application specific imports
+from dbApp.models import symportal_framework, data_set, reference_sequence, data_set_sample_sequence, analysis_type, analysis_group, data_set_sample, data_analysis, clade_collection, clade_collection_type
+############################################
 import os
 import pickle
+
+def delete_data_set(uid):
+    data_set.objects.get(id=uid).delete()
+
+def delete_data_analysis(uid):
+    data_analysis.objects.get(id=uid).delete()
+
 def writeListToDestination(destination, listToWrite):
     # print('Writing list to ' + destination)
     try:
@@ -97,3 +112,4 @@ def checkIfFileEmpty(filepath):
                 return False  # not empty
             count += 1
     return True
+

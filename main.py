@@ -22,6 +22,7 @@ import os
 from datetime import datetime
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.conf import settings
+
 ######## Setup Django DB and Models ########
 # Ensure settings are read
 from django.core.wsgi import get_wsgi_application
@@ -341,13 +342,13 @@ def main():
         new_data_set_submitting_user = config_dict['user_name']
 
         outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
-        output_file_list, date_time_str, num_samples = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
+        output_file_path_list, date_time_str, num_samples = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
             datasubstooutput=args.print_output_seqs, num_processors=args.num_proc, output_dir=outputDir,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
         if num_samples > 1000:
             print('Too many samples ({}) to generate plots'.format(num_samples))
         else:
-            for item in output_file_list:
+            for item in output_file_path_list:
                 if 'relative' in item:
                     svg_path, png_path = plotting.\
                         generate_stacked_bar_data_submission(path_to_tab_delim_count=item,
@@ -364,36 +365,36 @@ def main():
         vacuum_db()
         print('Vacuuming complete')
 
-def create_analysis_obj_and_run_analysis(analysis_name, description_arg, custom_data_set_ids, debug_bool, distance_method_arg,
-                                         new_data_set_submitting_user, new_data_set_user_email, no_fig_arg, no_ord_arg,
+def create_analysis_obj_and_run_analysis(analysis_name, description_arg, custom_data_set_ids, debug_bool,
+                                         distance_method_arg, submitting_user, user_email, no_fig_arg, no_ord_arg,
                                          no_output_arg, num_proc, within_clade_cutoff):
     new_analysis_object = data_analysis(listOfDataSubmissions=str(custom_data_set_ids),
                                         withinCladeCutOff=float(within_clade_cutoff), name=analysis_name,
                                         timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-                                        submittingUser=new_data_set_submitting_user,
-                                        submitting_user_email=new_data_set_user_email)
+                                        submittingUser=submitting_user,
+                                        submitting_user_email=user_email)
     new_analysis_object.description = description_arg
     new_analysis_object.save()
-    analysis_id = data_sub_collection_run.main(data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=no_fig_arg,
-                                 no_ordinations=no_ord_arg, distance_method=distance_method_arg, no_output=no_output_arg,
-                                 debug=debug_bool)
-    return analysis_id
+    analysis_uid, output_path_list = data_sub_collection_run.main(
+        data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=no_fig_arg,
+        no_ordinations=no_ord_arg, distance_method=distance_method_arg, no_output=no_output_arg, debug=debug_bool)
+    return analysis_uid, output_path_list
 
 def start_data_submission(data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg,
                           no_ord_arg, num_proc, screen_sub_evalue_bool):
     if data_sheet_arg:
         if os.path.isfile(data_sheet_arg):
-            data_sub_id =create_data_submission.main(input_dir, new_data_set.id, num_proc,
+            data_set_uid, output_path_list = create_data_submission.main(input_dir, new_data_set.id, num_proc,
                                         screen_sub_evalue=screen_sub_evalue_bool,
                                         data_sheet_path=data_sheet_arg, no_fig=no_fig_arg, no_ord=no_ord_arg,
                                         distance_method=distance_method_arg, debug=debug_bool)
         else:
             sys.exit('{} not found'.format(data_sheet_arg))
     else:
-        data_sub_id = create_data_submission.main(input_dir, new_data_set.id, num_proc,
+        data_set_uid, output_path_list = create_data_submission.main(input_dir, new_data_set.id, num_proc,
                                     screen_sub_evalue=screen_sub_evalue_bool, no_fig=no_fig_arg, no_ord=no_ord_arg,
                                     distance_method=distance_method_arg, debug=debug_bool)
-    return data_sub_id
+    return data_set_uid, output_path_list
 
 def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user, new_data_set_user_email):
 
