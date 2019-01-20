@@ -17,14 +17,7 @@
     along with this program.  If not, see
     https://github.com/SymPortal/SymPortal_framework/tree/master/LICENSE.txt.
     """
-import data_sub_collection_run
-import create_data_submission
-import output
-import plotting
-import json
-import sys
-import distance
-import argparse
+
 # Django specific settings
 import os
 from datetime import datetime
@@ -38,6 +31,14 @@ application = get_wsgi_application()
 from dbApp.models import data_set, data_set_sample, data_analysis
 ############################################
 
+import data_sub_collection_run
+import create_data_submission
+import output
+import plotting
+import json
+import sys
+import distance
+import argparse
 
 def main():
     # ##### args ######
