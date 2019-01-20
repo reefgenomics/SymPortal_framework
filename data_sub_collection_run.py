@@ -20,8 +20,8 @@ from scipy.stats import gaussian_kde
 
 from dbApp.models import (reference_sequence, data_set_sample_sequence, analysis_type, analysis_group,
                           data_set_sample, clade_collection_type,  clade_collection)
-from distance import (generate_within_clade_UniFrac_distances_ITS2_type_profiles,
-                      generate_within_clade_BrayCurtis_distances_ITS2_type_profiles)
+from distance import (generate_within_clade_unifrac_distances_its2_type_profiles,
+                      generate_within_clade_braycurtis_distances_its2_type_profiles)
 from general import write_list_to_destination, read_defined_file_to_list
 from output import output_type_count_tables
 from plotting import plot_between_its2_type_prof_dist_scatter
@@ -4111,12 +4111,12 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
             sys.stdout.write('\nCalculating pairwise distances\n')
             pcoa_path_list = None
             if distance_method == 'unifrac':
-                pcoa_path_list = generate_within_clade_UniFrac_distances_ITS2_type_profiles(
+                pcoa_path_list = generate_within_clade_unifrac_distances_its2_type_profiles(
                     data_submission_id_str=analysis_object.listOfDataSubmissions, num_processors=num_processors,
                     data_analysis_id=analysis_object.id, method='mothur', call_type='analysis',
                     date_time_string=date_time_string, no_figures=no_figures, output_dir=output_dir)
             elif distance_method == 'braycurtis':
-                pcoa_path_list = generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(
+                pcoa_path_list = generate_within_clade_braycurtis_distances_its2_type_profiles(
                     data_submission_id_str=analysis_object.listOfDataSubmissions,
                     data_analysis_id=analysis_object.id,
                     call_type='analysis', date_time_string=date_time_string,

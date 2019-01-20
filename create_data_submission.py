@@ -16,7 +16,7 @@ import sys
 import pandas as pd
 from output import div_output_pre_analysis_new_meta_and_new_dss_structure
 from general import *
-from distance import generate_within_clade_UniFrac_distances_samples, generate_within_clade_BrayCurtis_distances_samples
+from distance import generate_within_clade_unifrac_distances_samples, generate_within_clade_braycurtis_distances_samples
 from plotting import generate_stacked_bar_data_submission, plot_between_sample_distance_scatter
 
 
@@ -796,15 +796,15 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
         print('Calculating between sample pairwise distances')
         pcoa_paths_list = None
         if distance_method == 'unifrac':
-            pcoa_paths_list = generate_within_clade_UniFrac_distances_samples(
-                dataSubmission_str=data_set_identification,
+            pcoa_paths_list = generate_within_clade_unifrac_distances_samples(
+                data_set_string=data_set_identification,
                 num_processors=num_proc,
                 method='mothur', call_type='submission',
                 date_time_string=date_time_str,
                 output_dir=output_directory)
         elif distance_method == 'braycurtis':
-            pcoa_paths_list = generate_within_clade_BrayCurtis_distances_samples(
-                dataSubmission_str=data_set_identification,
+            pcoa_paths_list = generate_within_clade_braycurtis_distances_samples(
+                data_set_string=data_set_identification,
                 call_type='submission',
                 date_time_str=date_time_str,
                 output_dir=output_directory)
@@ -1144,7 +1144,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,
     #                                                     'below_e_cutoff_seqs_{}.screened'.format(ds_id), iteration_id,
     #                                                     seq_sample_support_cut_off)
     # screened_fasta_dict = createDictFromFasta(screened_fasta)
-    # writeListToDestination(path_to_screened_fasta, screened_fasta)
+    # write_list_to_destination(path_to_screened_fasta, screened_fasta)
 
     # Set up environment for running local blast
     blast_output_path = '{}/blast_eval.out'.format(wkd)

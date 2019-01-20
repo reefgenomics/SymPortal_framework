@@ -1,5 +1,4 @@
-# Rectangle is used despite it being greyed out in pycharm
-from matplotlib.patches import Rectangle
+from matplotlib.patches import Rectangle  # Rectangle is used despite it being greyed out in pycharm
 from matplotlib.collections import PatchCollection
 # https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
 import matplotlib as mpl
@@ -7,7 +6,6 @@ mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 plt.ioff()
 import matplotlib.pyplot as plt
-# from matplotlib.pyplot import *
 from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
 from collections import defaultdict
@@ -20,7 +18,9 @@ from datetime import datetime
 from dbApp.models import clade_collection
 plt.ioff()
 
-def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
+
+def generate_stacked_bar_data_submission(
+        path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
     print('Generating stacked bar data submission')
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
@@ -33,18 +33,16 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     # read in the SymPortal relative abundance output
     sp_output_df = pd.read_csv(path_to_tab_delim_count, sep='\t', lineterminator='\n', header=0, index_col=0)
 
-
-
     # In order to be able to drop the DIV row at the end and the meta information rows, we should
     # drop all rows that are after the DIV column. We will pass in an index value to the .drop
     # that is called here. To do this we need to work out which index we are working with
+    meta_index_to_cut_from = None
     index_values_as_list = sp_output_df.index.values.tolist()
     for i in range(-1, -(len(index_values_as_list)), -1):
         if index_values_as_list[i].startswith('DIV'):
             # then this is the index (in negative notation) that we need to cut from
             meta_index_to_cut_from = i
             break
-
 
     # now lets drop the QC columns from the SP output df and also drop the clade summation columns
     # we will be left with just clumns for each one of the sequences found in the samples
@@ -55,8 +53,8 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     sp_output_df.drop(index=sp_output_df.index[range(meta_index_to_cut_from, 0, 1)], inplace=True)
 
     # create sample id to sample name dict
-    smp_id_to_smp_name_dict = {int(ID): nm for ID, nm in zip(sp_output_df.index.values.tolist(),
-                                                                        sp_output_df['sample_name'].values.tolist())}
+    smp_id_to_smp_name_dict = {
+        int(ID): nm for ID, nm in zip(sp_output_df.index.values.tolist(), sp_output_df['sample_name'].values.tolist())}
 
     sp_output_df.drop(columns=['sample_name', 'noName Clade A', 'noName Clade B', 'noName Clade C', 'noName Clade D',
                                'noName Clade E', 'noName Clade F', 'noName Clade G', 'noName Clade H',
@@ -241,7 +239,7 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     # we will allow a buffer of 0.5 of the legend box's height between each legend box.
     # as such the coordinates of each y will be in increments of 100 / (1.5 * num rows)
     # the depth of the Rectangle for the legend box will be 2/3 * the above.
-    y_coord_increments = 100 / (max_n_rows)
+    y_coord_increments = 100 / max_n_rows
     leg_box_depth = 2 / 3 * y_coord_increments
 
     # X axis coordinates
@@ -334,7 +332,9 @@ def generate_stacked_bar_data_submission(path_to_tab_delim_count, output_directo
     return '{}_seq_abundance_stacked_bar_plot.svg'.format(fig_output_base), \
            '{}_seq_abundance_stacked_bar_plot.png'.format(fig_output_base)
 
-def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, output_directory, analysis_obj_id, time_date_str=None):
+
+def generate_stacked_bar_data_analysis_type_profiles(
+        path_to_tab_delim_count, output_directory, analysis_obj_id, time_date_str=None):
     print('Generating stacked bar type profiles')
 
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
@@ -370,6 +370,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     type_profile_to_abund_tup_list = int_temp_list
 
     # need to drop the rows that contain the sequence accession and species descriptions
+    index_to_drop_from = None
     for i, row_name in enumerate(sp_output_df.iloc[:, 0]):
         if 'Sequence accession' in str(row_name):
             # then we want to drop all rows from here until the end
@@ -379,7 +380,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     sp_output_df = sp_output_df.iloc[:index_to_drop_from]
 
     # now make a dict of id to sample name so that we can work with uids
-    smp_ID_to_smp_name = {int(ID): nm for ID, nm in zip(sp_output_df.iloc[2:, 0], sp_output_df.iloc[2:, 1])}
+    smp_uid_to_smp_name = {int(ID): nm for ID, nm in zip(sp_output_df.iloc[2:, 0], sp_output_df.iloc[2:, 1])}
 
     # now drop the sample name columns
     sp_output_df.drop(columns=1, inplace=True)
@@ -399,7 +400,8 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     # rule for any colours that are generated from each other.
     # let's do this for 50 colours to start with and see how long it takes.
     # turns out it is very quick. Easily quick enough to do dynamically.
-    # When working with pastel colours (i.e. mixing with 255,255,255 it is probably best to work with a smaller dist cutoff
+    # When working with pastel colours (i.e. mixing with 255,255,255 it is probably
+    # best to work with a smaller dist cutoff
 
     colour_palette_pas = ['#%02x%02x%02x' % rgb_tup for rgb_tup in
                           create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=1000, num_cols=50,
@@ -468,6 +470,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     f, axarr = plt.subplots(n_subplots + 1, 1, figsize=(10, 3 * n_subplots))
 
     # we will leave one subplot empty for making the legend in at the end
+    sample_id_list = None
     for i in range(n_subplots):
         patches_list = []
         ind = 0
@@ -485,7 +488,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
         sample_id_list = sp_output_df.index.values.tolist()
         for sample_id in sample_id_list[i * its_type_per_plot:end_slice]:
             sys.stdout.write('\rPlotting sample: {}'.format(sample_id))
-            x_tick_label_list.append(smp_ID_to_smp_name[int(sample_id)])
+            x_tick_label_list.append(smp_uid_to_smp_name[int(sample_id)])
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
             # for each sequence, create a rect patch
@@ -550,7 +553,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     # we will allow a buffer of 0.5 of the legend box's height between each legend box.
     # as such the coordinates of each y will be in increments of 100 / (1.5 * num rows)
     # the depth of the Rectangle for the legend box will be 2/3 * the above.
-    y_coord_increments = 100 / (max_n_rows)
+    y_coord_increments = 100 / max_n_rows
     leg_box_depth = 2 / 3 * y_coord_increments
 
     # X axis coordinates
@@ -658,6 +661,7 @@ def generate_stacked_bar_data_analysis_type_profiles(path_to_tab_delim_count, ou
     return '{}_its2_type_profile_abundance_stacked_bar_plot.svg'.format(fig_output_base), \
            '{}_its2_type_profile_abundance_stacked_bar_plot.png'.format(fig_output_base), sample_id_list
 
+
 def get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sequence_only_df_relative):
     max_seq_ddict = defaultdict(int)
     seq_to_samp_dict = defaultdict(list)
@@ -692,7 +696,9 @@ def get_sample_order_from_rel_seq_abund_df_no_clade_constraint(sequence_only_df_
 
     return ordered_sample_list
 
-def create_colour_list(sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_iterations=10000, avoid_black_and_white=True):
+
+def create_colour_list(
+        sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_iterations=10000, avoid_black_and_white=True):
     new_colours = []
     min_dist = []
     attempt = 0
@@ -705,9 +711,9 @@ def create_colour_list(sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_
                      'Please lower the number of colours you are trying to find, '
                      'the minimum distance between them, or both.'.format(attempt))
         if mix_col:
-            r = int((random.randint(0, 255) + mix_col[0]) /2)
-            g = int((random.randint(0, 255) + mix_col[1]) /2)
-            b = int((random.randint(0, 255) + mix_col[2]) /2)
+            r = int((random.randint(0, 255) + mix_col[0]) / 2)
+            g = int((random.randint(0, 255) + mix_col[1]) / 2)
+            b = int((random.randint(0, 255) + mix_col[2]) / 2)
         else:
             r = random.randint(0, 255)
             g = random.randint(0, 255)
@@ -733,43 +739,43 @@ def create_colour_list(sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_
             if dist_list:
                 min_dist.append(min(dist_list))
         if good_dist:
-            new_colours.append((r,g,b))
+            new_colours.append((r, g, b))
             attempt = 0
 
     return new_colours
 
+
 def get_colour_list():
-    colour_list = ["#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941", "#006FA6", "#A30059", "#FFDBE5",
-                  "#7A4900", "#0000A6", "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87", "#5A0007", "#809693",
-                  "#FEFFE6", "#1B4400", "#4FC601", "#3B5DFF", "#4A3B53", "#FF2F80", "#61615A", "#BA0900", "#6B7900",
-                  "#00C2A0", "#FFAA92", "#FF90C9", "#B903AA", "#D16100", "#DDEFFF", "#000035", "#7B4F4B", "#A1C299",
-                  "#300018", "#0AA6D8", "#013349", "#00846F", "#372101", "#FFB500", "#C2FFED", "#A079BF", "#CC0744",
-                  "#C0B9B2", "#C2FF99", "#001E09", "#00489C", "#6F0062", "#0CBD66", "#EEC3FF", "#456D75", "#B77B68",
-                  "#7A87A1", "#788D66", "#885578", "#FAD09F", "#FF8A9A", "#D157A0", "#BEC459", "#456648", "#0086ED",
-                  "#886F4C", "#34362D", "#B4A8BD", "#00A6AA", "#452C2C", "#636375", "#A3C8C9", "#FF913F", "#938A81",
-                  "#575329", "#00FECF", "#B05B6F", "#8CD0FF", "#3B9700", "#04F757", "#C8A1A1", "#1E6E00", "#7900D7",
-                  "#A77500", "#6367A9", "#A05837", "#6B002C", "#772600", "#D790FF", "#9B9700", "#549E79", "#FFF69F",
-                  "#201625", "#72418F", "#BC23FF", "#99ADC0", "#3A2465", "#922329", "#5B4534", "#FDE8DC", "#404E55",
-                  "#0089A3", "#CB7E98", "#A4E804", "#324E72", "#6A3A4C", "#83AB58", "#001C1E", "#D1F7CE", "#004B28",
-                  "#C8D0F6", "#A3A489", "#806C66", "#222800", "#BF5650", "#E83000", "#66796D", "#DA007C", "#FF1A59",
-                  "#8ADBB4", "#1E0200", "#5B4E51", "#C895C5", "#320033", "#FF6832", "#66E1D3", "#CFCDAC", "#D0AC94",
-                  "#7ED379", "#012C58", "#7A7BFF", "#D68E01", "#353339", "#78AFA1", "#FEB2C6", "#75797C", "#837393",
-                  "#943A4D", "#B5F4FF", "#D2DCD5", "#9556BD", "#6A714A", "#001325", "#02525F", "#0AA3F7", "#E98176",
-                  "#DBD5DD", "#5EBCD1", "#3D4F44", "#7E6405", "#02684E", "#962B75", "#8D8546", "#9695C5", "#E773CE",
-                  "#D86A78", "#3E89BE", "#CA834E", "#518A87", "#5B113C", "#55813B", "#E704C4", "#00005F", "#A97399",
-                  "#4B8160", "#59738A", "#FF5DA7", "#F7C9BF", "#643127", "#513A01", "#6B94AA", "#51A058", "#A45B02",
-                  "#1D1702", "#E20027", "#E7AB63", "#4C6001", "#9C6966", "#64547B", "#97979E", "#006A66", "#391406",
-                  "#F4D749", "#0045D2", "#006C31", "#DDB6D0", "#7C6571", "#9FB2A4", "#00D891", "#15A08A", "#BC65E9",
-                  "#FFFFFE", "#C6DC99", "#203B3C", "#671190", "#6B3A64", "#F5E1FF", "#FFA0F2", "#CCAA35", "#374527",
-                  "#8BB400", "#797868", "#C6005A", "#3B000A", "#C86240", "#29607C", "#402334", "#7D5A44", "#CCB87C",
-                  "#B88183", "#AA5199", "#B5D6C3", "#A38469", "#9F94F0", "#A74571", "#B894A6", "#71BB8C", "#00B433",
-                  "#789EC9", "#6D80BA", "#953F00", "#5EFF03", "#E4FFFC", "#1BE177", "#BCB1E5", "#76912F", "#003109",
-                  "#0060CD", "#D20096", "#895563", "#29201D", "#5B3213", "#A76F42", "#89412E", "#1A3A2A", "#494B5A",
-                  "#A88C85", "#F4ABAA", "#A3F3AB", "#00C6C8", "#EA8B66", "#958A9F", "#BDC9D2", "#9FA064", "#BE4700",
-                  "#658188", "#83A485", "#453C23", "#47675D", "#3A3F00", "#061203", "#DFFB71", "#868E7E", "#98D058",
-                  "#6C8F7D", "#D7BFC2", "#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C", "#00B57F",
-                  "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
+    colour_list = [
+        "#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941", "#006FA6", "#A30059", "#FFDBE5", "#7A4900", "#0000A6",
+        "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87", "#5A0007", "#809693", "#FEFFE6", "#1B4400", "#4FC601",
+        "#3B5DFF", "#4A3B53", "#FF2F80", "#61615A", "#BA0900", "#6B7900", "#00C2A0", "#FFAA92", "#FF90C9", "#B903AA",
+        "#D16100", "#DDEFFF", "#000035", "#7B4F4B", "#A1C299", "#300018", "#0AA6D8", "#013349", "#00846F", "#372101",
+        "#FFB500", "#C2FFED", "#A079BF", "#CC0744", "#C0B9B2", "#C2FF99", "#001E09", "#00489C", "#6F0062", "#0CBD66",
+        "#EEC3FF", "#456D75", "#B77B68", "#7A87A1", "#788D66", "#885578", "#FAD09F", "#FF8A9A", "#D157A0", "#BEC459",
+        "#456648", "#0086ED", "#886F4C", "#34362D", "#B4A8BD", "#00A6AA", "#452C2C", "#636375", "#A3C8C9", "#FF913F",
+        "#938A81", "#575329", "#00FECF", "#B05B6F", "#8CD0FF", "#3B9700", "#04F757", "#C8A1A1", "#1E6E00", "#7900D7",
+        "#A77500", "#6367A9", "#A05837", "#6B002C", "#772600", "#D790FF", "#9B9700", "#549E79", "#FFF69F", "#201625",
+        "#72418F", "#BC23FF", "#99ADC0", "#3A2465", "#922329", "#5B4534", "#FDE8DC", "#404E55", "#0089A3", "#CB7E98",
+        "#A4E804", "#324E72", "#6A3A4C", "#83AB58", "#001C1E", "#D1F7CE", "#004B28", "#C8D0F6", "#A3A489", "#806C66",
+        "#222800", "#BF5650", "#E83000", "#66796D", "#DA007C", "#FF1A59", "#8ADBB4", "#1E0200", "#5B4E51", "#C895C5",
+        "#320033", "#FF6832", "#66E1D3", "#CFCDAC", "#D0AC94", "#7ED379", "#012C58", "#7A7BFF", "#D68E01", "#353339",
+        "#78AFA1", "#FEB2C6", "#75797C", "#837393", "#943A4D", "#B5F4FF", "#D2DCD5", "#9556BD", "#6A714A", "#001325",
+        "#02525F", "#0AA3F7", "#E98176", "#DBD5DD", "#5EBCD1", "#3D4F44", "#7E6405", "#02684E", "#962B75", "#8D8546",
+        "#9695C5", "#E773CE", "#D86A78", "#3E89BE", "#CA834E", "#518A87", "#5B113C", "#55813B", "#E704C4", "#00005F",
+        "#A97399", "#4B8160", "#59738A", "#FF5DA7", "#F7C9BF", "#643127", "#513A01", "#6B94AA", "#51A058", "#A45B02",
+        "#1D1702", "#E20027", "#E7AB63", "#4C6001", "#9C6966", "#64547B", "#97979E", "#006A66", "#391406", "#F4D749",
+        "#0045D2", "#006C31", "#DDB6D0", "#7C6571", "#9FB2A4", "#00D891", "#15A08A", "#BC65E9", "#FFFFFE", "#C6DC99",
+        "#203B3C", "#671190", "#6B3A64", "#F5E1FF", "#FFA0F2", "#CCAA35", "#374527", "#8BB400", "#797868", "#C6005A",
+        "#3B000A", "#C86240", "#29607C", "#402334", "#7D5A44", "#CCB87C", "#B88183", "#AA5199", "#B5D6C3", "#A38469",
+        "#9F94F0", "#A74571", "#B894A6", "#71BB8C", "#00B433", "#789EC9", "#6D80BA", "#953F00", "#5EFF03", "#E4FFFC",
+        "#1BE177", "#BCB1E5", "#76912F", "#003109", "#0060CD", "#D20096", "#895563", "#29201D", "#5B3213", "#A76F42",
+        "#89412E", "#1A3A2A", "#494B5A", "#A88C85", "#F4ABAA", "#A3F3AB", "#00C6C8", "#EA8B66", "#958A9F", "#BDC9D2",
+        "#9FA064", "#BE4700", "#658188", "#83A485", "#453C23", "#47675D", "#3A3F00", "#061203", "#DFFB71", "#868E7E",
+        "#98D058", "#6C8F7D", "#D7BFC2", "#3C3E6E", "#D83D66", "#2F5D9B", "#6C5E46", "#D25B88", "#5B656C", "#00B57F",
+        "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
     return colour_list
+
 
 def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     # the directory where we should put the output plot
@@ -793,7 +799,6 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     ax.scatter(x_values, y_values, c='black', marker='o')
 
     # add point labels if labels == True
-
 
     if labels:
         sample_names = [str(clade_collection.objects.get(id=int(ID))) for ID in plotting_df.index.values.tolist()[:-1]]
@@ -820,6 +825,7 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
     return [svg_path, png_path]
+
 
 def plot_between_its2_type_prof_dist_scatter(csv_path, date_time_str):
     # the directory where we should put the output plot

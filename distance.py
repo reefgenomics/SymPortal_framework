@@ -1,8 +1,8 @@
-from dbApp.models import data_set, reference_sequence, data_set_sample_sequence, analysis_type, analysis_group, \
-    data_set_sample, data_analysis, clade_collection, clade_collection_type
+from dbApp.models import (data_set, reference_sequence, data_set_sample_sequence,
+                          analysis_type, data_set_sample, data_analysis, clade_collection)
 import os
 import shutil
-from multiprocessing import Queue, Process, Manager, current_process
+from multiprocessing import Queue, Process, current_process
 import math
 import sys
 from plumbum import local
@@ -15,18 +15,19 @@ from skbio.stats.ordination import pcoa
 from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta
 import itertools
 from scipy.spatial.distance import braycurtis
-from datetime import datetime
 
 
-##### DISTANCE MATRICES #####
-def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_id_str, num_processors, data_analysis_id,
-                                                               method, call_type, date_time_string, bootstrap_value=100, no_figures=False, output_dir=None):
-    ''' This will produce distance matrices between ITS2 type profiles of the same clade.
-    It will use exactly the same suite of programs as the generate_within_clade_UniFrac_distances_samples method
+# #### DISTANCE MATRICES #####
+def generate_within_clade_unifrac_distances_its2_type_profiles(
+        data_submission_id_str, num_processors, data_analysis_id, method, call_type,
+        date_time_string, bootstrap_value=100, no_figures=False, output_dir=None):
+    """This will produce distance matrices between ITS2 type profiles of the same clade.
+    It will use exactly the same suite of programs as the generate_within_clade_unifrac_distances_samples method
     The only difference will be that this will be calculated across ITS2 Type Profiles rather than samples.
     As such, this will require a data_set set and dataAnalysis.
     The average DIV abundances for each of the ITS2 type profiles should first be calculated from which the distances
-    can then be calcualated'''
+    can then be calcualated
+    """
 
     output_file_paths = []
 
@@ -45,24 +46,24 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
     data_analysis_obj = data_analysis.objects.get(id=data_analysis_id)
 
     # go clade by clade
-    ITS2_type_profiles_of_data_subs_and_analysis = analysis_type.objects.filter(
+    its2_type_profiles_of_data_subs_and_analysis = analysis_type.objects.filter(
         clade_collection_type__cladeCollectionFoundIn__dataSetSampleFrom__dataSubmissionFrom__in=
         data_submissions, dataAnalysisFrom=data_analysis_obj).distinct()
 
-    clade_list = list(set([type_profile.clade for type_profile in ITS2_type_profiles_of_data_subs_and_analysis]))
+    clade_list = list(set([type_profile.clade for type_profile in its2_type_profiles_of_data_subs_and_analysis]))
 
     # list for storing the paths to the PCoA .csv that will be produced
-    PCoA_path_lists = []
+    pcoa_path_lists = []
     for clade in clade_list:
         # convert query to a list so that we can iterate over twice in exactly the same order
-        ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade = list(
-            ITS2_type_profiles_of_data_subs_and_analysis.filter(clade=clade))
+        its2_type_profiles_of_data_subs_and_analysis_list_of_clade = list(
+            its2_type_profiles_of_data_subs_and_analysis.filter(clade=clade))
 
-        if len(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade) < 2:
+        if len(its2_type_profiles_of_data_subs_and_analysis_list_of_clade) < 2:
             continue
 
         group_file, name_file, unique_fasta = generate_fasta_name_group_between_profiles(
-            ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade)
+            its2_type_profiles_of_data_subs_and_analysis_list_of_clade)
 
         # at this point we have the fasta, name and group file
         # write out
@@ -77,19 +78,21 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
         # Generate random data sets
         fseqboot_base = generate_fseqboot_alignments(clade_wkd, bootstrap_value, out_file)
 
+        unifrac_dist = None
+        unifrac_path = None
         if method == 'mothur':
-            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
-                                                                    bootstrap_value, num_processors, date_time_string=date_time_string)
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_mp(
+                clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors, date_time_string=date_time_string)
         elif method == 'phylip':
-            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
-                                                                    bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_mp(
+                clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
 
-        PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist, date_time_string)
+        pcoa_path = generate_pcoa_coords(clade_wkd, unifrac_dist, date_time_string)
 
-        output_file_paths.append(PCoA_path)
+        output_file_paths.append(pcoa_path)
         output_file_paths.append(unifrac_path)
 
-        PCoA_path_lists.append(PCoA_path)
+        pcoa_path_lists.append(pcoa_path)
         # Delete the tempDataFolder and contents
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
         shutil.rmtree(path=file_to_del)
@@ -105,10 +108,10 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
-    return PCoA_path_lists
+    return pcoa_path_lists
 
 
-def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade):
+def generate_fasta_name_group_between_profiles(its2_type_profiles_of_data_subs_and_analysis_list_of_clade):
     unique_fasta = []
     unique_seq_id_list = []
     name_file_dict = {}
@@ -117,11 +120,11 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
     # we will need to get a list of all of the sequences that are found in the above ITS2 type profiles
     # we will then need to align these.
     # we will also need to produce a group file, a name file and a unique fasta file
-    # this will be similar to what we have in the generate_within_clade_UniFrac_distances_samples
+    # this will be similar to what we have in the generate_within_clade_unifrac_distances_samples
     # from this point on it should be easy for us to use the same set up as we have in the other method
     # we already have the ratios of each of the divs
     list_of_type_profile_norm_abundance_dicts = []
-    for at in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
+    for at in its2_type_profiles_of_data_subs_and_analysis_list_of_clade:
         sys.stdout.write('\rProcessing {}'.format(at))
         list_of_div_ids = [int(b) for b in at.orderedFootprintList.split(',')]
         foot_print_ratio_array = pd.DataFrame(at.getRatioList())
@@ -166,17 +169,15 @@ def generate_fasta_name_group_between_profiles(ITS2_type_profiles_of_data_subs_a
 
     return group_file, name_file, unique_fasta
 
-def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_list_str, num_processors,
-                                                    method, bootstrap_value=100, date_time_string=None):
 
-
-
-    '''
+def generate_within_clade_unifrac_distances_samples_sample_list_input(
+        smpl_id_list_str, num_processors, method, bootstrap_value=100, date_time_string=None):
+    """
     This method will be used to generate another .dist file and PCoA coordinates file for a specific set of
     samples. This is super useful when you want to further investigate resolutions according to the distance data.
-    TODO We will first implement this in the UniFrac methodology so that we can use this for the SP MS but then
+    We will first implement this in the UniFrac methodology so that we can use this for the SP MS but then
     we should also implement with the BrayCurtis method.
-    '''
+    """
 
     output_file_paths = []
     
@@ -187,13 +188,12 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
 
     clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_samples]))
 
-
     wkd = os.path.abspath(
         os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', 'custom_sample_list',
                      'between_samples', date_time_string))
 
     # for each clade found in the dataSubmissions' samples
-    PCoA_path_lists = []
+    pcoa_path_lists = []
     for clade_in_question in clades_of_clade_collections:
 
         clade_wkd = wkd + '/{}'.format(clade_in_question)
@@ -266,7 +266,8 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
                         # then this ref seq has not yet been added to the fasta and it needs to be
                         # populate the master fasta
                         master_fasta_dict[seq_name] = proc_fasta_dict[seq_name]
-                        # update the master_name_unique_id_dict to keep track of which sequence name represents the ref_seq_id
+                        # update the master_name_unique_id_dict to keep track of which
+                        # sequence name represents the ref_seq_id
                         master_name_unique_id_dict[seq_id] = seq_name
                         # create a name dict entry
                         master_name_dict[seq_name] = proc_name_dict[seq_name]
@@ -291,16 +292,16 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
         for key, value in master_name_dict.items():
             name_file.append('{}\t{}'.format(key, ','.join(value)))
 
-        # output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
         write_list_to_destination('{}/unique.fasta'.format(clade_wkd), fasta_file)
         write_list_to_destination('{}/name_file.names'.format(clade_wkd), name_file)
         write_list_to_destination('{}/group_file.groups'.format(clade_wkd), master_group_list)
 
         out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
 
-        ### I am really struglling to get the jmodeltest to run through python.
+        # ## I am really struglling to get the jmodeltest to run through python.
         # I will therefore work with a fixed model that has been chosen by running jmodeltest on the command line
-        # phyml  -i /tmp/jmodeltest7232692498672152838.phy -d nt -n 1 -b 0 --run_id TPM1uf+I -m 012210 -f m -v e -c 1 --no_memory_check -o tlr -s BEST
+        # phyml  -i /tmp/jmodeltest7232692498672152838.phy -d nt -n 1 -b 0
+        # --run_id TPM1uf+I -m 012210 -f m -v e -c 1 --no_memory_check -o tlr -s BEST
         # The production of an ML tree is going to be unrealistic with the larger number of sequences
         # it will simply take too long to compute.
         # Instead I will create an NJ consnsus tree.
@@ -309,20 +310,22 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
         # First I will have to create random data sets
         fseqboot_base = generate_fseqboot_alignments(clade_wkd, bootstrap_value, out_file)
 
+        unifrac_dist = None
+        unifrac_path = None
         if method == 'mothur':
-            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_mp(clade_wkd, fseqboot_base, name_file,
                                                                     bootstrap_value, num_processors, date_time_string)
         elif method == 'phylip':
-            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_mp(clade_wkd, fseqboot_base, name_file,
                                                                     bootstrap_value, num_processors)
 
-        PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist, date_time_string)
-        PCoA_path_lists.append(PCoA_path)
+        pcoa_path = generate_pcoa_coords(clade_wkd, unifrac_dist, date_time_string)
+        pcoa_path_lists.append(pcoa_path)
         # Delete the tempDataFolder and contents
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
         shutil.rmtree(path=file_to_del)
 
-        output_file_paths.append(PCoA_path)
+        output_file_paths.append(pcoa_path)
         output_file_paths.append(unifrac_path)
 
         # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
@@ -336,13 +339,15 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
-    return PCoA_path_lists
+    return pcoa_path_lists
 
-def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_processors,
-                                                    method, call_type, date_time_string, bootstrap_value=100, output_dir=None):
+
+def generate_within_clade_unifrac_distances_samples(
+        data_set_string, num_processors, method, call_type, date_time_string, bootstrap_value=100, output_dir=None):
 
     # The call_type argument will be used to determine which setting this method is being called from.
-    # if it is being called as part of the initial submission call_type='submission', then we will always be working with a single
+    # if it is being called as part of the initial submission call_type='submission',
+    # then we will always be working with a single
     # data_set. In this case we should output to the same folder that the submission results were output
     # to. In the case of being output in a standalone manner call_type='stand_alone' then we may be outputting
     # comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
@@ -351,7 +356,7 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     # TODO
     # we can now also colour the ordination plots according to the meta data of the samples, if this is available.
 
-    '''
+    """
     This method will generate a distance matrix between samples
     One for each clade.
     I have been giving some thought as to which level we should be generating these distance matrices on.
@@ -380,29 +385,29 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     for samples of a given data_set or collection of dataSubmissions. For each sample we will use all sequences
     of the given clade found within the sample to calculate the distances. This will output the distance matrix
     in the outputs folder.
-    '''
+    """
 
     output_file_paths = []
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(dataSubmission_str).split(',')])
+    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
 
-    clade_collection_list_of_dataSubmissions = clade_collection.objects.filter(
+    clade_collection_list_of_data_sets = clade_collection.objects.filter(
         dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
 
-    clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_dataSubmissions]))
+    clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_data_sets]))
 
     if call_type == 'stand_alone':
         wkd = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(dataSubmission_str.split(',')),
+            os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(data_set_string.split(',')),
                          'between_samples'))
     else:
         # call_type == 'submission':
         wkd = output_dir + '/between_sample_distances'
     # for each clade found in the dataSubmissions' samples
-    PCoA_path_lists = []
+    pcoa_path_lists = []
     for clade_in_question in clades_of_clade_collections:
 
         clade_wkd = wkd + '/{}'.format(clade_in_question)
-        clade_collections_of_clade = clade_collection_list_of_dataSubmissions.filter(clade=clade_in_question)
+        clade_collections_of_clade = clade_collection_list_of_data_sets.filter(clade=clade_in_question)
         if len(clade_collections_of_clade) < 2:
             continue
         # directly make a name file and unique fasta file
@@ -471,7 +476,8 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
                         # then this ref seq has not yet been added to the fasta and it needs to be
                         # populate the master fasta
                         master_fasta_dict[seq_name] = proc_fasta_dict[seq_name]
-                        # update the master_name_unique_id_dict to keep track of which sequence name represents the ref_seq_id
+                        # update the master_name_unique_id_dict to keep track of
+                        # which sequence name represents the ref_seq_id
                         master_name_unique_id_dict[seq_id] = seq_name
                         # create a name dict entry
                         master_name_dict[seq_name] = proc_name_dict[seq_name]
@@ -496,16 +502,16 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         for key, value in master_name_dict.items():
             name_file.append('{}\t{}'.format(key, ','.join(value)))
 
-        # output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
         write_list_to_destination('{}/unique.fasta'.format(clade_wkd), fasta_file)
         write_list_to_destination('{}/name_file.names'.format(clade_wkd), name_file)
         write_list_to_destination('{}/group_file.groups'.format(clade_wkd), master_group_list)
 
         out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
 
-        ### I am really struglling to get the jmodeltest to run through python.
+        # ## I am really struglling to get the jmodeltest to run through python.
         # I will therefore work with a fixed model that has been chosen by running jmodeltest on the command line
-        # phyml  -i /tmp/jmodeltest7232692498672152838.phy -d nt -n 1 -b 0 --run_id TPM1uf+I -m 012210 -f m -v e -c 1 --no_memory_check -o tlr -s BEST
+        # phyml  -i /tmp/jmodeltest7232692498672152838.phy -d nt -n 1 -b 0
+        # --run_id TPM1uf+I -m 012210 -f m -v e -c 1 --no_memory_check -o tlr -s BEST
         # The production of an ML tree is going to be unrealistic with the larger number of sequences
         # it will simply take too long to compute.
         # Instead I will create an NJ consnsus tree.
@@ -514,21 +520,23 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
         # First I will have to create random data sets
         fseqboot_base = generate_fseqboot_alignments(clade_wkd, bootstrap_value, out_file)
 
+        unifrac_path = None
+        unifrac_dist = None
         if method == 'mothur':
-            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
-                                                                    bootstrap_value, num_processors, date_time_string=date_time_string)
+            unifrac_dist, unifrac_path = mothur_unifrac_pipeline_mp(
+                clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors, date_time_string=date_time_string)
         elif method == 'phylip':
-            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file,
-                                                                    bootstrap_value, num_processors)
+            unifrac_dist, unifrac_path = phylip_unifrac_pipeline_mp(
+                clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
 
-        PCoA_path = generate_PCoA_coords(clade_wkd, unifrac_dist, date_time_string=date_time_string)
-        PCoA_path_lists.append(PCoA_path)
+        pcoa_path = generate_pcoa_coords(clade_wkd, unifrac_dist, date_time_string=date_time_string)
+        pcoa_path_lists.append(pcoa_path)
         # Delete the tempDataFolder and contents
         file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
         os.chdir(os.path.abspath(os.path.dirname(__file__)))
         shutil.rmtree(path=file_to_del)
 
-        output_file_paths.append(PCoA_path)
+        output_file_paths.append(pcoa_path)
         output_file_paths.append(unifrac_path)
 
         # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
@@ -542,11 +550,13 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
-    return PCoA_path_lists
+    return pcoa_path_lists
 
-def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id_list_str, date_time_string):
+
+def generate_within_clade_braycurtis_distances_samples_sample_list_input(smpl_id_list_str, date_time_string):
     # The call_type argument will be used to determine which setting this method is being called from.
-    # if it is being called as part of the initial submission call_type='submission', then we will always be working with a single
+    # if it is being called as part of the initial submission call_type='submission',
+    # then we will always be working with a single
     # data_set. In this case we should output to the same folder that the submission results were output
     # to. In the case of being output in a standalone manner call_type='stand_alone' then we may be outputting
     # comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
@@ -555,7 +565,7 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
     # TODO
     # we can now also colour the ordination plots according to the meta data of the samples, if this is available.
 
-    '''
+    """
     This method will generate a distance matrix between samples
     One for each clade.
     I have been giving some thought as to which level we should be generating these distance matrices on.
@@ -584,7 +594,7 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
     for samples of a given data_set or collection of dataSubmissions. For each sample we will use all sequences
     of the given clade found within the sample to calculate the distances. This will output the distance matrix
     in the outputs folder.
-    '''
+    """
 
     output_file_paths = []
 
@@ -599,9 +609,8 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
         os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', 'custom_sample_list',
                      'between_samples', date_time_string))
 
-
     # for each clade found in the dataSubmissions' samples
-    PCoA_path_lists = []
+    pcoa_path_lists = []
     for clade_in_question in clades_of_clade_collections:
 
         clade_wkd = wkd + '/{}'.format(clade_in_question)
@@ -617,13 +626,12 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
         data_set_samples_seq_rel_abund_of_clade_cols_dict = {}
         for clade_col in clade_collections_of_clade:
             temp_dict = {}
-            data_set_sample_sequences_of_clade_col = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_col)
+            data_set_sample_sequences_of_clade_col = data_set_sample_sequence.objects.filter(
+                cladeCollectionTwoFoundIn=clade_col)
             total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
             for dsss in data_set_sample_sequences_of_clade_col:
                 temp_dict[dsss.referenceSequenceOf.sequence] = dsss.abundance / total_seqs_ind_clade_col
             data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col.id] = temp_dict
-
-
 
         # then we can simply do a pairwise comparison of the clade collections and create distances
         within_clade_distances_dict = {}
@@ -637,7 +645,6 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
             set_of_sequences = set(list(clade_col_one_seq_rel_abundance_dict.keys()))
             set_of_sequences.update(list(clade_col_two_seq_rel_abundance_dict.keys()))
             list_of_sequences = list(set_of_sequences)
-
 
             # then iter through the list to get the rel abundances for each of the samples, putting 0 if not found in
             # the sample.
@@ -662,9 +669,7 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
             within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
             within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
 
-
-
-        # from this dict we can produce the distance file that can be passed into the generate_PCoA_coords method
+        # from this dict we can produce the distance file that can be passed into the generate_pcoa_coords method
         distance_out_file = [len(clade_collections_of_clade)]
         for clade_col_outer in clade_collections_of_clade:
             temp_clade_col_string = [clade_col_outer.id]
@@ -673,8 +678,9 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
                 if clade_col_outer == clade_col_inner:
                     temp_clade_col_string.append(0)
                 else:
-                    temp_clade_col_string.append(within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
-            distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_col_string ]))
+                    temp_clade_col_string.append(
+                        within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
+            distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_col_string]))
         # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
         # written out to the clade_wkd.
         os.makedirs(clade_wkd, exist_ok=True)
@@ -699,12 +705,11 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
             for line in dist_with_sample_name:
                 f.write('{}\n'.format(line))
 
-
-        PCoA_path = generate_PCoA_coords(clade_wkd, distance_out_file, date_time_string)
-        PCoA_path_lists.append(PCoA_path)
+        pcoa_path = generate_pcoa_coords(clade_wkd, distance_out_file, date_time_string)
+        pcoa_path_lists.append(pcoa_path)
         # Delete the tempDataFolder and contents
 
-        output_file_paths.append(PCoA_path)
+        output_file_paths.append(pcoa_path)
         output_file_paths.append(dist_out_path)
 
     # Print output files
@@ -712,11 +717,13 @@ def generate_within_clade_BrayCurtis_distances_samples_sample_list_input(smpl_id
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
-    return PCoA_path_lists
+    return pcoa_path_lists
 
-def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_type, date_time_str, output_dir=None):
+
+def generate_within_clade_braycurtis_distances_samples(data_set_string, call_type, date_time_str, output_dir=None):
     # The call_type argument will be used to determine which setting this method is being called from.
-    # if it is being called as part of the initial submission call_type='submission', then we will always be working with a single
+    # if it is being called as part of the initial submission call_type='submission',
+    # then we will always be working with a single
     # data_set. In this case we should output to the same folder that the submission results were output
     # to. In the case of being output in a standalone manner call_type='stand_alone' then we may be outputting
     # comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
@@ -725,7 +732,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
     # TODO
     # we can now also colour the ordination plots according to the meta data of the samples, if this is available.
 
-    '''
+    """
     This method will generate a distance matrix between samples
     One for each clade.
     I have been giving some thought as to which level we should be generating these distance matrices on.
@@ -754,30 +761,30 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
     for samples of a given data_set or collection of dataSubmissions. For each sample we will use all sequences
     of the given clade found within the sample to calculate the distances. This will output the distance matrix
     in the outputs folder.
-    '''
+    """
 
     output_file_paths = []
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(dataSubmission_str).split(',')])
+    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
 
-    clade_collection_list_of_dataSubmissions = clade_collection.objects.filter(
+    clade_collection_list_of_data_sets = clade_collection.objects.filter(
         dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
 
-    clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_dataSubmissions]))
+    clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_data_sets]))
 
     if call_type == 'stand_alone':
         wkd = os.path.abspath(
-            os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(dataSubmission_str.split(',')),
+            os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(data_set_string.split(',')),
                          'between_samples'))
     else:
         # call_type == 'submission':
         wkd = output_dir + '/between_sample_distances'
     # for each clade found in the dataSubmissions' samples
-    PCoA_path_lists = []
+    pcoa_path_lists = []
     for clade_in_question in clades_of_clade_collections:
 
         clade_wkd = wkd + '/{}'.format(clade_in_question)
         # convert to list so that the order is set
-        clade_collections_of_clade = list(clade_collection_list_of_dataSubmissions.filter(clade=clade_in_question))
+        clade_collections_of_clade = list(clade_collection_list_of_data_sets.filter(clade=clade_in_question))
 
         if len(clade_collections_of_clade) < 2:
             continue
@@ -788,13 +795,12 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
         data_set_samples_seq_rel_abund_of_clade_cols_dict = {}
         for clade_col in clade_collections_of_clade:
             temp_dict = {}
-            data_set_sample_sequences_of_clade_col = data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_col)
+            data_set_sample_sequences_of_clade_col = data_set_sample_sequence.objects.filter(
+                cladeCollectionTwoFoundIn=clade_col)
             total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
             for dsss in data_set_sample_sequences_of_clade_col:
                 temp_dict[dsss.referenceSequenceOf.sequence] = dsss.abundance / total_seqs_ind_clade_col
             data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col.id] = temp_dict
-
-
 
         # then we can simply do a pairwise comparison of the clade collections and create distances
         within_clade_distances_dict = {}
@@ -808,7 +814,6 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
             set_of_sequences = set(list(clade_col_one_seq_rel_abundance_dict.keys()))
             set_of_sequences.update(list(clade_col_two_seq_rel_abundance_dict.keys()))
             list_of_sequences = list(set_of_sequences)
-
 
             # then iter through the list to get the rel abundances for each of the samples, putting 0 if not found in
             # the sample.
@@ -833,9 +838,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
             within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
             within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
 
-
-
-        # from this dict we can produce the distance file that can be passed into the generate_PCoA_coords method
+        # from this dict we can produce the distance file that can be passed into the generate_pcoa_coords method
         distance_out_file = [len(clade_collections_of_clade)]
         for clade_col_outer in clade_collections_of_clade:
             temp_clade_col_string = [clade_col_outer.id]
@@ -844,8 +847,9 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
                 if clade_col_outer == clade_col_inner:
                     temp_clade_col_string.append(0)
                 else:
-                    temp_clade_col_string.append(within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
-            distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_col_string ]))
+                    temp_clade_col_string.append(
+                        within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
+            distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_col_string]))
         # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
         # written out to the clade_wkd.
         os.makedirs(clade_wkd, exist_ok=True)
@@ -856,7 +860,7 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
         dist_with_sample_name = [distance_out_file[0]]
         list_of_cc_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
         cc_of_outputs = list(clade_collection.objects.filter(id__in=list_of_cc_ids))
-        dict_of_cc_id_to_sample_name = {cc.id:cc.dataSetSampleFrom.name for cc in cc_of_outputs}
+        dict_of_cc_id_to_sample_name = {cc.id: cc.dataSetSampleFrom.name for cc in cc_of_outputs}
         for line in distance_out_file[1:]:
             temp_list = []
             cc_id = int(line.split('\t')[0])
@@ -870,12 +874,11 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
             for line in dist_with_sample_name:
                 f.write('{}\n'.format(line))
 
-
-        PCoA_path = generate_PCoA_coords(clade_wkd, distance_out_file, date_time_string=date_time_str)
-        PCoA_path_lists.append(PCoA_path)
+        pcoa_path = generate_pcoa_coords(clade_wkd, distance_out_file, date_time_string=date_time_str)
+        pcoa_path_lists.append(pcoa_path)
         # Delete the tempDataFolder and contents
 
-        output_file_paths.append(PCoA_path)
+        output_file_paths.append(pcoa_path)
         output_file_paths.append(dist_out_path)
 
     # Print output files
@@ -883,15 +886,18 @@ def generate_within_clade_BrayCurtis_distances_samples(dataSubmission_str, call_
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
-    return PCoA_path_lists
+    return pcoa_path_lists
 
-def generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(data_submission_id_str, data_analysis_id, call_type, date_time_string, output_dir=None):
-    ''' This will produce distance matrices between ITS2 type profiles of the same clade.
-    It will use exactly the same suite of programs as the generate_within_clade_UniFrac_distances_samples method
+
+def generate_within_clade_braycurtis_distances_its2_type_profiles(
+        data_submission_id_str, data_analysis_id, call_type, date_time_string, output_dir=None):
+    """ This will produce distance matrices between ITS2 type profiles of the same clade.
+    It will use exactly the same suite of programs as the generate_within_clade_unifrac_distances_samples method
     The only difference will be that this will be calculated across ITS2 Type Profiles rather than samples.
     As such, this will require a data_set set and dataAnalysis.
     The average DIV abundances for each of the ITS2 type profiles should first be calculated from which the distances
-    can then be calcualated'''
+    can then be calcualated
+    """
 
     output_file_paths = []
 
@@ -910,43 +916,44 @@ def generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(data_submissio
     data_analysis_obj = data_analysis.objects.get(id=data_analysis_id)
 
     # go clade by clade
-    ITS2_type_profiles_of_data_subs_and_analysis = analysis_type.objects.filter(
+    its2_type_profiles_of_data_subs_and_analysis = analysis_type.objects.filter(
         clade_collection_type__cladeCollectionFoundIn__dataSetSampleFrom__dataSubmissionFrom__in=
         data_submissions, dataAnalysisFrom=data_analysis_obj).distinct()
 
-    clade_list = list(set([type_profile.clade for type_profile in ITS2_type_profiles_of_data_subs_and_analysis]))
+    clade_list = list(set([type_profile.clade for type_profile in its2_type_profiles_of_data_subs_and_analysis]))
 
     # list for storing the paths to the PCoA .csv that will be produced
-    PCoA_path_lists = []
+    pcoa_path_lists = []
     for clade in clade_list:
         # convert query to a list so that we can iterate over twice in exactly the same order
-        ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade = list(
-            ITS2_type_profiles_of_data_subs_and_analysis.filter(clade=clade))
+        its2_type_profiles_of_data_subs_and_analysis_list_of_clade = list(
+            its2_type_profiles_of_data_subs_and_analysis.filter(clade=clade))
 
-        if len(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade) < 2:
+        if len(its2_type_profiles_of_data_subs_and_analysis_list_of_clade) < 2:
             continue
 
         clade_wkd = wkd + '/{}'.format(clade)
         # we will need to get a list of all of the sequences that are found in the above ITS2 type profiles
         # we will then need to align these.
         # we will also need to produce a group file, a name file and a unique fasta file
-        # this will be similar to what we have in the generate_within_clade_UniFrac_distances_samples
+        # this will be similar to what we have in the generate_within_clade_unifrac_distances_samples
         # from this point on it should be easy for us to use the same set up as we have in the other method
         # we already have the ratios of each of the divs
         type_profile_rel_abundance_dicts_dict = {}
-        for at in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
+        for at in its2_type_profiles_of_data_subs_and_analysis_list_of_clade:
             sys.stdout.write('\rProcessing {}'.format(at))
             list_of_div_ids = [int(b) for b in at.orderedFootprintList.split(',')]
             foot_print_ratio_array = pd.DataFrame(at.getRatioList())
-            rel_abundance_of_divs_dict = {list_of_div_ids[i]: float(foot_print_ratio_array[i].mean())
-                                                 for i in range(len(list_of_div_ids))}
+            rel_abundance_of_divs_dict = {
+                list_of_div_ids[i]: float(foot_print_ratio_array[i].mean()) for i in range(len(list_of_div_ids))}
             type_profile_rel_abundance_dicts_dict[at.id] = rel_abundance_of_divs_dict
 
         # here we have a dict for each of the ITS2 type profiles of the clade
         # we can now do pairwise comparisons just like we did for the samples
         # then we can simply do a pairwise comparison of the clade collections and create distances
         within_clade_distances_dict = {}
-        for type_one, type_two in itertools.combinations(list(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade), 2):
+        for type_one, type_two in itertools.combinations(
+                list(its2_type_profiles_of_data_subs_and_analysis_list_of_clade), 2):
             # let's work to a virtual subsample of 100 000
             clade_col_one_seq_rel_abundance_dict = type_profile_rel_abundance_dicts_dict[
                 type_one.id]
@@ -983,12 +990,12 @@ def generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(data_submissio
             within_clade_distances_dict[
                 '{}_{}'.format(type_two.id, type_one.id)] = distance
 
-        # from this dict we can produce the distance file that can be passed into the generate_PCoA_coords method
-        distance_out_file = [len(ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade)]
-        for type_outer in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
+        # from this dict we can produce the distance file that can be passed into the generate_pcoa_coords method
+        distance_out_file = [len(its2_type_profiles_of_data_subs_and_analysis_list_of_clade)]
+        for type_outer in its2_type_profiles_of_data_subs_and_analysis_list_of_clade:
             temp_clade_type_string = [type_outer.name]
 
-            for type_inner in ITS2_type_profiles_of_data_subs_and_analysis_list_of_clade:
+            for type_inner in its2_type_profiles_of_data_subs_and_analysis_list_of_clade:
                 if type_outer == type_inner:
                     temp_clade_type_string.append(0)
                 else:
@@ -1005,20 +1012,19 @@ def generate_within_clade_BrayCurtis_distances_ITS2_type_profiles(data_submissio
             for line in distance_out_file:
                 f.write('{}\n'.format(line))
 
+        pcoa_path = generate_pcoa_coords(clade_wkd, distance_out_file, date_time_string)
 
-        PCoA_path = generate_PCoA_coords(clade_wkd, distance_out_file, date_time_string)
-
-        output_file_paths.append(PCoA_path)
+        output_file_paths.append(pcoa_path)
         output_file_paths.append(dist_out_path)
 
-        PCoA_path_lists.append(PCoA_path)
+        pcoa_path_lists.append(pcoa_path)
 
     # output the paths of the new files created
     print('\n\nOutput files:\n')
     for path_of_output_file in output_file_paths:
         print(path_of_output_file)
 
-    return PCoA_path_lists
+    return pcoa_path_lists
 
 
 def mafft_align_fasta(clade_wkd, num_proc):
@@ -1040,7 +1046,7 @@ def mafft_align_fasta(clade_wkd, num_proc):
     return out_file
 
 
-def uni_frac_worker_two(input, output):
+def uni_frac_worker_two(input_queue, output):
     # We can fix this so that it is more multithreadable.
     # first we can fix the having to have a a numerical_name_dict, by just having a counter per
     # process and append the process id to make sure that the sequences are unique
@@ -1051,9 +1057,8 @@ def uni_frac_worker_two(input, output):
     # the particular ref_seq_ids
     proc_id = current_process().name
 
-    test_group = []
     # For each clade collection
-    for cc in iter(input.get, 'STOP'):
+    for cc in iter(input_queue.get, 'STOP'):
         # set up clade colection
         temp_fasta_dict = {}
         temp_name_dict = {}
@@ -1095,7 +1100,7 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     in_file_fconsense = '{}/individual_trees'.format(clade_wkd)
 
     # # ### DEBUG ###
-    # for line in readDefinedFileToList(in_file_fconsense):
+    # for line in read_defined_file_to_list(in_file_fconsense):
     #     if "1 Pro" in line:
     #         bob = 'asdf'
     # #############
@@ -1111,7 +1116,8 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
                 sys.exit('There has been a recursion depth error whilst trying to calculate a consensus tree\n'
                          'This occured whilst calculating between sample distances.\n'
                          'This problem occurs when trees are too big for sumtrees.py to process.\n'
-                         'This problem can often be solved by increasing the recursion limit used when running sumtrees.py\n'
+                         'This problem can often be solved by increasing the recursion '
+                         'limit used when running sumtrees.py\n'
                          'The dafault value is 1000. This can be increased.\n'
                          'To do this you need to edit the sumtrees.py file.\n'
                          'To locate this file, try typing:\n'
@@ -1129,7 +1135,8 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
             sys.exit('There has likely been a recursion depth error whilst trying to calculate a consensus tree\n'
                      'This occured whilst calculating between sample distances.\n'
                      'This problem occurs when trees are too big for sumtrees.py to process.\n'
-                     'This problem can often be solved by increasing the recursion limit used when running sumtrees.py\n'
+                     'This problem can often be solved by increasing the recursion '
+                     'limit used when running sumtrees.py\n'
                      'The dafault value is 1000. This can be increased.\n'
                      'To do this you need to edit the sumtrees.py file.\n'
                      'To locate this file, try typing:\n'
@@ -1143,7 +1150,6 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
                      'sys.setrecursionlimit(1500)\n'
                      'Save changes and rerun.')
 
-
     # The consunsus tree output by sumtree is causing problems because it contains metadata.
     # It is important that the tree we use for the unifrac has the branch lengths on it
     # The tree output by consense only has the boostrap values instead of lengths which is not ideal
@@ -1153,22 +1159,22 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     return tree_out_file_fconsense_sumtrees
 
 
-def generate_PCoA_coords(clade_wkd, raw_dist_file, date_time_string):
+def generate_pcoa_coords(clade_wkd, raw_dist_file, date_time_string):
     # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
     # a twoD list and then convert to a numpy array
-    temp_two_D_list = []
+    temp_two_d_list = []
     sample_names_from_dist_matrix = []
     for line in raw_dist_file[1:]:
         temp_elements = line.split('\t')
         sample_names_from_dist_matrix.append(temp_elements[0].replace(' ', ''))
-        temp_two_D_list.append([float(a) for a in temp_elements[1:]])
-    uni_frac_dist_array = np.array(temp_two_D_list)
+        temp_two_d_list.append([float(a) for a in temp_elements[1:]])
+    uni_frac_dist_array = np.array(temp_two_d_list)
     sys.stdout.write('\rcalculating PCoA coordinates')
-    pcoA_full_path = clade_wkd + '/{}.PCoA_coords.csv'.format(date_time_string)
+    pcoa_full_path = clade_wkd + '/{}.PCoA_coords.csv'.format(date_time_string)
     this = pcoa(uni_frac_dist_array)
 
     # rename the dataframe index as the sample names
-    mapper_dict = {i: j for i, j in enumerate(sample_names_from_dist_matrix)}
+
     this.samples['sample'] = sample_names_from_dist_matrix
     renamed_dataframe = this.samples.set_index('sample')
 
@@ -1176,8 +1182,8 @@ def generate_PCoA_coords(clade_wkd, raw_dist_file, date_time_string):
 
     renamed_dataframe = renamed_dataframe.append(this.proportion_explained.rename('proportion_explained'))
 
-    renamed_dataframe.to_csv(pcoA_full_path, index=True, header=True, sep=',')
-    return pcoA_full_path
+    renamed_dataframe.to_csv(pcoa_full_path, index=True, header=True, sep=',')
+    return pcoa_full_path
 
 
 def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
@@ -1196,15 +1202,15 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
         else:
             sys.exit('Cannot find fseqboot in PATH or in local installation at ./lib/phylipnew/fseqboot\n'
                      'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/'
+                     'wiki/SymPortal-setup#6-third-party-dependencies')
     # run fseqboot
     sys.stdout.write('\rGenerating multiple datasets')
     (fseqboot['-sequence', in_file_seqboot, '-outfile', out_file_seqboot, '-test', 'b', '-reps', num_reps])()
     # Now divide the fseqboot file up into its 100 different alignments
     fseqboot_file = read_defined_file_to_list(out_file_seqboot)
     rep_count = 0
-    out_put_holder = []
-    out_put_holder.append(fseqboot_file[0])
+    out_put_holder = [fseqboot_file[0]]
     fseqboot_base = '{}/out_seq_boot_reps/fseqboot_rep_'.format(clade_wkd)
 
     # NB below we used to just look for lines that when split had a length of two but this was not specific enough
@@ -1216,8 +1222,7 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
         reg_ex_matches_list = reg_ex.findall(line)
         if len(reg_ex_matches_list) == 1:
             write_list_to_destination('{}{}'.format(fseqboot_base, rep_count), out_put_holder)
-            out_put_holder = []
-            out_put_holder.append(line)
+            out_put_holder = [line]
             rep_count += 1
         else:
             out_put_holder.append(line)
@@ -1228,12 +1233,13 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
 def perform_unifrac(clade_wkd, tree_path):
     group_file_path = '{}/group_file.groups'.format(clade_wkd)
     name_file_path = '{}/name_file.names'.format(clade_wkd)
-    mothur_batch_WU = \
-        ['set.dir(input={}, output={})'.format(clade_wkd, clade_wkd),
-         'unifrac.weighted(tree={}, group={}, name={}, distance=square, processors=16)'
-             .format(tree_path, group_file_path, name_file_path)]
-    mothur_batch_path = '{}/mothur_batch_WU'.format(clade_wkd)
-    write_list_to_destination(mothur_batch_path, mothur_batch_WU)
+    mothur_batch_wu = [
+        'set.dir(input={}, output={})'.format(clade_wkd, clade_wkd),
+        'unifrac.weighted(tree={}, group={}, name={}, distance=square, processors=16)'.format(
+            tree_path, group_file_path, name_file_path)]
+
+    mothur_batch_path = '{}/mothur_batch_wu'.format(clade_wkd)
+    write_list_to_destination(mothur_batch_path, mothur_batch_wu)
     # now run the batch file with mothur
     sys.stdout.write('\rcalculating unifrac distances')
     completed_process = \
@@ -1274,10 +1280,6 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
         new_str = line
         examine = list(seq_re.findall(line))
 
-        ### DEBUG ###
-        diff = list(set(name_file_reps) - set(examine))
-        #############
-
         # N.B. the sumtrees.py program was causing some very strange behaviour. It was converting '_' to ' '
         # when they were preceeded by a single digit but leaving them as '_' when there were multiple digits before it
         # it took a long time to find what the problem was. It was causing issues in the mothur UniFrac.
@@ -1308,16 +1310,9 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
                         name_file_rep_match_list.append(name_file_rep)
                         found = True
                         break
-            if found == False:
-                bobbie = 'asdf'
 
         # now also remove the metadata which is held between square brackets '[]'
-        examine_two = list(seq_re_meta.findall(new_str))
-
-        diff = list(set(name_file_reps) - set(name_file_rep_match_list))
-
         new_str = re.sub('\[[^\]]*\]', '', new_str)
-
         new_tree_file.append(new_str)
 
     # here all of the tree_file names should have been replaced. Now write back out.
@@ -1325,46 +1320,41 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
     write_list_to_destination(tree_out_file_fconsense, new_tree_file)
 
 
-
 # mothur method
-def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
-    for p in iter(input.get, 'STOP'):
+def mothur_unifrac_pipeline_mp_worker(input_queue, output_queue, fseqboot_base, clade_wkd):
+    for p in iter(input_queue.get, 'STOP'):
         sys.stdout.write('\rProcessing p={} with {}'.format(p, current_process().name))
         # convert the interleaved fasta to sequential fasta
         interleaved_fast = read_defined_file_to_list('{}{}'.format(fseqboot_base, p))
         sequen_fast = convert_interleaved_to_sequencial_fasta(interleaved_fast)
         write_list_to_destination('{}{}.sequential.fasta'.format(fseqboot_base, p), sequen_fast)
-        mothur_batch_dist = \
-            ['set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
-             'dist.seqs(fasta={}, countends=T, output=square)'
-                 .format('{}{}.sequential.fasta'.format(fseqboot_base, p))]
+        mothur_batch_dist = [
+            'set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
+            'dist.seqs(fasta={}, countends=T, output=square)'.format('{}{}.sequential.fasta'.format(fseqboot_base, p))]
         mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_dist_{}'.format(clade_wkd, p)
 
         write_list_to_destination(mothur_batch_path, mothur_batch_dist)
 
         # now run the batch file with mothur
         sys.stdout.write('\rCalculating distances...')
-        completed_process = \
-            subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         sys.stdout.write('\rDone.')
         # now run in clearcut
-        input = '{}{}.sequential.square.dist'.format(fseqboot_base, p)
-        mothur_batch_clearcut = \
-            ['set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
-             'clearcut(phylip={}, verbose=t)'
-                 .format(input)]
+        clearcut_input = '{}{}.sequential.square.dist'.format(fseqboot_base, p)
+        mothur_batch_clearcut = [
+            'set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
+            'clearcut(phylip={}, verbose=t)'.format(clearcut_input)]
 
         mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_clearcut_{}'.format(clade_wkd, p)
         write_list_to_destination(mothur_batch_path, mothur_batch_clearcut)
         sys.stdout.write('\rGenerating NJ tree from distances')
-        completed_process = \
-            subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         sys.stdout.write('\rDone')
-        output.put(input.replace('.dist', '.tre'))
-    output.put('kill')
+        output_queue.put(clearcut_input.replace('.dist', '.tre'))
+    output_queue.put('kill')
 
 
-def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc, date_time_string):
+def mothur_unifrac_pipeline_mp(clade_wkd, fseqboot_base, name_file, num_reps, num_proc, date_time_string):
     # setup MP
     # Create the queues that will hold the cc information
     task_queue = Queue()
@@ -1383,7 +1373,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     all_processes = []
 
     for n in range(num_proc):
-        p = Process(target=mothur_unifrac_pipeline_MP_worker, args=(task_queue, output_queue, fseqboot_base, clade_wkd))
+        p = Process(target=mothur_unifrac_pipeline_mp_worker, args=(task_queue, output_queue, fseqboot_base, clade_wkd))
         all_processes.append(p)
         p.start()
 
@@ -1411,7 +1401,9 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
                                     tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
 
     # here add a date_time_string element to it to make it unique
-    dist_file_path_dts = dist_file_path.replace('consensus_tree_sumtrees', '{}.consensus_tree_sumtrees'.format(date_time_string)).replace('1.weighted.phylip', '')
+    dist_file_path_dts = dist_file_path.replace(
+        'consensus_tree_sumtrees', '{}.consensus_tree_sumtrees'.format(date_time_string)
+    ).replace('1.weighted.phylip', '')
 
     subprocess.run(['mv', dist_file_path, dist_file_path_dts])
 
@@ -1419,10 +1411,8 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     return raw_dist_file, dist_file_path_dts
 
 
-
-# phylip method
 def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
-    ### PHYLIP METHOD ###
+    # ## PHYLIP METHOD ###
     # give the option to install the new phylip suite from their executables
     # or simply download the executables form us and install into the ./lib/phylipnew folder
     is_installed = subprocess.call(['which', 'fdnadist'])
@@ -1435,7 +1425,8 @@ def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
         else:
             sys.exit('Cannot find fdnadist in PATH or in local installation at ./lib/phylipnew/fdnadist\n'
                      'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework'
+                     '/wiki/SymPortal-setup#6-third-party-dependencies')
 
     for p in range(num_reps):
         # run dnadist
@@ -1456,8 +1447,8 @@ def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
         else:
             sys.exit('Cannot find fneighbor in PATH or in local installation at ./lib/phylipnew/fneighbor\n'
                      'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
-
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/'
+                     'SymPortal-setup#6-third-party-dependencies')
 
     list_of_tree_paths = []
     for p in range(num_reps):
@@ -1466,7 +1457,8 @@ def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
         fneighbor_out_file_rep = '{}.fneighbor_{}'.format(fneighbor_in_file_rep, p)
         out_tree_file = '{}.nj_tree_{}'.format(fneighbor_in_file_rep, p)
         (fneighbor[
-            '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep, '-jumble', 'Y', '-outtreefile', out_tree_file])()
+            '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep,
+            '-jumble', 'Y', '-outtreefile', out_tree_file])()
         list_of_tree_paths.append(out_tree_file)
 
     tree_out_file_fconsense_sumtrees = create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file)
@@ -1481,7 +1473,7 @@ def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
     return raw_dist_file
 
 
-def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, num_proc):
+def phylip_unifrac_pipeline_mp(clade_wkd, fseqboot_base, name_file, num_reps, num_proc):
     # setup MP
     # Create the queues that will hold the cc information
     task_queue = Queue()
@@ -1500,7 +1492,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     all_processes = []
 
     for n in range(num_proc):
-        p = Process(target=phylip_unifrac_pipeline_MP_worker, args=(task_queue, output_queue, fseqboot_base))
+        p = Process(target=phylip_unifrac_pipeline_mp_worker, args=(task_queue, output_queue, fseqboot_base))
         all_processes.append(p)
         p.start()
 
@@ -1531,7 +1523,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     return raw_dist_file, dist_file_path
 
 
-def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
+def phylip_unifrac_pipeline_mp_worker(input_queue, output, fseqboot_base):
     # give the option to install the new phylip suite from their executables
     # or simply download the executables form us and install into the ./lib/phylipnew folder
     is_installed = subprocess.call(['which', 'fdnadist'])
@@ -1544,7 +1536,8 @@ def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
         else:
             sys.exit('Cannot find fdnadist in PATH or in local installation at ./lib/phylipnew/fdnadist\n'
                      'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework'
+                     '/wiki/SymPortal-setup#6-third-party-dependencies')
 
     # give the option to install the new phylip suite from their executables
     # or simply download the executables form us and install into the ./lib/phylipnew folder
@@ -1558,9 +1551,10 @@ def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
         else:
             sys.exit('Cannot find fneighbor in PATH or in local installation at ./lib/phylipnew/fneighbor\n'
                      'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/SymPortal-setup#6-third-party-dependencies')
+                     'GitHub page: https://github.com/didillysquat/SymPortal_framework'
+                     '/wiki/SymPortal-setup#6-third-party-dependencies')
 
-    for p in iter(input.get, 'STOP'):
+    for p in iter(input_queue.get, 'STOP'):
         # run dnadist
         in_file_dnadist_rep = '{}{}'.format(fseqboot_base, p)
         out_file_dnadist_rep = '{}out_{}'.format(fseqboot_base, p)
@@ -1572,8 +1566,7 @@ def phylip_unifrac_pipeline_MP_worker(input, output, fseqboot_base):
         fneighbor_out_file_rep = '{}.fneighbor_{}'.format(fneighbor_in_file_rep, p)
         out_tree_file = '{}.nj_tree_{}'.format(fneighbor_in_file_rep, p)
         (fneighbor[
-            '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep, '-jumble', 'Y', '-outtreefile', out_tree_file])()
+            '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep,
+            '-jumble', 'Y', '-outtreefile', out_tree_file])()
         output.put(out_tree_file)
     output.put('kill')
-
-#############################

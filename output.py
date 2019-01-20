@@ -465,7 +465,7 @@ def output_type_count_tables(
         output_directory, analysis_object.id, analysis_object.name, date_time_string)
 
     df_relative.to_csv(path_to_profiles_rel, sep="\t", header=False)
-    # writeListToDestination(path_to_profiles_rel, outputTableTwo)
+    # write_list_to_destination(path_to_profiles_rel, outputTableTwo)
     output_files_list.append(path_to_profiles_rel)
 
     del df_relative
