@@ -5,8 +5,10 @@ import main
 import json
 import general
 import sys
+from pathlib import Path
+import shutil
 
-def test_data_loading_without_command_line(test_data_directory, data_sheet_path, num_proc, name_for_data_set, debug_bool, distance_method_arg,
+def test_data_loading_without_command_line(test_data_directory, data_sheet_path, num_proc, debug_bool, distance_method_arg,
                            no_ord_arg=False, no_fig_arg=False):
     """
     This is the function used to test the loading of data into the database. It will work directly with the
@@ -25,44 +27,52 @@ def test_data_loading_without_command_line(test_data_directory, data_sheet_path,
 
     submitting_user, user_email, system_type = get_system_type_user_name_and_user_email()
 
-    # generate a data set object that can be used in the submission
-    new_data_set = main.create_new_data_set_object_from_params(name_for_data_set, submitting_user, user_email)
-
-    if system_type == 'remote':
-        data_set_uid, path_of_output_items_list = perform_loading_tests_for_remote_system(
-            data_sheet_path, debug_bool, distance_method_arg,
-            new_data_set, no_fig_arg, no_ord_arg, num_proc, test_data_directory)
-
-    elif system_type == 'local':
-        data_set_uid, path_of_output_items_list = perform_loading_tests_for_local_system(
-            data_sheet_path, debug_bool, distance_method_arg,
-            new_data_set, no_fig_arg, no_ord_arg, num_proc, test_data_directory)
-    else:
-        sys.exit('Unknown system type in settings.py. System type should be set to \'local\' in most instances.')
+    data_set_uid, path_of_output_items_list = perform_load_testing_based_on_system_type(
+        data_sheet_path, debug_bool, distance_method_arg, no_fig_arg, no_ord_arg, num_proc,
+        system_type, test_data_directory, submitting_user, user_email)
 
     return data_set_uid, path_of_output_items_list
 
 
-def perform_loading_tests_for_remote_system(data_sheet_path, debug_bool, distance_method_arg, new_data_set, no_fig_arg,
-                                            no_ord_arg, num_proc, test_data_directory):
+def perform_load_testing_based_on_system_type(
+        data_sheet_path, debug_bool, distance_method_arg, no_fig_arg, no_ord_arg,
+        num_proc, system_type, test_data_directory, submitting_user, user_email):
+    if system_type == 'remote':
+        data_set_uid, path_of_output_items_list = perform_loading_tests_for_remote_system(
+            data_sheet_path, debug_bool, distance_method_arg,
+            no_fig_arg, no_ord_arg, num_proc, test_data_directory, submitting_user, user_email)
+
+    elif system_type == 'local':
+        data_set_uid, path_of_output_items_list = perform_loading_tests_for_local_system(
+            data_sheet_path, debug_bool, distance_method_arg,
+            no_fig_arg, no_ord_arg, num_proc, test_data_directory, submitting_user, user_email)
+    else:
+        sys.exit('Unknown system type in settings.py. System type should be set to \'local\' in most instances.')
+    return data_set_uid, path_of_output_items_list
+
+
+def perform_loading_tests_for_remote_system(
+        data_sheet_path, debug_bool, distance_method_arg, no_fig_arg,
+        no_ord_arg, num_proc, test_data_directory, submitting_user, user_email):
+
     # perform a load test: 1 - with no sub_e_screening and no data sheet
-    print('Loading test 1/2:')
-    print('Loading test with no data_sheet and with screen_sub_evalue_bool == False')
-    data_set_uid_one, path_of_output_items_list_one = perform_loading_test(
-        data_sheet_arg=False, debug_bool=debug_bool, distance_method_arg=distance_method_arg,
-        input_dir=test_data_directory, new_data_set=new_data_set, no_fig_arg=no_fig_arg, no_ord_arg=no_ord_arg,
-        num_proc=num_proc, screen_sub_evalue_bool=False)
-    print('Loading test 1/2 SUCCESSFUL')
-    # delete this data_set
-
-    # todo see which directories need deleting and write it into a function specific for deleteing files
-    # from a data_load
-
-    general.delete_data_set(data_set_uid_one)
+    perform_load_test_one_remote_system(
+        debug_bool, distance_method_arg, no_fig_arg, no_ord_arg, num_proc,
+        submitting_user, test_data_directory, user_email)
 
     # perform a load test: 2 - with sub_e_screening and data sheet
+    data_set_uid_two, path_of_output_items_list_two = perform_load_test_two_remote_system(
+        data_sheet_path, debug_bool, distance_method_arg, no_fig_arg, no_ord_arg,
+        num_proc, submitting_user, test_data_directory, user_email)
+
+    return data_set_uid_two, path_of_output_items_list_two
+
+
+def perform_load_test_two_remote_system(data_sheet_path, debug_bool, distance_method_arg, no_fig_arg, no_ord_arg,
+                                        num_proc, submitting_user, test_data_directory, user_email):
     print('Loading test 2/2:')
     print('Loading test with data_sheet and with screen_sub_evalue_bool == True')
+    new_data_set = main.create_new_data_set_object_from_params('testing', submitting_user, user_email)
     data_set_uid_two, path_of_output_items_list_two = perform_loading_test(
         data_sheet_arg=data_sheet_path, debug_bool=debug_bool, distance_method_arg=distance_method_arg,
         input_dir=test_data_directory, new_data_set=new_data_set, no_fig_arg=no_fig_arg, no_ord_arg=no_ord_arg,
@@ -71,30 +81,77 @@ def perform_loading_tests_for_remote_system(data_sheet_path, debug_bool, distanc
     return data_set_uid_two, path_of_output_items_list_two
 
 
-def perform_loading_tests_for_local_system(data_sheet_path, debug_bool, distance_method_arg, new_data_set, no_fig_arg,
-                                           no_ord_arg, num_proc, test_data_directory):
-    # perform a load test: 1 - with no sub_e_screening and no data sheet
+def perform_load_test_one_remote_system(debug_bool, distance_method_arg, no_fig_arg, no_ord_arg, num_proc,
+                                        submitting_user, test_data_directory, user_email):
     print('Loading test 1/2:')
     print('Loading test with no data_sheet and with screen_sub_evalue_bool == False')
+    new_data_set = main.create_new_data_set_object_from_params('testing', submitting_user, user_email)
     data_set_uid_one, path_of_output_items_list_one = perform_loading_test(
         data_sheet_arg=False, debug_bool=debug_bool, distance_method_arg=distance_method_arg,
         input_dir=test_data_directory, new_data_set=new_data_set, no_fig_arg=no_fig_arg, no_ord_arg=no_ord_arg,
         num_proc=num_proc, screen_sub_evalue_bool=False)
-
     print('Loading test 1/2 SUCCESSFUL')
-    # delete this data_set
-    # todo see which directories need deleting and write it into a function specific for deleteing files
-    # from a data_load
-    general.delete_data_set(data_set_uid_one)
+    clean_up_after_test_loading(data_set_uid_one)
+
+
+def perform_loading_tests_for_local_system(data_sheet_path, debug_bool, distance_method_arg, no_fig_arg,
+                                           no_ord_arg, num_proc, test_data_directory, submitting_user, user_email):
+
+    # perform a load test: 1 - with no sub_e_screening and no data sheet
+
+    perform_load_test_one_local_system(
+        debug_bool, distance_method_arg, no_fig_arg, no_ord_arg,
+        num_proc, test_data_directory, submitting_user, user_email)
+
     # perform a load test: 2 - no sub_e_screening, with data sheet
+    data_set_uid_two, path_of_output_items_list_two = perform_load_test_two_local_system(
+        data_sheet_path, debug_bool, distance_method_arg, no_fig_arg, no_ord_arg, num_proc,
+        test_data_directory, submitting_user, user_email)
+
+    return data_set_uid_two, path_of_output_items_list_two
+
+
+def perform_load_test_two_local_system(data_sheet_path, debug_bool, distance_method_arg, no_fig_arg,
+                                       no_ord_arg, num_proc, test_data_directory, submitting_user,
+                                       user_email):
     print('Loading test 2/2:')
     print('Loading test with data_sheet and with screen_sub_evalue_bool == True')
+    new_data_set = main.create_new_data_set_object_from_params('testing', submitting_user, user_email)
     data_set_uid_two, path_of_output_items_list_two = perform_loading_test(
         data_sheet_arg=data_sheet_path, debug_bool=debug_bool, distance_method_arg=distance_method_arg,
         input_dir=test_data_directory, new_data_set=new_data_set, no_fig_arg=no_fig_arg, no_ord_arg=no_ord_arg,
         num_proc=num_proc, screen_sub_evalue_bool=False)
-
+    print('Loading test 2/2 SUCCESSFUL')
     return data_set_uid_two, path_of_output_items_list_two
+
+
+def perform_load_test_one_local_system(debug_bool, distance_method_arg, no_fig_arg, no_ord_arg, num_proc,
+                                       test_data_directory, submitting_user, user_email):
+    print('Loading test 1/2:')
+    print('Loading test with no data_sheet and with screen_sub_evalue_bool == False')
+    new_data_set = main.create_new_data_set_object_from_params('testing', submitting_user, user_email)
+    data_set_uid_one, path_of_output_items_list_one = perform_loading_test(
+        data_sheet_arg=False, debug_bool=debug_bool, distance_method_arg=distance_method_arg,
+        input_dir=test_data_directory, new_data_set=new_data_set, no_fig_arg=no_fig_arg, no_ord_arg=no_ord_arg,
+        num_proc=num_proc, screen_sub_evalue_bool=False)
+    print('Loading test 1/2 SUCCESSFUL')
+    clean_up_after_test_loading(data_set_uid_one)
+
+
+def clean_up_after_test_loading(data_set_uid_one):
+    delete_data_load_output_object_directories(data_set_uid_one)
+    print('Output directory deleted')
+    # delete this data_set
+    print('test data_set {} deleted'.format(data_set_uid_one))
+    general.delete_data_set(data_set_uid_one)
+
+
+def clean_up_after_test_analysis(data_analysis_uid):
+    delete_data_analysis_output_object_directories(data_analysis_uid)
+    print('Output directory deleted')
+    # delete this data_set
+    print('test data_analysis {} deleted'.format(data_analysis_uid))
+    general.delete_data_analysis(data_analysis_uid)
 
 
 def perform_loading_test(
@@ -109,7 +166,8 @@ def perform_loading_test(
 
 
 def get_system_type_user_name_and_user_email():
-    with open('{}/sp_config'.format(os.path.abspath(os.path.dirname(__file__)))) as f:
+    sp_config_path = os.path.abspath(os.path.join(Path(__file__).parents[1], 'sp_config'))
+    with open(sp_config_path, 'r') as f:
         config_dict = json.load(f)
     local_or_remote = config_dict['system_type']
     new_data_set_submitting_user = config_dict['user_name']
@@ -145,6 +203,7 @@ def test_analysis_without_command_line(
         analysis_name, description_arg, custom_data_set_ids, debug_bool, distance_method_arg, submitting_user,
         user_email, no_fig_arg, no_ord_arg, no_output_arg, num_proc, within_clade_cutoff)
     print('Analysis testing SUCCESSFUL')
+    clean_up_after_test_analysis(analysis_uid)
     return analysis_uid, output_path_list
 
 
@@ -160,20 +219,20 @@ def initiate_test():
 
     # run_loading_tests
     test_data_directory = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data')
-    data_sheet_path = test_data_directory + 'test_data_submission_input.csv'
+    data_sheet_path = os.path.join(test_data_directory, 'test_data_submission_input.csv')
 
     data_set_uid, path_of_output_items_list = test_data_loading_without_command_line(
         test_data_directory=test_data_directory, data_sheet_path=data_sheet_path,
-        num_proc=6, name_for_data_set='testing', debug_bool=False, distance_method_arg='braycurtis',
+        num_proc=6, debug_bool=False, distance_method_arg='braycurtis',
         no_ord_arg=False, no_fig_arg=False)
 
     # run_analysis_tests
-    analysis_uid, output_path_list = test_analysis_without_command_line(
-        custom_data_set_ids=str(data_set_uid), analysis_name='ed_testing_analysis',
-        description_arg='ed_testing_analysis',  distance_method_arg='braycurtis', no_fig_arg=False,
+    test_analysis_without_command_line(
+        custom_data_set_ids=str(data_set_uid), analysis_name='testing',
+        description_arg='testing',  distance_method_arg='braycurtis', no_fig_arg=False,
         no_ord_arg=False, no_output_arg=False, num_proc=6, within_clade_cutoff=0.03, debug_bool=False)
 
-    # todo create a function that will delete the files from the data_load and the analysis and run here
+    # todo run some checks on the output files to verify there are no subtle bugs
 
     # todo run the sample by sample ordination
 
@@ -186,21 +245,17 @@ def initiate_test():
     print('testing complete')
 
 
+def delete_data_load_output_object_directories(data_set_uid):
+    directory_to_delete = os.path.abspath(os.path.join(
+        Path(__file__).parents[1], 'outputs', 'data_set_submissions', str(data_set_uid)))
+    shutil.rmtree(directory_to_delete)
+
+
+def delete_data_analysis_output_object_directories(data_analysis_uid):
+    directory_to_delete = os.path.abspath(os.path.join(
+        Path(__file__).parents[1], 'outputs', 'analyses', str(data_analysis_uid)))
+    shutil.rmtree(directory_to_delete)
+
+
 if __name__ == "__main__":
     initiate_test()
-
-# old code
-def test_data_loading_to_database_from_command_line(
-        submission_dir='/Users/humebc/Documents/SymPortal_testing_repo/example_data_location',
-        data_sheet_path = '/Users/humebc/Documents/SymPortal_testing_repo/'
-                          'example_data_location/example_meta_data_input.xlsx',
-        has_data_sheet=True, num_proc=6, submission_name='ed_testing'):
-
-    path_to_sp_main = os.path.abspath(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'main.py'))
-
-    if has_data_sheet:
-        subprocess.run([path_to_sp_main, '--submit', submission_dir, '--data_sheet', data_sheet_path,
-                        '--num_proc', str(num_proc), '--name', submission_name])
-    else:
-        subprocess.run([path_to_sp_main, '--submit', submission_dir, '--num_proc', str(num_proc),
-                        '--name', submission_name])

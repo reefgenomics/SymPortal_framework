@@ -1971,7 +1971,7 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
         # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
         # sample divided by clade. This is used in the output to keep track of sequences that are not
         # included in cladeCollections
-        clade_zeroes_list = [0] * len(clade_list)
+        clade_zeroes_list = [0 for _ in clade_list]
         empty_cladal_seq_totals = json.dumps(clade_zeroes_list)
 
         dss = data_set_sample(name=sampleName, dataSubmissionFrom=data_submission_in_q,
@@ -2018,7 +2018,7 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
         # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
         # sample divided by clade. This is used in the output to keep track of sequences that are not
         # included in cladeCollections
-        clade_zeroes_list = [0] * len(clade_list)
+        clade_zeroes_list = [0 for _ in clade_list]
         empty_cladal_seq_totals = json.dumps(clade_zeroes_list)
 
         dss = data_set_sample(name=sampleName, dataSubmissionFrom=data_submission_in_q,

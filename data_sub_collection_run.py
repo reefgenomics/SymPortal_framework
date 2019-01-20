@@ -47,7 +47,7 @@ def profile_discovery(num_procs):
         # Each dictionary will hold key = footprint (set of sequences)
         # value = [[] []] where []0 = list of cladeCollections containing given footprint
         # and []1 = list of majority sequence for given sample
-        master_cladal_list_of_footprint_dicts = [{}] * len(clade_list)
+        master_cladal_list_of_footprint_dicts = [{} for _ in clade_list]
 
         # For each clade Collection add its footprint to the count dict
         # by associating the majority sequence and sample to the corect cladal dict
@@ -1844,7 +1844,7 @@ class InitialType:
         self.profile_length = len(self.profile)
         self.contains_multiple_basal_sequences, self.basalSequence_list = \
             self.check_if_initial_type_contains_basal_sequences()
-        self.clade_collection_list = clade_collection_list
+        self.clade_collection_list = list(clade_collection_list)
         self.support = len(self.clade_collection_list)
         # We may move away from using the dsss but for the time being we will use it
         if maj_dsss_list:
@@ -3771,7 +3771,7 @@ def assign_species():
         footprint_abundance_info = json.loads(att.footprintSeqAbundances)
         clade = att.clade
         # A list that will contain the average abundance of the def ref seq in question
-        average_abundance_list = [0] * len(reference_sequence_uids_list)
+        average_abundance_list = [0 for _ in reference_sequence_uids_list]
         for j in range(len(footprint_abundance_info)):
             for i in range(len(reference_sequence_uids_list)):
                 average_abundance_list[i] += int(footprint_abundance_info[j][i]) / sum(
