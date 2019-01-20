@@ -1,5 +1,5 @@
-from dbApp.models import (data_set, reference_sequence, data_set_sample_sequence,
-                          analysis_type, data_set_sample, data_analysis, clade_collection)
+from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence,
+                          AnalysisType, DataSetSample, DataAnalysis, CladeCollection)
 import os
 import shutil
 from multiprocessing import Queue, Process, current_process
@@ -40,13 +40,13 @@ def generate_within_clade_unifrac_distances_its2_type_profiles(
         wkd = '{}/{}'.format(output_dir, 'between_its2_type_profile_distances')
 
     # get the dataSubmissions
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
+    data_submissions = DataSet.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
 
     # get the dataAnalysis
-    data_analysis_obj = data_analysis.objects.get(id=data_analysis_id)
+    data_analysis_obj = DataAnalysis.objects.get(id=data_analysis_id)
 
     # go clade by clade
-    its2_type_profiles_of_data_subs_and_analysis = analysis_type.objects.filter(
+    its2_type_profiles_of_data_subs_and_analysis = AnalysisType.objects.filter(
         clade_collection_type__cladeCollectionFoundIn__dataSetSampleFrom__dataSubmissionFrom__in=
         data_submissions, dataAnalysisFrom=data_analysis_obj).distinct()
 
@@ -127,7 +127,7 @@ def generate_fasta_name_group_between_profiles(its2_type_profiles_of_data_subs_a
     for at in its2_type_profiles_of_data_subs_and_analysis_list_of_clade:
         sys.stdout.write('\rProcessing {}'.format(at))
         list_of_div_ids = [int(b) for b in at.orderedFootprintList.split(',')]
-        foot_print_ratio_array = pd.DataFrame(at.getRatioList())
+        foot_print_ratio_array = pd.DataFrame(at.get_ratio_list())
         normalised_abundance_of_divs_dict = {list_of_div_ids[i]: math.ceil(foot_print_ratio_array[i].mean() * 1000) for
                                              i in range(len(list_of_div_ids))}
         list_of_type_profile_norm_abundance_dicts.append(normalised_abundance_of_divs_dict)
@@ -147,7 +147,7 @@ def generate_fasta_name_group_between_profiles(its2_type_profiles_of_data_subs_a
                 zero_seq_name = '{}_id{}_{}'.format(ref_seq_id_key, at.id, 0)
                 unique_fasta.append('>{}'.format(zero_seq_name))
                 # get sequence of ref_seq
-                sequence = reference_sequence.objects.get(id=ref_seq_id_key).sequence
+                sequence = ReferenceSequence.objects.get(id=ref_seq_id_key).sequence
                 unique_fasta.append(sequence)
                 unique_seq_id_list.append(ref_seq_id_key)
 
@@ -182,8 +182,8 @@ def generate_within_clade_unifrac_distances_samples_sample_list_input(
     output_file_paths = []
     
     smpl_id_list = [int(str_id) for str_id in smpl_id_list_str.split(',')]
-    sample_list = data_set_sample.objects.filter(id__in=smpl_id_list)
-    clade_collection_list_of_samples = clade_collection.objects.filter(
+    sample_list = DataSetSample.objects.filter(id__in=smpl_id_list)
+    clade_collection_list_of_samples = CladeCollection.objects.filter(
         dataSetSampleFrom__in=sample_list)
 
     clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_samples]))
@@ -388,9 +388,9 @@ def generate_within_clade_unifrac_distances_samples(
     """
 
     output_file_paths = []
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
+    data_submissions = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
 
-    clade_collection_list_of_data_sets = clade_collection.objects.filter(
+    clade_collection_list_of_data_sets = CladeCollection.objects.filter(
         dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
 
     clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_data_sets]))
@@ -599,8 +599,8 @@ def generate_within_clade_braycurtis_distances_samples_sample_list_input(smpl_id
     output_file_paths = []
 
     smpl_id_list = [int(str_id) for str_id in smpl_id_list_str.split(',')]
-    sample_list = data_set_sample.objects.filter(id__in=smpl_id_list)
-    clade_collection_list_of_samples = clade_collection.objects.filter(
+    sample_list = DataSetSample.objects.filter(id__in=smpl_id_list)
+    clade_collection_list_of_samples = CladeCollection.objects.filter(
         dataSetSampleFrom__in=sample_list)
 
     clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_samples]))
@@ -626,7 +626,7 @@ def generate_within_clade_braycurtis_distances_samples_sample_list_input(smpl_id
         data_set_samples_seq_rel_abund_of_clade_cols_dict = {}
         for clade_col in clade_collections_of_clade:
             temp_dict = {}
-            data_set_sample_sequences_of_clade_col = data_set_sample_sequence.objects.filter(
+            data_set_sample_sequences_of_clade_col = DataSetSampleSequence.objects.filter(
                 cladeCollectionTwoFoundIn=clade_col)
             total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
             for dsss in data_set_sample_sequences_of_clade_col:
@@ -690,7 +690,7 @@ def generate_within_clade_braycurtis_distances_samples_sample_list_input(smpl_id
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
         dist_with_sample_name = [distance_out_file[0]]
         list_of_cc_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
-        cc_of_outputs = list(clade_collection.objects.filter(id__in=list_of_cc_ids))
+        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
         dict_of_cc_id_to_sample_name = {cc.id: cc.dataSetSampleFrom.name for cc in cc_of_outputs}
         for line in distance_out_file[1:]:
             temp_list = []
@@ -764,9 +764,9 @@ def generate_within_clade_braycurtis_distances_samples(data_set_string, call_typ
     """
 
     output_file_paths = []
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
+    data_submissions = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
 
-    clade_collection_list_of_data_sets = clade_collection.objects.filter(
+    clade_collection_list_of_data_sets = CladeCollection.objects.filter(
         dataSetSampleFrom__dataSubmissionFrom__in=data_submissions)
 
     clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_data_sets]))
@@ -795,7 +795,7 @@ def generate_within_clade_braycurtis_distances_samples(data_set_string, call_typ
         data_set_samples_seq_rel_abund_of_clade_cols_dict = {}
         for clade_col in clade_collections_of_clade:
             temp_dict = {}
-            data_set_sample_sequences_of_clade_col = data_set_sample_sequence.objects.filter(
+            data_set_sample_sequences_of_clade_col = DataSetSampleSequence.objects.filter(
                 cladeCollectionTwoFoundIn=clade_col)
             total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
             for dsss in data_set_sample_sequences_of_clade_col:
@@ -859,7 +859,7 @@ def generate_within_clade_braycurtis_distances_samples(data_set_string, call_typ
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
         dist_with_sample_name = [distance_out_file[0]]
         list_of_cc_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
-        cc_of_outputs = list(clade_collection.objects.filter(id__in=list_of_cc_ids))
+        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
         dict_of_cc_id_to_sample_name = {cc.id: cc.dataSetSampleFrom.name for cc in cc_of_outputs}
         for line in distance_out_file[1:]:
             temp_list = []
@@ -910,13 +910,13 @@ def generate_within_clade_braycurtis_distances_its2_type_profiles(
         wkd = '{}/{}'.format(output_dir, 'between_its2_type_profile_distances')
 
     # get the dataSubmissions
-    data_submissions = data_set.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
+    data_submissions = DataSet.objects.filter(id__in=[int(a) for a in str(data_submission_id_str).split(',')])
 
     # get the dataAnalysis
-    data_analysis_obj = data_analysis.objects.get(id=data_analysis_id)
+    data_analysis_obj = DataAnalysis.objects.get(id=data_analysis_id)
 
     # go clade by clade
-    its2_type_profiles_of_data_subs_and_analysis = analysis_type.objects.filter(
+    its2_type_profiles_of_data_subs_and_analysis = AnalysisType.objects.filter(
         clade_collection_type__cladeCollectionFoundIn__dataSetSampleFrom__dataSubmissionFrom__in=
         data_submissions, dataAnalysisFrom=data_analysis_obj).distinct()
 
@@ -943,7 +943,7 @@ def generate_within_clade_braycurtis_distances_its2_type_profiles(
         for at in its2_type_profiles_of_data_subs_and_analysis_list_of_clade:
             sys.stdout.write('\rProcessing {}'.format(at))
             list_of_div_ids = [int(b) for b in at.orderedFootprintList.split(',')]
-            foot_print_ratio_array = pd.DataFrame(at.getRatioList())
+            foot_print_ratio_array = pd.DataFrame(at.get_ratio_list())
             rel_abundance_of_divs_dict = {
                 list_of_div_ids[i]: float(foot_print_ratio_array[i].mean()) for i in range(len(list_of_div_ids))}
             type_profile_rel_abundance_dicts_dict[at.id] = rel_abundance_of_divs_dict
@@ -1066,7 +1066,7 @@ def uni_frac_worker_two(input_queue, output):
         temp_ref_seq_id_list = []
 
         sys.stdout.write('\rProcessing cc: {} with {}'.format(cc, proc_id))
-        for data_set_sample_seq in data_set_sample_sequence.objects.filter(
+        for data_set_sample_seq in DataSetSampleSequence.objects.filter(
                 cladeCollectionTwoFoundIn=cc):
             ref_seq_id = data_set_sample_seq.referenceSequenceOf.id
             temp_ref_seq_id_list.append(ref_seq_id)

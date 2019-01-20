@@ -1,5 +1,5 @@
-from dbApp.models import (data_set, reference_sequence, data_set_sample_sequence, analysis_type, data_set_sample,
-                          data_analysis, clade_collection, clade_collection_type)
+from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
+                          DataAnalysis, CladeCollection, CladeCollectionType)
 from multiprocessing import Queue, Process, Manager
 import sys
 from django import db
@@ -39,11 +39,11 @@ def output_type_count_tables(
     data_submissions_to_output = [int(a) for a in str(datasubstooutput).split(',')]
 
     # Get collection of types that are specific for the dataSubmissions we are looking at
-    query_set_of_data_sets = data_set.objects.filter(id__in=data_submissions_to_output)
+    query_set_of_data_sets = DataSet.objects.filter(id__in=data_submissions_to_output)
 
-    clade_collections_from_data_sets = clade_collection.objects.filter(
+    clade_collections_from_data_sets = CladeCollection.objects.filter(
         dataSetSampleFrom__dataSubmissionFrom__in=query_set_of_data_sets)
-    clade_collection_types_from_this_data_analysis_and_data_set = clade_collection_type.objects.filter(
+    clade_collection_types_from_this_data_analysis_and_data_set = CladeCollectionType.objects.filter(
         cladeCollectionFoundIn__in=clade_collections_from_data_sets,
         analysisTypeOf__dataAnalysisFrom=analysis_object).distinct()
 
@@ -55,8 +55,8 @@ def output_type_count_tables(
 
     # Need to get a list of Samples that are part of the dataAnalysis
     list_of_data_set_samples = list(
-        data_set_sample.objects.filter(
-            dataSubmissionFrom__in=data_set.objects.filter(id__in=data_submissions_to_output)))
+        DataSetSample.objects.filter(
+            dataSubmissionFrom__in=DataSet.objects.filter(id__in=data_submissions_to_output)))
 
     # Now go through the types, firstly by clade and then by the number of cladeCollections they were found in
     # Populate a 2D list of types with a list per clade
@@ -120,9 +120,9 @@ def output_type_count_tables(
             for smp in list_of_data_set_samples:
                 sys.stdout.write('\rCollecting clade collections for sample {}'.format(smp))
                 try:
-                    sample_uid_to_clade_collection_uids_of_clade[smp.id] = clade_collection.objects.get(
+                    sample_uid_to_clade_collection_uids_of_clade[smp.id] = CladeCollection.objects.get(
                         dataSetSampleFrom=smp, clade=clade_in_question).id
-                except clade_collection.DoesNotExist:
+                except CladeCollection.DoesNotExist:
                     sample_uid_to_clade_collection_uids_of_clade[smp.id] = None
                 except Exception as ex:  # Just incase there is some weird stuff going on
                     print(ex)
@@ -535,7 +535,7 @@ def sort_list_of_types_by_clade_collections_in_current_output(
 
     type_uids_sorted = sorted(tuple_list, key=lambda x: x[1], reverse=True)
 
-    return [analysis_type.objects.get(id=x[0]) for x in type_uids_sorted]
+    return [AnalysisType.objects.get(id=x[0]) for x in type_uids_sorted]
 
 
 def output_worker_one(
@@ -603,7 +603,7 @@ def output_worker_one(
             clade_collection_in_question_uid = sample_uid_to_clade_collection_of_clade_uid[ID]
 
             # The number of sequences that were returned for the sample in question
-            total_number_of_sequences = data_set_sample.objects.get(id=ID).finalTotSeqNum
+            total_number_of_sequences = DataSetSample.objects.get(id=ID).finalTotSeqNum
 
             # The number of sequences that make up the type in q
             # The index of the clade_collection_object in the type's listOfCladeCollections
@@ -672,7 +672,7 @@ def get_maj_list(atype):
     for index in range(count + 1):
         for item in range(len(uids_of_sequences_in_order_of_abundance)):
             if uids_of_sequences_in_order_of_abundance[item] in majority_sequeces_uids:
-                maj_seq_obj = reference_sequence.objects.get(id=int(uids_of_sequences_in_order_of_abundance[item]))
+                maj_seq_obj = ReferenceSequence.objects.get(id=int(uids_of_sequences_in_order_of_abundance[item]))
                 if maj_seq_obj.hasName:
                     majority_list.append(maj_seq_obj.name)
                 else:
@@ -721,9 +721,9 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     data_sets_to_output = [int(a) for a in datasubstooutput.split(',')]
 
     # Get collection of data_sets that are specific for the dataSubmissions we are looking at
-    query_set_of_data_sets = data_set.objects.filter(id__in=data_sets_to_output)
+    query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
 
-    reference_sequences_in_data_sets = reference_sequence.objects.filter(
+    reference_sequences_in_data_sets = ReferenceSequence.objects.filter(
         data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=query_set_of_data_sets).distinct()
 
     # Get list of clades found
@@ -748,7 +748,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     # The manager that we will build all of the shared dictionaries from below.
     worker_manager = Manager()
 
-    sample_list = data_set_sample.objects.filter(dataSubmissionFrom__in=query_set_of_data_sets)
+    sample_list = DataSetSample.objects.filter(dataSubmissionFrom__in=query_set_of_data_sets)
 
     # Dictionary that will hold the list of data_set_sample_sequences for each sample
     sample_to_dsss_list_shared_dict = worker_manager.dict()
@@ -756,7 +756,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     for dss in sample_list:
         sys.stdout.write('\r{}'.format(dss.name))
         sample_to_dsss_list_shared_dict[dss.id] = list(
-            data_set_sample_sequence.objects.filter(data_set_sample_from=dss))
+            DataSetSampleSequence.objects.filter(data_set_sample_from=dss))
 
     # Queue that will hold the data set samples for the MP
     data_set_sample_queue = Queue()
@@ -983,10 +983,10 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     # This was painfully slow because we were doing individual calls to the dictionary
     # I think this will be much faster if do two queries of the db to get the named and
     # non named refseqs and then make two dicts for each of these and use these to populate the below
-    reference_sequences_in_data_sets_no_name = reference_sequence.objects.filter(
+    reference_sequences_in_data_sets_no_name = ReferenceSequence.objects.filter(
         data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=query_set_of_data_sets,
         hasName=False).distinct()
-    reference_sequences_in_data_sets_has_name = reference_sequence.objects.filter(
+    reference_sequences_in_data_sets_has_name = ReferenceSequence.objects.filter(
         data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=query_set_of_data_sets,
         hasName=True).distinct()
     # no name dict should be a dict of id to sequence
@@ -1037,7 +1037,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
         output_df_absolute = output_df_absolute.append(temp_series)
         output_df_relative = output_df_relative.append(temp_series)
     elif call_type == 'analysis':
-        data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
+        data_analysis_obj = DataAnalysis.objects.get(id=analysis_obj_id)
         meta_info_string_items = [
             'Output as part of data_analysis ID: {}; Number of data_set objects as part of analysis = {}; '
             'submitting_user: {}; time_stamp: {}'.format(
@@ -1081,7 +1081,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     else:
         date_time_string = time_date_str
     if analysis_obj_id:
-        data_analysis_obj = data_analysis.objects.get(id=analysis_obj_id)
+        data_analysis_obj = DataAnalysis.objects.get(id=analysis_obj_id)
         path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
                                                                       data_analysis_obj.name, date_time_string)
         path_to_div_relative = '{}/{}_{}_{}.DIVs.relative.txt'.format(output_dir, analysis_obj_id,

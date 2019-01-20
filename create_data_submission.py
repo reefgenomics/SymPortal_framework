@@ -1,6 +1,6 @@
 import subprocess
-from dbApp.models import (symportal_framework, data_set, reference_sequence,
-                          data_set_sample_sequence, data_set_sample, clade_collection)
+from dbApp.models import (SymportalFramework, DataSet, ReferenceSequence,
+                          DataSetSampleSequence, DataSetSample, CladeCollection)
 from multiprocessing import Queue, Process, Manager
 from django import db
 
@@ -40,11 +40,11 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
     # we will need to split up this worker function into several stages. The first will be the 'initial mothur'
 
     # This worker performs the pre-MED processing
-    data_sub_in_q = data_set.objects.get(id=data_sub_id)
+    data_sub_in_q = DataSet.objects.get(id=data_sub_id)
     for contigPair in iter(input_q.get, 'STOP'):
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
 
-        data_set_sample_instance_in_q = data_set_sample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
         # Only process samples that have not already had this done.
         # This should be handy in the event of crashed midprocessing
         if not data_set_sample_instance_in_q.initialProcessingComplete:
@@ -273,7 +273,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
 def perform_med(wkd, uid, num_proc, debug):
     # Create mothur batch for each .fasta .name pair to be deuniqued
     # Put in directory list, run via multiprocessing
-    samples_collection = data_set_sample.objects.filter(dataSubmissionFrom=data_set.objects.get(id=uid))
+    samples_collection = DataSetSample.objects.filter(dataSubmissionFrom=DataSet.objects.get(id=uid))
     mothur_batch_file_path_list = []
     for dataSetSampleInstance in samples_collection:  # For each samples directory
         sample_name = dataSetSampleInstance.name
@@ -486,14 +486,14 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
     # get the names of reference_sequecnes
     # this is likely quite expensive so I think it will be easier to make a dict for this purpose which is
     # reference_sequence.id (KEY) reference_sequence.name (VALUE)
-    reference_sequence_id_to_name_dict = {ref_seq.id: ref_seq.name for ref_seq in reference_sequence.objects.all()}
+    reference_sequence_id_to_name_dict = {ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
 
     # This is a dict of key = reference_sequence.sequence value = reference_sequence.id for all refseqs
     # currently held in the database
     # We will use this to see if the sequence in question has a match, or is found in (this is key
     # as some of the seqs are one bp smaller than the reference seqs) there reference sequences
     reference_sequence_sequence_to_id_dict = {
-        ref_seq.sequence: ref_seq.id for ref_seq in reference_sequence.objects.all()}
+        ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
 
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     for directory in med_dirs:  # For each of the directories where we did MED
@@ -548,7 +548,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                     # If there is no current match for the MED node in our current reference_sequences
                     # create a new reference_sequence object and add this to the refSeqDict
                     # Then assign the MED node to this new reference_sequence using the node_to_ref_dict
-                    new_reference_sequence = reference_sequence(clade=clade, sequence=sequence_in_q)
+                    new_reference_sequence = ReferenceSequence(clade=clade, sequence=sequence_in_q)
                     new_reference_sequence.save()
                     new_reference_sequence.name = str(new_reference_sequence.id)
                     new_reference_sequence.save()
@@ -592,8 +592,8 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
 
         for i in range(len(samples)):  # For each sample # There should only be one sample
 
-            data_set_sample_object = data_set_sample.objects.get(
-                dataSubmissionFrom=data_set.objects.get(id=identification),
+            data_set_sample_object = DataSetSample.objects.get(
+                dataSubmissionFrom=DataSet.objects.get(id=identification),
                 name=samples[i])
             # Add the metadata to the data_set_sample
             data_set_sample_object.post_med_absolute += sum(count_array[i])
@@ -622,7 +622,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                 sys.stdout.write(
                     '\n{} clade {} sequences in {}. Creating clade_collection_object object\n'.format(sum(count_array[i]),
                                                                                                sample_name, clade))
-                new_cc = clade_collection(clade=clade, dataSetSampleFrom=data_set_sample_object)
+                new_cc = CladeCollection(clade=clade, dataSetSampleFrom=data_set_sample_object)
                 new_cc.save()
             else:
                 sys.stdout.write(
@@ -643,7 +643,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                 abundance = count_array[i][j]
                 if abundance > 0:
                     ref_seq_abundance_counter[
-                        reference_sequence.objects.get(id=node_to_ref_dict[nodes[j]])] += abundance
+                        ReferenceSequence.objects.get(id=node_to_ref_dict[nodes[j]])] += abundance
 
             # > 200 associate a clade_collection_object to the data_set_sample, else, don't
             # irrespective, associate a data_set_sample_sequences to the data_set_sample
@@ -652,13 +652,13 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                                                                                                            sample_name))
             if sum(count_array[i]) > 200:
                 for ref_seq in ref_seq_abundance_counter.keys():
-                    dss = data_set_sample_sequence(referenceSequenceOf=ref_seq,
-                                                   cladeCollectionTwoFoundIn=new_cc,
-                                                   abundance=ref_seq_abundance_counter[ref_seq],
-                                                   data_set_sample_from=data_set_sample_object)
+                    dss = DataSetSampleSequence(referenceSequenceOf=ref_seq,
+                                                cladeCollectionTwoFoundIn=new_cc,
+                                                abundance=ref_seq_abundance_counter[ref_seq],
+                                                data_set_sample_from=data_set_sample_object)
                     dss_list.append(dss)
                 # Save all of the newly created dss
-                data_set_sample_sequence.objects.bulk_create(dss_list)
+                DataSetSampleSequence.objects.bulk_create(dss_list)
                 # Get the ids of each of the dss and add create a string of them and store it as cc.footPrint
                 # This way we can quickly get the footprint of the clade_collection_object.
                 # Sadly we can't get eh uids from the list so we will need to re-query
@@ -667,12 +667,12 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                 new_cc.save()
             else:
                 for ref_seq in ref_seq_abundance_counter.keys():
-                    dss = data_set_sample_sequence(referenceSequenceOf=ref_seq,
-                                                   abundance=ref_seq_abundance_counter[ref_seq],
-                                                   data_set_sample_from=data_set_sample_object)
+                    dss = DataSetSampleSequence(referenceSequenceOf=ref_seq,
+                                                abundance=ref_seq_abundance_counter[ref_seq],
+                                                data_set_sample_from=data_set_sample_object)
                     dss_list.append(dss)
                 # Save all of the newly created dss
-                data_set_sample_sequence.objects.bulk_create(dss_list)
+                DataSetSampleSequence.objects.bulk_create(dss_list)
 
     return
 
@@ -681,7 +681,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
          data_sheet_path=None, no_fig=False, no_ord=False, distance_method='braycurtis', debug=False):
     # UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE
 
-    data_submission_in_q = data_set.objects.get(id=data_set_identification)
+    data_submission_in_q = DataSet.objects.get(id=data_set_identification)
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     # we will create the output dire early on so that we can use it to write out the sample by sample
     # thrown away seqs.
@@ -930,7 +930,7 @@ def perform_sequence_drop():
 
 
 def processed_samples_status(data_submission_in_q, path_to_input_file):
-    sample_list = data_set_sample.objects.filter(dataSubmissionFrom=data_submission_in_q)
+    sample_list = DataSetSample.objects.filter(dataSubmissionFrom=data_submission_in_q)
     failed_list = []
     for sample in sample_list:
         if sample.errorInProcessing:
@@ -1400,12 +1400,12 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
 # noinspection PyBroadException,PyPep8
 def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_id, list_of_discarded_seqs,
                               throw_away_seqs_dir):
-    data_sub_in_q = data_set.objects.get(id=data_sub_id)
+    data_sub_in_q = DataSet.objects.get(id=data_sub_id)
     for contigPair in iter(input_q.get, 'STOP'):
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
         if sample_name in error_sample_list_shared:
             continue
-        data_set_sample_instance_in_q = data_set_sample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
         root_name = r'{0}stability'.format(sample_name)
 
@@ -1503,13 +1503,13 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_i
 
 
 def worker_screen_size(input_q, error_sample_list, wkd, data_sub_id, debug):
-    data_sub_in_q = data_set.objects.get(id=data_sub_id)
+    data_sub_in_q = DataSet.objects.get(id=data_sub_id)
     for contigPair in iter(input_q.get, 'STOP'):
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
         if sample_name in error_sample_list:
             continue
 
-        data_set_sample_instance_in_q = data_set_sample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
         root_name = r'{0}stability'.format(sample_name)
         # At this point we have the newFasta, new_name, new_group. These all only contain sequences that were
@@ -1573,12 +1573,12 @@ def worker_screen_size(input_q, error_sample_list, wkd, data_sub_id, debug):
 
 
 def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, data_sub_id):
-    data_sub_in_q = data_set.objects.get(id=data_sub_id)
+    data_sub_in_q = DataSet.objects.get(id=data_sub_id)
     for contigPair in iter(input_q.get, 'STOP'):
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
         if sample_name in error_sample_list:
             continue
-        data_set_sample_instance_in_q = data_set_sample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
         root_name = r'{0}stability'.format(sample_name)
 
@@ -1746,14 +1746,14 @@ def associate_qc_meta_data_to_samples(wkd, num_proc, data_set_identification, er
 
 
 def worker_associate_qc_meta_data_to_samples(input_q, error_sample_list, wkd, data_sub_id):
-    data_sub_in_q = data_set.objects.get(id=data_sub_id)
+    data_sub_in_q = DataSet.objects.get(id=data_sub_id)
     for contigPair in iter(input_q.get, 'STOP'):
 
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
         if sample_name in error_sample_list:
             continue
 
-        data_set_sample_instance_in_q = data_set_sample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
 
         # load the name_dict form the previous worker
@@ -1945,7 +1945,7 @@ def generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set
                                                                                               data_submission_in_q,
                                                                                               wkd)
     # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-    data_set_sample.objects.bulk_create(list_of_sample_objects)
+    DataSetSample.objects.bulk_create(list_of_sample_objects)
     return wkd, len(list_of_sample_objects)
 
 
@@ -1978,8 +1978,8 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
         clade_zeroes_list = [0 for _ in clade_list]
         empty_cladal_seq_totals = json.dumps(clade_zeroes_list)
 
-        dss = data_set_sample(name=sampleName, dataSubmissionFrom=data_submission_in_q,
-                              cladalSeqTotals=empty_cladal_seq_totals)
+        dss = DataSetSample(name=sampleName, dataSubmissionFrom=data_submission_in_q,
+                            cladalSeqTotals=empty_cladal_seq_totals)
         list_of_sample_objects.append(dss)
     return list_of_sample_objects
 
@@ -2026,20 +2026,20 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
         clade_zeroes_list = [0 for _ in clade_list]
         empty_cladal_seq_totals = json.dumps(clade_zeroes_list)
 
-        dss = data_set_sample(name=sampleName, dataSubmissionFrom=data_submission_in_q,
-                              cladalSeqTotals=empty_cladal_seq_totals,
-                              sample_type=sample_meta_df.loc[sampleName, 'sample_type'],
-                              host_phylum=sample_meta_df.loc[sampleName, 'host_phylum'],
-                              host_class=sample_meta_df.loc[sampleName, 'host_class'],
-                              host_order=sample_meta_df.loc[sampleName, 'host_order'],
-                              host_family=sample_meta_df.loc[sampleName, 'host_family'],
-                              host_genus=sample_meta_df.loc[sampleName, 'host_genus'],
-                              host_species=sample_meta_df.loc[sampleName, 'host_species'],
-                              collection_latitude=sample_meta_df.loc[sampleName, 'collection_latitude'],
-                              collection_longitude=sample_meta_df.loc[sampleName, 'collection_longitude'],
-                              collection_date=sample_meta_df.loc[sampleName, 'collection_date'],
-                              collection_depth=sample_meta_df.loc[sampleName, 'collection_depth']
-                              )
+        dss = DataSetSample(name=sampleName, dataSubmissionFrom=data_submission_in_q,
+                            cladalSeqTotals=empty_cladal_seq_totals,
+                            sample_type=sample_meta_df.loc[sampleName, 'sample_type'],
+                            host_phylum=sample_meta_df.loc[sampleName, 'host_phylum'],
+                            host_class=sample_meta_df.loc[sampleName, 'host_class'],
+                            host_order=sample_meta_df.loc[sampleName, 'host_order'],
+                            host_family=sample_meta_df.loc[sampleName, 'host_family'],
+                            host_genus=sample_meta_df.loc[sampleName, 'host_genus'],
+                            host_species=sample_meta_df.loc[sampleName, 'host_species'],
+                            collection_latitude=sample_meta_df.loc[sampleName, 'collection_latitude'],
+                            collection_longitude=sample_meta_df.loc[sampleName, 'collection_longitude'],
+                            collection_date=sample_meta_df.loc[sampleName, 'collection_date'],
+                            collection_depth=sample_meta_df.loc[sampleName, 'collection_depth']
+                            )
         list_of_sample_objects.append(dss)
     return list_of_sample_objects
 
@@ -2335,7 +2335,7 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
         write_list_to_destination(full_path_to_new_ref_fasta_iteration, new_fasta)
 
         # now update the SymPortal framework object
-        symportal_framework_object = symportal_framework.objects.get(id=1)
+        symportal_framework_object = SymportalFramework.objects.get(id=1)
         symportal_framework_object.latest_reference_fasta = 'symClade_{}_{}.fa'.format(iteration_id,
                                                                                        seq_sample_support_cut_off)
         symportal_framework_object.next_reference_fasta_iteration += 1
@@ -2357,6 +2357,6 @@ def generate_sequence_drop_file():
     # this will simply produce a list
     # in the list each item will be a line of text that will be a refseq name, clade and sequence
     output_list = []
-    for ref_seq in reference_sequence.objects.filter(hasName=True):
+    for ref_seq in ReferenceSequence.objects.filter(hasName=True):
         output_list.append('{}\t{}\t{}'.format(ref_seq.name, ref_seq.clade, ref_seq.sequence))
     return output_list

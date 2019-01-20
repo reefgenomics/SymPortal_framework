@@ -6,16 +6,16 @@ from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 
 # Your application specific imports
-from dbApp.models import data_set, data_analysis
+from dbApp.models import DataSet, DataAnalysis
 # ###########################################
 
 
 def delete_data_set(uid):
-    data_set.objects.get(id=uid).delete()
+    DataSet.objects.get(id=uid).delete()
 
 
 def delete_data_analysis(uid):
-    data_analysis.objects.get(id=uid).delete()
+    DataAnalysis.objects.get(id=uid).delete()
 
 
 def write_list_to_destination(destination, list_to_write):

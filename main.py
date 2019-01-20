@@ -28,7 +28,7 @@ from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 # Your application specific imports
-from dbApp.models import data_set, data_set_sample, data_analysis
+from dbApp.models import DataSet, DataSetSample, DataAnalysis
 ############################################
 
 import data_sub_collection_run
@@ -206,7 +206,7 @@ def main():
         custom_data_set_ids = args.analyse
         if args.analyse == 'all':
             temp_list = []
-            for ds in data_set.objects.all():
+            for ds in DataSet.objects.all():
                 temp_list.append(str(ds.id))
             string_list = ','.join(temp_list)
             custom_data_set_ids = string_list
@@ -216,7 +216,7 @@ def main():
         new_data_set_submitting_user = config_dict['user_name']
         new_data_set_user_email = config_dict['user_email']
 
-        new_analysis_object = data_analysis(
+        new_analysis_object = DataAnalysis(
             listOfDataSubmissions=str(custom_data_set_ids), withinCladeCutOff=float(within_clade_cutoff),
             name=args.name, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
             submittingUser=new_data_set_submitting_user, submitting_user_email=new_data_set_user_email)
@@ -234,10 +234,10 @@ def main():
             config_dict = json.load(f)
         new_data_set_submitting_user = config_dict['user_name']
         if args.data_analysis_id:
-            analysis_object = data_analysis.objects.get(id=args.data_analysis_id)
+            analysis_object = DataAnalysis.objects.get(id=args.data_analysis_id)
             data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
-            query_set_of_data_sets = data_set.objects.filter(id__in=data_sets_to_output)
-            num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=query_set_of_data_sets))
+            query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
+            num_samples = len(DataSetSample.objects.filter(dataSubmissionFrom__in=query_set_of_data_sets))
 
             data_sub_collection_run.output_type_count_tables(
                 analysisobj=analysis_object, num_processors=args.num_proc, call_type='stand_alone',
@@ -253,7 +253,7 @@ def main():
         # Then print out all of the dataSubmissions with names and uids in the db
         # Let's sort this by id when outputting
         # When just printing the raw query the order is somewhat random
-        data_set_id_to_obj_dict = {ds.id: ds for ds in list(data_set.objects.all())}
+        data_set_id_to_obj_dict = {ds.id: ds for ds in list(DataSet.objects.all())}
         sorted_list_of_ids = sorted(list(data_set_id_to_obj_dict.keys()))
 
         for ds_id in sorted_list_of_ids:
@@ -264,7 +264,7 @@ def main():
         # Then print out all of the dataAnalysisTwos with names and uids in the db
         # Let's sort this by id when outputting
         # When just printing the raw query the order is somewhat random
-        data_analysis_id_to_obj_dict = {da.id: da for da in list(data_analysis.objects.all())}
+        data_analysis_id_to_obj_dict = {da.id: da for da in list(DataAnalysis.objects.all())}
         sorted_list_of_ids = sorted(list(data_analysis_id_to_obj_dict.keys()))
 
         for da_id in sorted_list_of_ids:
@@ -372,7 +372,7 @@ def create_analysis_obj_and_run_analysis(
         analysis_name, description_arg, custom_data_set_ids, debug_bool, distance_method_arg, submitting_user,
         user_email, no_fig_arg, no_ord_arg, no_output_arg, num_proc, within_clade_cutoff):
 
-    new_analysis_object = data_analysis(
+    new_analysis_object = DataAnalysis(
         listOfDataSubmissions=str(custom_data_set_ids), withinCladeCutOff=float(within_clade_cutoff),
         name=analysis_name, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
         submittingUser=submitting_user, submitting_user_email=user_email)
@@ -405,10 +405,10 @@ def start_data_submission(data_sheet_arg, debug_bool, distance_method_arg, input
 
 def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user, new_data_set_user_email):
 
-    new_data_set = data_set(name=name_for_data_set, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-                            reference_fasta_database_used='symClade.fa',
-                            submittingUser=new_data_set_submitting_user,
-                            submitting_user_email=new_data_set_user_email)
+    new_data_set = DataSet(name=name_for_data_set, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+                           reference_fasta_database_used='symClade.fa',
+                           submittingUser=new_data_set_submitting_user,
+                           submitting_user_email=new_data_set_user_email)
     new_data_set.save()
     return new_data_set
 

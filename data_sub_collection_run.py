@@ -18,8 +18,8 @@ import numpy as np
 from django import db
 from scipy.stats import gaussian_kde
 
-from dbApp.models import (reference_sequence, data_set_sample_sequence, analysis_type, analysis_group,
-                          data_set_sample, clade_collection_type,  clade_collection)
+from dbApp.models import (ReferenceSequence, DataSetSampleSequence, AnalysisType, AnalysisGroup,
+                          DataSetSample, CladeCollectionType, CladeCollection)
 from distance import (generate_within_clade_unifrac_distances_its2_type_profiles,
                       generate_within_clade_braycurtis_distances_its2_type_profiles)
 from general import write_list_to_destination, read_defined_file_to_list
@@ -41,7 +41,7 @@ def profile_discovery(num_procs):
         clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
         # Get the cladeCollections that are found in the listof datasubmissions that are found in the analysis_object
-        clade_collections_of_analysis = analysis_object.getCladeCollections()
+        clade_collections_of_analysis = analysis_object.get_clade_collections()
 
         # List that will hold a dictionary for each clade
         # Each dictionary will hold key = footprint (set of sequences)
@@ -171,24 +171,24 @@ def profile_discovery(num_procs):
 
                         # the Counter class (from collections import Counter) may be useful
                         # http://stackoverflow.com/questions/2600191/how-can-i-count-the-occurrences-of-a-list-item-in-python
-                        new_analysis_type = analysis_type(
+                        new_analysis_type = AnalysisType(
                             coDom=True,
                             dataAnalysisFrom=analysis_object,
                             clade=clade_list[master_cladal_list_of_footprint_dicts.index(footPrintDict)])
 
-                        new_analysis_type.setMajRefSeqSet(initialType.set_of_maj_ref_seqs)
-                        new_analysis_type.initTypeAttributes(initialType.clade_collection_list, initialType.profile)
+                        new_analysis_type.set_maj_ref_seq_set(initialType.set_of_maj_ref_seqs)
+                        new_analysis_type.init_type_attributes(initialType.clade_collection_list, initialType.profile)
 
                         new_analysis_type.save()
                         print('\rCreating analysis type: {}'.format(new_analysis_type.name), end='')
                     else:
 
-                        new_analysis_type = analysis_type(coDom=False, dataAnalysisFrom=analysis_object,
-                                                          clade=clade_list[
+                        new_analysis_type = AnalysisType(coDom=False, dataAnalysisFrom=analysis_object,
+                                                         clade=clade_list[
                                                               master_cladal_list_of_footprint_dicts.index(
                                                                   footPrintDict)])
-                        new_analysis_type.setMajRefSeqSet(initialType.set_of_maj_ref_seqs)
-                        new_analysis_type.initTypeAttributes(initialType.clade_collection_list, initialType.profile)
+                        new_analysis_type.set_maj_ref_seq_set(initialType.set_of_maj_ref_seqs)
+                        new_analysis_type.init_type_attributes(initialType.clade_collection_list, initialType.profile)
                         new_analysis_type.save()
                         print('\rCreating analysis type: {}'.format(new_analysis_type.name), end='')
 
@@ -283,7 +283,7 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
     """
 
     # Get list of all types
-    all_types_from_data_analysis = analysis_type.objects.filter(dataAnalysisFrom=analysis_object)
+    all_types_from_data_analysis = AnalysisType.objects.filter(dataAnalysisFrom=analysis_object)
 
     # Get list of clades that are represented by the types
     clade_list = set()
@@ -295,13 +295,13 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
         while 1:
             restart = False
             # Get list of type from scratch as we may be restarting this
-            all_types_from_data_analysis = analysis_type.objects.filter(dataAnalysisFrom=analysis_object)
+            all_types_from_data_analysis = AnalysisType.objects.filter(dataAnalysisFrom=analysis_object)
             cladal_types_uids = [at.id for at in all_types_from_data_analysis if at.clade == currentClade]
             # For each type
             for type_to_check_uid in cladal_types_uids:
                 # if this type has not already been checked
                 if type_to_check_uid not in checked:
-                    print('\n\nChecking {}'.format(analysis_type.objects.get(id=type_to_check_uid)))
+                    print('\n\nChecking {}'.format(AnalysisType.objects.get(id=type_to_check_uid)))
                     # If this type contains artefact DIVs
                     if type_footprint_dict[type_to_check_uid][2]:
                         # Then this is a type we need to check
@@ -318,7 +318,7 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                                             for
                                             refSeqObj in ref_seq_objs_of_type_list}
 
-                        list_of_ccs_to_check = [cc for cc in analysis_object.getCladeCollections() if
+                        list_of_ccs_to_check = [cc for cc in analysis_object.get_clade_collections() if
                                                 cc.clade == currentClade]
 
                         task_queue = Queue()
@@ -383,7 +383,7 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                                     else:
                                         initial_type_uid = find_which_type_is_same_basal_type_as_pnt(
                                             requirement_dict,
-                                            analysis_type.objects.filter(
+                                            AnalysisType.objects.filter(
                                                 id__in=cc_to_initial_type_dict[clade_collection_object.id])).id
 
                                         set_of_types_affected.add(initial_type_uid)
@@ -404,13 +404,13 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                             print('Reassessing support of affected types')
                             stranded_ccs = []
                             for an_type in type_to_cc_to_be_removed_dict.keys():
-                                analysis_type_in_question = analysis_type.objects.get(id=an_type)
+                                analysis_type_in_question = AnalysisType.objects.get(id=an_type)
 
                                 # REMOVE CCs FROM TYPES
                                 # Remove CCs from type
                                 list_of_ccs_to_be_removed_str_uid = [str(cc.id) for cc in
                                                                      type_to_cc_to_be_removed_dict[an_type]]
-                                analysis_type_in_question.removeCCListFromInitialCladeCollectionList(
+                                analysis_type_in_question.remove_clade_collection_list_from_initial_clade_collection_list(
                                     list_of_ccs_to_be_removed_str_uid)
 
                                 # Change the clade_collection_object associations in the cctocurrent... dict
@@ -425,28 +425,28 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                                 # As some of these will not have 4 to start with
                                 # IF SUPPORTED
 
-                                list_of_ccs_in_type = [cc for cc in clade_collection.objects.filter(
+                                list_of_ccs_in_type = [cc for cc in CladeCollection.objects.filter(
                                     id__in=[int(x) for x in
                                             analysis_type_in_question.listOfCladeCollectionsFoundInInitially.split(',')
                                             if x != ''])]
                                 if list_of_ccs_in_type and len(
-                                        analysis_type_in_question.getOrderedFootprintList()) == 1:
+                                        analysis_type_in_question.get_ordered_footprint_list()) == 1:
                                     print('Short Type {} supported by {} CCs. Reinitiating.'
                                           .format(analysis_type_in_question.name, len(list_of_ccs_in_type)))
                                     # Then this still has suffiecient support
                                     # reinitiate the type
-                                    analysis_type_in_question.initTypeAttributes(
-                                        listOfCC=list_of_ccs_in_type,
-                                        footprintlistofrefseqs=analysis_type_in_question.getOrderedFootprintList())
+                                    analysis_type_in_question.init_type_attributes(
+                                        list_of_clade_collections=list_of_ccs_in_type,
+                                        footprintlistofrefseqs=analysis_type_in_question.get_ordered_footprint_list())
                                 elif len(list_of_ccs_in_type) >= 4:
                                     print('Type {} supported by {} CCs. Reinitiating.'.format(
                                         analysis_type_in_question.name,
                                         len(list_of_ccs_in_type)))
                                     # Then this still has suffiecient support
                                     # reinitiate the type
-                                    analysis_type_in_question.initTypeAttributes(
-                                        listOfCC=list_of_ccs_in_type,
-                                        footprintlistofrefseqs=analysis_type_in_question.getOrderedFootprintList())
+                                    analysis_type_in_question.init_type_attributes(
+                                        list_of_clade_collections=list_of_ccs_in_type,
+                                        footprintlistofrefseqs=analysis_type_in_question.get_ordered_footprint_list())
                                 # IF UNSUPPORTED
                                 else:
                                     # Then this antype no longer has sufficient support
@@ -479,14 +479,14 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                                 total_intra_set = set()
                                 for clade_collection_object in stranded_ccs:
                                     total_intra_set.update(
-                                        clade_collection_object.cutOffFootprint(analysis_object.withinCladeCutOff))
+                                        clade_collection_object.cutoff_footprint(analysis_object.withinCladeCutOff))
 
                                 # Now go through each clade_collection_object again and remove any intra
                                 # from the total list that isn't found in the
                                 # CCinQ to produce an in common list
                                 ref_seqs_to_remove = set()
                                 for clade_collection_object in stranded_ccs:
-                                    intras_in_clade_collection_in_question = clade_collection_object.cutOffFootprint(
+                                    intras_in_clade_collection_in_question = clade_collection_object.cutoff_footprint(
                                         analysis_object.withinCladeCutOff)
                                     for ref_seq in list(total_intra_set):
                                         if ref_seq not in intras_in_clade_collection_in_question:
@@ -548,8 +548,8 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
 
                             # FINALLY, ADD CCs TO TYPEINQ AND REINITIATE
                             # N.B. The CCs have already had their cc_to_initial_type_dict adjusted
-                            type_to_check_object = analysis_type.objects.get(id=type_to_check_uid)
-                            current_list_of_clade_collections_in_type = [cc for cc in clade_collection.objects.filter(
+                            type_to_check_object = AnalysisType.objects.get(id=type_to_check_uid)
+                            current_list_of_clade_collections_in_type = [cc for cc in CladeCollection.objects.filter(
                                 id__in=[int(x) for x in
                                         type_to_check_object.listOfCladeCollectionsFoundInInitially.split(',')
                                         if x != ''])]
@@ -557,9 +557,9 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                             updated_list_of_ccs_in_type.extend(current_list_of_clade_collections_in_type)
                             updated_list_of_ccs_in_type.extend(support_list)
 
-                            type_to_check_object.initTypeAttributes(
-                                listOfCC=updated_list_of_ccs_in_type,
-                                footprintlistofrefseqs=type_to_check_object.getOrderedFootprintList())
+                            type_to_check_object.init_type_attributes(
+                                list_of_clade_collections=updated_list_of_ccs_in_type,
+                                footprintlistofrefseqs=type_to_check_object.get_ordered_footprint_list())
                             print('Added {} CCs to {}'.format(len(support_list), type_to_check_object))
                         checked.append(type_to_check_uid)
                         if restart:
@@ -610,7 +610,7 @@ def check_whether_pnt_needs_comparing_to_current_type(requirement_dict, list_of_
     # for each at check to see if the result is informative
     for at in list_of_analysis_types:
         basal = False
-        for rs in at.getOrderedFootprintList():
+        for rs in at.get_ordered_footprint_list():
             if 'C3' == rs.name:
                 basal = 'C3'
                 break
@@ -651,7 +651,7 @@ def find_which_type_is_same_basal_type_as_pnt(requirement_dict, list_of_analysis
     # for each at check to see if the result is informative
     for at in list_of_analysis_types:
         basal = False
-        for rs in at.getOrderedFootprintList():
+        for rs in at.get_ordered_footprint_list():
             if 'C3' == rs.name:
                 basal = 'C3'
                 break
@@ -749,7 +749,7 @@ def worker_artefact_two(input_queue, support_list, cc_to_initial_type_dict, type
                 # if it is not then we should not let the clade_collection_object associate with the potential new type
                 current_initial_type = check_whether_pnt_needs_comparing_to_current_type(
                     requirement_dict,
-                    analysis_type.objects.filter(id__in=cc_to_initial_type_dict[clade_collection_object.id]))
+                    AnalysisType.objects.filter(id__in=cc_to_initial_type_dict[clade_collection_object.id]))
                 # we will only allow a clade_collection_object to support a potential new type if the
                 # pnt is of the same basal as one of the CCs current types
                 # This is because we run into trouble in knowing which type to
@@ -816,7 +816,7 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
             required_abundance = unlockedAbund
         else:
             required_abundance = 0.03
-        pnt.append((reference_sequence.objects.get(id=intraID), required_abundance))
+        pnt.append((ReferenceSequence.objects.get(id=intraID), required_abundance))
     ############################################################################
 
     # Check to see if the potential newtypes footprint already exists
@@ -830,7 +830,7 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
 
     if exists:
         print('Assessing new type:{}'.format(
-            [reference_sequence.objects.get(id=refSeqID).name for refSeqID in pnt_footprint]))
+            [ReferenceSequence.objects.get(id=refSeqID).name for refSeqID in pnt_footprint]))
         print('Potential new type already exists')
         return False
 
@@ -872,11 +872,11 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
     # code so that if a clade_collection_object doesn't have an itnitial type
     # currently it can give support to the PNT if the PNT's DIVs are found in the clade_collection_object.
 
-    list_of_ccs_to_check = [cc for cc in analysis_object.getCladeCollections() if cc.clade == type_a.clade if
+    list_of_ccs_to_check = [cc for cc in analysis_object.get_clade_collections() if cc.clade == type_a.clade if
                             cc.id in cctocurrentinitialtypedict.keys()]
 
     print('Assessing support for potential new type:{}'.format(
-        [reference_sequence.objects.get(id=refSeqID).name for refSeqID in pnt_footprint]))
+        [ReferenceSequence.objects.get(id=refSeqID).name for refSeqID in pnt_footprint]))
 
     # CHECK EVERY clade_collection_object OF THE ANALYSISOBJ
     # To see whether the clade_collection_object supports the pnt
@@ -915,20 +915,20 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
     if len(support_list) >= 4:
 
         # CREATE NEW TYPE
-        new_analysis_type = analysis_type(dataAnalysisFrom=analysis_object, clade=clade)
+        new_analysis_type = AnalysisType(dataAnalysisFrom=analysis_object, clade=clade)
         # list_of_ccs = [cc for cc in clade_collection.objects.filter(id__in=support_list)]
-        new_analysis_type.initTypeAttributes(support_list, [pntItem[0] for pntItem in pnt])
+        new_analysis_type.init_type_attributes(support_list, [pntItem[0] for pntItem in pnt])
         new_analysis_type.save()
         print('\nSupport found. Creating new type:{}'.format(new_analysis_type))
         # We need to keep the typefootprintdict upto date when types are created or deleted
         # get list of refseqs in type
 
         # UPDATE TYPEFOOTPRINT
-        ref_seq_uids = set([ref_seq.id for ref_seq in new_analysis_type.getOrderedFootprintList()])
+        ref_seq_uids = set([ref_seq.id for ref_seq in new_analysis_type.get_ordered_footprint_list()])
         artefact_intra_uids = set([int(x) for x in new_analysis_type.artefactIntras.split(',') if x != ''])
         non_artefact_uids = [identification for identification in ref_seq_uids if
                              identification not in artefact_intra_uids]
-        footprint = new_analysis_type.getOrderedFootprintList()
+        footprint = new_analysis_type.get_ordered_footprint_list()
         typefootprintdict[new_analysis_type.id] = [non_artefact_uids, ref_seq_uids, artefact_intra_uids, footprint]
 
         # REDISTRIBUTE SUPPORTING TYPES
@@ -948,7 +948,7 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
                     initial_type_uid = cctocurrentinitialtypedict[clade_collection_object.id][0]
                 else:
                     # this will return the analysis_type from the list of analysis types that matches the pnt
-                    initial_type = check_which_type_has_same_basal_seq(pnt, analysis_type.objects.filter(
+                    initial_type = check_which_type_has_same_basal_seq(pnt, AnalysisType.objects.filter(
                         id__in=cctocurrentinitialtypedict[clade_collection_object.id]))
                     if initial_type:
                         initial_type_uid = initial_type.id
@@ -977,12 +977,12 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
         print('Reassessing support of affected types')
         stranded_ccs = []
         for an_type in type_to_cc_to_be_removed_dict.keys():
-            analysis_type_in_question = analysis_type.objects.get(id=an_type)
+            analysis_type_in_question = AnalysisType.objects.get(id=an_type)
 
             # REMOVE CCs FROM TYPES
             # Remove CCs from type
             list_of_ccs_to_be_removed_str_uid = [str(cc.id) for cc in type_to_cc_to_be_removed_dict[an_type]]
-            analysis_type_in_question.removeCCListFromInitialCladeCollectionList(list_of_ccs_to_be_removed_str_uid)
+            analysis_type_in_question.remove_clade_collection_list_from_initial_clade_collection_list(list_of_ccs_to_be_removed_str_uid)
 
             # Change the clade_collection_object associations in the cctocurrent... dict
             for ccstrid in list_of_ccs_to_be_removed_str_uid:
@@ -994,7 +994,7 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
             # If it does then reinitiate it
             # IF SUPPORTED
 
-            list_of_ccs_in_type = [cc for cc in clade_collection.objects.filter(
+            list_of_ccs_in_type = [cc for cc in CladeCollection.objects.filter(
                 id__in=[int(x) for x in analysis_type_in_question.listOfCladeCollectionsFoundInInitially.split(',') if
                         x != ''])]
             if len(list_of_ccs_in_type) >= 4:
@@ -1002,9 +1002,9 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
                                                                           len(list_of_ccs_in_type)))
                 # Then this still has suffiecient support
                 # reinitiate the type
-                analysis_type_in_question.initTypeAttributes(
-                    listOfCC=list_of_ccs_in_type,
-                    footprintlistofrefseqs=analysis_type_in_question.getOrderedFootprintList())
+                analysis_type_in_question.init_type_attributes(
+                    list_of_clade_collections=list_of_ccs_in_type,
+                    footprintlistofrefseqs=analysis_type_in_question.get_ordered_footprint_list())
             # IF UNSUPPORTED
             else:
                 # THen this antype no longer has sufficient support
@@ -1047,14 +1047,14 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
         if len(stranded_ccs) >= 4:
             total_intra_set = set()
             for clade_collection_object in stranded_ccs:
-                total_intra_set.update(clade_collection_object.cutOffFootprint(analysis_object.withinCladeCutOff))
+                total_intra_set.update(clade_collection_object.cutoff_footprint(analysis_object.withinCladeCutOff))
 
             # Now go through each clade_collection_object again and remove any intra from
             # the total list that isn't found in the
             # CCinQ to produce an in common list
             ref_seqs_to_remove = set()
             for clade_collection_object in stranded_ccs:
-                intras_in_clade_collection_in_question = clade_collection_object.cutOffFootprint(
+                intras_in_clade_collection_in_question = clade_collection_object.cutoff_footprint(
                     analysis_object.withinCladeCutOff)
                 for ref_seq in list(total_intra_set):
                     if ref_seq not in intras_in_clade_collection_in_question:
@@ -1133,7 +1133,7 @@ def check_which_type_has_same_basal_seq(pnt, list_of_type_objects):
     # for each at check to see if the result is informative
     for at in list_of_type_objects:
         basal = False
-        for rs in at.getOrderedFootprintList():
+        for rs in at.get_ordered_footprint_list():
             if 'C3' == rs.name:
                 basal = 'C3'
                 break
@@ -1204,7 +1204,7 @@ def worker_artefact_one(input_queue, support_list, cctorefabunddict, pnt, cctocu
                 # that has multiple C15 types. So...
                 # If the check_which_type_has_same_basal_seq returns false, then the non of the current_initial_types
                 # have a basal in common with the pnt. In this case we can lend our support to the type
-                current_initial_types = analysis_type.objects.filter(
+                current_initial_types = AnalysisType.objects.filter(
                     id__in=cctocurrentinitialtypedict[clade_collection_object.id])
                 current_initial_type = None
 
@@ -1252,7 +1252,7 @@ def associate_ccs_to_existing_type_and_update_dicts(cctocurrentinitialtypedict, 
     for clade_collection_object in stranded_ccs:
         cctocurrentinitialtypedict[clade_collection_object.id] = [type_that_exists_uid]
 
-    type_that_exists = analysis_type.objects.get(id=type_that_exists_uid)
+    type_that_exists = AnalysisType.objects.get(id=type_that_exists_uid)
 
     print('Associating stranded types to existing type {}'.format(type_that_exists.name))
     # add the CCs to the type
@@ -1261,33 +1261,33 @@ def associate_ccs_to_existing_type_and_update_dicts(cctocurrentinitialtypedict, 
     type_that_exists.listOfCladeCollectionsFoundInInitially = ','.join(current_list_of_initial_ccs)
     type_that_exists.save()
     # Re initiate the type in Q to incorporate the new CCs
-    list_of_ccs = [cc for cc in clade_collection.objects.filter(
+    list_of_ccs = [cc for cc in CladeCollection.objects.filter(
         id__in=[int(x) for x in type_that_exists.listOfCladeCollectionsFoundInInitially.split(',')])]
-    type_that_exists.initTypeAttributes(listOfCC=list_of_ccs,
-                                        footprintlistofrefseqs=type_that_exists.getOrderedFootprintList())
+    type_that_exists.init_type_attributes(list_of_clade_collections=list_of_ccs,
+                                          footprintlistofrefseqs=type_that_exists.get_ordered_footprint_list())
     # Update the typefootprintdict with this type
-    ref_seq_uids = set([ref_seq.id for ref_seq in type_that_exists.getOrderedFootprintList()])
+    ref_seq_uids = set([ref_seq.id for ref_seq in type_that_exists.get_ordered_footprint_list()])
     artefact_intra_uids = set([int(x) for x in type_that_exists.artefactIntras.split(',') if x != ''])
     non_artefact_uids = [identification for identification in ref_seq_uids if identification not in artefact_intra_uids]
-    footprint = type_that_exists.getOrderedFootprintList()
+    footprint = type_that_exists.get_ordered_footprint_list()
     typefootprintdict[type_that_exists.id] = [non_artefact_uids, ref_seq_uids, artefact_intra_uids, footprint]
 
 
 def make_new_type_and_associate_ccs_and_update_dicts(cctocurrentinitialtypedict, clade, intras_in_common_list,
                                                      stranded_ccs,
                                                      typefootprintdict):
-    new_analysis_type = analysis_type(dataAnalysisFrom=analysis_object, clade=clade)
+    new_analysis_type = AnalysisType(dataAnalysisFrom=analysis_object, clade=clade)
     list_of_ccs = list(stranded_ccs)
     list_of_ref_seqs = intras_in_common_list
-    new_analysis_type.initTypeAttributes(list_of_ccs, list_of_ref_seqs)
+    new_analysis_type.init_type_attributes(list_of_ccs, list_of_ref_seqs)
 
     # new_analysis_type.save()
     print('Creating new type: {} from {} residual cladeCollections'.format(new_analysis_type, len(stranded_ccs)))
     # Update the typefootprintdict with this type
-    ref_seq_uids = set([ref_seq.id for ref_seq in new_analysis_type.getOrderedFootprintList()])
+    ref_seq_uids = set([ref_seq.id for ref_seq in new_analysis_type.get_ordered_footprint_list()])
     artefact_intra_uids = set([int(x) for x in new_analysis_type.artefactIntras.split(',') if x != ''])
     non_artefact_uids = [identification for identification in ref_seq_uids if identification not in artefact_intra_uids]
-    footprint = new_analysis_type.getOrderedFootprintList()
+    footprint = new_analysis_type.get_ordered_footprint_list()
     typefootprintdict[new_analysis_type.id] = [non_artefact_uids, ref_seq_uids, artefact_intra_uids, footprint]
     # Also update the cctocurrentinitialtypedict
     for clade_collection_object in list_of_ccs:
@@ -1326,7 +1326,7 @@ def reassociate_ccs_to_existing_types_and_update_dicts(cctocurrentinitialtypedic
         for clade_collection_object in stranded_ccs:
             # Get new list of an types for each clade_collection_object in case types are made
             list_of_analysis_types = [antype for antype in
-                                      analysis_type.objects.filter(id__in=list(typefootprintdict.keys()))
+                                      AnalysisType.objects.filter(id__in=list(typefootprintdict.keys()))
                                       if antype.clade == clade]
             high_abund = 0
             best_type_uid = None
@@ -1376,7 +1376,7 @@ def reassociate_ccs_to_existing_types_and_update_dicts(cctocurrentinitialtypedic
             ref_seq = most_abund_intra_of_clade_collection[0]
 
             if best_type_uid is not None and high_abund >= abundance:
-                match_type = analysis_type.objects.get(id=best_type_uid)
+                match_type = AnalysisType.objects.get(id=best_type_uid)
                 current_list_of_initial_ccs = match_type.listOfCladeCollectionsFoundInInitially.split(',')
                 current_list_of_initial_ccs.append(str(clade_collection_object.id))
                 match_type.listOfCladeCollectionsFoundInInitially = ','.join(current_list_of_initial_ccs)
@@ -1386,15 +1386,15 @@ def reassociate_ccs_to_existing_types_and_update_dicts(cctocurrentinitialtypedic
 
                 # reinitiate type
                 list_of_ccs = [cc for cc in
-                               clade_collection.objects.filter(id__in=[int(x) for x in current_list_of_initial_ccs])]
-                match_type.initTypeAttributes(listOfCC=list_of_ccs,
-                                              footprintlistofrefseqs=match_type.getOrderedFootprintList())
+                               CladeCollection.objects.filter(id__in=[int(x) for x in current_list_of_initial_ccs])]
+                match_type.init_type_attributes(list_of_clade_collections=list_of_ccs,
+                                                footprintlistofrefseqs=match_type.get_ordered_footprint_list())
 
                 # update the type_footprint_dict
-                ref_seq_uids = set([ref_seq.id for ref_seq in match_type.getOrderedFootprintList()])
+                ref_seq_uids = set([ref_seq.id for ref_seq in match_type.get_ordered_footprint_list()])
                 artefact_intra_uids = set([int(x) for x in match_type.artefactIntras.split(',') if x != ''])
                 non_artefact_uids = [uid for uid in ref_seq_uids if uid not in artefact_intra_uids]
-                footprint = match_type.getOrderedFootprintList()
+                footprint = match_type.get_ordered_footprint_list()
                 typefootprintdict[match_type.id] = [non_artefact_uids, ref_seq_uids, artefact_intra_uids, footprint]
 
                 print(
@@ -1430,7 +1430,7 @@ def create_total_seqs_dict_for_all_ccs(num_processors):
 
         print('Generating CCToTotalSeqDict')
 
-        list_of_ccs_to_check = [cc for cc in analysis_object.getCladeCollections()]
+        list_of_ccs_to_check = [cc for cc in analysis_object.get_clade_collections()]
 
         task_queue = Queue()
         clade_collection_to_total_seqs_manager = Manager()
@@ -1472,7 +1472,7 @@ def create_total_seqs_dict_for_all_ccs(num_processors):
 
 def create_ref_seq_rel_abunds_for_all_ccs_dict(cc_to_total_seqs_dict, num_processors):
     # Generate dict per cc for listof reference sequences and their abundances in the clade_collection_object
-    list_of_ccs_to_check = [cc for cc in analysis_object.getCladeCollections()]
+    list_of_ccs_to_check = [cc for cc in analysis_object.get_clade_collections()]
     test_dir_path = os.path.join(os.path.dirname(__file__), 'temp/{}'.format(analysis_object.id))
     os.chdir(test_dir_path)
     try:
@@ -1515,7 +1515,7 @@ def workercc_to_ref_seq_list_and_abundances(input_queue, cc_to_total_seqs_dict, 
     for clade_collection_object in iter(input_queue.get, 'STOP'):
         print('\r{} {}'.format(clade_collection_object, current_process().name), end='')
         list_of_dataset_sample_sequences_in_clade_collection = [dsss for dsss in
-                                                                data_set_sample_sequence.objects.filter(
+                                                                DataSetSampleSequence.objects.filter(
                                                                     cladeCollectionTwoFoundIn=clade_collection_object)]
         list_of_ref_seqs_in_cladecollection = [dsss.referenceSequenceOf for dsss in
                                                list_of_dataset_sample_sequences_in_clade_collection]
@@ -1534,14 +1534,14 @@ def create_type_artefact_div_info_dict(all_types_from_data_analysis):
         # if str(at) == 'C42g-C42a-C42.2-C42h-C1-C42b':
         #     apples = 'pears'
         # get list of refseqs in type
-        ref_seq_uids = set([ref_seq.id for ref_seq in at.getOrderedFootprintList()])
+        ref_seq_uids = set([ref_seq.id for ref_seq in at.get_ordered_footprint_list()])
         artefact_intra_uids = set([int(x) for x in at.artefactIntras.split(',') if x != ''])
         # ###DEBUG###
         # for ID in artefact_intra_uids:
         #     print(reference_sequence.objects.get(id=ID).name)
         # #####
         non_artefact_uids = [uid for uid in ref_seq_uids if uid not in artefact_intra_uids]
-        footprint = at.getOrderedFootprintList()
+        footprint = at.get_ordered_footprint_list()
         type_footprint_dict[at.id] = [non_artefact_uids, ref_seq_uids, artefact_intra_uids, footprint]
 
     return type_footprint_dict
@@ -1568,8 +1568,8 @@ def check_if_type_pairs_contain_incompatible_basal_seqs(typea, typeb):
     them to be considered together"""
     # TODO 11/01/18 we can potentially speed this up by keeping the initalT information on basal seqs
     # and having this info be held in the type object.
-    reference_sequence_a = typea.getOrderedFootprintList()
-    reference_sequence_b = typeb.getOrderedFootprintList()
+    reference_sequence_a = typea.get_ordered_footprint_list()
+    reference_sequence_b = typeb.get_ordered_footprint_list()
 
     # first check to see if we have a basal seq in a.
     # If we don't then we can't have an compataility
@@ -1616,7 +1616,7 @@ def check_for_additional_artefact_types(num_processors):
         cc_to_total_seqs_dict, num_processors)
 
     # Get list of all types
-    all_types_from_data_analysis = analysis_type.objects.filter(dataAnalysisFrom=analysis_object)
+    all_types_from_data_analysis = AnalysisType.objects.filter(dataAnalysisFrom=analysis_object)
 
     # Get list of clades that are represented by the types
     clade_list = set()
@@ -1636,9 +1636,9 @@ def check_for_additional_artefact_types(num_processors):
     # so that it is compatible with ccts having multiple types.
     # we still need to do the other artefact checking
     for clade in clade_list:
-        all_types_from_data_analysis = analysis_type.objects.filter(dataAnalysisFrom=analysis_object, clade=clade)
+        all_types_from_data_analysis = AnalysisType.objects.filter(dataAnalysisFrom=analysis_object, clade=clade)
 
-        static_list_of_types = list(analysis_type.objects.filter(dataAnalysisFrom=analysis_object, clade=clade))
+        static_list_of_types = list(AnalysisType.objects.filter(dataAnalysisFrom=analysis_object, clade=clade))
         done_list = []
         while 1:
             restart = False
@@ -1696,7 +1696,7 @@ def check_for_additional_artefact_types(num_processors):
                                         # that are found in common between the original types list and an
                                         # updated types list. This way no newly added types will be analysed.
                                         # and we should avoid a run away situation
-                                        all_types_from_data_analysis = analysis_type.objects.filter(
+                                        all_types_from_data_analysis = AnalysisType.objects.filter(
                                             dataAnalysisFrom=analysis_object, clade=clade)
                                         break
                                     else:
@@ -1735,7 +1735,7 @@ def workercc_to_total_seqs_dict(input_queue, cctototalseqsdict):
         print('\r{} {}'.format(clade_collection_object, current_process().name), end='')
         total_sequences_in_cladecollection = sum(
             [dsss.abundance for dsss in
-             data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_object)])
+             DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_object)])
         cctototalseqsdict[clade_collection_object.id] = total_sequences_in_cladecollection
 
 
@@ -1774,8 +1774,8 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
             # Here we need to check that for each of the CCs we have a C3 dsss in the list of maj seqs
             clade_collection_type_list = footprintdict[keyname][0]
             for i in range(len(clade_collection_type_list)):
-                c3dsss = data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=clade_collection_type_list[i],
-                                                              referenceSequenceOf=rs)
+                c3dsss = DataSetSampleSequence.objects.get(cladeCollectionTwoFoundIn=clade_collection_type_list[i],
+                                                           referenceSequenceOf=rs)
 
                 # check that whether it is a list that we are adding to
                 # this will probably fail because maj list is currently just a list.
@@ -1787,8 +1787,8 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
             # Here we need to check that for each of the CCs we have a C3 dsss in the list of maj seqs
             clade_collection_type_list = footprintdict[keyname][0]
             for i in range(len(clade_collection_type_list)):
-                c1dsss = data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=clade_collection_type_list[i],
-                                                              referenceSequenceOf=rs)
+                c1dsss = DataSetSampleSequence.objects.get(cladeCollectionTwoFoundIn=clade_collection_type_list[i],
+                                                           referenceSequenceOf=rs)
                 # check that whether it is a list that we are adding to
                 # this will probably fail because maj list is currently just a list.
                 # we need to change this to be a 2Dlist we will need to update this when we are first forming the dict
@@ -1803,7 +1803,7 @@ def check_if_contains_multiple_basal_seqs(footprintdict, keyname):
             for i in range(len(clade_collection_type_list)):
                 # for each cct we need to find the most abundant C15X seq and add this as the majsequence
                 list_of_sequences_in_clade_collection_type = list(
-                    data_set_sample_sequence.objects.filter(
+                    DataSetSampleSequence.objects.filter(
                         cladeCollectionTwoFoundIn=clade_collection_type_list[i]).order_by(
                         '-abundance'))
                 for dsss in list_of_sequences_in_clade_collection_type:
@@ -1904,7 +1904,7 @@ class InitialType:
             for clade_collection_obj in self.clade_collection_list:
                 temp_dsss_list = []
                 data_set_sample_sequence_list = list(
-                    data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
+                    DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
                         '-abundance'))
                 # for each of the basal seqs in the basal seqs list, find the dsss representative
                 for basal_seq in self.basalSequence_list:
@@ -1951,7 +1951,7 @@ class InitialType:
             for clade_collection_obj in self.clade_collection_list:
                 temp_dsss_list = []
                 dsss_in_cc = list(
-                    data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
+                    DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
                         '-abundance'))
                 dsss_in_cc_in_profile = [dsss for dsss in dsss_in_cc if dsss.referenceSequenceOf in self.profile]
                 # first find the dsss that are the representatives of the basal types
@@ -1984,7 +1984,7 @@ class InitialType:
             for clade_collection_obj in self.clade_collection_list:
                 temp_dsss_list = []
                 dsss_in_cc = list(
-                    data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
+                    DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_obj).order_by(
                         '-abundance'))
                 dsss_in_cc_in_profile = [dsss for dsss in dsss_in_cc if dsss.referenceSequenceOf in self.profile]
                 basal_dsss = dsss_in_cc_in_profile[0]
@@ -2931,11 +2931,11 @@ def profile_assignment(num_procs):
     print('Running inferFinalSymbiodiniumTypes()')
 
     # Get a list of all of the analysisTypes that have been discovered in the type discovery
-    query_set_of_analysis_types = list(analysis_type.objects.filter(dataAnalysisFrom=analysis_object))
+    query_set_of_analysis_types = list(AnalysisType.objects.filter(dataAnalysisFrom=analysis_object))
     # Get the uids of these types
     analysis_types_uids = [an_type.id for an_type in query_set_of_analysis_types]
     # Get a list of the CCs to check for types within
-    query_set_of_clade_collections = analysis_object.getCladeCollections()
+    query_set_of_clade_collections = analysis_object.get_clade_collections()
     # Get dict of the clade_collection_object footprint and Type footprints so that we don't have to
     # look them up each time
 
@@ -3011,7 +3011,7 @@ def profile_assignment(num_procs):
 
     analysis_type_footprint_manager = Manager()
     analysis_type_footprint_dictionary = analysis_type_footprint_manager.dict(
-        {an_type.id: frozenset(an_type.getOrderedFootprintList()) for an_type in query_set_of_analysis_types})
+        {an_type.id: frozenset(an_type.get_ordered_footprint_list()) for an_type in query_set_of_analysis_types})
 
     # Two manager objects that will be used in the multiprocessing as outputs
 
@@ -3059,10 +3059,10 @@ def profile_assignment(num_procs):
     # Create cladeCollectionTypes in bulk
     clade_collection_type_list = []
     for cct in bulk_create_list:
-        clade_collection_type_list.append(clade_collection_type(analysisTypeOf=analysis_type.objects.get(id=cct[0]),
-                                                                cladeCollectionFoundIn=clade_collection.objects.get(
+        clade_collection_type_list.append(CladeCollectionType(analysisTypeOf=AnalysisType.objects.get(id=cct[0]),
+                                                              cladeCollectionFoundIn=CladeCollection.objects.get(
                                                                     id=cct[1])))
-    clade_collection_type.objects.bulk_create(clade_collection_type_list)
+    CladeCollectionType.objects.bulk_create(clade_collection_type_list)
 
     # The info in here is the a list of tuples with 0 being the id of the analysis type and 1 the cladeCollection id
     # We can easily do what we were doing with the dictionary manager with the above.
@@ -3072,8 +3072,8 @@ def profile_assignment(num_procs):
         clade_collection_type_making_dictionary[atID].append(ccID)
 
     for type_uidKey in clade_collection_type_making_dictionary.keys():
-        analysis_type_in_question = analysis_type.objects.get(id=type_uidKey)
-        analysis_type_in_question.addCCListToCladeCollectionList(clade_collection_type_making_dictionary[type_uidKey])
+        analysis_type_in_question = AnalysisType.objects.get(id=type_uidKey)
+        analysis_type_in_question.add_clade_collection_list_to_clade_collection_list(clade_collection_type_making_dictionary[type_uidKey])
         analysis_type_in_question.save()
 
     # #Add the clade_collection_object's to the profiles
@@ -3091,9 +3091,9 @@ def profile_assignment(num_procs):
     # Update the types' counts and ratios from the up-to-date clade_collection_object lists
     # See the updateTypeAttributes comment for more details of the use
 
-    for antype in analysis_type.objects.filter(id__in=analysis_types_uids):
+    for antype in AnalysisType.objects.filter(id__in=analysis_types_uids):
         if antype.listOfCladeCollections:
-            antype.updateTypeAttributes()
+            antype.update_type_attributes()
             antype.save()
             print('\rUpdating type {}'.format(antype.name), end='')
 
@@ -3120,7 +3120,7 @@ def worker_assignment_two(input_queue, dictionary):
         temporary_dictionary = {}
         # get a list of dataSetSampleSequenceTwos and make a refseq to abundance dict
         data_set_sample_sequence_list = list(
-            data_set_sample_sequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_object))
+            DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=clade_collection_object))
         for dsss in data_set_sample_sequence_list:
             temporary_dictionary[dsss.referenceSequenceOf] = dsss.abundance
         dictionary[clade_collection_object] = temporary_dictionary
@@ -3145,7 +3145,7 @@ def worker_assignment_three(input_queue, clade_collection_reference_sequence_abu
         # I will cycle through the uids to prevent having to update the query setofAnalysisTypesevery run
         for i in range(len(analysis_types_uids)):
             # This is the analysis_type that we are trying to find in the clade_collection_object
-            analysis_type_in_question = analysis_type.objects.get(id=analysis_types_uids[i])
+            analysis_type_in_question = AnalysisType.objects.get(id=analysis_types_uids[i])
 
             analysis_type_footprint = analysis_type_footprint_dictionary[analysis_types_uids[i]]
 
@@ -3167,7 +3167,7 @@ def worker_assignment_three(input_queue, clade_collection_reference_sequence_abu
 
                 else:  # If Type is only one DIV # can't we just look this up with the CCRedSeqAbundDict?
                     # ensure that the seq is found at above 0.05 of the clade_collection_object
-                    sequences_in_clade_collection = data_set_sample_sequence.objects.filter(
+                    sequences_in_clade_collection = DataSetSampleSequence.objects.filter(
                         cladeCollectionTwoFoundIn=clade_collection_object)
                     abundance_of_sequences_in_clade_collection = sum(
                         aSS.abundance for aSS in sequences_in_clade_collection)
@@ -3283,7 +3283,7 @@ def ratio_check(clade_collection_object, antype):  # allowance of 0.00 and no up
 
     # list of ref seqs that make up the type in Q in order of abundance across all
     # cladeCollections the type was found in initially
-    ordered_footprint_list_of_type = antype.getOrderedFootprintList()
+    ordered_footprint_list_of_type = antype.get_ordered_footprint_list()
 
     # For each refseq of type, get the abundance in the clade_collection_object in Q and sum these.
     # We will use this to calculate
@@ -3297,8 +3297,8 @@ def ratio_check(clade_collection_object, antype):  # allowance of 0.00 and no up
     for ref_seq in ordered_footprint_list_of_type:
         # Get the abundance of the current ref_seq in Q
         sample_seq_abundances.append(
-            data_set_sample_sequence.objects.get(cladeCollectionTwoFoundIn=clade_collection_object,
-                                                 referenceSequenceOf=ref_seq).abundance)
+            DataSetSampleSequence.objects.get(cladeCollectionTwoFoundIn=clade_collection_object,
+                                              referenceSequenceOf=ref_seq).abundance)
     total = sum(sample_seq_abundances)
     footprint_in_q_ratios_list = [x / total for x in sample_seq_abundances]
 
@@ -3312,7 +3312,7 @@ def ratio_check(clade_collection_object, antype):  # allowance of 0.00 and no up
     # I will check this now.
     # If this is all good then I should be sure to make a note of this in the SymPortal documentations.
     # I have checked this. We are all good. I was mis-remembering. I will aim to make this clearer in the logic doc now.
-    current_max_min_ratio_for_type = antype.getMaxMinRatios()
+    current_max_min_ratio_for_type = antype.get_max_min_ratios()
     for ref_seq in ordered_footprint_list_of_type[:]:
         current_max = current_max_min_ratio_for_type[ordered_footprint_list_of_type.index(ref_seq)][0]
         current_min = current_max_min_ratio_for_type[ordered_footprint_list_of_type.index(ref_seq)][1]
@@ -3338,11 +3338,11 @@ def multi_modal_detection(initial_run):
     if not initial_run:  # We only want types that have a cladeCollectionList
         # both empty string and None return False so this is types that have CCs associated to them only
         list_of_all_analysis_types = [
-            anObj for anObj in analysis_type.objects.filter(
+            anObj for anObj in AnalysisType.objects.filter(
                 dataAnalysisFrom=analysis_object) if anObj.listOfCladeCollections]
     else:  # No need to check if initial run as all types have initial clade collections
         list_of_all_analysis_types = [anObj for anObj in
-                                      analysis_type.objects.all().filter(dataAnalysisFrom=analysis_object)]
+                                      AnalysisType.objects.all().filter(dataAnalysisFrom=analysis_object)]
     analysis_types_to_be_deleted = []
     # This is a list of the types that have already been successfuly split
     # If this has types in it then we want to re-assess to see if there are further types to split
@@ -3357,7 +3357,7 @@ def multi_modal_detection(initial_run):
             list_of_types_to_analyse = list_of_all_analysis_types
         types_split = []
         for k in range(len(list_of_types_to_analyse)):
-            ordered_footprint_list = list_of_types_to_analyse[k].getOrderedFootprintList()
+            ordered_footprint_list = list_of_types_to_analyse[k].get_ordered_footprint_list()
             if len(ordered_footprint_list) == 1:
                 # If there is only one intra then no need to check
                 continue
@@ -3366,15 +3366,15 @@ def multi_modal_detection(initial_run):
             # bimodal but eventually  we need to check all types
             # if listOfTypesToAnalyse[k].coDom:
             if initial_run:
-                clade_collections_in_type = list_of_types_to_analyse[k].getCladeCollectionsFoundInInitially()
+                clade_collections_in_type = list_of_types_to_analyse[k].get_clade_collections_found_in_initially()
             else:
 
-                clade_collections_in_type = list_of_types_to_analyse[k].getCladeCollections()
+                clade_collections_in_type = list_of_types_to_analyse[k].get_clade_collections()
 
             # 2D list where each list is cc and each item in list is the relative abundance of the
             # seqinQ in the clade_collection_object
             # where seqs are in the order of orderedFootprintList
-            seq_ratios_for_type = list_of_types_to_analyse[k].getRatioList()
+            seq_ratios_for_type = list_of_types_to_analyse[k].get_ratio_list()
             # we can only split a type if we have sufficient instances of that type to look at
             # we will make the cutoff 10 for the time being
             if len(clade_collections_in_type) > 9:
@@ -3440,10 +3440,10 @@ def multi_modal_detection(initial_run):
                         if x_diff_valid:
                             if initial_run:
                                 ordered_list_of_clade_collections_in_type = list_of_types_to_analyse[
-                                    k].getCladeCollectionsFoundInInitially()
+                                    k].get_clade_collections_found_in_initially()
                             else:
                                 ordered_list_of_clade_collections_in_type = list_of_types_to_analyse[
-                                    k].getCladeCollections()
+                                    k].get_clade_collections()
                             clade_collections_for_type_a = []
                             clade_collections_for_type_b = []
                             # returns the index of local max and mins in pdf
@@ -3492,7 +3492,7 @@ def multi_modal_detection(initial_run):
                                 majority_sequence_reference_sequence_set_a = set()
                                 for i in range(2):  # Do twice, once with only top 10, second if needed, with all
                                     for cc in clade_collections_for_type_a:
-                                        ordered_footprint_of_ref_seqs_by_abundance = cc.orderedListOfRefSeqs(all_found)
+                                        ordered_footprint_of_ref_seqs_by_abundance = cc.ordered_list_of_reference_sequences(all_found)
                                         for refSequence in ordered_footprint_of_ref_seqs_by_abundance:
                                             if refSequence in ordered_footprint_list:
                                                 majority_sequence_reference_sequence_set_a.add(refSequence)
@@ -3507,7 +3507,7 @@ def multi_modal_detection(initial_run):
                                 majority_sequence_reference_sequence_set_b = set()
                                 for i in range(2):  # Do twice, once with only top 10, second if needed, with all
                                     for cc in clade_collections_for_type_b:
-                                        ordered_footprint_of_ref_seqs_by_abundance = cc.orderedListOfRefSeqs(all_found)
+                                        ordered_footprint_of_ref_seqs_by_abundance = cc.ordered_list_of_reference_sequences(all_found)
                                         for refSequence in ordered_footprint_of_ref_seqs_by_abundance:
                                             if refSequence in ordered_footprint_list:
                                                 majority_sequence_reference_sequence_set_b.add(refSequence)
@@ -3520,22 +3520,22 @@ def multi_modal_detection(initial_run):
 
                                 # Initiate analysisTypeA first
                                 if len(majority_sequence_reference_sequence_set_a) > 1:  # Then coDom = True
-                                    new_analysis_type_a = analysis_type(dataAnalysisFrom=analysis_object, coDom=True,
-                                                                        clade=clade_collections_for_type_a[0].clade)
+                                    new_analysis_type_a = AnalysisType(dataAnalysisFrom=analysis_object, coDom=True,
+                                                                       clade=clade_collections_for_type_a[0].clade)
                                     new_analysis_type_a.save()
                                 else:
-                                    new_analysis_type_a = analysis_type(dataAnalysisFrom=analysis_object, coDom=False,
-                                                                        clade=clade_collections_for_type_a[0].clade)
+                                    new_analysis_type_a = AnalysisType(dataAnalysisFrom=analysis_object, coDom=False,
+                                                                       clade=clade_collections_for_type_a[0].clade)
                                     new_analysis_type_a.save()
-                                new_analysis_type_a.setMajRefSeqSet(majority_sequence_reference_sequence_set_a)
+                                new_analysis_type_a.set_maj_ref_seq_set(majority_sequence_reference_sequence_set_a)
                                 # If this is the first run of the multiModal detection then we are still
                                 # working with the listOfCladeCollectionsFoundInInitially rather than the later
                                 # listOfCladeCollections
                                 # equally we will be calling initTypeAtttributes rather than updateTypeAttributes
 
                                 if initial_run:
-                                    new_analysis_type_a.initTypeAttributes(
-                                        listOfCC=clade_collections_for_type_a,
+                                    new_analysis_type_a.init_type_attributes(
+                                        list_of_clade_collections=clade_collections_for_type_a,
                                         footprintlistofrefseqs=ordered_footprint_list)
                                 else:
                                     # before calling updateTypeAttributes we must set
@@ -3548,7 +3548,7 @@ def multi_modal_detection(initial_run):
 
                                     new_analysis_type_a.save()
 
-                                    new_analysis_type_a.updateTypeAttributes()
+                                    new_analysis_type_a.update_type_attributes()
                                 new_analysis_type_a.save()
                                 print(
                                     'Creating type {} for multimodal characteristics'.format(new_analysis_type_a.name))
@@ -3562,25 +3562,25 @@ def multi_modal_detection(initial_run):
                                 if not initial_run:
                                     list_of_clade_collection_types = []
                                     for clade_collection_object in clade_collections_for_type_a:
-                                        new_clade_collection_type = clade_collection_type(
+                                        new_clade_collection_type = CladeCollectionType(
                                             analysisTypeOf=new_analysis_type_a,
                                             cladeCollectionFoundIn=clade_collection_object)
                                         list_of_clade_collection_types.append(new_clade_collection_type)
-                                    clade_collection_type.objects.bulk_create(list_of_clade_collection_types)
+                                    CladeCollectionType.objects.bulk_create(list_of_clade_collection_types)
 
                                 # Initiate analysisTypeB second
                                 if len(majority_sequence_reference_sequence_set_b) > 1:  # Then coDom = True
-                                    new_analysis_type_b = analysis_type(dataAnalysisFrom=analysis_object, coDom=True,
-                                                                        clade=clade_collections_for_type_b[0].clade)
+                                    new_analysis_type_b = AnalysisType(dataAnalysisFrom=analysis_object, coDom=True,
+                                                                       clade=clade_collections_for_type_b[0].clade)
                                     new_analysis_type_b.save()
                                 else:
-                                    new_analysis_type_b = analysis_type(dataAnalysisFrom=analysis_object, coDom=False,
-                                                                        clade=clade_collections_for_type_b[0].clade)
+                                    new_analysis_type_b = AnalysisType(dataAnalysisFrom=analysis_object, coDom=False,
+                                                                       clade=clade_collections_for_type_b[0].clade)
                                     new_analysis_type_b.save()
-                                new_analysis_type_b.setMajRefSeqSet(majority_sequence_reference_sequence_set_b)
+                                new_analysis_type_b.set_maj_ref_seq_set(majority_sequence_reference_sequence_set_b)
                                 if initial_run:
-                                    new_analysis_type_b.initTypeAttributes(
-                                        listOfCC=clade_collections_for_type_b,
+                                    new_analysis_type_b.init_type_attributes(
+                                        list_of_clade_collections=clade_collections_for_type_b,
                                         footprintlistofrefseqs=ordered_footprint_list)
 
                                 else:
@@ -3597,7 +3597,7 @@ def multi_modal_detection(initial_run):
                                         [str(ref_seq.id) for ref_seq in ordered_footprint_list])
                                     new_analysis_type_b.save()
 
-                                    new_analysis_type_b.updateTypeAttributes()
+                                    new_analysis_type_b.update_type_attributes()
                                 new_analysis_type_b.save()
                                 print(
                                     'Creating type {} for multimodal characteristics'.format(new_analysis_type_b.name))
@@ -3606,11 +3606,11 @@ def multi_modal_detection(initial_run):
                                 if not initial_run:
                                     list_of_clade_collection_types = []
                                     for clade_collection_object in clade_collections_for_type_b:
-                                        new_clade_collection_type = clade_collection_type(
+                                        new_clade_collection_type = CladeCollectionType(
                                             analysisTypeOf=new_analysis_type_b,
                                             cladeCollectionFoundIn=clade_collection_object)
                                         list_of_clade_collection_types.append(new_clade_collection_type)
-                                    clade_collection_type.objects.bulk_create(list_of_clade_collection_types)
+                                    CladeCollectionType.objects.bulk_create(list_of_clade_collection_types)
                                 # Both analysis types are initialized here
                                 # Delete the old analysis_type -- NB this should delete the cladCollectionTypes as well.
                                 # The actual deleting should be done outside of the analysis_type for loop (k loop)
@@ -3631,7 +3631,7 @@ def multi_modal_detection(initial_run):
 
     # Delete the redundant analysisTypes
     # cladeCollectionsFirst
-    clade_collection_type_to_delete = clade_collection_type.objects.all().filter(
+    clade_collection_type_to_delete = CladeCollectionType.objects.all().filter(
         analysisTypeOf__in=analysis_types_to_be_deleted)
     for cc in clade_collection_type_to_delete:
         cc.delete()
@@ -3674,7 +3674,7 @@ def assign_profiles_to_groups():
     # groupnames are the Maj types found in types
     # but if coDom types exist the groups contain all types that have majs that are found in the codoms
     # Get list of all types that have cladeCollections associated with them
-    list_of_analysis_types = [anlType for anlType in analysis_type.objects.filter(dataAnalysisFrom=analysis_object) if
+    list_of_analysis_types = [anlType for anlType in AnalysisType.objects.filter(dataAnalysisFrom=analysis_object) if
                               anlType.listOfCladeCollections]
 
     # Create groupings of Types that have majs in common
@@ -3694,7 +3694,7 @@ def assign_profiles_to_groups():
     # for each group link the types it contains to the analysis_group instance
     for group in group_names_list:
         print('Creating new group without name')
-        new_analysis_group = analysis_group(dataAnalysisFrom=analysis_object)
+        new_analysis_group = AnalysisGroup(dataAnalysisFrom=analysis_object)
         # Name each of the groups that were just created
         # newAnalysisGroup.generateName()
         new_analysis_group.save()
@@ -3717,8 +3717,8 @@ def create_groups(group_names_list, new_analysis_type):
     for tempGroup in group_list:  # for each grouping of anlTypes which is a list
         list_of_maj_ref_seqs_found_in_types_in_temp_group = []
         for aType in tempGroup:
-            list_of_maj_ref_seqs_found_in_types_in_temp_group.extend(list(aType.getMajRefSeqSet()))
-        for majRefSeq in new_analysis_type.getMajRefSeqSet():
+            list_of_maj_ref_seqs_found_in_types_in_temp_group.extend(list(aType.get_majority_reference_sequence_set()))
+        for majRefSeq in new_analysis_type.get_majority_reference_sequence_set():
             if majRefSeq in list_of_maj_ref_seqs_found_in_types_in_temp_group:
                 # Then this type shares a majseq with one of the types in this group
                 # Get index so that these two groups can be merged
@@ -3756,13 +3756,13 @@ def create_groups(group_names_list, new_analysis_type):
 
 # OUTPUT FORMAT FUNCTIONS
 def assign_species():
-    at = analysis_type.objects.filter(dataAnalysisFrom=analysis_object)
+    at = AnalysisType.objects.filter(dataAnalysisFrom=analysis_object)
     uids = [att.id for att in at]
 
     # For each analysis type check and assign the associated species
     for m in range(len(uids)):
         assigned_species = []
-        att = analysis_type.objects.get(id=uids[m])
+        att = AnalysisType.objects.get(id=uids[m])
         # This is a 2D list of sequence abundances.
         # Each list is the seq abundances found in a clade collection
         # Each value within a list is the abundance of the defining sequences (in order of att.orderedFootprintList)
@@ -3785,11 +3785,11 @@ def assign_species():
         list_of_ref_seqs = []
 
         for i in range(len(reference_sequence_uids_list)):
-            list_of_ref_seqs.append(reference_sequence.objects.get(id=reference_sequence_uids_list[i]))
+            list_of_ref_seqs.append(ReferenceSequence.objects.get(id=reference_sequence_uids_list[i]))
         list_of_all_defining_sequence_names = [refseq.name for refseq in list_of_ref_seqs]
 
         majority_sequences = [ref_seq.name for ref_seq in
-                              reference_sequence.objects.filter(id__in=att.MajRefSeqSet.split(','))]
+                              ReferenceSequence.objects.filter(id__in=att.MajRefSeqSet.split(','))]
         # Now we have all of the info we need to work out which species to associate to the type
         if clade == 'A':
             if 'A1' in majority_sequences:
@@ -3868,13 +3868,13 @@ def naming_reference_sequences_used_in_definitions():
     # one of the named reference sequences it would already have been given that name
 
     list_of_sequence_names_that_already_exist = [ref_seq.name for ref_seq in
-                                                 reference_sequence.objects.filter(hasName=True)]
+                                                 ReferenceSequence.objects.filter(hasName=True)]
     list_of_sequence_names_that_already_exist.append('D1a')
 
     # Get list of referenceSeqs that are found in the analysis and are used in the type descriptions
     # Get list of analysisTypes
     list_of_defining_reference_seqeunce_uids = set()
-    at = analysis_type.objects.filter(dataAnalysisFrom=analysis_object)
+    at = AnalysisType.objects.filter(dataAnalysisFrom=analysis_object)
     for att in at:
         list_of_defining_reference_seqeunce_uids.update([int(a) for a in att.orderedFootprintList.split(',')])
 
@@ -3884,7 +3884,7 @@ def naming_reference_sequences_used_in_definitions():
 
     # we only need to name the refSeqs that don't already have a name
     list_of_defining_reference_sequences = list(
-        reference_sequence.objects.filter(id__in=list_of_defining_reference_seqeunce_uids, hasName=False))
+        ReferenceSequence.objects.filter(id__in=list_of_defining_reference_seqeunce_uids, hasName=False))
 
     # When we made the code to assign sequences to refseqs or create new refseqs we were smart in that
     # if we had a new sequence that was bigger than a refseq we collapsed the big seq to the refseq.
@@ -3915,7 +3915,7 @@ def naming_reference_sequences_used_in_definitions():
 
         # create the fasta to query against which is all of the names sequences.
         named_seqs_in_symportal_remote_db_fasta_list = []
-        for rs in reference_sequence.objects.filter(hasName=True):
+        for rs in ReferenceSequence.objects.filter(hasName=True):
             named_seqs_in_symportal_remote_db_fasta_list.extend(['>{}'.format(rs.name), rs.sequence])
 
         named_seqs_in_symportal_remote_db_fasta_path = os.path.abspath(
@@ -3942,7 +3942,7 @@ def naming_reference_sequences_used_in_definitions():
         # Now assign names to those that aren't exact matches
         for bo in blast_output_file:
             split_elements = bo.split('\t')
-            reference_sequences_in_question = reference_sequence.objects.get(id=int(split_elements[0]))
+            reference_sequences_in_question = ReferenceSequence.objects.get(id=int(split_elements[0]))
             if not reference_sequences_in_question.hasName:
                 new_name = create_new_reference_sequence_name(split_elements[1],
                                                               list_of_sequence_names_that_already_exist)
@@ -3957,8 +3957,8 @@ def naming_reference_sequences_used_in_definitions():
         # new names will only be generated if we are system_type remote
         uids = [att.id for att in at]
         for i in range(len(uids)):
-            type_in_question = analysis_type.objects.get(id=uids[i])
-            type_in_question.name = type_in_question.generateName()
+            type_in_question = AnalysisType.objects.get(id=uids[i])
+            type_in_question.name = type_in_question.generate_name()
             type_in_question.save()
 
         # Now clean up the binary files from the blast dict creation
@@ -3972,7 +3972,7 @@ def naming_reference_sequences_used_in_definitions():
         # remake the fasta and write out.
         # create the fasta
         named_seqs_in_symportal_remote_db_fasta_list = []
-        for rs in reference_sequence.objects.filter(hasName=True):
+        for rs in ReferenceSequence.objects.filter(hasName=True):
             named_seqs_in_symportal_remote_db_fasta_list.extend(['>{}'.format(rs.name), rs.sequence])
 
         named_seqs_in_symportal_remote_db_fasta_path = os.path.abspath(
@@ -4098,7 +4098,7 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
 
     # We will not do any plotting if there are more than 1000 samples in the data_analysis
     list_of_sample_ids = [int(x) for x in analysis_object.listOfDataSubmissions.split(',')]
-    num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=list_of_sample_ids))
+    num_samples = len(DataSetSample.objects.filter(dataSubmissionFrom__in=list_of_sample_ids))
     list_of_output_file_paths = []
     if not no_output:
         output_dir, date_time_string, list_of_output_file_paths = output_type_count_tables(analysisobj=analysis_object,

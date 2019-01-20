@@ -15,7 +15,7 @@ import os
 import numpy as np
 import sys
 from datetime import datetime
-from dbApp.models import clade_collection
+from dbApp.models import CladeCollection
 plt.ioff()
 
 
@@ -801,7 +801,7 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     # add point labels if labels == True
 
     if labels:
-        sample_names = [str(clade_collection.objects.get(id=int(ID))) for ID in plotting_df.index.values.tolist()[:-1]]
+        sample_names = [str(CladeCollection.objects.get(id=int(ID))) for ID in plotting_df.index.values.tolist()[:-1]]
         for i, txt in enumerate(sample_names):
             ax.annotate(txt, (x_values[i], y_values[i]))
 

@@ -10,7 +10,7 @@ from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 
 # Your application specific imports
-from dbApp.models import reference_sequence
+from dbApp.models import ReferenceSequence
 # ###########################################
 
 
@@ -44,7 +44,7 @@ def populate_db_with_ref_seqs():
             try:
                 print('Sequence {} already in db'.format(fasta_to_populate_from[i][1:]))
             except:
-                new_seq = reference_sequence(
+                new_seq = ReferenceSequence(
                     name=fasta_to_populate_from[i][1:], clade=fasta_to_populate_from[i][1],
                     sequence=fasta_to_populate_from[i+1], hasName=True)
                 new_seq.save()
