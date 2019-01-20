@@ -1,21 +1,24 @@
-######## Setup Django DB and Models ########
+import os
+import pickle
+# ####### Setup Django DB and Models ########
 # Ensure settings are read
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 
 # Your application specific imports
-from dbApp.models import symportal_framework, data_set, reference_sequence, data_set_sample_sequence, analysis_type, analysis_group, data_set_sample, data_analysis, clade_collection, clade_collection_type
-############################################
-import os
-import pickle
+from dbApp.models import data_set, data_analysis
+# ###########################################
+
 
 def delete_data_set(uid):
     data_set.objects.get(id=uid).delete()
 
+
 def delete_data_analysis(uid):
     data_analysis.objects.get(id=uid).delete()
 
-def writeListToDestination(destination, listToWrite):
+
+def write_list_to_destination(destination, list_to_write):
     # print('Writing list to ' + destination)
     try:
         os.makedirs(os.path.dirname(destination))
@@ -24,23 +27,21 @@ def writeListToDestination(destination, listToWrite):
 
     with open(destination, mode='w') as writer:
         i = 0
-        while i < len(listToWrite):
-            if i != len(listToWrite) - 1:
-                writer.write(listToWrite[i] + '\n')
-            elif i == len(listToWrite) - 1:
-                writer.write(listToWrite[i])
+        while i < len(list_to_write):
+            if i != len(list_to_write) - 1:
+                writer.write(list_to_write[i] + '\n')
+            elif i == len(list_to_write) - 1:
+                writer.write(list_to_write[i])
             i += 1
 
 
-def readDefinedFileToList(filename):
-    temp_list = []
+def read_defined_file_to_list(filename):
     with open(filename, mode='r') as reader:
         temp_list = [line.rstrip() for line in reader]
     return temp_list
 
 
 def convert_interleaved_to_sequencial_fasta(fasta_in):
-    fasta_dict = {}
     list_seq_names = []
     list_seq_sequences = []
     num_seqs = int(fasta_in[0].split()[0])
@@ -66,50 +67,30 @@ def convert_interleaved_to_sequencial_fasta(fasta_in):
     return out_fasta
 
 
-def readByteObjectFromDefinedDirectory(directory):
+def read_byte_object_from_defined_directory(directory):
     f = open(directory, 'rb')
     return pickle.load(f)
 
-def writeByteObjectToDefinedDirectory(directory,object):
-    f = open(directory , 'wb+')
-    pickle.dump(object, f)
 
-def createNoSpaceFastaFile(fastaList):
-    tempList = []
+def write_byte_object_to_defined_directory(directory, byte_object):
+    f = open(directory, 'wb+')
+    pickle.dump(byte_object, f)
+
+
+def create_no_space_fasta_file(fasta_list):
+    temp_list = []
     i = 0
-    while i < len(fastaList):
-        tempList.extend([fastaList[i].split('\t')[0], fastaList[i+1]])
+    while i < len(fasta_list):
+        temp_list.extend([fasta_list[i].split('\t')[0], fasta_list[i + 1]])
         i += 2
-    return tempList
+    return temp_list
 
-def createDictFromFasta(fastaList):
+
+def create_dict_from_fasta(fasta_list):
     temporary_dictionary = {}
     i = 0
-    while i < len(fastaList):
-        sequence = fastaList[i][1:]
-        temporary_dictionary[sequence] = fastaList[i+1]
+    while i < len(fasta_list):
+        sequence = fasta_list[i][1:]
+        temporary_dictionary[sequence] = fasta_list[i + 1]
         i += 2
     return temporary_dictionary
-
-def createNewFile(pathtofile):
-    try:
-        os.makedirs(os.path.dirname(pathtofile))
-    except FileExistsError:
-        pass
-
-    open(pathtofile, mode='w')
-
-def writeLinesToFile(path_to_file, listoflines):
-    with open(path_to_file, mode='a') as f:
-        for line in listoflines:
-            f.write(line + '\n')
-
-def checkIfFileEmpty(filepath):
-    count = 0
-    with open(filepath, mode='r') as reader:
-        for line in reader:
-            if count != 0:
-                return False  # not empty
-            count += 1
-    return True
-

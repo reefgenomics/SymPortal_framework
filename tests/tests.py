@@ -1,6 +1,5 @@
 #!/usr/bin/env python3.6
 import os
-import subprocess
 import main
 import json
 import general
@@ -8,16 +7,17 @@ import sys
 from pathlib import Path
 import shutil
 
-def test_data_loading_without_command_line(test_data_directory, data_sheet_path, num_proc, debug_bool, distance_method_arg,
-                           no_ord_arg=False, no_fig_arg=False):
+
+def test_data_loading_without_command_line(
+        test_data_directory, data_sheet_path, num_proc, debug_bool, distance_method_arg,
+        no_ord_arg=False, no_fig_arg=False):
     """
     This is the function used to test the loading of data into the database. It will work directly with the
     create_data_submission.py functions rather than by running command line arguments. For the command line version
     please see test_data_loading_to_database_from_command_line above.
-    :param input_dir: The directory in which the test data is held
-    :param data_sheet_arg: the data sheet containing the sample names and meta data for the test sample data
+    :param test_data_directory: The directory in which the test data is held
+    :param data_sheet_path: the data sheet containing the sample names and meta data for the test sample data
     :param num_proc: the number of processors that should be used in the loading
-    :param name_for_data_set: name of the data_set
     :param debug_bool: whether the load should be run in debug mode, default=False
     :param distance_method_arg: which distance method should be used (default=braycurtis, alternative=unifrac)
     :param no_ord_arg: bool, whether ordination should not be performed. default = False (ordinations are produced)

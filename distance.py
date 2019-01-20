@@ -12,7 +12,7 @@ import subprocess
 import re
 import numpy as np
 from skbio.stats.ordination import pcoa
-from general import writeListToDestination, readDefinedFileToList, convert_interleaved_to_sequencial_fasta
+from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta
 import itertools
 from scipy.spatial.distance import braycurtis
 from datetime import datetime
@@ -67,9 +67,9 @@ def generate_within_clade_UniFrac_distances_ITS2_type_profiles(data_submission_i
         # at this point we have the fasta, name and group file
         # write out
         clade_wkd = wkd + '/{}'.format(clade)
-        writeListToDestination('{}/unique.fasta'.format(clade_wkd), unique_fasta)
-        writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
-        writeListToDestination('{}/group_file.groups'.format(clade_wkd), group_file)
+        write_list_to_destination('{}/unique.fasta'.format(clade_wkd), unique_fasta)
+        write_list_to_destination('{}/name_file.names'.format(clade_wkd), name_file)
+        write_list_to_destination('{}/group_file.groups'.format(clade_wkd), group_file)
 
         # align fasta
         out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
@@ -292,9 +292,9 @@ def generate_within_clade_UniFrac_distances_samples_sample_list_input(smpl_id_li
             name_file.append('{}\t{}'.format(key, ','.join(value)))
 
         # output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
-        writeListToDestination('{}/unique.fasta'.format(clade_wkd), fasta_file)
-        writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
-        writeListToDestination('{}/group_file.groups'.format(clade_wkd), master_group_list)
+        write_list_to_destination('{}/unique.fasta'.format(clade_wkd), fasta_file)
+        write_list_to_destination('{}/name_file.names'.format(clade_wkd), name_file)
+        write_list_to_destination('{}/group_file.groups'.format(clade_wkd), master_group_list)
 
         out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
 
@@ -497,9 +497,9 @@ def generate_within_clade_UniFrac_distances_samples(dataSubmission_str, num_proc
             name_file.append('{}\t{}'.format(key, ','.join(value)))
 
         # output_file_paths.extend(['{}/unique.fasta'.format(clade_wkd), '{}/name_file.names'.format(clade_wkd), '{}/group_file.groups'.format(clade_wkd)])
-        writeListToDestination('{}/unique.fasta'.format(clade_wkd), fasta_file)
-        writeListToDestination('{}/name_file.names'.format(clade_wkd), name_file)
-        writeListToDestination('{}/group_file.groups'.format(clade_wkd), master_group_list)
+        write_list_to_destination('{}/unique.fasta'.format(clade_wkd), fasta_file)
+        write_list_to_destination('{}/name_file.names'.format(clade_wkd), name_file)
+        write_list_to_destination('{}/group_file.groups'.format(clade_wkd), master_group_list)
 
         out_file = mafft_align_fasta(clade_wkd, num_proc=num_processors)
 
@@ -1083,10 +1083,10 @@ def uni_frac_worker_two(input, output):
 def concatenate_trees(list_of_tree_paths, out_put_path):
     master_tree_file = []
     for i in range(len(list_of_tree_paths)):
-        temp_tree_file = readDefinedFileToList(list_of_tree_paths[i])
+        temp_tree_file = read_defined_file_to_list(list_of_tree_paths[i])
         for line in temp_tree_file:
             master_tree_file.append(line)
-    writeListToDestination(out_put_path, master_tree_file)
+    write_list_to_destination(out_put_path, master_tree_file)
 
 
 def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
@@ -1201,7 +1201,7 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     sys.stdout.write('\rGenerating multiple datasets')
     (fseqboot['-sequence', in_file_seqboot, '-outfile', out_file_seqboot, '-test', 'b', '-reps', num_reps])()
     # Now divide the fseqboot file up into its 100 different alignments
-    fseqboot_file = readDefinedFileToList(out_file_seqboot)
+    fseqboot_file = read_defined_file_to_list(out_file_seqboot)
     rep_count = 0
     out_put_holder = []
     out_put_holder.append(fseqboot_file[0])
@@ -1215,13 +1215,13 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     for line in fseqboot_file[1:]:
         reg_ex_matches_list = reg_ex.findall(line)
         if len(reg_ex_matches_list) == 1:
-            writeListToDestination('{}{}'.format(fseqboot_base, rep_count), out_put_holder)
+            write_list_to_destination('{}{}'.format(fseqboot_base, rep_count), out_put_holder)
             out_put_holder = []
             out_put_holder.append(line)
             rep_count += 1
         else:
             out_put_holder.append(line)
-    writeListToDestination('{}{}'.format(fseqboot_base, rep_count), out_put_holder)
+    write_list_to_destination('{}{}'.format(fseqboot_base, rep_count), out_put_holder)
     return fseqboot_base
 
 
@@ -1233,7 +1233,7 @@ def perform_unifrac(clade_wkd, tree_path):
          'unifrac.weighted(tree={}, group={}, name={}, distance=square, processors=16)'
              .format(tree_path, group_file_path, name_file_path)]
     mothur_batch_path = '{}/mothur_batch_WU'.format(clade_wkd)
-    writeListToDestination(mothur_batch_path, mothur_batch_WU)
+    write_list_to_destination(mothur_batch_path, mothur_batch_WU)
     # now run the batch file with mothur
     sys.stdout.write('\rcalculating unifrac distances')
     completed_process = \
@@ -1252,7 +1252,7 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
     seq_re = re.compile('\d+[_ ]id[\d_]+')
     seq_re_meta = re.compile('\[[^\]]*\]')
     sys.stdout.write('\rrenaming tree nodes')
-    tree_file = readDefinedFileToList(tree_out_file_fconsense)
+    tree_file = read_defined_file_to_list(tree_out_file_fconsense)
     new_tree_file = []
     for line in tree_file:
         # # ### DEBUG ###
@@ -1322,7 +1322,7 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
 
     # here all of the tree_file names should have been replaced. Now write back out.
     sys.stdout.write('\rwriting out tree')
-    writeListToDestination(tree_out_file_fconsense, new_tree_file)
+    write_list_to_destination(tree_out_file_fconsense, new_tree_file)
 
 
 
@@ -1331,16 +1331,16 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
     for p in iter(input.get, 'STOP'):
         sys.stdout.write('\rProcessing p={} with {}'.format(p, current_process().name))
         # convert the interleaved fasta to sequential fasta
-        interleaved_fast = readDefinedFileToList('{}{}'.format(fseqboot_base, p))
+        interleaved_fast = read_defined_file_to_list('{}{}'.format(fseqboot_base, p))
         sequen_fast = convert_interleaved_to_sequencial_fasta(interleaved_fast)
-        writeListToDestination('{}{}.sequential.fasta'.format(fseqboot_base, p), sequen_fast)
+        write_list_to_destination('{}{}.sequential.fasta'.format(fseqboot_base, p), sequen_fast)
         mothur_batch_dist = \
             ['set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
              'dist.seqs(fasta={}, countends=T, output=square)'
                  .format('{}{}.sequential.fasta'.format(fseqboot_base, p))]
         mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_dist_{}'.format(clade_wkd, p)
 
-        writeListToDestination(mothur_batch_path, mothur_batch_dist)
+        write_list_to_destination(mothur_batch_path, mothur_batch_dist)
 
         # now run the batch file with mothur
         sys.stdout.write('\rCalculating distances...')
@@ -1355,7 +1355,7 @@ def mothur_unifrac_pipeline_MP_worker(input, output, fseqboot_base, clade_wkd):
                  .format(input)]
 
         mothur_batch_path = '{}/out_seq_boot_reps/mothur_batch_batch_clearcut_{}'.format(clade_wkd, p)
-        writeListToDestination(mothur_batch_path, mothur_batch_clearcut)
+        write_list_to_destination(mothur_batch_path, mothur_batch_clearcut)
         sys.stdout.write('\rGenerating NJ tree from distances')
         completed_process = \
             subprocess.run(['mothur', '{}'.format(mothur_batch_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -1415,7 +1415,7 @@ def mothur_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
 
     subprocess.run(['mv', dist_file_path, dist_file_path_dts])
 
-    raw_dist_file = readDefinedFileToList(dist_file_path_dts)
+    raw_dist_file = read_defined_file_to_list(dist_file_path_dts)
     return raw_dist_file, dist_file_path_dts
 
 
@@ -1476,7 +1476,7 @@ def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
     dist_file_path = '{}/{}'.format(clade_wkd,
                                     tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
 
-    raw_dist_file = readDefinedFileToList(dist_file_path)
+    raw_dist_file = read_defined_file_to_list(dist_file_path)
 
     return raw_dist_file
 
@@ -1526,7 +1526,7 @@ def phylip_unifrac_pipeline_MP(clade_wkd, fseqboot_base, name_file, num_reps, nu
     dist_file_path = '{}/{}'.format(clade_wkd,
                                     tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
 
-    raw_dist_file = readDefinedFileToList(dist_file_path)
+    raw_dist_file = read_defined_file_to_list(dist_file_path)
 
     return raw_dist_file, dist_file_path
 

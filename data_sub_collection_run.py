@@ -22,8 +22,8 @@ from dbApp.models import (reference_sequence, data_set_sample_sequence, analysis
                           data_set_sample, clade_collection_type,  clade_collection)
 from distance import (generate_within_clade_UniFrac_distances_ITS2_type_profiles,
                       generate_within_clade_BrayCurtis_distances_ITS2_type_profiles)
-from general import writeListToDestination, readDefinedFileToList
-from output import formatOutput_ord
+from general import write_list_to_destination, read_defined_file_to_list
+from output import output_type_count_tables
 from plotting import plot_between_its2_type_prof_dist_scatter
 
 if 'PYCHARM_HOSTED' in os.environ:
@@ -403,19 +403,19 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                             # TYPE BY TYPE OF REDISTRIBUTED CCs DELETE OR REINITIATE
                             print('Reassessing support of affected types')
                             stranded_ccs = []
-                            for anType in type_to_cc_to_be_removed_dict.keys():
-                                analysis_type_in_question = analysis_type.objects.get(id=anType)
+                            for an_type in type_to_cc_to_be_removed_dict.keys():
+                                analysis_type_in_question = analysis_type.objects.get(id=an_type)
 
                                 # REMOVE CCs FROM TYPES
                                 # Remove CCs from type
                                 list_of_ccs_to_be_removed_str_uid = [str(cc.id) for cc in
-                                                                     type_to_cc_to_be_removed_dict[anType]]
+                                                                     type_to_cc_to_be_removed_dict[an_type]]
                                 analysis_type_in_question.removeCCListFromInitialCladeCollectionList(
                                     list_of_ccs_to_be_removed_str_uid)
 
                                 # Change the clade_collection_object associations in the cctocurrent... dict
                                 for ccstrid in list_of_ccs_to_be_removed_str_uid:
-                                    cc_to_initial_type_dict[int(ccstrid)].remove(anType)
+                                    cc_to_initial_type_dict[int(ccstrid)].remove(an_type)
                                     cc_to_initial_type_dict[int(ccstrid)].append(type_to_check_uid)
 
                                 # REASSESS SUPPORT OF TYPE
@@ -462,7 +462,7 @@ def reassess_support_of_artefact_div_containing_types(cc_to_ref_seq_list_and_abu
                                             # Then there are other types associated to
                                             # this cladeCollection and we should simply
                                             # remove the type in question from the list
-                                            cc_to_initial_type_dict[cc.id].remove(anType)
+                                            cc_to_initial_type_dict[cc.id].remove(an_type)
                                         else:
                                             # then this only contains one type and we
                                             # should delte the cc entry in the dict and it will
@@ -847,7 +847,7 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
     # support one initial type profile. I think we do need to enforce this rule else, you will have really basic
     # types being supported by CCs. e.g. C3 would get loads of support.
     # This could end up being very expensive so I would consider the following work flow to get this working.
-    # Have a dictionary that is clade_collection_object: current initial typeProfile found in.
+    # Have a dictionary that is clade_collection_object: current initial type_profile_name found in.
     # This will need to be kept upto date.
     # Then for each profile we are testing support for, get list of CCs of the clade,
     # go through each clade_collection_object as
@@ -976,17 +976,17 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
         # TYPE BY TYPE OF REDISTRIBUTED CCs DELETE OR REINITIATE
         print('Reassessing support of affected types')
         stranded_ccs = []
-        for anType in type_to_cc_to_be_removed_dict.keys():
-            analysis_type_in_question = analysis_type.objects.get(id=anType)
+        for an_type in type_to_cc_to_be_removed_dict.keys():
+            analysis_type_in_question = analysis_type.objects.get(id=an_type)
 
             # REMOVE CCs FROM TYPES
             # Remove CCs from type
-            list_of_ccs_to_be_removed_str_uid = [str(cc.id) for cc in type_to_cc_to_be_removed_dict[anType]]
+            list_of_ccs_to_be_removed_str_uid = [str(cc.id) for cc in type_to_cc_to_be_removed_dict[an_type]]
             analysis_type_in_question.removeCCListFromInitialCladeCollectionList(list_of_ccs_to_be_removed_str_uid)
 
             # Change the clade_collection_object associations in the cctocurrent... dict
             for ccstrid in list_of_ccs_to_be_removed_str_uid:
-                cctocurrentinitialtypedict[int(ccstrid)].remove(anType)
+                cctocurrentinitialtypedict[int(ccstrid)].remove(an_type)
                 cctocurrentinitialtypedict[int(ccstrid)].append(new_analysis_type.id)
 
             # REASSESS SUPPORT OF TYPE
@@ -1019,7 +1019,7 @@ def check_type_pairing_for_artefact_type(type_a, type_b, typefootprintdict, clad
                     if len(cctocurrentinitialtypedict[cc.id]) > 1:
                         # Then there are other types associated to this cladeCollection and we should simply
                         # remove the type in question from the list
-                        cctocurrentinitialtypedict[cc.id].remove(anType)
+                        cctocurrentinitialtypedict[cc.id].remove(an_type)
                     else:
                         # then this only contains one type and we should delte the cc entry in the dict and it will
                         # become stranded.
@@ -2933,7 +2933,7 @@ def profile_assignment(num_procs):
     # Get a list of all of the analysisTypes that have been discovered in the type discovery
     query_set_of_analysis_types = list(analysis_type.objects.filter(dataAnalysisFrom=analysis_object))
     # Get the uids of these types
-    analysis_types_uids = [anType.id for anType in query_set_of_analysis_types]
+    analysis_types_uids = [an_type.id for an_type in query_set_of_analysis_types]
     # Get a list of the CCs to check for types within
     query_set_of_clade_collections = analysis_object.getCladeCollections()
     # Get dict of the clade_collection_object footprint and Type footprints so that we don't have to
@@ -3011,7 +3011,7 @@ def profile_assignment(num_procs):
 
     analysis_type_footprint_manager = Manager()
     analysis_type_footprint_dictionary = analysis_type_footprint_manager.dict(
-        {anType.id: frozenset(anType.getOrderedFootprintList()) for anType in query_set_of_analysis_types})
+        {an_type.id: frozenset(an_type.getOrderedFootprintList()) for an_type in query_set_of_analysis_types})
 
     # Two manager objects that will be used in the multiprocessing as outputs
 
@@ -3733,8 +3733,8 @@ def create_groups(group_names_list, new_analysis_type):
         list_of_types_in_groups = []
         list_of_groups = [group_list[i] for i in index_match]
         for group in list_of_groups:
-            for anType in group:
-                list_of_types_in_groups.append(anType)
+            for an_type in group:
+                list_of_types_in_groups.append(an_type)
 
         # Also add our new type
         list_of_types_in_groups.append(new_analysis_type)
@@ -3898,7 +3898,7 @@ def naming_reference_sequences_used_in_definitions():
             fasta_to_blast.extend(['>{}'.format(rs.id), '{}'.format(rs.sequence)])
         write_directory = os.path.abspath(
             os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/unnamedRefSeqs.fasta'
-        writeListToDestination(write_directory, fasta_to_blast)
+        write_list_to_destination(write_directory, fasta_to_blast)
 
         blast_output_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/blast.out'
 
@@ -3922,8 +3922,8 @@ def naming_reference_sequences_used_in_definitions():
             os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/named_seqs_in_SP_remote_db.fa'
 
         # and write out
-        writeListToDestination(destination=named_seqs_in_symportal_remote_db_fasta_path,
-                               listToWrite=named_seqs_in_symportal_remote_db_fasta_list)
+        write_list_to_destination(destination=named_seqs_in_symportal_remote_db_fasta_path,
+                                  list_to_write=named_seqs_in_symportal_remote_db_fasta_list)
 
         # now create blast db from the fasta
         subprocess.run(
@@ -3937,7 +3937,7 @@ def naming_reference_sequences_used_in_definitions():
              '-max_target_seqs', '1', '-num_threads', '3'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
         # Read in blast output
-        blast_output_file = readDefinedFileToList(blast_output_path)
+        blast_output_file = read_defined_file_to_list(blast_output_path)
 
         # Now assign names to those that aren't exact matches
         for bo in blast_output_file:
@@ -3979,8 +3979,8 @@ def naming_reference_sequences_used_in_definitions():
             os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/named_seqs_in_SP_remote_db.fa'
 
         # and write out
-        writeListToDestination(destination=named_seqs_in_symportal_remote_db_fasta_path,
-                               listToWrite=named_seqs_in_symportal_remote_db_fasta_list)
+        write_list_to_destination(destination=named_seqs_in_symportal_remote_db_fasta_path,
+                                  list_to_write=named_seqs_in_symportal_remote_db_fasta_list)
 
     analysis_object.refSeqsNamed = True
     analysis_object.save()
@@ -4101,10 +4101,10 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
     num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=list_of_sample_ids))
     list_of_output_file_paths = []
     if not no_output:
-        output_dir, date_time_string, list_of_output_file_paths = formatOutput_ord(analysisobj=analysis_object,
-                                                        datasubstooutput=analysis_object.listOfDataSubmissions,
-                                                        call_type='analysis', num_samples=num_samples,
-                                                        num_processors=num_processors, no_figures=no_figures)
+        output_dir, date_time_string, list_of_output_file_paths = output_type_count_tables(analysisobj=analysis_object,
+                                                                                           datasubstooutput=analysis_object.listOfDataSubmissions,
+                                                                                           call_type='analysis', num_samples=num_samples,
+                                                                                           num_processors=num_processors, no_figures=no_figures)
 
         # Between type ordination analysis
         if not no_ordinations:

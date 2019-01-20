@@ -77,10 +77,10 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
             stability_file_path = r'{0}{1}'.format(current_directory, stability_file_name)
 
             # write out the stability file. This will be a single pair of contigs with a sample name
-            writeListToDestination(stability_file_path, stability_file)
+            write_list_to_destination(stability_file_path, stability_file)
 
             # Write oligos file to directory. This file contains the primer sequences used for PCR cropping
-            writeListToDestination('{0}{1}'.format(current_directory, 'primers.oligos'), oligo_file)
+            write_list_to_destination('{0}{1}'.format(current_directory, 'primers.oligos'), oligo_file)
 
             # NB mothur is working very strangely with the python subprocess command. For some
             # reason it is adding in an extra 'mothur' before the filename in the input directory
@@ -113,7 +113,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
 
             # Write out the batch file
             mothur_batch_file_path = r'{0}{1}{2}'.format(current_directory, 'mothur_batch_file', sample_name)
-            writeListToDestination(mothur_batch_file_path, mothur_batch_file)
+            write_list_to_destination(mothur_batch_file_path, mothur_batch_file)
 
             error = False
             # NB the mothur return code doesn't seem to work. We just get None type.
@@ -148,7 +148,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
             # Here check the outputted files to see if they are reverse complement
             # or not by running the pcr.seqs and checking the results
             # Check to see if there are sequences in the PCR output file
-            last_summary = readDefinedFileToList(
+            last_summary = read_defined_file_to_list(
                 '{}{}.trim.contigs.good.unique.abund.pcr.fasta'.format(current_directory, root_name))
 
             # If this file is empty
@@ -165,7 +165,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
                 ]
                 mothur_batch_file_path = r'{0}{1}{2}'.format(current_directory, 'mothur_batch_file', sample_name)
                 # write out RC batch file
-                writeListToDestination(mothur_batch_file_path, mothur_batch_reverse)
+                write_list_to_destination(mothur_batch_file_path, mothur_batch_reverse)
 
                 if not debug:
                     subprocess.run(
@@ -189,7 +189,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
 
             # Check again to see if the RC has fixed the problem of having an empty fasta
             # If this file is still empty, then the problem was not solved by reverse complementing
-            last_summary = readDefinedFileToList(
+            last_summary = read_defined_file_to_list(
                 '{}{}.trim.contigs.good.unique.abund.pcr.fasta'.format(current_directory, root_name))
 
             if len(last_summary) == 0:
@@ -209,7 +209,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
             ]
 
             mothur_batch_file_path = r'{0}{1}{2}'.format(current_directory, 'mothur_batch_file', sample_name)
-            writeListToDestination(mothur_batch_file_path, mothur_batch_file_cont)
+            write_list_to_destination(mothur_batch_file_path, mothur_batch_file_cont)
 
             completed_process = subprocess.run(
                 ['mothur', r'{0}'.format(mothur_batch_file_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
@@ -224,7 +224,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
 
             # Check to see if there are sequences in the PCR output file
             try:
-                last_summary = readDefinedFileToList(
+                last_summary = read_defined_file_to_list(
                     '{}{}.trim.contigs.good.unique.abund.pcr.unique.fasta'.format(current_directory, root_name))
                 if len(last_summary) == 0:  # If this file is empty
                     error_reason = 'error in inital QC'
@@ -236,7 +236,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
                 continue
 
             # Get number of sequences after make.contig
-            last_summary = readDefinedFileToList('{}{}.trim.contigs.summary'.format(current_directory, root_name))
+            last_summary = read_defined_file_to_list('{}{}.trim.contigs.summary'.format(current_directory, root_name))
             number_of_seqs_contig_absolute = len(last_summary) - 1
             data_set_sample_instance_in_q.initialTotSeqNum = number_of_seqs_contig_absolute
             sys.stdout.write(
@@ -244,7 +244,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
                     sample_name, number_of_seqs_contig_absolute))
 
             # Get number of sequences after unique
-            last_summary = readDefinedFileToList(
+            last_summary = read_defined_file_to_list(
                 '{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(current_directory, root_name))
             number_of_seqs_contig_unique = len(last_summary) - 1
             data_set_sample_instance_in_q.initialUniqueSeqNum = number_of_seqs_contig_unique
@@ -253,7 +253,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
                     sample_name, number_of_seqs_contig_unique))
 
             # Get absolute number of sequences after after sequence QC
-            last_summary = readDefinedFileToList(
+            last_summary = read_defined_file_to_list(
                 '{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(current_directory, root_name))
             absolute_count = 0
             for line in last_summary[1:]:
@@ -309,7 +309,7 @@ def perform_med(wkd, uid, num_proc, debug):
             ]
             mothur_batch_file_path = '{0}/{1}'.format(path_to_dir, '{0}.{1}.{2}'.format(sample_name, clade_name,
                                                                                         'mothur_batch_file'))
-            writeListToDestination(mothur_batch_file_path, mothur_batch_file)
+            write_list_to_destination(mothur_batch_file_path, mothur_batch_file)
             mothur_batch_file_path_list.append(mothur_batch_file_path)
 
     # Create the queues that will hold the mothur_batch_file paths
@@ -378,12 +378,12 @@ def deunique_worker(input_queue, output, debug):
                 path_to_file = '{0}/{1}'.format(cwd, file)
 
                 break
-        deuniqued_fasta = readDefinedFileToList(path_to_file)
+        deuniqued_fasta = read_defined_file_to_list(path_to_file)
         deuniqued_fasta = ['{0}{1}_{2}'.format(a[0], sample_name, a[1:].replace('_', '-')) if a[0] == '>' else a for a
                            in
                            deuniqued_fasta]
         # write the modified deuniqued_fasta to list
-        writeListToDestination(path_to_file, deuniqued_fasta)
+        write_list_to_destination(path_to_file, deuniqued_fasta)
         if debug:
             if deuniqued_fasta:
                 if len(deuniqued_fasta) < 100:
@@ -492,7 +492,8 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
     # currently held in the database
     # We will use this to see if the sequence in question has a match, or is found in (this is key
     # as some of the seqs are one bp smaller than the reference seqs) there reference sequences
-    reference_sequence_sequence_to_id_dict = {ref_seq.sequence: ref_seq.id for ref_seq in reference_sequence.objects.all()}
+    reference_sequence_sequence_to_id_dict = {
+        ref_seq.sequence: ref_seq.id for ref_seq in reference_sequence.objects.all()}
 
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
     for directory in med_dirs:  # For each of the directories where we did MED
@@ -508,7 +509,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
 
         # Read in the node file
         try:
-            node_file = readDefinedFileToList('NODE-REPRESENTATIVES.fasta')
+            node_file = read_defined_file_to_list('NODE-REPRESENTATIVES.fasta')
         except FileNotFoundError:
             # if no node file found move on to the next directory
             if debug:
@@ -625,7 +626,8 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                 new_cc.save()
             else:
                 sys.stdout.write(
-                    '\n{} clade {} sequences in {}. Insufficient sequence to create a clade_collection_object object\n'.format(
+                    '\n{} clade {} sequences in {}. Insufficient sequence to '
+                    'create a clade_collection_object object\n'.format(
                         sum(count_array[i]), clade, sample_name))
 
             # I want to address a problem we are having here. Now that we have thorough checks to
@@ -762,7 +764,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
 
     # also write out the fasta of the sequences that were discarded
     discarded_seqs_fasta_path = '{}/discarded_seqs_{}.fasta'.format(output_directory, data_set_identification)
-    writeListToDestination(discarded_seqs_fasta_path, discarded_seqs_fasta)
+    write_list_to_destination(discarded_seqs_fasta_path, discarded_seqs_fasta)
     print('A fasta containing discarded sequences ({}) is output here:\n{}'.format(len(discarded_seqs_fasta) / 2,
                                                                                    discarded_seqs_fasta_path))
 
@@ -855,7 +857,7 @@ def generate_and_write_below_evalue_fasta_for_screening(data_set_identification,
         # this will return a new fasta containing only the sequences that were 'Symbiodinium' matches
         # we can then output this dictionary
         path_to_fasta_out_with_clade = wkd + '/below_e_cutoff_seqs_{}.fasta'.format(data_set_identification)
-        writeListToDestination(path_to_fasta_out_with_clade, fasta_out_with_clade)
+        write_list_to_destination(path_to_fasta_out_with_clade, fasta_out_with_clade)
         return fasta_out_with_clade, path_to_fasta_out_with_clade
     else:
         return fasta_out, None
@@ -866,7 +868,7 @@ def make_evalue_screening_fasta_with_clade(data_submission_in_q, fasta_out, wkd,
     db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
     ncbirc_file.extend(["[BLAST]", "BLASTDB={}".format(db_path)])
     # write the .ncbirc file that gives the location of the db
-    writeListToDestination("{0}/.ncbirc".format(wkd), ncbirc_file)
+    write_list_to_destination("{0}/.ncbirc".format(wkd), ncbirc_file)
     blast_output_path = r'{}/blast.out'.format(wkd)
     output_format = "6 qseqid sseqid staxids evalue"
     input_path = r'{}/blastInputFasta.fa'.format(wkd)
@@ -883,7 +885,7 @@ def make_evalue_screening_fasta_with_clade(data_submission_in_q, fasta_out, wkd,
              data_submission_in_q.reference_fasta_database_used, '-max_target_seqs', '1', '-num_threads', '1'])
 
     # Read in blast output
-    blast_output_file = readDefinedFileToList(r'{}/blast.out'.format(wkd))
+    blast_output_file = read_defined_file_to_list(r'{}/blast.out'.format(wkd))
     if debug:
         if not blast_output_file:
             print('WARNING blast output file is empty for evalue screening')
@@ -913,7 +915,7 @@ def make_evalue_screening_fasta_no_clade(data_set_identification, e_value_multi_
             fasta_out.extend(['>sub_e_seq_count_{}_{}_{}'.format(temp_count, data_set_identification, value), key])
             temp_count += 1
     if fasta_out:
-        writeListToDestination(wkd + '/blastInputFasta.fa', fasta_out)
+        write_list_to_destination(wkd + '/blastInputFasta.fa', fasta_out)
     return fasta_out
 
 
@@ -924,7 +926,7 @@ def perform_sequence_drop():
         '/dbBackUp/seq_dumps/seq_dump_',
         str(datetime.now()).replace(' ', '_', ).replace(':', '-'))
     sys.stdout.write('\n\nBackup of named reference_sequences output to {}\n'.format(sequence_drop_path))
-    writeListToDestination(sequence_drop_path, sequence_drop_file)
+    write_list_to_destination(sequence_drop_path, sequence_drop_file)
 
 
 def processed_samples_status(data_submission_in_q, path_to_input_file):
@@ -948,12 +950,12 @@ def processed_samples_status(data_submission_in_q, path_to_input_file):
             print('Sample {} : {}'.format(sample.name, sample.errorReason))
     for sampleName in failed_list:
         read_me_list.append('Sample {} : ERROR in sequencing reads. Unable to process'.format(sampleName))
-    writeListToDestination(path_to_input_file + '/readMe.txt', read_me_list)
+    write_list_to_destination(path_to_input_file + '/readMe.txt', read_me_list)
 
 
 def taxonomic_screening(wkd, data_set_identification, num_proc, data_submission_in_q, error_sample_list, screen_sub_e,
                         output_dir, debug):
-    sample_fastq_pairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    sample_fastq_pairs = read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
 
     # If we will be screening the seuqences
     # At this point we should create a back up of the current symClade db.
@@ -1101,7 +1103,7 @@ def create_symclade_backup(data_set_identification):
     # Then write out a very breif readme
     read_me = [
         'This is a symClade.fa backup created during datasubmission of data_set ID: {}'.format(data_set_identification)]
-    writeListToDestination(dst_readme_path, read_me)
+    write_list_to_destination(dst_readme_path, read_me)
 
 
 # noinspection PyPep8
@@ -1121,13 +1123,13 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,
     db_path = full_path_to_nt_database_directory
     ncbirc_file.extend(["[BLAST]", "BLASTDB={}".format(db_path)])
 
-    writeListToDestination("{}/.ncbirc".format(wkd), ncbirc_file)
+    write_list_to_destination("{}/.ncbirc".format(wkd), ncbirc_file)
 
     # Read in the fasta files of below e values that were kicked out. This has already been filtered to only
     # contain seqs that were found in > 3 samples.
     path_to_input_fasta = '{}/below_e_cutoff_seqs_{}.fasta'.format(wkd, data_set_id)
-    fasta_file = readDefinedFileToList(path_to_input_fasta)
-    fasta_file_dict = createDictFromFasta(fasta_file)
+    fasta_file = read_defined_file_to_list(path_to_input_fasta)
+    fasta_file_dict = create_dict_from_fasta(fasta_file)
 
     # screen the input fasta for sample support according to seq_sample_support_cut_off
     # screened_fasta = []
@@ -1156,7 +1158,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,
          '-max_target_seqs', '10', '-num_threads', str(num_proc)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Read in blast output
-    blast_output_file = readDefinedFileToList(blast_output_path)
+    blast_output_file = read_defined_file_to_list(blast_output_path)
 
     # Now go through each of the results and look to see if there is a result that has > 95% coverage and has >60%
     # match and has symbiodinium in the name.
@@ -1191,7 +1193,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,
             new_fasta.extend(['>{}'.format(seq_to_add), '{}'.format(fasta_file_dict[seq_to_add])])
 
         # now add the current sequences
-        previous_reference_fasta = readDefinedFileToList(
+        previous_reference_fasta = read_defined_file_to_list(
             '{}/{}'.format(sym_db_dir, 'symClade.fa'))
 
         combined_fasta = new_fasta + previous_reference_fasta
@@ -1199,7 +1201,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3,
         # now that the reference db fasta has had the new sequences added to it.
         # write out to the db to the database directory of SymPortal
         full_path_to_new_db = '{}/symClade.fa'.format(sym_db_dir)
-        writeListToDestination(full_path_to_new_db, combined_fasta)
+        write_list_to_destination(full_path_to_new_db, combined_fasta)
 
         # run makeblastdb
         subprocess.run(
@@ -1289,19 +1291,20 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
         sys.stdout.write('{}: verifying seqs are Symbiodinium and determining clade\n'.format(sample_name))
 
         # write the .ncbirc file that gives the location of the db
-        writeListToDestination("{0}.ncbirc".format(current_directory), ncbirc_file)
+        write_list_to_destination("{0}.ncbirc".format(current_directory), ncbirc_file)
 
         # Read in the fasta, name and group files and convert to dics
-        fasta_file = readDefinedFileToList(
+        fasta_file = read_defined_file_to_list(
             '{0}{1}.trim.contigs.good.unique.abund.pcr.unique.fasta'.format(current_directory, root_name))
-        unique_fasta_file = createNoSpaceFastaFile(fasta_file)
-        writeListToDestination('{}blastInputFasta.fa'.format(current_directory), unique_fasta_file)
-        fasta_dict = createDictFromFasta(unique_fasta_file)
-        name_file = readDefinedFileToList(
+        unique_fasta_file = create_no_space_fasta_file(fasta_file)
+        write_list_to_destination('{}blastInputFasta.fa'.format(current_directory), unique_fasta_file)
+        fasta_dict = create_dict_from_fasta(unique_fasta_file)
+        name_file = read_defined_file_to_list(
             '{0}{1}.trim.contigs.good.unique.abund.pcr.names'.format(current_directory, root_name))
         name_dict = {a.split('\t')[0]: a for a in name_file}
 
-        group_file = readDefinedFileToList('{0}{1}.contigs.good.abund.pcr.groups'.format(current_directory, root_name))
+        group_file = read_defined_file_to_list(
+            '{0}{1}.contigs.good.abund.pcr.groups'.format(current_directory, root_name))
 
         # Set up environment for running local blast
 
@@ -1323,7 +1326,7 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
                  '-max_target_seqs', '1', '-num_threads', '1'])
         sys.stdout.write('{}: BLAST complete\n'.format(sample_name))
         # Read in blast output
-        blast_output_file = readDefinedFileToList(r'{}blast.out'.format(current_directory))
+        blast_output_file = read_defined_file_to_list(r'{}blast.out'.format(current_directory))
         if debug:
             if not blast_output_file:
                 print('WARNING blast output file is empty for {}'.format(sample_name))
@@ -1488,14 +1491,14 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_i
             error_sample_list_shared.put(sample_name)
             continue
         sys.stdout.write('{}: non-Symbiodinium sequences binned\n'.format(sample_name))
-        writeListToDestination(
+        write_list_to_destination(
             '{0}{1}.trim.contigs.good.unique.abund.pcr.blast.fasta'.format(current_directory, root_name),
             new_fasta)
-        writeListToDestination('{0}{1}.trim.contigs.good.abund.pcr.blast.names'.format(current_directory, root_name),
-                               new_name)
-        writeListToDestination('{0}{1}.contigs.good.abund.pcr.blast.groups'.format(current_directory, root_name),
-                               new_group)
-        writeByteObjectToDefinedDirectory('{0}{1}.clade_dict.dict'.format(current_directory, root_name), cladal_dict)
+        write_list_to_destination('{0}{1}.trim.contigs.good.abund.pcr.blast.names'.format(current_directory, root_name),
+                                  new_name)
+        write_list_to_destination('{0}{1}.contigs.good.abund.pcr.blast.groups'.format(current_directory, root_name),
+                                  new_group)
+        write_byte_object_to_defined_directory('{0}{1}.clade_dict.dict'.format(current_directory, root_name), cladal_dict)
     return
 
 
@@ -1526,7 +1529,7 @@ def worker_screen_size(input_q, error_sample_list, wkd, data_sub_id, debug):
             Clade D 260.44158075601376
              '''
         # I will take our absolute cutoffs from these numbers (+- 50 bp) so 184-310
-        last_summary = readDefinedFileToList(
+        last_summary = read_defined_file_to_list(
             '{0}{1}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(current_directory, root_name))
         total = 0
         for line in last_summary[1:]:
@@ -1554,7 +1557,7 @@ def worker_screen_size(input_q, error_sample_list, wkd, data_sub_id, debug):
         ]
         mothur_batch_file_path = r'{0}{1}{2}'.format(current_directory, 'mothur_batch_file', root_name)
 
-        writeListToDestination(mothur_batch_file_path, secondmothur_batch_file)
+        write_list_to_destination(mothur_batch_file_path, secondmothur_batch_file)
 
         completed_process = subprocess.run(['mothur', r'{0}'.format(mothur_batch_file_path)], stdout=subprocess.PIPE,
                                            stderr=subprocess.PIPE)
@@ -1582,20 +1585,21 @@ def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, dat
         # Here make cladally separated fastas
 
         try:
-            fasta_file = readDefinedFileToList(
+            fasta_file = read_defined_file_to_list(
                 '{0}{1}.trim.contigs.good.unique.abund.pcr.blast.good.unique.fasta'.format(current_directory,
                                                                                            root_name))
-            name_file = readDefinedFileToList(
+            name_file = read_defined_file_to_list(
                 '{0}{1}.trim.contigs.good.unique.abund.pcr.blast.good.names'.format(current_directory, root_name))
         except FileNotFoundError:
             log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, 'generic_error')
             continue
 
         sys.stdout.write('{}: final Mothur completed\n'.format(sample_name))
-        fasta_dict = createDictFromFasta(fasta_file)
+        fasta_dict = create_dict_from_fasta(fasta_file)
 
         name_dict = {a.split('\t')[0]: a for a in name_file}
-        clade_dict = readByteObjectFromDefinedDirectory('{0}{1}.clade_dict.dict'.format(current_directory, root_name))
+        clade_dict = read_byte_object_from_defined_directory(
+            '{0}{1}.clade_dict.dict'.format(current_directory, root_name))
         clade_dirs = []
         clade_fastas = {}
         for line in name_file:
@@ -1615,11 +1619,11 @@ def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, dat
         for someclade in clade_dirs:
             # These are the files that we are going to want to put into the pre_MED_seqs directory
             # By doing this, people will be able to work without the MED component of the SP QC
-            writeListToDestination(
+            write_list_to_destination(
                 r'{0}{1}/{2}.QCed.clade{1}.fasta'.format(current_directory, someclade,
                                                          root_name.replace('stability', '')),
                 clade_fastas[someclade][0])
-            writeListToDestination(
+            write_list_to_destination(
                 r'{0}{1}/{2}.QCed.clade{1}.names'.format(current_directory, someclade,
                                                          root_name.replace('stability', '')),
                 clade_fastas[someclade][1])
@@ -1627,12 +1631,12 @@ def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, dat
             # write the files into the
             wkd.replace('tempData', 'pre_MED_seqs')
 
-            writeListToDestination(
+            write_list_to_destination(
                 r'{0}{1}/{2}.QCed.clade{1}.fasta'.format(current_directory.replace('tempData', 'pre_MED_seqs'),
                                                          someclade,
                                                          root_name.replace('stability', '')),
                 clade_fastas[someclade][0])
-            writeListToDestination(
+            write_list_to_destination(
                 r'{0}{1}/{2}.QCed.clade{1}.names'.format(current_directory.replace('tempData', 'pre_MED_seqs'),
                                                          someclade,
                                                          root_name.replace('stability', '')),
@@ -1643,7 +1647,7 @@ def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, dat
 
 
 def execute_size_screening(wkd, num_proc, data_set_identification, error_sample_list, debug):
-    sample_fastq_pairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    sample_fastq_pairs = read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
     # Create the queues that will hold the sample information
     input_q = Queue()
 
@@ -1676,7 +1680,7 @@ def execute_size_screening(wkd, num_proc, data_set_identification, error_sample_
 
 
 def write_out_clade_separated_fastas(wkd, num_proc, data_set_identification, error_sample_list):
-    sample_fastq_pairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    sample_fastq_pairs = read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
     # Create the queues that will hold the sample information
     input_q = Queue()
 
@@ -1709,7 +1713,7 @@ def write_out_clade_separated_fastas(wkd, num_proc, data_set_identification, err
 
 
 def associate_qc_meta_data_to_samples(wkd, num_proc, data_set_identification, error_sample_list):
-    sample_fastq_pairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    sample_fastq_pairs = read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
     # Create the queues that will hold the sample information
     input_q = Queue()
 
@@ -1855,7 +1859,7 @@ def pre_med_qc(data_set_identification, data_submission_in_q, num_proc, wkd, scr
 
 
 def execute_worker_initial_mothur(data_set_identification, num_proc, wkd, debug):
-    sample_fastq_pairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    sample_fastq_pairs = read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
     if not sample_fastq_pairs:
         sys.exit('sample fastq pairs list empty')
 
@@ -1958,7 +1962,7 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
     # fastq using the end_index that we determined above
     new_stability_file = generate_new_stability_file_inferred(end_index, sample_fastq_pairs)
     # write out the new stability file
-    writeListToDestination(r'{0}/stability.files'.format(wkd), new_stability_file)
+    write_list_to_destination(r'{0}/stability.files'.format(wkd), new_stability_file)
 
     data_submission_in_q.workingDirectory = wkd
     data_submission_in_q.save()
@@ -1995,7 +1999,8 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
         sys.exit('Data sheet: {} is in an unrecognised format. '
                  'Please ensure that it is either in .xlxs or .csv format.')
     # if we are given a data_sheet then use these sample names given as the data_set_sample object names
-    fastq_file_to_sample_name_dict, list_of_names, fastq_or_fastq_gz = identify_sample_names_data_sheet(sample_meta_df, wkd)
+    fastq_file_to_sample_name_dict, list_of_names, fastq_or_fastq_gz = identify_sample_names_data_sheet(
+        sample_meta_df, wkd)
     # Make a batch file for mothur, set input and output dir and create a .file file
     sample_fastq_pairs = generate_mothur_dotfile_file(wkd, fastq_or_fastq_gz)
 
@@ -2005,7 +2010,7 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
     # fastq using the end_index that we determined above
     new_stability_file = generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, sample_fastq_pairs)
     # write out the new stability file
-    writeListToDestination(r'{0}/stability.files'.format(wkd), new_stability_file)
+    write_list_to_destination(r'{0}/stability.files'.format(wkd), new_stability_file)
 
     data_submission_in_q.workingDirectory = wkd
     data_submission_in_q.save()
@@ -2056,6 +2061,7 @@ def generate_new_stability_file_inferred(end_index, sample_fastq_pairs):
                 pair_components[2]))
     return new_stability_file
 
+
 def generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, sample_fastq_pairs):
     new_stability_file = []
     for stability_file_line in sample_fastq_pairs:
@@ -2088,14 +2094,14 @@ def generate_mothur_dotfile_file(wkd, fastq_or_fastq_gz):
             r'make.file(inputdir={0}, type=fastq, numcols=3)'.format(wkd)
         ]
 
-    writeListToDestination(r'{0}/mothur_batch_file_makeFile'.format(wkd), mothur_batch_file)
+    write_list_to_destination(r'{0}/mothur_batch_file_makeFile'.format(wkd), mothur_batch_file)
     # noinspection PyPep8
     subprocess.run(['mothur', r'{0}/mothur_batch_file_makeFile'.format(wkd)],
                    stdout=subprocess.PIPE,
                    stderr=subprocess.PIPE)
     # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
     # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
-    sample_fastq_pairs = readDefinedFileToList(r'{0}/stability.files'.format(wkd))
+    sample_fastq_pairs = read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
     return sample_fastq_pairs
 
 
@@ -2248,10 +2254,10 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
 
     db_path = full_path_to_nt_database_directory
     ncbirc_file.extend(["[BLAST]", "BLASTDB={}".format(db_path)])
-    writeListToDestination("{}/.ncbirc".format(data_sub_data_dir), ncbirc_file)
+    write_list_to_destination("{}/.ncbirc".format(data_sub_data_dir), ncbirc_file)
 
     # Read in the fasta files of below e values that were kicked out.
-    fasta_file = readDefinedFileToList('{}/below_e_cutoff_seqs_{}.fasta'.format(data_sub_data_dir, ds_id))
+    fasta_file = read_defined_file_to_list('{}/below_e_cutoff_seqs_{}.fasta'.format(data_sub_data_dir, ds_id))
 
     # screen the input fasta for sample support according to seq_sample_support_cut_off
     screened_fasta = []
@@ -2265,8 +2271,8 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
     path_to_screened_fasta = '{}/{}_{}_{}.fasta'.format(data_sub_data_dir,
                                                         'below_e_cutoff_seqs_{}.screened'.format(ds_id), iteration_id,
                                                         seq_sample_support_cut_off)
-    screened_fasta_dict = createDictFromFasta(screened_fasta)
-    writeListToDestination(path_to_screened_fasta, screened_fasta)
+    screened_fasta_dict = create_dict_from_fasta(screened_fasta)
+    write_list_to_destination(path_to_screened_fasta, screened_fasta)
 
     # Set up environment for running local blast
     blast_output_path = r'{}/blast_{}_{}.out'.format(data_sub_data_dir, iteration_id, seq_sample_support_cut_off)
@@ -2280,7 +2286,7 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
          '-max_target_seqs', '10', '-num_threads', '20'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
     # Read in blast output
-    blast_output_file = readDefinedFileToList(
+    blast_output_file = read_defined_file_to_list(
         r'{}/blast_{}_{}.out'.format(data_sub_data_dir, iteration_id, seq_sample_support_cut_off))
 
     # Now go through each of the results and look to see if there is a result that has > 95% coverage and has >60%
@@ -2315,7 +2321,7 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
             new_fasta.extend(['>{}'.format(seq_to_add), '{}'.format(screened_fasta_dict[seq_to_add])])
 
         # now add the current sequences
-        previous_reference_fasta = readDefinedFileToList(
+        previous_reference_fasta = read_defined_file_to_list(
             '{}/{}'.format(os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')),
                            previous_reference_fasta_name))
         # we need to check that none of the new sequence names are found in
@@ -2326,7 +2332,7 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
         full_path_to_new_ref_fasta_iteration = '{}/symClade_{}_{}.fa'.format(
             os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')), iteration_id,
             seq_sample_support_cut_off)
-        writeListToDestination(full_path_to_new_ref_fasta_iteration, new_fasta)
+        write_list_to_destination(full_path_to_new_ref_fasta_iteration, new_fasta)
 
         # now update the SymPortal framework object
         symportal_framework_object = symportal_framework.objects.get(id=1)

@@ -238,14 +238,14 @@ def main():
         new_data_set_submitting_user = config_dict['user_name']
         if args.data_analysis_id:
             analysis_object = data_analysis.objects.get(id=args.data_analysis_id)
-            dataSubmissionsToOutput = [int(a) for a in args.print_output_types.split(',')]
-            querySetOfDataSubmissions = data_set.objects.filter(id__in=dataSubmissionsToOutput)
-            num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=querySetOfDataSubmissions))
+            data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
+            query_set_of_data_sets = data_set.objects.filter(id__in=data_sets_to_output)
+            num_samples = len(data_set_sample.objects.filter(dataSubmissionFrom__in=query_set_of_data_sets))
 
-            data_sub_collection_run.formatOutput_ord(analysisobj=analysis_object,
-                                                     num_processors=args.num_proc, call_type='stand_alone', num_samples=num_samples,
-                                                     datasubstooutput=args.print_output_types, no_figures=args.no_figures,
-                                                     output_user=new_data_set_submitting_user)
+            data_sub_collection_run.output_type_count_tables(analysisobj=analysis_object,
+                                                             num_processors=args.num_proc, call_type='stand_alone', num_samples=num_samples,
+                                                             datasubstooutput=args.print_output_types, no_figures=args.no_figures,
+                                                             output_user=new_data_set_submitting_user)
         else:
             print('Please provide a data_analysis to ouput from by providing a data_analysis ID to the --data_analysis_id '
                   'flag. To see a list of data_analysis objects in the framework\'s database, use the --display_analyses flag.')
@@ -341,9 +341,9 @@ def main():
             config_dict = json.load(f)
         new_data_set_submitting_user = config_dict['user_name']
 
-        outputDir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
+        output_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
         output_file_path_list, date_time_str, num_samples = output.div_output_pre_analysis_new_meta_and_new_dss_structure(
-            datasubstooutput=args.print_output_seqs, num_processors=args.num_proc, output_dir=outputDir,
+            datasubstooutput=args.print_output_seqs, num_processors=args.num_proc, output_dir=output_directory,
             call_type='stand_alone', output_user=new_data_set_submitting_user)
         if num_samples > 1000:
             print('Too many samples ({}) to generate plots'.format(num_samples))
@@ -352,7 +352,7 @@ def main():
                 if 'relative' in item:
                     svg_path, png_path = plotting.\
                         generate_stacked_bar_data_submission(path_to_tab_delim_count=item,
-                                                           output_directory=outputDir, time_date_str=date_time_str)
+                                                           output_directory=output_directory, time_date_str=date_time_str)
                     print('Output figs:')
                     print(svg_path)
                     print(png_path)
