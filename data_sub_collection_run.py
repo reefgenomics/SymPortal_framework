@@ -3109,7 +3109,7 @@ def profile_assignment(num_procs):
 def worker_assignment_one(input_queue, dictionary):
     for clade_collection_object in iter(input_queue.get, 'STOP'):
         print('\rfootprintdict {}\t{}'.format(clade_collection_object, current_process()), end='')
-        dictionary[clade_collection_object] = clade_collection_object.footprint()
+        dictionary[clade_collection_object] = clade_collection_object.get_footprint()
 
 
 def worker_assignment_two(input_queue, dictionary):
