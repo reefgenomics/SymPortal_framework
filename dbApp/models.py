@@ -202,7 +202,7 @@ class CladeCollection(models.Model):
     # with the analysedSampleSequences associated with the cladeCollectionInQ
     def get_footprint(self):
         return frozenset(
-            refseq for refseq in ReferenceSequence.objects.filter(id__in=[int(a) for a in self.get_footprint.split(',')]))
+            refseq for refseq in ReferenceSequence.objects.filter(id__in=[int(a) for a in self.footprint.split(',')]))
 
     def __str__(self):
         return self.data_set_sample_from.name

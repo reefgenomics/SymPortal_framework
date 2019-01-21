@@ -6,7 +6,8 @@ import general
 import sys
 from pathlib import Path
 import shutil
-
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
+from dbApp.models import DataAnalysis, DataSet
 
 def test_data_loading_without_command_line(
         test_data_directory, data_sheet_path, num_proc, debug_bool, distance_method_arg,
@@ -217,6 +218,8 @@ def initiate_test():
     :return:
     """
 
+    cleanup_after_previous_tests()
+
     # run_loading_tests
     test_data_directory = os.path.join(os.path.abspath(os.path.dirname(__file__)), 'data')
     data_sheet_path = os.path.join(test_data_directory, 'test_data_submission_input.csv')
@@ -245,16 +248,39 @@ def initiate_test():
     print('testing complete')
 
 
+def cleanup_after_previous_tests():
+    cleanup_after_previously_run_data_analysis_tests()
+    cleanup_after_previously_run_data_loading_tests()
+
+
+def cleanup_after_previously_run_data_loading_tests():
+    uids_of_testing_data_set_objects = (ds.id for ds in DataSet.objects.filter(name='testing'))
+    for ds_uid in uids_of_testing_data_set_objects:
+        print(f'Cleaning up after previous data loading test: {ds_uid}')
+        delete_data_load_output_object_directories(ds_uid)
+        general.delete_data_set(ds_uid)
+
+
+def cleanup_after_previously_run_data_analysis_tests():
+    uids_of_testing_data_analysis_objects = (da.id for da in DataAnalysis.objects.filter(name='testing'))
+    for da_uid in uids_of_testing_data_analysis_objects:
+        print(f'Cleaning up after previous data analysis test: {da_uid}')
+        delete_data_analysis_output_object_directories(da_uid)
+        general.delete_data_analysis(da_uid)
+
+
 def delete_data_load_output_object_directories(data_set_uid):
     directory_to_delete = os.path.abspath(os.path.join(
         Path(__file__).parents[1], 'outputs', 'data_set_submissions', str(data_set_uid)))
-    shutil.rmtree(directory_to_delete)
+    if os.path.exists(directory_to_delete):
+        shutil.rmtree(directory_to_delete)
 
 
 def delete_data_analysis_output_object_directories(data_analysis_uid):
     directory_to_delete = os.path.abspath(os.path.join(
         Path(__file__).parents[1], 'outputs', 'analyses', str(data_analysis_uid)))
-    shutil.rmtree(directory_to_delete)
+    if os.path.exists(directory_to_delete):
+        shutil.rmtree(directory_to_delete)
 
 
 if __name__ == "__main__":
