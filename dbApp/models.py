@@ -27,22 +27,22 @@ class SymportalFramework(models.Model):
 class DataSet(models.Model):
     name = models.CharField(max_length=60, default='something')
     reference_fasta_database_used = models.CharField(max_length=60, default='None')
-    submittingUser = models.CharField(max_length=100, default='no_user_defined')
+    submitting_user = models.CharField(max_length=100, default='no_user_defined')
     submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
     # submittedDataRaw = models.FileField()
-    workingDirectory = models.CharField(max_length=300, default='None')
+    working_directory = models.CharField(max_length=300, default='None')
 
     # This is true when all processing is complete, including MED analyses
-    dataProcessed = models.BooleanField(default=False)
+    data_processed = models.BooleanField(default=False)
     # This is true when all sample processing is complete, i.e. MED may not necessarily be complete yet.
-    initialDataProcessed = models.BooleanField(default=False)
+    initial_data_processed = models.BooleanField(default=False)
     # This will be true if there is a python process currently processing this data_set
     # NB as the program may crash at any time this may get stuck to True
     # To prevent this we will have to set all of these to false on start up of SymPortal
-    # On startup all dataSubs have their currentlyBeingProcessed to False using the apps.py and __init__.py scipts:
+    # On startup all dataSubs have their currently_being_processed to False using the apps.py and __init__.py scipts:
     # http://stackoverflow.com/questions/28896627/executing-code-on-startup-in-django-1-7
-    currentlyBeingProcessed = models.BooleanField(default=False)
-    timeStamp = models.CharField(max_length=100, default='None')
+    currently_being_processed = models.BooleanField(default=False)
+    time_stamp = models.CharField(max_length=100, default='None')
     # http://stackoverflow.com/questions/27220480/django-datetime-migration-error
     # We can programatically set whenSubmitted by '= datetime.now()'
     # The Datetimes were causing a lot of problems when doing the dumpdata and loaddata. I think it was becuase of the
@@ -65,25 +65,25 @@ class DataSet(models.Model):
 
 class DataSetSample(models.Model):
 
-    dataSubmissionFrom = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
+    data_submission_from = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=200, default='None')
     # This is the absolute number of sequences after make.contigs
-    initialTotSeqNum = models.IntegerField(default=0)
+    num_contigs = models.IntegerField(default=0)
 
     # store the aboslute number of sequences after sequencing QC at this stage
-    post_seq_qc_absolute_num_seqs = models.IntegerField(default=0)
+    post_qc_absolute_num_seqs = models.IntegerField(default=0)
     # This is the unique number of sequences after the sequencing QC
-    initialUniqueSeqNum = models.IntegerField(default=0)
+    post_qc_unique_num_seqs = models.IntegerField(default=0)
 
     # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
-    finalTotSeqNum = models.IntegerField(default=0)
+    absolute_num_sym_seqs = models.IntegerField(default=0)
     # Same as above but the number of unique seqs
-    finalUniqueSeqNum = models.IntegerField(default=0)
+    unique_num_sym_seqs = models.IntegerField(default=0)
 
     # store the abosolute number of sequenes that were not considered Symbiodinium
     non_sym_absolute_num_seqs = models.IntegerField(default=0)
     # This is the number of unique sequences that were not considered Symbiodinium
-    nonSymSeqsNum = models.IntegerField(default=0)
+    non_sym_unique_num_seqs = models.IntegerField(default=0)
 
     # store the abosulte number of sequences that were lost during the size selection
     size_violation_absolute = models.IntegerField(default=0)
@@ -96,12 +96,12 @@ class DataSetSample(models.Model):
     post_med_unique = models.IntegerField(default=0)
 
     # Whether processed upto cladal separation but not MED yet
-    initialProcessingComplete = models.BooleanField(default=False)
+    initial_processing_complete = models.BooleanField(default=False)
     # Whether processed as above but also including MED
-    finalProcessingComplete = models.BooleanField(default=False)
-    errorInProcessing = models.BooleanField(default=False)
-    errorReason = models.CharField(max_length=100, default='noError')
-    cladalSeqTotals = models.CharField(max_length=5000, null=True)
+    final_processing_complete = models.BooleanField(default=False)
+    error_in_processing = models.BooleanField(default=False)
+    error_reason = models.CharField(max_length=100, default='noError')
+    cladal_seq_totals = models.CharField(max_length=5000, null=True)
 
     # Meta data for the sample
     sample_type = models.CharField(max_length=50, default='NoData')
@@ -124,67 +124,64 @@ class DataSetSample(models.Model):
 
 class DataAnalysis(models.Model):
     # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
-    listOfDataSubmissions = models.CharField(max_length=500, null=True)
-    withinCladeCutOff = models.FloatField(default=0.04)
-    typeSupport = models.FloatField(default=0.01)
-    cladeCollectionPopulationComplete = models.BooleanField(default=False)
-    analysisTypesDefined = models.BooleanField(default=False)
-    initialTypeDiscoComplete = models.BooleanField(default=False)
-    analysisTypesAssigned = models.BooleanField(default=False)
-    analysisTypesCollapsed = models.BooleanField(default=False)
-    refSeqsNamed = models.BooleanField(default=False)
-    speciesAssociated = models.BooleanField(default=False)
+    list_of_data_set_uids = models.CharField(max_length=500, null=True)
+    within_clade_cutoff = models.FloatField(default=0.04)
+    type_support = models.FloatField(default=0.01)
+    clade_collection_population_complete = models.BooleanField(default=False)
+    analysis_types_defined = models.BooleanField(default=False)
+    initial_type_discovery_complete = models.BooleanField(default=False)
+    analysis_types_assigned = models.BooleanField(default=False)
+    analysis_types_collapsed = models.BooleanField(default=False)
+    reference_sequences_named = models.BooleanField(default=False)
+    species_associated = models.BooleanField(default=False)
     name = models.CharField(max_length=100, null=True)
     description = models.CharField(max_length=5000, null=True)
-    dbVersionAnalysis = models.BooleanField(default=False)
-    dbVersionToRunAgainstID = models.IntegerField(null=True)
-    dSIDToAnalyse = models.IntegerField(null=True)
-    timeStamp = models.CharField(max_length=100, default='None')
-    submittingUser = models.CharField(max_length=100, default='no_user_defined')
+    time_stamp = models.CharField(max_length=100, default='None')
+    submitting_user = models.CharField(max_length=100, default='no_user_defined')
     submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
 
     def get_clade_collections(self):
-        list_of_uids = [int(x) for x in self.listOfDataSubmissions.split(',')]
-        clade_collections = CladeCollection.objects.filter(dataSetSampleFrom__dataSubmissionFrom__in=list_of_uids)
+        list_of_uids = [int(x) for x in self.list_of_data_set_uids.split(',')]
+        clade_collections = CladeCollection.objects.filter(data_set_sample_from__data_submission_from__in=list_of_uids)
         return clade_collections
 
 
 class CladeCollection(models.Model):
-    dataSetSampleFrom = models.ForeignKey(DataSetSample, on_delete=models.CASCADE, null=True)
+    data_set_sample_from = models.ForeignKey(DataSetSample, on_delete=models.CASCADE, null=True)
     clade = models.CharField(max_length=1)
     # the method below to get the footprint of the clade_collection_object is incredibly slow.
     # Hopefully a much faster way will be to store the ID's of the refseqs that make up the footprint
     # I will therefore store the reference uids in the field below
-    footPrint = models.CharField(max_length=100000, default=True)
+    footprint = models.CharField(max_length=100000, default=True)
 
     # maj() should return the analysedSampleSequence associated with the
     # cladeCollection in Q with the largest abundance
     def maj(self):
         max_abundance = DataSetSampleSequence.objects.filter(
-            cladeCollectionTwoFoundIn=self).aggregate(Max('abundance'))['abundance__max']
+            clade_collection_found_in=self).aggregate(Max('abundance'))['abundance__max']
         # A .get() could fail if there are two sequences with an equal abundance so I
         # will try the get first and then failing that I will do a .filter() and return the first element
         try:
-            return DataSetSampleSequence.objects.get(cladeCollectionTwoFoundIn=self, abundance=max_abundance)
+            return DataSetSampleSequence.objects.get(clade_collection_found_in=self, abundance=max_abundance)
 
         except:
-            return DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=self, abundance=max_abundance)[0]
+            return DataSetSampleSequence.objects.filter(clade_collection_found_in=self, abundance=max_abundance)[0]
 
     # range will be how many of the seqs we want to return
     def ordered_list_of_reference_sequences(self, num_to_return):
         if num_to_return:
-            dsss = list(DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=self).order_by('-abundance'))
-            ordered_reference_sequences = [ds.referenceSequenceOf for ds in dsss]
+            dsss = list(DataSetSampleSequence.objects.filter(clade_collection_found_in=self).order_by('-abundance'))
+            ordered_reference_sequences = [ds.reference_sequence_of for ds in dsss]
         else:
             # Try is for incase there are not 10 seqs in the clade_collection_object
             try:
                 dsss = list(DataSetSampleSequence.objects.filter(
-                    cladeCollectionTwoFoundIn=self).order_by('-abundance')[:10])
-                ordered_reference_sequences = [ds.referenceSequenceOf for ds in dsss]
+                    clade_collection_found_in=self).order_by('-abundance')[:10])
+                ordered_reference_sequences = [ds.reference_sequence_of for ds in dsss]
             except:
                 dsss = list(DataSetSampleSequence.objects.filter(
-                    cladeCollectionTwoFoundIn=self).order_by('-abundance'))
-                ordered_reference_sequences = [ds.referenceSequenceOf for ds in dsss]
+                    clade_collection_found_in=self).order_by('-abundance'))
+                ordered_reference_sequences = [ds.reference_sequence_of for ds in dsss]
         return ordered_reference_sequences
 
     # This will return the foot print of the analysedSampleSequences that are found above the given percentage cutoff
@@ -192,80 +189,80 @@ class CladeCollection(models.Model):
         # get total seqs in cladeCollection
         total = 0
 
-        for dsss in DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=self):
+        for dsss in DataSetSampleSequence.objects.filter(clade_collection_found_in=self):
             total += dsss.abundance
         sequence_number_cutoff = cutoff * total
         frset = set([])
-        for dsss in DataSetSampleSequence.objects.filter(cladeCollectionTwoFoundIn=self):
+        for dsss in DataSetSampleSequence.objects.filter(clade_collection_found_in=self):
             if dsss.abundance > sequence_number_cutoff:
-                frset.add(dsss.referenceSequenceOf)
+                frset.add(dsss.reference_sequence_of)
         return frozenset(frset)
 
     # footprint should return a frozen of referenceSequenceObjects associated
     # with the analysedSampleSequences associated with the cladeCollectionInQ
     def footprint(self):
         return frozenset(
-            refseq for refseq in ReferenceSequence.objects.filter(id__in=[int(a) for a in self.footPrint.split(',')]))
+            refseq for refseq in ReferenceSequence.objects.filter(id__in=[int(a) for a in self.footprint.split(',')]))
 
     def __str__(self):
-        return self.dataSetSampleFrom.name
+        return self.data_set_sample_from.name
 
 
 class AnalysisGroup(models.Model):
-    dataAnalysisFrom = models.ForeignKey(DataAnalysis, on_delete=models.CASCADE, null=True)
+    data_analysis_from = models.ForeignKey(DataAnalysis, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=100, null=True)
 
     # We will generate a name for the analysis_group at some point later according to the analysisTypes it contains
 
 
 class AnalysisType(models.Model):
-    dataAnalysisFrom = models.ForeignKey(DataAnalysis, on_delete=models.CASCADE, null=True)
-    analysisGroupOf = models.ForeignKey(AnalysisGroup, on_delete=models.SET_NULL, null=True)
+    data_analysis_from = models.ForeignKey(DataAnalysis, on_delete=models.CASCADE, null=True)
+    analysis_group_of = models.ForeignKey(AnalysisGroup, on_delete=models.SET_NULL, null=True)
     # This should be a frozen set of referenceSequences
     # As this is not possible in a django field or jsonable
     # I will instead make it a string of reference sequence uids
     # I will make set and get methods for the footprint
     # This will be a list of refSeqs that make up the footprint in order of their abundance when type first defined
     # This is a commar separated string of the uids of the ref seqs that define the type
-    orderedFootprintList = models.CharField(max_length=200, null=True)
+    ordered_footprint_list = models.CharField(max_length=200, null=True)
     # Same for listOfMajs
     # set() of refseqs that are Majs in each of the CCs this type was initially identified in.
     # Note that this is therefore in no particular order
-    MajRefSeqSet = models.CharField(max_length=40, null=True)
+    majority_reference_sequence_set = models.CharField(max_length=40, null=True)
     # Same for this
     # The list of cladeCollections in which the type was defined from
-    listOfCladeCollectionsFoundInInitially = models.CharField(max_length=5000, null=True)
+    list_of_clade_collections_found_in_initially = models.CharField(max_length=5000, null=True)
     # The list of cladeCollections that the type was associated with after one iteration of assigningTypes
-    listOfCladeCollections = models.CharField(max_length=100000, null=True)
+    list_of_clade_collections = models.CharField(max_length=100000, null=True)
     # This is a 2D list, a list for each clade collection in order of the listofCladeCollections
-    # Within each list the absolute abundances of the defining seqs in order of orderedFootprintList
-    footprintSeqAbundances = models.CharField(max_length=100000, null=True)
+    # Within each list the absolute abundances of the defining seqs in order of ordered_footprint_list
+    footprint_sequence_abundances = models.CharField(max_length=100000, null=True)
     # Same as above but the relative abundance of the
     # seq in Q as a function of all of the sequences in the cladeCollection
-    footprintSeqRatios = models.CharField(max_length=100000, null=True)
+    footprint_sequence_ratios = models.CharField(max_length=100000, null=True)
     clade = models.CharField(max_length=1)
-    coDom = models.BooleanField(default=False)
+    co_dominant = models.BooleanField(default=False)
 
     name = models.CharField(max_length=1000, null=True)
     # [(max,min) for refseq in ordered footprint list]
-    maxMinRatios = models.CharField(max_length=100000, null=True)
+    max_min_ratios = models.CharField(max_length=100000, null=True)
     # The list of speceis that this type is associated with
     species = models.CharField(max_length=200, null=True)
 
     # this list will keep track of which of the defining intras of this type are 'unlocked' i.e. at least one
     # of the instances of that intra were found at <5%. We will use this list to the 'artefact type creation'
-    # This artefactIntras will hold a char string of comma separated ints that represent the id's of the
+    # This artefact_intras will hold a char string of comma separated ints that represent the id's of the
     # refseqs that are unlocked
-    artefactIntras = models.CharField(max_length=5000, default='')
+    artefact_intras = models.CharField(max_length=5000, default='')
 
     # This will only be set to true when running an analysis against a database version.
-    isLockedType = models.BooleanField(default=False)
+    is_locked_type = models.BooleanField(default=False)
 
     # This method will populate the following attributes
-    #  self.listOfCladeCollectionsFoundInInitially
-    # self.orderedFootprintList
+    #  self.list_of_clade_collections_found_in_initially
+    # self.ordered_footprint_list
     # self.name
-    # self.footprintSeqAbundances
+    # self.footprint_sequence_abundances
     # Very important that the listOfCC be an acutal list rather than a query set as the query set may not maintain order
     # We need order to be maintained when we come to do the multimodal detection
     # I have checked and the listOfCC is indeed a list rather than a queryset
@@ -273,7 +270,7 @@ class AnalysisType(models.Model):
     # in the multimodal detection and the ratio checking for type association.
     # Once we have been through the initial round of type association we will
     # be using the updateTypeAttribute method in place of this so that we will start working from the
-    # listofCladeCaoolections rather than the listOfCladeCollectionsFoundInInitially
+    # listofCladeCaoolections rather than the list_of_clade_collections_found_in_initially
     # TODO because I am going to move away from this silly ratio business and work on relative abundance
     # of defining intras.
     # These will simply be the relative proportion of any given intra (including the maj) with respect to the
@@ -281,10 +278,10 @@ class AnalysisType(models.Model):
 
     def init_type_attributes(self, list_of_clade_collections, footprintlistofrefseqs):
         # Becuase this can be run twice on a type due to the checking for within clade cutoff methods
-        # We need to reset the artefactIntras
-        self.artefactIntras = ''
+        # We need to reset the artefact_intras
+        self.artefact_intras = ''
 
-        self.listOfCladeCollectionsFoundInInitially = ','.join([str(cc.id) for cc in list(list_of_clade_collections)])
+        self.list_of_clade_collections_found_in_initially = ','.join([str(cc.id) for cc in list(list_of_clade_collections)])
 
         footprintlist = list(footprintlistofrefseqs)
         count_list = [[] for _ in list_of_clade_collections]
@@ -322,31 +319,31 @@ class AnalysisType(models.Model):
 
         # I don't think that it is necessary to predetermine whether a type is CoDom or not
         # we do all of the work that is required for that here anyway.
-        # So instead I am going to workout coDom in the type init here.
+        # So instead I am going to workout co_dominant in the type init here.
         # work out the maj seqs here
         set_of_majority_reference_sequences = set()
         for clade_collection_object in list_of_clade_collections:
             max_abund = 0
             maj_reference_sequence = None
             list_of_sequences_from_clade_collection = DataSetSampleSequence.objects.filter(
-                cladeCollectionTwoFoundIn=clade_collection_object)
+                clade_collection_found_in=clade_collection_object)
             for ref_seq in footprintlistofrefseqs:
                 sample_sequence_of_reference_sequence = list_of_sequences_from_clade_collection.get(
-                    referenceSequenceOf=ref_seq)
+                    reference_sequence_of=ref_seq)
                 abundance_of_reference_sequence_in_question = sample_sequence_of_reference_sequence.abundance
                 if abundance_of_reference_sequence_in_question > max_abund:
-                    maj_reference_sequence = sample_sequence_of_reference_sequence.referenceSequenceOf
+                    maj_reference_sequence = sample_sequence_of_reference_sequence.reference_sequence_of
                     max_abund = sample_sequence_of_reference_sequence.abundance
                 count_list[
                     list_of_clade_collections.index(
                         clade_collection_object)].append(abundance_of_reference_sequence_in_question)
             set_of_majority_reference_sequences.add(maj_reference_sequence)
 
-        # if set_of_majority_reference_sequences > 1 then this is coDom
+        # if set_of_majority_reference_sequences > 1 then this is co_dominant
         if len(set_of_majority_reference_sequences) > 1:
-            self.coDom = True
+            self.co_dominant = True
         else:
-            self.coDom = False
+            self.co_dominant = False
         self.set_maj_ref_seq_set(set_of_majority_reference_sequences)
         # At this point we have the abundance of each sequence for each instance of the type
         # we have 2d array where list are cladeCollections, and items in each list represent sequence
@@ -364,9 +361,9 @@ class AnalysisType(models.Model):
         # just so long as we work with the relative abundances as funtion of the
         # type seuences in the clade_collection_object
 
-        self.orderedFootprintList = ','.join([str(refseq.id) for refseq in ordered_footprint_list])
+        self.ordered_footprint_list = ','.join([str(refseq.id) for refseq in ordered_footprint_list])
 
-        if not self.isLockedType:
+        if not self.is_locked_type:
             self.name = self.generate_name(ordered_footprint_list)
 
         # The below code re orders the countlist 2D list so that the columns are in order of refseq abundance
@@ -380,7 +377,7 @@ class AnalysisType(models.Model):
         del count_list
         # Here we have the 2d list of raw abundances of seqs for every clade collection (row) for every seq (column)
         # Now we can store it in a char field by json.dumpsing it.
-        self.footprintSeqAbundances = json.dumps(count_list_ordered)
+        self.footprint_sequence_abundances = json.dumps(count_list_ordered)
 
         # These now represent relative abundances rather than ratios
 
@@ -388,15 +385,15 @@ class AnalysisType(models.Model):
         self.generate_ratio_list()
         self.save()
 
-    # This is similar to initTypeAttributes but it works on the listOfCladeCollections
-    # It sets self.orderedFootprintList, self.name, self.footprintSeqAbundances, self.genreateMaxMinRatios,
-    # self.coDom, self.MajRefSeqSet
+    # This is similar to initTypeAttributes but it works on the list_of_clade_collections
+    # It sets self.ordered_footprint_list, self.name, self.footprint_sequence_abundances, self.genreateMaxMinRatios,
+    # self.co_dominant, self.majority_reference_sequence_set
     # the self.maxminratios will be kept uptodate through the assigning types to clade collections process but
     # This will be called everytime we finish an iteration of the assigning types. after the first iteration for
-    # this will convert from working on the initial clade collection list to the listOfCladeCollections
+    # this will convert from working on the initial clade collection list to the list_of_clade_collections
     # It will be important to call this before running the miltimodal function as the counts and ratios will
     # need to be up to date.
-    # The listOfCladeCollections should be kept up to date as we go through the association of types.
+    # The list_of_clade_collections should be kept up to date as we go through the association of types.
 
     def update_type_attributes(self):
         # Important to use this get() format rather than all().filter() format as
@@ -404,35 +401,35 @@ class AnalysisType(models.Model):
         # NB this is now updating from listoflcadecollections rather than from listoflcadecollectionsfoundininitially
 
         list_of_clade_collections = [
-            CladeCollection.objects.get(id=ID) for ID in [int(x) for x in self.listOfCladeCollections.split(',')]]
+            CladeCollection.objects.get(id=ID) for ID in [int(x) for x in self.list_of_clade_collections.split(',')]]
 
         ordered_list_of_reference_sequences_in_type = [
-            ReferenceSequence.objects.get(id=ID) for ID in [int(x) for x in self.orderedFootprintList.split(',')]]
+            ReferenceSequence.objects.get(id=ID) for ID in [int(x) for x in self.ordered_footprint_list.split(',')]]
 
         count_list = [[] for _ in list_of_clade_collections]
 
         for clade_collection_object in list_of_clade_collections:
             list_of_sequences_from_clade_collection = DataSetSampleSequence.objects.filter(
-                cladeCollectionTwoFoundIn=clade_collection_object)
+                clade_collection_found_in=clade_collection_object)
             for ref_seq in ordered_list_of_reference_sequences_in_type:
                 sample_sequence_of_reference_sequence = list_of_sequences_from_clade_collection.get(
-                    referenceSequenceOf=ref_seq)
+                    reference_sequence_of=ref_seq)
                 count_list[
                     list_of_clade_collections.index(
                         clade_collection_object)].append(sample_sequence_of_reference_sequence.abundance)
 
-        # Here I will update/initiate self.MajRefSeqSet and self.coDom using the countList info
+        # Here I will update/initiate self.majority_reference_sequence_set and self.co_dominant using the countList info
         majority_reference_sequence_set = set()
         for CClist in count_list:
             max_value = max(CClist)
 
             index = CClist.index(max_value)
             majority_reference_sequence_set.add(ordered_list_of_reference_sequences_in_type[index])
-        self.MajRefSeqSet = ','.join([str(a.id) for a in list(majority_reference_sequence_set)])
+        self.majority_reference_sequence_set = ','.join([str(a.id) for a in list(majority_reference_sequence_set)])
         if len(majority_reference_sequence_set) > 1:
-            self.coDom = True
+            self.co_dominant = True
         else:
-            self.coDom = False
+            self.co_dominant = False
         self.save()
         # At this point we have the abundance of each sequence for each instance of the type
         # we have 2d array where list are samples and items in list represent sequence
@@ -445,14 +442,14 @@ class AnalysisType(models.Model):
         ordered_footprint_list = [a[0] for a in sorted(abundance_list, key=lambda x: x[1], reverse=True)]
         # Because this is also used when creating a brand new type in the bimodal distribution splitting
         # We should always create a new name
-        # if self.orderedFootprintList != ','.join([str(refseq.id) for refseq in orderedFootprintList]):
+        # if self.ordered_footprint_list != ','.join([str(refseq.id) for refseq in ordered_footprint_list]):
         # Then the order of the footprint has changed and the name needs to be redone
         # Else it doesn't need to be redone
-        self.orderedFootprintList = ','.join([str(refseq.id) for refseq in ordered_footprint_list])
+        self.ordered_footprint_list = ','.join([str(refseq.id) for refseq in ordered_footprint_list])
 
-        if not self.isLockedType:
+        if not self.is_locked_type:
             self.name = self.generate_name(ordered_footprint_list)
-        # If the order of the footPrint hasn't changed then the count list is
+        # If the order of the footprint hasn't changed then the count list is
         # already in the right order and we don't need to do the code below.
         # If the order has changed then we do need to redo the code
         # The below code re orders the countlist 2D list os that the columns are in order of refseq abundance
@@ -467,33 +464,33 @@ class AnalysisType(models.Model):
         # Here we have the 2d list of raw abundances of seqs for every clade collection (row) for every seq (column)
         # Now we can store it in a char field by json.dumpsing it.
 
-        self.footprintSeqAbundances = json.dumps(count_list_ordered)
+        self.footprint_sequence_abundances = json.dumps(count_list_ordered)
         # These now represent relative abundances rather than ratios
         self.generate_max_min_ratios(count_list_ordered, ordered_footprint_list)
         self.generate_ratio_list()
 
     def add_clade_collection_to_clade_collection_list(self, clade_collection_object):
-        if self.listOfCladeCollections:  # If empty then no need to add comma
-            self.listOfCladeCollections += ',{}'.format(clade_collection_object.id)
+        if self.list_of_clade_collections:  # If empty then no need to add comma
+            self.list_of_clade_collections += ',{}'.format(clade_collection_object.id)
         else:
-            self.listOfCladeCollections = str(clade_collection_object.id)
+            self.list_of_clade_collections = str(clade_collection_object.id)
 
     def add_clade_collection_list_to_clade_collection_list(self, clade_collection_uid_list):
-        if self.listOfCladeCollections:  # If empty then no need to add commar
-            self.listOfCladeCollections += ',{}'.format(','.join([str(a) for a in clade_collection_uid_list]))
+        if self.list_of_clade_collections:  # If empty then no need to add commar
+            self.list_of_clade_collections += ',{}'.format(','.join([str(a) for a in clade_collection_uid_list]))
         else:
-            self.listOfCladeCollections = ','.join([str(a) for a in clade_collection_uid_list])
+            self.list_of_clade_collections = ','.join([str(a) for a in clade_collection_uid_list])
 
     def remove_clade_collection_list_from_initial_clade_collection_list(self, clade_collection_uid_list):
-        list_of_uids_as_string = self.listOfCladeCollectionsFoundInInitially.split(',')
+        list_of_uids_as_string = self.list_of_clade_collections_found_in_initially.split(',')
         new_list = [uid for uid in list_of_uids_as_string if uid not in clade_collection_uid_list]
-        self.listOfCladeCollectionsFoundInInitially = ','.join(new_list)
+        self.list_of_clade_collections_found_in_initially = ','.join(new_list)
         self.save()
 
     def remove_clade_collection_from_clade_collection_list(self, clade_collection_object):
-        list_of_uids_as_string = self.listOfCladeCollections.split(',')
+        list_of_uids_as_string = self.list_of_clade_collections.split(',')
         list_of_uids_as_string.remove(str(clade_collection_object.id))
-        self.listOfCladeCollections = ','.join(list_of_uids_as_string)
+        self.list_of_clade_collections = ','.join(list_of_uids_as_string)
         self.save()
 
     # This is the relative abundance of each sequence in the type as a function of the total sequence found
@@ -501,7 +498,7 @@ class AnalysisType(models.Model):
 
     def generate_ratio_list(self):
         new_ratio_list = []
-        footprint_seq_abundances_loaded = json.loads(self.footprintSeqAbundances)
+        footprint_seq_abundances_loaded = json.loads(self.footprint_sequence_abundances)
         # For each clade_collection_object the type is associated with
         for i in range(len(footprint_seq_abundances_loaded)):
             new_ratio_list.append([])
@@ -509,17 +506,17 @@ class AnalysisType(models.Model):
             for j in range(len(footprint_seq_abundances_loaded[i])):  # For each intra in the type
                 ratio = float("%.3f" % (footprint_seq_abundances_loaded[i][j]/denominator))
                 new_ratio_list[-1].append(ratio)
-        self.footprintSeqRatios = json.dumps(new_ratio_list)
+        self.footprint_sequence_ratios = json.dumps(new_ratio_list)
 
     def get_ratio_list(self):
-        return json.loads(self.footprintSeqRatios)
+        return json.loads(self.footprint_sequence_ratios)
 
     def generate_name(self, ordered_list_of_reference_sequences_in_footprint=None, accession=None):
-        # If self.isLockedType then we skip the naming.
-        if not self.isLockedType:
+        # If self.is_locked_type then we skip the naming.
+        if not self.is_locked_type:
 
-            # this is interesting, sometimes one of the intras that is not a coDom is more abundant than one
-            # of the coDom intras to solve this problem we should add the coDoms intas to the name first and then
+            # this is interesting, sometimes one of the intras that is not a co_dominant is more abundant than one
+            # of the co_dominant intras to solve this problem we should add the co_dominants intas to the name first and then
             # go in the remaining order of the orderedListOfRefSeqsInFootprint
 
             if accession:
@@ -528,11 +525,11 @@ class AnalysisType(models.Model):
                 # If there are accessions available we use these, in the same / and - format as the usual name
                 # Where there aren't accessions available for the ref seqs we use the ref seq's ID.
                 orderedlistofrefseqsinfootprint = self.get_ordered_footprint_list()
-                if self.coDom:
+                if self.co_dominant:
                     list_of_majority_reference_sequences = ReferenceSequence.objects.filter(
-                        id__in=[int(x) for x in self.MajRefSeqSet.split(',')])
-                    # Start the name with the coDom intras in order of abundance.
-                    # Then append the noncoDom intras in order of abundance
+                        id__in=[int(x) for x in self.majority_reference_sequence_set.split(',')])
+                    # Start the name with the co_dominant intras in order of abundance.
+                    # Then append the nonco_dominant intras in order of abundance
                     ordered_list_of_majority_reference_sequences = [
                         ref_seq for ref_seq in orderedlistofrefseqsinfootprint if
                         ref_seq in list_of_majority_reference_sequences]
@@ -564,11 +561,11 @@ class AnalysisType(models.Model):
                 # as I don't want to break the below
                 # code by trying to overwrite orderedListOfRefSeqsInFootprint
                 orderedlistofrefseqsinfootprint = self.get_ordered_footprint_list()
-                if self.coDom:
+                if self.co_dominant:
                     list_of_majority_reference_sequences = ReferenceSequence.objects.filter(
-                        id__in=[int(x) for x in self.MajRefSeqSet.split(',')])
-                    # Start the name with the coDom intras in order of abundance.
-                    # Then append the noncoDom intras in order of abundance
+                        id__in=[int(x) for x in self.majority_reference_sequence_set.split(',')])
+                    # Start the name with the co_dominant intras in order of abundance.
+                    # Then append the nonco_dominant intras in order of abundance
                     name = '/'.join([
                         str(ref_seq) for ref_seq in orderedlistofrefseqsinfootprint
                         if ref_seq in list_of_majority_reference_sequences])
@@ -585,12 +582,12 @@ class AnalysisType(models.Model):
                     return '-'.join(str(ref_seq) for ref_seq in orderedlistofrefseqsinfootprint)
 
             else:
-                if self.coDom:
+                if self.co_dominant:
                     list_of_majority_reference_sequences = ReferenceSequence.objects.filter(
-                        id__in=[int(x) for x in self.MajRefSeqSet.split(',')])
+                        id__in=[int(x) for x in self.majority_reference_sequence_set.split(',')])
 
-                    # Start the name with the coDom intras in order of abundance.
-                    # Then append the noncoDom intras in order of abundance
+                    # Start the name with the co_dominant intras in order of abundance.
+                    # Then append the nonco_dominant intras in order of abundance
                     name = '/'.join(
                         [str(ref_seq) for ref_seq in ordered_list_of_reference_sequences_in_footprint if ref_seq in
                          list_of_majority_reference_sequences])
@@ -632,7 +629,7 @@ class AnalysisType(models.Model):
                     # This way we should hopefully mitigate any artefacts caused by the within cladeCutOff
                     # Additionally we need to note that our 0.03 within clade cutoff may be acting on this intra
                     # to cause an artefact. To do this we need to add the intra (ref_seq.id) to the types
-                    # artefactIntras list
+                    # artefact_intras list
 
                     if maxmin_candidate < 0.06:
                         min_val = 0.0001
@@ -641,42 +638,42 @@ class AnalysisType(models.Model):
                     else:
                         min_val = maxmin_candidate
                         max_min_list[-1][1] = min_val  # Populate the tuple for this refseq with the new min
-        self.maxMinRatios = json.dumps(max_min_list)
+        self.max_min_ratios = json.dumps(max_min_list)
 
     def note_artefact_intra(self, reference_sequence_uid):
-        # Add the ID of the refseq in question to the artefactIntras list of the type if the ID not already in list
-        if self.artefactIntras != '':
-            artefact_list = self.artefactIntras.split(',')
+        # Add the ID of the refseq in question to the artefact_intras list of the type if the ID not already in list
+        if self.artefact_intras != '':
+            artefact_list = self.artefact_intras.split(',')
             if str(reference_sequence_uid) in artefact_list:
                 return
             else:
                 artefact_list.append(str(reference_sequence_uid))
-                self.artefactIntras = ','.join(artefact_list)
+                self.artefact_intras = ','.join(artefact_list)
                 self.save()
         else:
-            self.artefactIntras = str(reference_sequence_uid)
+            self.artefact_intras = str(reference_sequence_uid)
             self.save()
 
     def get_clade_collections_found_in_initially(self):
         return CladeCollection.objects.filter(
-            id__in=[int(x) for x in self.listOfCladeCollectionsFoundInInitially.split(',')])
+            id__in=[int(x) for x in self.list_of_clade_collections_found_in_initially.split(',')])
 
     def get_clade_collections(self):
-        return CladeCollection.objects.filter(id__in=[int(x) for x in self.listOfCladeCollections.split(',')])
+        return CladeCollection.objects.filter(id__in=[int(x) for x in self.list_of_clade_collections.split(',')])
 
     def get_max_min_ratios(self):
-        return json.loads(self.maxMinRatios)
+        return json.loads(self.max_min_ratios)
 
     def get_ordered_footprint_list(self):
         # Important that we keep the order of the list
-        list_of_ref_seq_uids = [int(a) for a in self.orderedFootprintList.split(',')]
+        list_of_ref_seq_uids = [int(a) for a in self.ordered_footprint_list.split(',')]
         return [ReferenceSequence.objects.get(id=uid) for uid in list_of_ref_seq_uids]
 
     def set_maj_ref_seq_set(self, set_of_reference_sequences):
-        self.MajRefSeqSet = ','.join(str(refseq.id) for refseq in list(set_of_reference_sequences))
+        self.majority_reference_sequence_set = ','.join(str(refseq.id) for refseq in list(set_of_reference_sequences))
 
     def get_majority_reference_sequence_set(self):
-        list_of_reference_sequence_uids = [int(a) for a in self.MajRefSeqSet.split(',')]
+        list_of_reference_sequence_uids = [int(a) for a in self.majority_reference_sequence_set.split(',')]
         reference_sequence_query_set = ReferenceSequence.objects.filter(id__in=list_of_reference_sequence_uids)
         return set([refseq for refseq in reference_sequence_query_set])
 
@@ -685,14 +682,14 @@ class AnalysisType(models.Model):
 
 
 class CladeCollectionType(models.Model):
-    analysisTypeOf = models.ForeignKey(AnalysisType, on_delete=models.CASCADE, null=True)
-    # analysisTypeOf = models.IntegerField(null=True)
-    cladeCollectionFoundIn = models.ForeignKey(CladeCollection, on_delete=models.CASCADE, null=True)
-    # cladeCollectionFoundIn = models.IntegerField(null=True)
+    analysis_type_of = models.ForeignKey(AnalysisType, on_delete=models.CASCADE, null=True)
+    # analysis_type_of = models.IntegerField(null=True)
+    clade_collection_found_in = models.ForeignKey(CladeCollection, on_delete=models.CASCADE, null=True)
+    # clade_collection_found_in = models.IntegerField(null=True)
 
     def __str__(self):
-        # return ','.join([str(refseq.id) for refseq in self.analysisTypeOf.getOrderedFootprintList()])
-        return self.analysisTypeOf.name
+        # return ','.join([str(refseq.id) for refseq in self.analysis_type_of.get_ordered_footprint_list()])
+        return self.analysis_type_of.name
 
 
 # TODO 08/12/17 Consider adding a basal seq of argument in this. This will improve our ability to separate basal
@@ -701,27 +698,27 @@ class CladeCollectionType(models.Model):
 # would happen to some of the biguns like C21 and C39. But this could be really good.
 class ReferenceSequence(models.Model):
     name = models.CharField(max_length=30, default='noName')
-    hasName = models.BooleanField(default=False)
+    has_name = models.BooleanField(default=False)
     clade = models.CharField(max_length=30)
     sequence = models.CharField(max_length=500)
     accession = models.CharField(max_length=50, null=True)
 
     def __str__(self):
-        if self.hasName:
+        if self.has_name:
             return self.name
         else:
             return '{}'.format(self.id)
 
 
 class DataSetSampleSequence(models.Model):
-    cladeCollectionTwoFoundIn = models.ForeignKey(CladeCollection, on_delete=models.CASCADE, null=True)
-    referenceSequenceOf = models.ForeignKey(ReferenceSequence, on_delete=models.CASCADE, null=True)
-    # referenceSequenceOf = models.IntegerField(null=True)
+    clade_collection_found_in = models.ForeignKey(CladeCollection, on_delete=models.CASCADE, null=True)
+    reference_sequence_of = models.ForeignKey(ReferenceSequence, on_delete=models.CASCADE, null=True)
+    # reference_sequence_of = models.IntegerField(null=True)
     abundance = models.IntegerField(default=0)
     data_set_sample_from = models.ForeignKey(DataSetSample, on_delete=models.CASCADE, null=True)
 
     def __str__(self):
-        if self.referenceSequenceOf.hasName:
-            return self.referenceSequenceOf.name
+        if self.reference_sequence_of.has_name:
+            return self.reference_sequence_of.name
         else:
             return 'ID=' + str(self.id)

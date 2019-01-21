@@ -46,7 +46,7 @@ def populate_db_with_ref_seqs():
             except:
                 new_seq = ReferenceSequence(
                     name=fasta_to_populate_from[i][1:], clade=fasta_to_populate_from[i][1],
-                    sequence=fasta_to_populate_from[i+1], hasName=True)
+                    sequence=fasta_to_populate_from[i+1], has_name=True)
                 new_seq.save()
                 print('Sequence {} added to db'.format(fasta_to_populate_from[i][1:]))
     return

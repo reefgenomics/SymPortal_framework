@@ -42,28 +42,28 @@ def output_type_count_tables(
     query_set_of_data_sets = DataSet.objects.filter(id__in=data_submissions_to_output)
 
     clade_collections_from_data_sets = CladeCollection.objects.filter(
-        dataSetSampleFrom__dataSubmissionFrom__in=query_set_of_data_sets)
+        data_set_sample_from__data_submission_from__in=query_set_of_data_sets)
     clade_collection_types_from_this_data_analysis_and_data_set = CladeCollectionType.objects.filter(
-        cladeCollectionFoundIn__in=clade_collections_from_data_sets,
-        analysisTypeOf__dataAnalysisFrom=analysis_object).distinct()
+        clade_collection_found_in__in=clade_collections_from_data_sets,
+        analysis_type_of__data_analysis_from=analysis_object).distinct()
 
     at = set()
     for cct in clade_collection_types_from_this_data_analysis_and_data_set:
         sys.stdout.write('\rCollecting analysis_type from clade collection type {}'.format(cct))
-        at.add(cct.analysisTypeOf)
+        at.add(cct.analysis_type_of)
     at = list(at)
 
     # Need to get a list of Samples that are part of the dataAnalysis
     list_of_data_set_samples = list(
         DataSetSample.objects.filter(
-            dataSubmissionFrom__in=DataSet.objects.filter(id__in=data_submissions_to_output)))
+            data_submission_from__in=DataSet.objects.filter(id__in=data_submissions_to_output)))
 
     # Now go through the types, firstly by clade and then by the number of cladeCollections they were found in
     # Populate a 2D list of types with a list per clade
     types_cladal_list = [[] for _ in clade_list]
     for att in at:
         try:
-            if len(att.listOfCladeCollections) > 0:
+            if len(att.list_of_clade_collections) > 0:
                 types_cladal_list[clade_list.index(att.clade)].append(att)
         except:
             pass
@@ -78,7 +78,7 @@ def output_type_count_tables(
             # ##### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
             #     # For each type we want to calculate the average proportions of the defining seqs in that type
             #     # We will also calculate an SD.
-            #     # We will do both of these calculations using the footprintSeqAbundances, listOfCladeCollections
+            #     # We will do both of these calculations using the footprint_sequence_abundances, list_of_clade_collections
             #     # and orderedFoorprintList attributes of each type
 
             # ######### MAKE GROUP COUNTER AND DICT ###########
@@ -121,7 +121,7 @@ def output_type_count_tables(
                 sys.stdout.write('\rCollecting clade collections for sample {}'.format(smp))
                 try:
                     sample_uid_to_clade_collection_uids_of_clade[smp.id] = CladeCollection.objects.get(
-                        dataSetSampleFrom=smp, clade=clade_in_question).id
+                        data_set_sample_from=smp, clade=clade_in_question).id
                 except CladeCollection.DoesNotExist:
                     sample_uid_to_clade_collection_uids_of_clade[smp.id] = None
                 except Exception as ex:  # Just incase there is some weird stuff going on
@@ -410,7 +410,7 @@ def output_type_count_tables(
             'Output as part of data_analysis ID: {}; '
             'Number of data_set objects as part of analysis = {}; '
             'submitting_user: {}; time_stamp: {}'.format(
-                analysisobj.id, len(query_set_of_data_sets), analysisobj.submittingUser, analysisobj.timeStamp)]
+                analysisobj.id, len(query_set_of_data_sets), analysisobj.submitting_user, analysisobj.time_stamp)]
         temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]], name='meta_info_summary')
         df_absolute = df_absolute.append(temp_series)
         df_relative = df_relative.append(temp_series)
@@ -419,7 +419,7 @@ def output_type_count_tables(
             data_set_meta_list = [
                 'Data_set ID: {}; Data_set name: {}; submitting_user: {}; time_stamp: {}'.format(
                     data_set_object.id, data_set_object.name,
-                    data_set_object.submittingUser, data_set_object.timeStamp)]
+                    data_set_object.submitting_user, data_set_object.time_stamp)]
 
             temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]], name='data_set_info')
             df_absolute = df_absolute.append(temp_series)
@@ -432,7 +432,7 @@ def output_type_count_tables(
             'Number of data_set objects as part of output = {}; '
             'Number of data_set objects as part of analysis = {}'.format(
                 output_user, str(datetime.now()).replace(' ', '_').replace(':', '-'), analysisobj.id,
-                len(query_set_of_data_sets), len(analysisobj.listOfDataSubmissions.split(',')))]
+                len(query_set_of_data_sets), len(analysisobj.list_of_data_set_uids.split(',')))]
 
         temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]], name='meta_info_summary')
         df_absolute = df_absolute.append(temp_series)
@@ -441,7 +441,7 @@ def output_type_count_tables(
             data_set_meta_list = [
                 'Data_set ID: {}; Data_set name: {}; submitting_user: {}; time_stamp: {}'.format(
                     data_set_object.id, data_set_object.name,
-                    data_set_object.submittingUser, data_set_object.timeStamp)]
+                    data_set_object.submitting_user, data_set_object.time_stamp)]
 
             temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]], name='data_set_info')
             df_absolute = df_absolute.append(temp_series)
@@ -523,12 +523,12 @@ def sort_list_of_types_by_clade_collections_in_current_output(
     sys.stdout.write('\nSorting types by abundance of clade collections\n')
     tuple_list = []
     clade_collections_uid_in_current_output = [
-        clade_collection_type_obj.cladeCollectionFoundIn.id
+        clade_collection_type_obj.clade_collection_found_in.id
         for clade_collection_type_obj in clade_collection_types_in_current_output]
 
     for at in list_of_analysis_types:
         sys.stdout.write('\rCounting for type {}'.format(at))
-        list_of_clade_collections_found_in = [int(x) for x in at.listOfCladeCollections.split(',')]
+        list_of_clade_collections_found_in = [int(x) for x in at.list_of_clade_collections.split(',')]
         num_clade_collections_of_output = list(
             set(clade_collections_uid_in_current_output).intersection(list_of_clade_collections_found_in))
         tuple_list.append((at.id, len(num_clade_collections_of_output)))
@@ -548,9 +548,9 @@ def output_worker_one(
         # ##### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
         # For each type we want to calculate the average proportions of the defining seqs in that type
         # We will also calculate an SD.
-        # We will do both of these calculations using the footprintSeqAbundances, listOfCladeCollections
+        # We will do both of these calculations using the footprint_sequence_abundances, list_of_clade_collections
         # and orderedFoorprintList attributes of each type
-        footprint_abundances = json.loads(an_type.footprintSeqAbundances)
+        footprint_abundances = json.loads(an_type.footprint_sequence_abundances)
 
         # We have to make a decision as to whether this average should represent all the findings of this type
         # or whether we should only represent the averages of samples found in this dataset.
@@ -583,7 +583,7 @@ def output_worker_one(
         # For each type create a holder that will hold 0s for each sample until populated below
         data_row_raw = [0 for _ in range(num_samples)]
         data_row_proportion = [0 for _ in range(num_samples)]
-        type_clade_collection_uids = [int(a) for a in type_in_question.listOfCladeCollections.split(',')]
+        type_clade_collection_uids = [int(a) for a in type_in_question.list_of_clade_collections.split(',')]
 
         # We also need the type abund db value. We can get this from the type cladeCollections
         global_count = len(type_clade_collection_uids)
@@ -603,15 +603,15 @@ def output_worker_one(
             clade_collection_in_question_uid = sample_uid_to_clade_collection_of_clade_uid[ID]
 
             # The number of sequences that were returned for the sample in question
-            total_number_of_sequences = DataSetSample.objects.get(id=ID).finalTotSeqNum
+            total_number_of_sequences = DataSetSample.objects.get(id=ID).absolute_num_sym_seqs
 
             # The number of sequences that make up the type in q
-            # The index of the clade_collection_object in the type's listOfCladeCollections
+            # The index of the clade_collection_object in the type's list_of_clade_collections
             clade_collection_index_in_type = type_clade_collection_uids.index(clade_collection_in_question_uid)
             # List containing the abundances of each of the ref seqs that
             # make up the type in the given clade_collection_object
             sequence_abundance_info_for_clade_collection_and_type_in_question = json.loads(
-                type_in_question.footprintSeqAbundances)[clade_collection_index_in_type]
+                type_in_question.footprint_sequence_abundances)[clade_collection_index_in_type]
             # total of the above list, i.e. seqs in type
             sum_of_defining_reference_sequence_abundances_in_type = sum(
                 sequence_abundance_info_for_clade_collection_and_type_in_question)
@@ -630,14 +630,14 @@ def output_worker_one(
         type_profile_name = type_in_question.name
         species = type_in_question.species
         type_abundance = abundance_count
-        # This is currently putting out the Majs in an odd order due to the fact that the MajRefSeqSet is
+        # This is currently putting out the Majs in an odd order due to the fact that the majority_reference_sequence_set is
         # a set. Instead we should get the Majs from the name.
-        # majority_its2 = '/'.join([str(refseq) for refseq in sortedListOfTypes[j].getMajRefSeqSet()])
+        # majority_its2 = '/'.join([str(refseq) for refseq in sortedListOfTypes[j].getmajority_reference_sequence_set()])
         majority_its2, majority_list = get_maj_list(an_type)
         type_abundance_and_standard_deviation_string = get_abundance_string(
             total_list, standard_deviation_list, majority_list)
 
-        sequence_accession = type_in_question.generateName(accession=True)
+        sequence_accession = type_in_question.generate_name(accession=True)
         row_one = '{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}'.format(
             type_uid, clade, majority_its2, species, str(type_abundance), str(global_count), type_profile_name,
             '\t'.join([str(a) for a in data_row_raw]), sequence_accession,
@@ -666,14 +666,14 @@ def get_maj_list(atype):
     count = name.count('/')
     majority_list = []
     # list of the seqs in order of abundance across the type's samples
-    uids_of_sequences_in_order_of_abundance = atype.orderedFootprintList.split(',')
+    uids_of_sequences_in_order_of_abundance = atype.ordered_footprint_list.split(',')
     # list of the maj seqs in the type
-    majority_sequeces_uids = atype.MajRefSeqSet.split(',')
+    majority_sequeces_uids = atype.majority_reference_sequence_set.split(',')
     for index in range(count + 1):
         for item in range(len(uids_of_sequences_in_order_of_abundance)):
             if uids_of_sequences_in_order_of_abundance[item] in majority_sequeces_uids:
                 maj_seq_obj = ReferenceSequence.objects.get(id=int(uids_of_sequences_in_order_of_abundance[item]))
-                if maj_seq_obj.hasName:
+                if maj_seq_obj.has_name:
                     majority_list.append(maj_seq_obj.name)
                 else:
                     majority_list.append(str(maj_seq_obj.id))
@@ -724,7 +724,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
 
     reference_sequences_in_data_sets = ReferenceSequence.objects.filter(
-        data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=query_set_of_data_sets).distinct()
+        datasetsamplesequence__data_set_sample_from__data_submission_from__in=query_set_of_data_sets).distinct()
 
     # Get list of clades found
     clade_set = set()
@@ -748,7 +748,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     # The manager that we will build all of the shared dictionaries from below.
     worker_manager = Manager()
 
-    sample_list = DataSetSample.objects.filter(dataSubmissionFrom__in=query_set_of_data_sets)
+    sample_list = DataSetSample.objects.filter(data_submission_from__in=query_set_of_data_sets)
 
     # Dictionary that will hold the list of data_set_sample_sequences for each sample
     sample_to_dsss_list_shared_dict = worker_manager.dict()
@@ -767,7 +767,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
 
     reference_sequence_names_annotated = [
-        ref_seq.name if ref_seq.hasName
+        ref_seq.name if ref_seq.has_name
         else str(ref_seq.id) + '_{}'.format(ref_seq.clade) for ref_seq in reference_sequences_in_data_sets]
 
     generic_seq_to_abund_dict = {refSeq_name: 0 for refSeq_name in reference_sequence_names_annotated}
@@ -984,11 +984,11 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     # I think this will be much faster if do two queries of the db to get the named and
     # non named refseqs and then make two dicts for each of these and use these to populate the below
     reference_sequences_in_data_sets_no_name = ReferenceSequence.objects.filter(
-        data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=query_set_of_data_sets,
-        hasName=False).distinct()
+        datasetsamplesequence__data_set_sample_from__data_submission_from__in=query_set_of_data_sets,
+        has_name=False).distinct()
     reference_sequences_in_data_sets_has_name = ReferenceSequence.objects.filter(
-        data_set_sample_sequence__data_set_sample_from__dataSubmissionFrom__in=query_set_of_data_sets,
-        hasName=True).distinct()
+        datasetsamplesequence__data_set_sample_from__data_submission_from__in=query_set_of_data_sets,
+        has_name=True).distinct()
     # no name dict should be a dict of id to sequence
     no_name_dict = {rs.id: rs.sequence for rs in reference_sequences_in_data_sets_no_name}
     # has name dict should be a dict of name to sequence
@@ -1031,7 +1031,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
         # there will only be one data_set object
         meta_info_string_items = [
             'Output as part of data_set submission ID: {}; submitting_user: {}; time_stamp: {}'.format(
-                data_set_object.id, data_set_object.submittingUser, data_set_object.timeStamp)]
+                data_set_object.id, data_set_object.submitting_user, data_set_object.time_stamp)]
 
         temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
         output_df_absolute = output_df_absolute.append(temp_series)
@@ -1041,8 +1041,8 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
         meta_info_string_items = [
             'Output as part of data_analysis ID: {}; Number of data_set objects as part of analysis = {}; '
             'submitting_user: {}; time_stamp: {}'.format(
-                data_analysis_obj.id, len(data_analysis_obj.listOfDataSubmissions.split(',')),
-                data_analysis_obj.submittingUser, data_analysis_obj.timeStamp)]
+                data_analysis_obj.id, len(data_analysis_obj.list_of_data_set_uids.split(',')),
+                data_analysis_obj.submitting_user, data_analysis_obj.time_stamp)]
 
         temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
         output_df_absolute = output_df_absolute.append(temp_series)
@@ -1051,7 +1051,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
             data_set_meta_list = [
                 'Data_set ID: {}; Data_set name: {}; submitting_user: {}; time_stamp: {}'.format(
                     data_set_object.id, data_set_object.name,
-                    data_set_object.submittingUser, data_set_object.timeStamp)]
+                    data_set_object.submitting_user, data_set_object.time_stamp)]
 
             temp_series = pd.Series(data_set_meta_list, index=[list(output_df_absolute)[0]], name='data_set_info')
             output_df_absolute = output_df_absolute.append(temp_series)
@@ -1068,8 +1068,8 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
         for data_set_object in query_set_of_data_sets:
             data_set_meta_list = [
                 'Data_set ID: {}; Data_set name: {}; submitting_user: {}; time_stamp: {}'.format(
-                    data_set_object.id, data_set_object.name, data_set_object.submittingUser,
-                    data_set_object.timeStamp)]
+                    data_set_object.id, data_set_object.name, data_set_object.submitting_user,
+                    data_set_object.time_stamp)]
 
             temp_series = pd.Series(data_set_meta_list, index=[list(output_df_absolute)[0]], name='data_set_info')
             output_df_absolute = output_df_absolute.append(temp_series)
@@ -1120,7 +1120,7 @@ def output_worker_two(input_queue, seq_rel_abund_dict, smpl_seq_dict, sample_no_
     for dss in iter(input_queue.get, 'STOP'):
         sys.stdout.write('\rCounting seqs for {}'.format(dss))
 
-        cladal_abundances = [int(a) for a in json.loads(dss.cladalSeqTotals)]
+        cladal_abundances = [int(a) for a in json.loads(dss.cladal_seq_totals)]
 
         sample_seq_tot = sum(cladal_abundances)
 
@@ -1134,13 +1134,13 @@ def output_worker_two(input_queue, seq_rel_abund_dict, smpl_seq_dict, sample_no_
 
         for dsss in dsss_in_sample:
             # determine what the name of the seq will be in the output
-            if not dsss.referenceSequenceOf.hasName:
-                name_unit = str(dsss.referenceSequenceOf.id) + '_{}'.format(dsss.referenceSequenceOf.clade)
+            if not dsss.reference_sequence_of.has_name:
+                name_unit = str(dsss.reference_sequence_of.id) + '_{}'.format(dsss.reference_sequence_of.clade)
                 # the clade summries are only for the noName seqs
-                clade_summary_absolute_dict[dsss.referenceSequenceOf.clade] += dsss.abundance
-                clade_summary_relative_dict[dsss.referenceSequenceOf.clade] += dsss.abundance / sample_seq_tot
+                clade_summary_absolute_dict[dsss.reference_sequence_of.clade] += dsss.abundance
+                clade_summary_relative_dict[dsss.reference_sequence_of.clade] += dsss.abundance / sample_seq_tot
             else:
-                name_unit = dsss.referenceSequenceOf.name
+                name_unit = dsss.reference_sequence_of.name
 
             seq_rel_abund_dict[name_unit] += dsss.abundance / sample_seq_tot
             smple_seq_count_aboslute_dict[name_unit] += dsss.abundance
@@ -1234,10 +1234,10 @@ def output_worker_three(
         # List that will hold the row
         sample_row_data_counts = []
         sample_row_data_props = []
-        cladal_abundances = [int(a) for a in json.loads(dss.cladalSeqTotals)]
+        cladal_abundances = [int(a) for a in json.loads(dss.cladal_seq_totals)]
         sample_seq_tot = sum(cladal_abundances)
 
-        if dss.errorInProcessing or sample_seq_tot == 0:
+        if dss.error_in_processing or sample_seq_tot == 0:
             # Then this sample had a problem in the sequencing and we need to just output 0s across the board
             # QC
 
@@ -1306,25 +1306,25 @@ def populate_quality_control_data_of_successful_sample(
         dss, sample_row_data_counts, sample_row_data_props, sample_seq_tot):
     # CONTIGS
     # This is the absolute number of sequences after make.contigs
-    contig_num = dss.initialTotSeqNum
+    contig_num = dss.num_contigs
     sample_row_data_counts.append(contig_num)
     sample_row_data_props.append(contig_num / sample_seq_tot)
     # POST-QC
     # store the aboslute number of sequences after sequencing QC at this stage
-    post_qc_absolute = dss.post_seq_qc_absolute_num_seqs
+    post_qc_absolute = dss.post_qc_absolute_num_seqs
     sample_row_data_counts.append(post_qc_absolute)
     sample_row_data_props.append(post_qc_absolute / sample_seq_tot)
     # This is the unique number of sequences after the sequencing QC
-    post_qc_unique = dss.initialUniqueSeqNum
+    post_qc_unique = dss.post_qc_unique_num_seqs
     sample_row_data_counts.append(post_qc_unique)
     sample_row_data_props.append(post_qc_unique / sample_seq_tot)
     # POST TAXA-ID
     # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
-    tax_id_symbiodinium_absolute = dss.finalTotSeqNum
+    tax_id_symbiodinium_absolute = dss.absolute_num_sym_seqs
     sample_row_data_counts.append(tax_id_symbiodinium_absolute)
     sample_row_data_props.append(tax_id_symbiodinium_absolute / sample_seq_tot)
     # Same as above but the number of unique seqs
-    tax_id_symbiodinium_unique = dss.finalUniqueSeqNum
+    tax_id_symbiodinium_unique = dss.unique_num_sym_seqs
     sample_row_data_counts.append(tax_id_symbiodinium_unique)
     sample_row_data_props.append(tax_id_symbiodinium_unique / sample_seq_tot)
     # store the absolute number of sequences lost to size cutoff violations
@@ -1340,7 +1340,7 @@ def populate_quality_control_data_of_successful_sample(
     sample_row_data_counts.append(tax_id_non_symbiodinum_abosulte)
     sample_row_data_props.append(tax_id_non_symbiodinum_abosulte / sample_seq_tot)
     # This is the number of unique sequences that were not considered Symbiodinium
-    tax_id_non_symbiodinium_unique = dss.nonSymSeqsNum
+    tax_id_non_symbiodinium_unique = dss.non_sym_unique_num_seqs
     sample_row_data_counts.append(tax_id_non_symbiodinium_unique)
     sample_row_data_props.append(tax_id_non_symbiodinium_unique / sample_seq_tot)
     # Post MED absolute
@@ -1359,8 +1359,8 @@ def populate_quality_control_data_of_failed_sample(dss, sample_row_data_counts, 
     # CONTIGS
     # This is the absolute number of sequences after make.contigs
 
-    if dss.initialTotSeqNum:
-        contig_num = dss.initialTotSeqNum
+    if dss.num_contigs:
+        contig_num = dss.num_contigs
         sample_row_data_counts.append(contig_num)
         sample_row_data_props.append(0)
     else:
@@ -1368,16 +1368,16 @@ def populate_quality_control_data_of_failed_sample(dss, sample_row_data_counts, 
         sample_row_data_props.append(0)
     # POST-QC
     # store the aboslute number of sequences after sequencing QC at this stage
-    if dss.post_seq_qc_absolute_num_seqs:
-        post_qc_absolute = dss.post_seq_qc_absolute_num_seqs
+    if dss.post_qc_absolute_num_seqs:
+        post_qc_absolute = dss.post_qc_absolute_num_seqs
         sample_row_data_counts.append(post_qc_absolute)
         sample_row_data_props.append(0)
     else:
         sample_row_data_counts.append(0)
         sample_row_data_props.append(0)
     # This is the unique number of sequences after the sequencing QC
-    if dss.initialUniqueSeqNum:
-        post_qc_unique = dss.initialUniqueSeqNum
+    if dss.post_qc_unique_num_seqs:
+        post_qc_unique = dss.post_qc_unique_num_seqs
         sample_row_data_counts.append(post_qc_unique)
         sample_row_data_props.append(0)
     else:
@@ -1385,16 +1385,16 @@ def populate_quality_control_data_of_failed_sample(dss, sample_row_data_counts, 
         sample_row_data_props.append(0)
     # POST TAXA-ID
     # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
-    if dss.finalTotSeqNum:
-        tax_id_symbiodinium_absolute = dss.finalTotSeqNum
+    if dss.absolute_num_sym_seqs:
+        tax_id_symbiodinium_absolute = dss.absolute_num_sym_seqs
         sample_row_data_counts.append(tax_id_symbiodinium_absolute)
         sample_row_data_props.append(0)
     else:
         sample_row_data_counts.append(0)
         sample_row_data_props.append(0)
     # Same as above but the number of unique seqs
-    if dss.finalUniqueSeqNum:
-        tax_id_symbiodinium_unique = dss.finalUniqueSeqNum
+    if dss.unique_num_sym_seqs:
+        tax_id_symbiodinium_unique = dss.unique_num_sym_seqs
         sample_row_data_counts.append(tax_id_symbiodinium_unique)
         sample_row_data_props.append(0)
     else:
@@ -1425,8 +1425,8 @@ def populate_quality_control_data_of_failed_sample(dss, sample_row_data_counts, 
         sample_row_data_counts.append(0)
         sample_row_data_props.append(0)
     # This is the number of unique sequences that were not considered Symbiodinium
-    if dss.nonSymSeqsNum:
-        tax_id_non_symbiodinium_unique = dss.nonSymSeqsNum
+    if dss.non_sym_unique_num_seqs:
+        tax_id_non_symbiodinium_unique = dss.non_sym_unique_num_seqs
         sample_row_data_counts.append(tax_id_non_symbiodinium_unique)
         sample_row_data_props.append(0)
     else:

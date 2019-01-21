@@ -22,11 +22,11 @@ from plotting import generate_stacked_bar_data_submission, plot_between_sample_d
 
 def log_qc_error_and_continue(datasetsampleinstanceinq, samplename, errorreason):
     print('Error in processing sample: {}'.format(samplename))
-    datasetsampleinstanceinq.finalUniqueSeqNum = 0
-    datasetsampleinstanceinq.finalTotSeqNum = 0
-    datasetsampleinstanceinq.initialProcessingComplete = True
-    datasetsampleinstanceinq.errorInProcessing = True
-    datasetsampleinstanceinq.errorReason = errorreason
+    datasetsampleinstanceinq.unique_num_sym_seqs = 0
+    datasetsampleinstanceinq.absolute_num_sym_seqs = 0
+    datasetsampleinstanceinq.initial_processing_complete = True
+    datasetsampleinstanceinq.error_in_processing = True
+    datasetsampleinstanceinq.error_reason = errorreason
     datasetsampleinstanceinq.save()
 
     return
@@ -44,10 +44,10 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
     for contigPair in iter(input_q.get, 'STOP'):
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
 
-        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, data_submission_from=data_sub_in_q)
         # Only process samples that have not already had this done.
         # This should be handy in the event of crashed midprocessing
-        if not data_set_sample_instance_in_q.initialProcessingComplete:
+        if not data_set_sample_instance_in_q.initial_processing_complete:
             # NB We will always crop with the SYMVAR primers as they produce the shortest product
             primer_fwd_seq = 'GAATTGCAGAACTCCGTGAACC'  # Written 5'-->3'
             primer_rev_seq = 'CGGGTTCWCTTGTYTGACTTCATGC'  # Written 5'-->3'
@@ -238,18 +238,18 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
             # Get number of sequences after make.contig
             last_summary = read_defined_file_to_list('{}{}.trim.contigs.summary'.format(current_directory, root_name))
             number_of_seqs_contig_absolute = len(last_summary) - 1
-            data_set_sample_instance_in_q.initialTotSeqNum = number_of_seqs_contig_absolute
+            data_set_sample_instance_in_q.num_contigs = number_of_seqs_contig_absolute
             sys.stdout.write(
-                '{}: data_set_sample_instance_in_q.initialTotSeqNum = {}\n'.format(
+                '{}: data_set_sample_instance_in_q.num_contigs = {}\n'.format(
                     sample_name, number_of_seqs_contig_absolute))
 
             # Get number of sequences after unique
             last_summary = read_defined_file_to_list(
                 '{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(current_directory, root_name))
             number_of_seqs_contig_unique = len(last_summary) - 1
-            data_set_sample_instance_in_q.initialUniqueSeqNum = number_of_seqs_contig_unique
+            data_set_sample_instance_in_q.post_qc_unique_num_seqs = number_of_seqs_contig_unique
             sys.stdout.write(
-                '{}: data_set_sample_instance_in_q.initialUniqueSeqNum = {}\n'.format(
+                '{}: data_set_sample_instance_in_q.post_qc_unique_num_seqs = {}\n'.format(
                     sample_name, number_of_seqs_contig_unique))
 
             # Get absolute number of sequences after after sequence QC
@@ -258,9 +258,9 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
             absolute_count = 0
             for line in last_summary[1:]:
                 absolute_count += int(line.split('\t')[6])
-            data_set_sample_instance_in_q.post_seq_qc_absolute_num_seqs = absolute_count
+            data_set_sample_instance_in_q.post_qc_absolute_num_seqs = absolute_count
             data_set_sample_instance_in_q.save()
-            sys.stdout.write('{}: data_set_sample_instance_in_q.post_seq_qc_absolute_num_seqs = {}\n'.format(
+            sys.stdout.write('{}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {}\n'.format(
                 sample_name, absolute_count))
 
             sys.stdout.write('{}: Initial mothur complete\n'.format(sample_name))
@@ -273,7 +273,7 @@ def worker_initial_mothur(input_q, error_sample_list, wkd, data_sub_id, debug):
 def perform_med(wkd, uid, num_proc, debug):
     # Create mothur batch for each .fasta .name pair to be deuniqued
     # Put in directory list, run via multiprocessing
-    samples_collection = DataSetSample.objects.filter(dataSubmissionFrom=DataSet.objects.get(id=uid))
+    samples_collection = DataSetSample.objects.filter(data_submission_from=DataSet.objects.get(id=uid))
     mothur_batch_file_path_list = []
     for dataSetSampleInstance in samples_collection:  # For each samples directory
         sample_name = dataSetSampleInstance.name
@@ -593,26 +593,26 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
         for i in range(len(samples)):  # For each sample # There should only be one sample
 
             data_set_sample_object = DataSetSample.objects.get(
-                dataSubmissionFrom=DataSet.objects.get(id=identification),
+                data_submission_from=DataSet.objects.get(id=identification),
                 name=samples[i])
             # Add the metadata to the data_set_sample
             data_set_sample_object.post_med_absolute += sum(count_array[i])
             data_set_sample_object.post_med_unique += len(count_array[i])
             data_set_sample_object.save()
-            cladal_seq_abundance_counter = [int(a) for a in json.loads(data_set_sample_object.cladalSeqTotals)]
+            cladal_seq_abundance_counter = [int(a) for a in json.loads(data_set_sample_object.cladal_seq_totals)]
 
             # This is where we need to tackle the issue of making sure we keep track of sequences in samples that
             # were not above the 200 threshold to be made into cladeCollections
             # We will simply add a list to the sampleObject that will be a sequence total for each of the clades
             # in order of clade_list
 
-            # Here we modify the cladalSeqTotals string of the sample object to add the sequence totals
+            # Here we modify the cladal_seq_totals string of the sample object to add the sequence totals
             # for the given clade
             clade_index = clade_list.index(clade)
             temp_int = cladal_seq_abundance_counter[clade_index]
             temp_int += sum(count_array[i])
             cladal_seq_abundance_counter[clade_index] = temp_int
-            data_set_sample_object.cladalSeqTotals = json.dumps([str(a) for a in cladal_seq_abundance_counter])
+            data_set_sample_object.cladal_seq_totals = json.dumps([str(a) for a in cladal_seq_abundance_counter])
             data_set_sample_object.save()
 
             dss_list = []
@@ -622,7 +622,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                 sys.stdout.write(
                     '\n{} clade {} sequences in {}. Creating clade_collection_object object\n'.format(sum(count_array[i]),
                                                                                                sample_name, clade))
-                new_cc = CladeCollection(clade=clade, dataSetSampleFrom=data_set_sample_object)
+                new_cc = CladeCollection(clade=clade, data_set_sample_from=data_set_sample_object)
                 new_cc.save()
             else:
                 sys.stdout.write(
@@ -652,22 +652,22 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
                                                                                                            sample_name))
             if sum(count_array[i]) > 200:
                 for ref_seq in ref_seq_abundance_counter.keys():
-                    dss = DataSetSampleSequence(referenceSequenceOf=ref_seq,
-                                                cladeCollectionTwoFoundIn=new_cc,
+                    dss = DataSetSampleSequence(reference_sequence_of=ref_seq,
+                                                clade_collection_found_in=new_cc,
                                                 abundance=ref_seq_abundance_counter[ref_seq],
                                                 data_set_sample_from=data_set_sample_object)
                     dss_list.append(dss)
                 # Save all of the newly created dss
                 DataSetSampleSequence.objects.bulk_create(dss_list)
-                # Get the ids of each of the dss and add create a string of them and store it as cc.footPrint
+                # Get the ids of each of the dss and add create a string of them and store it as cc.footprint
                 # This way we can quickly get the footprint of the clade_collection_object.
                 # Sadly we can't get eh uids from the list so we will need to re-query
                 # Instead we add the identification of each refseq in the ref_seq_abundance_counter.keys() list
-                new_cc.footPrint = ','.join([str(ref_seq.id) for ref_seq in ref_seq_abundance_counter.keys()])
+                new_cc.footprint = ','.join([str(ref_seq.id) for ref_seq in ref_seq_abundance_counter.keys()])
                 new_cc.save()
             else:
                 for ref_seq in ref_seq_abundance_counter.keys():
-                    dss = DataSetSampleSequence(referenceSequenceOf=ref_seq,
+                    dss = DataSetSampleSequence(reference_sequence_of=ref_seq,
                                                 abundance=ref_seq_abundance_counter[ref_seq],
                                                 data_set_sample_from=data_set_sample_object)
                     dss_list.append(dss)
@@ -692,7 +692,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
     new_seqs_added_count = None
     fasta_of_sig_sub_e_seqs = None
     fasta_of_sig_sub_e_seqs_path = None
-    if not data_submission_in_q.initialDataProcessed:
+    if not data_submission_in_q.initial_data_processed:
 
         # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
         wkd, num_samples = generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set_identification,
@@ -714,7 +714,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
     # This function now performs the MEDs sample by sample, clade by clade.
     # The list of outputed paths lead to the MED directories where node info etc can be found
     sys.stdout.write('\n\nStarting MED analysis\n')
-    med_dirs = perform_med(data_submission_in_q.workingDirectory, data_submission_in_q.id, num_proc, debug)
+    med_dirs = perform_med(data_submission_in_q.working_directory, data_submission_in_q.id, num_proc, debug)
 
     if debug:
         print('MED dirs:')
@@ -725,8 +725,8 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
                                                     med_dirs,
                                                     debug)
 
-    # data_submission_in_q.dataProcessed = True
-    data_submission_in_q.currentlyBeingProcessed = False
+    # data_submission_in_q.data_processed = True
+    data_submission_in_q.currently_being_processed = False
     data_submission_in_q.save()
 
     # WRITE OUT REPORT OF HOW MANY SAMPLES WERE SUCCESSFULLY PROCESSED
@@ -930,10 +930,10 @@ def perform_sequence_drop():
 
 
 def processed_samples_status(data_submission_in_q, path_to_input_file):
-    sample_list = DataSetSample.objects.filter(dataSubmissionFrom=data_submission_in_q)
+    sample_list = DataSetSample.objects.filter(data_submission_from=data_submission_in_q)
     failed_list = []
     for sample in sample_list:
-        if sample.errorInProcessing:
+        if sample.error_in_processing:
             failed_list.append(sample.name)
     read_me_list = []
     sum_message = '\n\n{0} out of {1} samples successfully passed QC.\n' \
@@ -947,7 +947,7 @@ def processed_samples_status(data_submission_in_q, path_to_input_file):
             print('Sample {} processed successfuly'.format(sample.name))
             read_me_list.append('Sample {} processed successfuly'.format(sample.name))
         else:
-            print('Sample {} : {}'.format(sample.name, sample.errorReason))
+            print('Sample {} : {}'.format(sample.name, sample.error_reason))
     for sampleName in failed_list:
         read_me_list.append('Sample {} : ERROR in sequencing reads. Unable to process'.format(sampleName))
     write_list_to_destination(path_to_input_file + '/readMe.txt', read_me_list)
@@ -1405,7 +1405,7 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_i
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
         if sample_name in error_sample_list_shared:
             continue
-        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, data_submission_from=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
         root_name = r'{0}stability'.format(sample_name)
 
@@ -1449,7 +1449,7 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_i
 
         data_set_sample_instance_in_q.non_sym_absolute_num_seqs = temp_count
         # Add details of non-symbiodinium unique seqs
-        data_set_sample_instance_in_q.nonSymSeqsNum = len(set(throw_away_seqs))
+        data_set_sample_instance_in_q.non_sym_unique_num_seqs = len(set(throw_away_seqs))
         data_set_sample_instance_in_q.save()
 
         # Output new fasta, name and group files that don't contain seqs that didn't make the cut
@@ -1509,7 +1509,7 @@ def worker_screen_size(input_q, error_sample_list, wkd, data_sub_id, debug):
         if sample_name in error_sample_list:
             continue
 
-        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, data_submission_from=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
         root_name = r'{0}stability'.format(sample_name)
         # At this point we have the newFasta, new_name, new_group. These all only contain sequences that were
@@ -1578,7 +1578,7 @@ def worker_write_out_clade_separated_fastas(input_q, error_sample_list, wkd, dat
         sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
         if sample_name in error_sample_list:
             continue
-        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, data_submission_from=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
         root_name = r'{0}stability'.format(sample_name)
 
@@ -1753,7 +1753,7 @@ def worker_associate_qc_meta_data_to_samples(input_q, error_sample_list, wkd, da
         if sample_name in error_sample_list:
             continue
 
-        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, dataSubmissionFrom=data_sub_in_q)
+        data_set_sample_instance_in_q = DataSetSample.objects.get(name=sample_name, data_submission_from=data_sub_in_q)
         current_directory = r'{0}/{1}/'.format(wkd, sample_name)
 
         # load the name_dict form the previous worker
@@ -1762,29 +1762,29 @@ def worker_associate_qc_meta_data_to_samples(input_q, error_sample_list, wkd, da
 
         # now populate the data set sample with the qc meta-data
         # get unique seqs remaining
-        data_set_sample_instance_in_q.finalUniqueSeqNum = len(name_dict)
+        data_set_sample_instance_in_q.unique_num_sym_seqs = len(name_dict)
         # Get total number of sequences
         count = 0
         for nameKey in name_dict.keys():
             count += len(name_dict[nameKey].split('\t')[1].split(','))
-        data_set_sample_instance_in_q.finalTotSeqNum = count
+        data_set_sample_instance_in_q.absolute_num_sym_seqs = count
         # now get the seqs lost through size violations through subtraction
         data_set_sample_instance_in_q.size_violation_absolute = \
-            data_set_sample_instance_in_q.post_seq_qc_absolute_num_seqs - \
-            data_set_sample_instance_in_q.finalTotSeqNum - \
+            data_set_sample_instance_in_q.post_qc_absolute_num_seqs - \
+            data_set_sample_instance_in_q.absolute_num_sym_seqs - \
             data_set_sample_instance_in_q.non_sym_absolute_num_seqs
         data_set_sample_instance_in_q.size_violation_unique = \
-            data_set_sample_instance_in_q.initialUniqueSeqNum - \
-            data_set_sample_instance_in_q.finalUniqueSeqNum - \
-            data_set_sample_instance_in_q.nonSymSeqsNum
+            data_set_sample_instance_in_q.post_qc_unique_num_seqs - \
+            data_set_sample_instance_in_q.unique_num_sym_seqs - \
+            data_set_sample_instance_in_q.non_sym_unique_num_seqs
 
-        # Now update the data_set_sample instance to set initialProcessingComplete to True
-        data_set_sample_instance_in_q.initialProcessingComplete = True
+        # Now update the data_set_sample instance to set initial_processing_complete to True
+        data_set_sample_instance_in_q.initial_processing_complete = True
         data_set_sample_instance_in_q.save()
         sys.stdout.write('{}: initial processing complete\n'.format(sample_name))
         sys.stdout.write(
-            '{}: data_set_sample_instance_in_q.finalUniqueSeqNum = {}\n'.format(sample_name, len(name_dict)))
-        sys.stdout.write('{}: data_set_sample_instance_in_q.finalTotSeqNum = {}\n'.format(sample_name, count))
+            '{}: data_set_sample_instance_in_q.unique_num_sym_seqs = {}\n'.format(sample_name, len(name_dict)))
+        sys.stdout.write('{}: data_set_sample_instance_in_q.absolute_num_sym_seqs = {}\n'.format(sample_name, count))
 
         os.chdir(current_directory)
         file_list = [f for f in os.listdir(current_directory) if
@@ -1849,8 +1849,8 @@ def pre_med_qc(data_set_identification, data_submission_in_q, num_proc, wkd, scr
     associate_qc_meta_data_to_samples(data_set_identification=data_set_identification, num_proc=num_proc, wkd=wkd,
                                       error_sample_list=error_sample_list)
 
-    # We also need to set initialDataProcessed to True
-    data_submission_in_q.initialDataProcessed = True
+    # We also need to set initial_data_processed to True
+    data_submission_in_q.initial_data_processed = True
     data_submission_in_q.save()
     if screen_sub_evalue:
         return new_seqs_added_count, discarded_seqs_fasta
@@ -1964,7 +1964,7 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
     # write out the new stability file
     write_list_to_destination(r'{0}/stability.files'.format(wkd), new_stability_file)
 
-    data_submission_in_q.workingDirectory = wkd
+    data_submission_in_q.working_directory = wkd
     data_submission_in_q.save()
     # Create data_set_sample instances
     list_of_sample_objects = []
@@ -1972,14 +1972,14 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
     for sampleName in list_of_names:
         print('\rCreating data_set_sample {}'.format(sampleName))
         # Create the data_set_sample objects in bulk.
-        # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
+        # The cladal_seq_totals property of the data_set_sample object keeps track of the seq totals for the
         # sample divided by clade. This is used in the output to keep track of sequences that are not
         # included in cladeCollections
         clade_zeroes_list = [0 for _ in clade_list]
         empty_cladal_seq_totals = json.dumps(clade_zeroes_list)
 
-        dss = DataSetSample(name=sampleName, dataSubmissionFrom=data_submission_in_q,
-                            cladalSeqTotals=empty_cladal_seq_totals)
+        dss = DataSetSample(name=sampleName, data_submission_from=data_submission_in_q,
+                            cladal_seq_totals=empty_cladal_seq_totals)
         list_of_sample_objects.append(dss)
     return list_of_sample_objects
 
@@ -2012,7 +2012,7 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
     # write out the new stability file
     write_list_to_destination(r'{0}/stability.files'.format(wkd), new_stability_file)
 
-    data_submission_in_q.workingDirectory = wkd
+    data_submission_in_q.working_directory = wkd
     data_submission_in_q.save()
     # Create data_set_sample instances
     list_of_sample_objects = []
@@ -2020,14 +2020,14 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
     for sampleName in list_of_names:
         print('\rCreating data_set_sample {}'.format(sampleName))
         # Create the data_set_sample objects in bulk.
-        # The cladalSeqTotals property of the data_set_sample object keeps track of the seq totals for the
+        # The cladal_seq_totals property of the data_set_sample object keeps track of the seq totals for the
         # sample divided by clade. This is used in the output to keep track of sequences that are not
         # included in cladeCollections
         clade_zeroes_list = [0 for _ in clade_list]
         empty_cladal_seq_totals = json.dumps(clade_zeroes_list)
 
-        dss = DataSetSample(name=sampleName, dataSubmissionFrom=data_submission_in_q,
-                            cladalSeqTotals=empty_cladal_seq_totals,
+        dss = DataSetSample(name=sampleName, data_submission_from=data_submission_in_q,
+                            cladal_seq_totals=empty_cladal_seq_totals,
                             sample_type=sample_meta_df.loc[sampleName, 'sample_type'],
                             host_phylum=sample_meta_df.loc[sampleName, 'host_phylum'],
                             host_class=sample_meta_df.loc[sampleName, 'host_class'],
@@ -2357,6 +2357,6 @@ def generate_sequence_drop_file():
     # this will simply produce a list
     # in the list each item will be a line of text that will be a refseq name, clade and sequence
     output_list = []
-    for ref_seq in ReferenceSequence.objects.filter(hasName=True):
+    for ref_seq in ReferenceSequence.objects.filter(has_name=True):
         output_list.append('{}\t{}\t{}'.format(ref_seq.name, ref_seq.clade, ref_seq.sequence))
     return output_list

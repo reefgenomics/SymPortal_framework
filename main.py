@@ -217,9 +217,9 @@ def main():
         new_data_set_user_email = config_dict['user_email']
 
         new_analysis_object = DataAnalysis(
-            listOfDataSubmissions=str(custom_data_set_ids), withinCladeCutOff=float(within_clade_cutoff),
-            name=args.name, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            submittingUser=new_data_set_submitting_user, submitting_user_email=new_data_set_user_email)
+            list_of_data_set_uids=str(custom_data_set_ids), within_clade_cutoff=float(within_clade_cutoff),
+            name=args.name, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+            submitting_user=new_data_set_submitting_user, submitting_user_email=new_data_set_user_email)
 
         new_analysis_object.description = args.description
         new_analysis_object.save()
@@ -237,7 +237,7 @@ def main():
             analysis_object = DataAnalysis.objects.get(id=args.data_analysis_id)
             data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
             query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
-            num_samples = len(DataSetSample.objects.filter(dataSubmissionFrom__in=query_set_of_data_sets))
+            num_samples = len(DataSetSample.objects.filter(data_submission_from__in=query_set_of_data_sets))
 
             data_sub_collection_run.output_type_count_tables(
                 analysisobj=analysis_object, num_processors=args.num_proc, call_type='stand_alone',
@@ -258,7 +258,7 @@ def main():
 
         for ds_id in sorted_list_of_ids:
             ds_in_q = data_set_id_to_obj_dict[ds_id]
-            print('{}: {}\t{}'.format(ds_in_q.id, ds_in_q.name, ds_in_q.timeStamp))
+            print('{}: {}\t{}'.format(ds_in_q.id, ds_in_q.name, ds_in_q.time_stamp))
 
     elif args.display_analyses:
         # Then print out all of the dataAnalysisTwos with names and uids in the db
@@ -269,7 +269,7 @@ def main():
 
         for da_id in sorted_list_of_ids:
             da_in_q = data_analysis_id_to_obj_dict[da_id]
-            print('{}: {}\t{}'.format(da_in_q.id, da_in_q.name, da_in_q.timeStamp))
+            print('{}: {}\t{}'.format(da_in_q.id, da_in_q.name, da_in_q.time_stamp))
 
     elif args.between_type_distances:
         dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
@@ -373,9 +373,9 @@ def create_analysis_obj_and_run_analysis(
         user_email, no_fig_arg, no_ord_arg, no_output_arg, num_proc, within_clade_cutoff):
 
     new_analysis_object = DataAnalysis(
-        listOfDataSubmissions=str(custom_data_set_ids), withinCladeCutOff=float(within_clade_cutoff),
-        name=analysis_name, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-        submittingUser=submitting_user, submitting_user_email=user_email)
+        list_of_data_set_uids=str(custom_data_set_ids), within_clade_cutoff=float(within_clade_cutoff),
+        name=analysis_name, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+        submitting_user=submitting_user, submitting_user_email=user_email)
 
     new_analysis_object.description = description_arg
     new_analysis_object.save()
@@ -405,9 +405,9 @@ def start_data_submission(data_sheet_arg, debug_bool, distance_method_arg, input
 
 def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user, new_data_set_user_email):
 
-    new_data_set = DataSet(name=name_for_data_set, timeStamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+    new_data_set = DataSet(name=name_for_data_set, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
                            reference_fasta_database_used='symClade.fa',
-                           submittingUser=new_data_set_submitting_user,
+                           submitting_user=new_data_set_submitting_user,
                            submitting_user_email=new_data_set_user_email)
     new_data_set.save()
     return new_data_set
