@@ -177,7 +177,7 @@ def generate_stacked_bar_data_submission(
         x_tick_label_list = []
         for sample in sp_output_df.index.values.tolist()[i * smp_per_plot:end_slice]:
             sys.stdout.write('\rPlotting sample: {}'.format(sample))
-            x_tick_label_list.append(smp_id_to_smp_name_dict[int(sample)])
+            add_sample_names_to_tick_label_list(sample, smp_id_to_smp_name_dict, x_tick_label_list)
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
             # for each sequence, create a rect patch
@@ -331,6 +331,14 @@ def generate_stacked_bar_data_submission(
     # plt.show()
     return '{}_seq_abundance_stacked_bar_plot.svg'.format(fig_output_base), \
            '{}_seq_abundance_stacked_bar_plot.png'.format(fig_output_base)
+
+
+def add_sample_names_to_tick_label_list(sample, smp_id_to_smp_name_dict, x_tick_label_list):
+    sample_name = smp_id_to_smp_name_dict[int(sample)]
+    if len(sample_name) < 20:
+        x_tick_label_list.append(smp_id_to_smp_name_dict[int(sample)])
+    else:
+        x_tick_label_list.append(f'uid_{int(sample)}')
 
 
 def generate_stacked_bar_data_analysis_type_profiles(
@@ -488,7 +496,7 @@ def generate_stacked_bar_data_analysis_type_profiles(
         sample_id_list = sp_output_df.index.values.tolist()
         for sample_id in sample_id_list[i * its_type_per_plot:end_slice]:
             sys.stdout.write('\rPlotting sample: {}'.format(sample_id))
-            x_tick_label_list.append(smp_uid_to_smp_name[int(sample_id)])
+            add_sample_names_to_tick_label_list(sample_id, smp_uid_to_smp_name, x_tick_label_list)
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
             # for each sequence, create a rect patch
