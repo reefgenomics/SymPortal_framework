@@ -1488,7 +1488,7 @@ def worker_taxonomy_write_out(input_q, error_sample_list_shared, wkd, data_sub_i
             # Then the fasta is blank and we have got no good Symbiodinium seqs
             error_reason = 'No Symbiodinium sequences left after blast annotation'
             log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
-            error_sample_list_shared.put(sample_name)
+            error_sample_list_shared.append(sample_name)
             continue
         sys.stdout.write('{}: non-Symbiodinium sequences binned\n'.format(sample_name))
         write_list_to_destination(
@@ -1567,7 +1567,7 @@ def worker_screen_size(input_q, error_sample_list, wkd, data_sub_id, debug):
                 print(completed_process.stdout.decode('utf-8'))
             error_reason = 'No Symbiodinium sequences left after size screening'
             log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
-            error_sample_list.put(sample_name)
+            error_sample_list.append(sample_name)
             continue
     return
 
