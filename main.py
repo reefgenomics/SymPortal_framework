@@ -56,7 +56,7 @@ def main():
              'this path can point directly to a single compressed file containing the same paired fastq.gz files. '
              '\nA name must be associated with the data_set using the --name flag. \nThe number of processes to use '
              'can also be specified using the --num_proc flag. \nA datasheet can also be uploaded using the '
-             '--data_sheet flag and the full path to the .xlxs data_sheet file (RECOMMENDED). \n'
+             '--data_sheet flag and the full path to the .xlsx data_sheet file (RECOMMENDED). \n'
              'To skip the generation of figures pass the --no_figures flag.\n To skip the generation of '
              'ordination files (pairwise distances and PCoA coordinates) pass the --no_ordinations flag')
 
@@ -120,7 +120,7 @@ def main():
 
     parser.add_argument(
         '--data_sheet',
-        help='An absolute path to the .xlxs file containing the meta-data information for the data_set\'s samples')
+        help='An absolute path to the .xlsx file containing the meta-data information for the data_set\'s samples')
 
     parser.add_argument('--no_figures', action='store_true', help='Skip figure production')
 
