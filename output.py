@@ -879,7 +879,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
     db.connections.close_all()
 
-    sys.stdout.write('\n\nOutputting DIV data\n')
+    sys.stdout.write('\n\nOutputting seq data\n')
     for N in range(num_processors):
         p = Process(target=output_worker_three, args=(
             data_set_sample_queue, managed_sample_output_dict, clade_abundance_ordered_ref_seq_list, output_header,
@@ -890,7 +890,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     for p in all_processes:
         p.join()
 
-    print('\nDIV output complete\n')
+    print('\nseq output complete\n')
 
     managed_sample_output_dict_dict = dict(managed_sample_output_dict)
 
@@ -1014,7 +1014,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
         else:
             accession_list.append(np.nan)
 
-    temp_series = pd.Series(accession_list, name='DIV_accession', index=list(output_df_relative))
+    temp_series = pd.Series(accession_list, name='seq_accession', index=list(output_df_relative))
     output_df_absolute = output_df_absolute.append(temp_series)
     output_df_relative = output_df_relative.append(temp_series)
 
@@ -1082,17 +1082,17 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
         date_time_string = time_date_str
     if analysis_obj_id:
         data_analysis_obj = DataAnalysis.objects.get(id=analysis_obj_id)
-        path_to_div_absolute = '{}/{}_{}_{}.DIVs.absolute.txt'.format(output_dir, analysis_obj_id,
+        path_to_div_absolute = '{}/{}_{}_{}.seqs.absolute.txt'.format(output_dir, analysis_obj_id,
                                                                       data_analysis_obj.name, date_time_string)
-        path_to_div_relative = '{}/{}_{}_{}.DIVs.relative.txt'.format(output_dir, analysis_obj_id,
+        path_to_div_relative = '{}/{}_{}_{}.seqs.relative.txt'.format(output_dir, analysis_obj_id,
                                                                       data_analysis_obj.name, date_time_string)
-        fasta_path = '{}/{}_{}_{}.DIVs.fasta'.format(output_dir, analysis_obj_id,
+        fasta_path = '{}/{}_{}_{}.seqs.fasta'.format(output_dir, analysis_obj_id,
                                                      data_analysis_obj.name, date_time_string)
 
     else:
-        path_to_div_absolute = '{}/{}.DIVs.absolute.txt'.format(output_dir, date_time_string)
-        path_to_div_relative = '{}/{}.DIVs.relative.txt'.format(output_dir, date_time_string)
-        fasta_path = '{}/{}.DIVs.fasta'.format(output_dir, date_time_string)
+        path_to_div_absolute = '{}/{}.seqs.absolute.txt'.format(output_dir, date_time_string)
+        path_to_div_relative = '{}/{}.seqs.relative.txt'.format(output_dir, date_time_string)
+        fasta_path = '{}/{}.seqs.fasta'.format(output_dir, date_time_string)
 
     os.makedirs(output_dir, exist_ok=True)
     output_df_absolute.to_csv(path_to_div_absolute, sep="\t")
@@ -1230,7 +1230,7 @@ def output_worker_three(
     clade_list = list('ABCDEFGHI')
     for dss in iter(input_queue.get, 'STOP'):
 
-        sys.stdout.write('\rOutputting DIV data for {}'.format(dss.name))
+        sys.stdout.write('\rOutputting seq data for {}'.format(dss.name))
         # List that will hold the row
         sample_row_data_counts = []
         sample_row_data_props = []
@@ -1284,14 +1284,14 @@ def output_worker_three(
 
         # now add the clade divided summaries of the clades
         for clade in clade_list:
-            sys.stdout.write('\rOutputting DIV data for {}: clade summary {}'.format(dss.name, clade))
+            sys.stdout.write('\rOutputting seq data for {}: clade summary {}'.format(dss.name, clade))
             sample_row_data_counts.append(smpl_clade_summary_absolute_dict[clade])
             sample_row_data_props.append(smpl_clade_summary_relative_dict[clade])
 
         # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
         # the sampleRowDataCounts and the sampleRowDataProps
         for seq_name in clade_abundance_ordered_ref_seq_list:
-            sys.stdout.write('\rOutputting DIV data for {}: sequence {}'.format(dss.name, seq_name))
+            sys.stdout.write('\rOutputting seq data for {}: sequence {}'.format(dss.name, seq_name))
             sample_row_data_counts.append(smpl_seq_abund_absolute_dict[seq_name])
             sample_row_data_props.append(smpl_seq_abund_relative_dict[seq_name])
 

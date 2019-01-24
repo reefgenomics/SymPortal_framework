@@ -39,7 +39,7 @@ def generate_stacked_bar_data_submission(
     meta_index_to_cut_from = None
     index_values_as_list = sp_output_df.index.values.tolist()
     for i in range(-1, -(len(index_values_as_list)), -1):
-        if index_values_as_list[i].startswith('DIV'):
+        if index_values_as_list[i].startswith('seq'):
             # then this is the index (in negative notation) that we need to cut from
             meta_index_to_cut_from = i
             break
