@@ -9,7 +9,7 @@ import json
 from general import write_list_to_destination
 from collections import defaultdict
 import pandas as pd
-from plotting import generate_stacked_bar_data_analysis_type_profiles, generate_stacked_bar_data_submission
+from plotting import generate_stacked_bar_data_analysis_type_profiles, generate_stacked_bar_data_loading
 import pickle
 from collections import Counter
 import numpy as np
@@ -471,7 +471,7 @@ def output_type_count_tables(
     del df_relative
 
     # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
-    div_output_file_list, date_time_string, number_of_samples = div_output_pre_analysis_new_meta_and_new_dss_structure(
+    div_output_file_list, date_time_string, number_of_samples = output_sequence_count_tables(
         datasubstooutput=datasubstooutput, num_processors=num_processors, output_dir=output_directory,
         sorted_sample_uid_list=samples_by_uid_that_have_been_sorted, analysis_obj_id=analysisobj.id,
         call_type='analysis', time_date_str=date_time_string)
@@ -505,7 +505,7 @@ def output_type_count_tables(
                     path_to_plot = file
                     break
 
-            svg_path, png_path = generate_stacked_bar_data_submission(
+            svg_path, png_path = generate_stacked_bar_data_loading(
                 path_to_tab_delim_count=path_to_plot, output_directory=output_dir,
                 time_date_str=date_time_string, sample_id_order_list=sorted_sample_id_list)
 
@@ -702,7 +702,7 @@ def get_abundance_string(totlist, sdlist, majlist):
     return abund_output_str
 
 
-def div_output_pre_analysis_new_meta_and_new_dss_structure(
+def output_sequence_count_tables(
         datasubstooutput, num_processors, output_dir, call_type,
         sorted_sample_uid_list=None, analysis_obj_id=None, output_user=None, time_date_str=None):
 

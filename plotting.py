@@ -19,7 +19,7 @@ from dbApp.models import CladeCollection
 plt.ioff()
 
 
-def generate_stacked_bar_data_submission(
+def generate_stacked_bar_data_loading(
         path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
     print('Generating stacked bar data submission')
     # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt

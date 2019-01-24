@@ -41,236 +41,22 @@ import distance
 import argparse
 
 def main():
-    # ##### args ######
-    parser = argparse.ArgumentParser(
-        description='Intragenomic analysis of the ITS2 region of the nrDNA',
-        epilog='For support email: symportal@gmail.com')
 
-    group = parser.add_mutually_exclusive_group(required=True)
-
-    # Mutually exclusive arguments
-    group.add_argument(
-        '--load', metavar='path_to_dir',
-        help='Run this to load data to the framework\'s database. The first argument to this command must be an '
-             'absolute path to a directory containing  the paired sequencing reads in .fastq.gz format. Alternatively, '
-             'this path can point directly to a single compressed file containing the same paired fastq.gz files. '
-             '\nA name must be associated with the data_set using the --name flag. \nThe number of processes to use '
-             'can also be specified using the --num_proc flag. \nA datasheet can also be uploaded using the '
-             '--data_sheet flag and the full path to the .xlsx data_sheet file (RECOMMENDED). \n'
-             'To skip the generation of figures pass the --no_figures flag.\n To skip the generation of '
-             'ordination files (pairwise distances and PCoA coordinates) pass the --no_ordinations flag')
-
-    group.add_argument(
-        '--analyse', metavar='data_set uids',
-        help='Analyse one or more data_set objects together. Enter comma separated uids of the data_set uids you '
-             'which to analyse. e.g.: 43,44,45. If you wish to use all available dataSubmissions, you may pass '
-             '\'all\' as an argument. To display all data_sets currently submitted to the framework\'s database, '
-             'including their ids, use the \'show_data_sets\' command\nTo skip the generation of figures pass the '
-             '--no_figures flag.\nTo skip the generation of ordination files (pairwise distances and PCoA coordinates) '
-             'pass the --no_ordinations flag')
-
-    group.add_argument(
-        '--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
-
-    group.add_argument(
-        '--display_analyses', action='store_true',
-        help=' Display data_analysis objects currently stored in the framework\'s database')
-
-    group.add_argument(
-        '--print_output_seqs', metavar='data_set uids',
-        help='Use this function to output ITS2 sequence count tables for given data_set instances')
-
-    group.add_argument(
-        '--print_output_types', metavar='data_set uids, analysis ID',
-        help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
-             'data_sets that have been run in a given analysis. Give the data_set uids that you wish to make outputs '
-             'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
-             'comma separate the uids of the data_set objects, e.g. 44,45,46. Give the ID of the analysis you wish to '
-             'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
-             '--no_figures flag.')
-
-    group.add_argument(
-        '--between_type_distances', metavar='data_set uids, analysis ID',
-        help='Use this function to output UniFrac pairwise distances between ITS2 type profiles clade separated')
-
-    group.add_argument(
-        '--between_sample_distances', metavar='data_set uids',
-        help='Use this function to output UniFrac pairwise distances between samples clade separated from a '
-             'given collection of data_set objects')
-
-    group.add_argument(
-        '--between_sample_distances_sample_set', metavar='data_set_sample uids',
-        help='Use this function to output UniFrac pairwise distances between samples clade '
-             'separated from a given collection of data_set_sample objects')
-
-    # Additional arguments
-    parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
-
-    parser.add_argument('--name', help='A name for your input or analysis', default='noName')
-
-    parser.add_argument('--description', help='An optional description', default='No description')
-
-    parser.add_argument('--data_analysis_id', type=int, help='The ID of the data_analysis you wish to output from')
-
-    group.add_argument(
-        '--vacuum_database', action='store_true',
-        help='Vacuuming the database will free up memory from objects that have been deleted recently')
-
-    parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
-
-    parser.add_argument(
-        '--data_sheet',
-        help='An absolute path to the .xlsx file containing the meta-data information for the data_set\'s samples')
-
-    parser.add_argument('--no_figures', action='store_true', help='Skip figure production')
-
-    parser.add_argument('--no_ordinations', action='store_true', help='Skip ordination analysis')
-
-    parser.add_argument('--debug', action='store_true', help='Present additional stdout output', default=False)
-
-    parser.add_argument(
-        '--no_output', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
-
-    parser.add_argument(
-        '--distance_method', help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. The method to use when '
-                                  'calculating distances between its2 type profiles or samples.', default='braycurtis')
-
-    # when run as remote
-    parser.add_argument(
-        '--submitting_user_name',
-        help='Only for use when running as remote\nallows the association of a different user_name to the '
-             'data_set than the one listed in sp_config', default='not supplied')
-
-    parser.add_argument(
-        '--submitting_user_email',
-        help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
-             'than the one listed in sp_config', default='not supplied')
-
-    args = parser.parse_args()
+    args = define_args()
 
     # Code to run the main functionality of SymPortal
     if args.load:
-        if args.name == 'noName':
-            sys.exit('Please provide a name using the --name flag. e.g. --name splendid_dataset')
-
-        # This is how we read data into the SP database
-        # This should be given a string on the command line which is a directory that contains the sequencing data.
-        # We will need to create a data_set object for each time this command is run.
-        num_proc = args.num_proc
-
-        # input directory should contain either paired .fastq.gz files of a single .zip file
-        input_dir = args.load
-
-        name_for_data_set = args.name
-
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        local_or_remote = config_dict['system_type']
-        if local_or_remote == 'remote':
-            screen_sub_evalue_bool = True
-            if args.submitting_user_name and args.submitting_user_email:
-                new_data_set_submitting_user = args.submitting_user_name
-                new_data_set_user_email = args.submitting_user_email
-            else:
-                print('Please supply --submitting_user_name and --submitting_user_email.')
-                sys.exit(1)
-        else:
-            new_data_set_submitting_user = config_dict['user_name']
-            new_data_set_user_email = config_dict['user_email']
-            screen_sub_evalue_bool = False
-
-        # If working on the remote server a difference reference_fasta_database_used can be used.
-        new_data_set = create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user,
-                                                              new_data_set_user_email)
-
-        # only perform sub_evalue_screening when working on the remote system
-
-        data_sheet_arg = args.data_sheet
-        no_fig_arg = args.no_figures
-        no_ord_arg = args.no_ordinations
-        debug_bool = args.debug
-        distance_method_arg = args.distance_method
-
-        start_data_submission(
-            data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg,
-            no_ord_arg, num_proc, screen_sub_evalue_bool)
-
+        perform_data_loading(args)
     elif args.analyse:
-        if args.name == 'noName':
-            print('Please provide a name using the --name flag. e.g. --name wonderful_analysis')
-            return
-
-        within_clade_cutoff = 0.03
-
-        num_proc = args.num_proc
-        custom_data_set_ids = args.analyse
-        if args.analyse == 'all':
-            temp_list = []
-            for ds in DataSet.objects.all():
-                temp_list.append(str(ds.id))
-            string_list = ','.join(temp_list)
-            custom_data_set_ids = string_list
-
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        new_data_set_submitting_user = config_dict['user_name']
-        new_data_set_user_email = config_dict['user_email']
-
-        new_analysis_object = DataAnalysis(
-            list_of_data_set_uids=str(custom_data_set_ids), within_clade_cutoff=float(within_clade_cutoff),
-            name=args.name, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            submitting_user=new_data_set_submitting_user, submitting_user_email=new_data_set_user_email)
-
-        new_analysis_object.description = args.description
-        new_analysis_object.save()
-        data_sub_collection_run.main(
-            data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=args.no_figures,
-            no_ordinations=args.no_ordinations, distance_method=args.distance_method, no_output=args.no_output,
-            debug=args.debug)
-        print('return code: 0\nAnalysis complete')
-
+        perform_data_analysis(args)
+    elif args.print_output_seqs:
+        perform_sequences_count_table_output(args)
     elif args.print_output_types:
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        new_data_set_submitting_user = config_dict['user_name']
-        if args.data_analysis_id:
-            analysis_object = DataAnalysis.objects.get(id=args.data_analysis_id)
-            data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
-            query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
-            num_samples = len(DataSetSample.objects.filter(data_submission_from__in=query_set_of_data_sets))
-
-            data_sub_collection_run.output_type_count_tables(
-                analysisobj=analysis_object, num_processors=args.num_proc, call_type='stand_alone',
-                num_samples=num_samples, datasubstooutput=args.print_output_types, no_figures=args.no_figures,
-                output_user=new_data_set_submitting_user)
-        else:
-            print(
-                'Please provide a data_analysis to ouput from by providing a data_analysis '
-                'ID to the --data_analysis_id flag. To see a list of data_analysis objects in the '
-                'framework\'s database, use the --display_analyses flag.')
-
+        perform_type_cout_table_output(args)
     elif args.display_data_sets:
-        # Then print out all of the dataSubmissions with names and uids in the db
-        # Let's sort this by id when outputting
-        # When just printing the raw query the order is somewhat random
-        data_set_id_to_obj_dict = {ds.id: ds for ds in list(DataSet.objects.all())}
-        sorted_list_of_ids = sorted(list(data_set_id_to_obj_dict.keys()))
-
-        for ds_id in sorted_list_of_ids:
-            ds_in_q = data_set_id_to_obj_dict[ds_id]
-            print('{}: {}\t{}'.format(ds_in_q.id, ds_in_q.name, ds_in_q.time_stamp))
-
+        perform_display_data_sets()
     elif args.display_analyses:
-        # Then print out all of the dataAnalysisTwos with names and uids in the db
-        # Let's sort this by id when outputting
-        # When just printing the raw query the order is somewhat random
-        data_analysis_id_to_obj_dict = {da.id: da for da in list(DataAnalysis.objects.all())}
-        sorted_list_of_ids = sorted(list(data_analysis_id_to_obj_dict.keys()))
-
-        for da_id in sorted_list_of_ids:
-            da_in_q = data_analysis_id_to_obj_dict[da_id]
-            print('{}: {}\t{}'.format(da_in_q.id, da_in_q.name, da_in_q.time_stamp))
-
+        perform_display_analysis_types()
     elif args.between_type_distances:
         dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
         pcoa_path_list = None
@@ -339,33 +125,323 @@ def main():
                     os.path.dirname(pcoa_path).split('/')[-1]))
                 plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
 
-    elif args.print_output_seqs:
-        # this is a stand_alone and output and we should grab the user who is requresting it from the config file
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        new_data_set_submitting_user = config_dict['user_name']
-
-        output_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
-        output_file_path_list, date_time_str, num_samples = \
-            output.div_output_pre_analysis_new_meta_and_new_dss_structure(
-                datasubstooutput=args.print_output_seqs, num_processors=args.num_proc, output_dir=output_directory,
-                call_type='stand_alone', output_user=new_data_set_submitting_user)
-        if num_samples > 1000:
-            print('Too many samples ({}) to generate plots'.format(num_samples))
-        else:
-            for item in output_file_path_list:
-                if 'relative' in item:
-                    svg_path, png_path = plotting.generate_stacked_bar_data_submission(
-                        path_to_tab_delim_count=item, output_directory=output_directory, time_date_str=date_time_str)
-                    print('Output figs:')
-                    print(svg_path)
-                    print(png_path)
-                    break
-
     elif args.vacuumDatabase:
-        print('Vacuuming database')
-        vacuum_db()
-        print('Vacuuming complete')
+        perform_vacuum_database()
+
+
+def perform_display_analysis_types():
+    data_analysis_id_to_obj_dict = {da.id: da for da in list(DataAnalysis.objects.all())}
+    sorted_list_of_ids = sorted(list(data_analysis_id_to_obj_dict.keys()))
+    for da_id in sorted_list_of_ids:
+        da_in_q = data_analysis_id_to_obj_dict[da_id]
+        print('{}: {}\t{}'.format(da_in_q.id, da_in_q.name, da_in_q.time_stamp))
+
+
+def perform_display_data_sets():
+    data_set_id_to_obj_dict = {ds.id: ds for ds in list(DataSet.objects.all())}
+    sorted_list_of_ids = sorted(list(data_set_id_to_obj_dict.keys()))
+    for ds_id in sorted_list_of_ids:
+        ds_in_q = data_set_id_to_obj_dict[ds_id]
+        print('{}: {}\t{}'.format(ds_in_q.id, ds_in_q.name, ds_in_q.time_stamp))
+
+
+def perform_vacuum_database():
+    print('Vacuuming database')
+    vacuum_db()
+    print('Vacuuming complete')
+
+
+def perform_sequences_count_table_output(args):
+    date_time_str, num_samples, output_directory, output_file_path_list = seq_output_make_count_tables(args)
+    seq_output_make_figures(date_time_str, num_samples, output_directory, output_file_path_list)
+
+
+def seq_output_make_figures(date_time_str, num_samples, output_directory, output_file_path_list):
+    if num_samples > 1000:
+        print('Too many samples ({}) to generate plots'.format(num_samples))
+    else:
+        make_stacked_bar_figures_from_seq_count_tables(date_time_str, output_directory, output_file_path_list)
+
+
+def seq_output_make_count_tables(args):
+    output_directory, submitting_user = set_seq_output_params()
+    output_file_path_list, date_time_str, num_samples = \
+        output.output_sequence_count_tables(
+            datasubstooutput=args.print_output_seqs, num_processors=args.num_proc, output_dir=output_directory,
+            call_type='stand_alone', output_user=submitting_user)
+    return date_time_str, num_samples, output_directory, output_file_path_list
+
+
+def set_seq_output_params():
+    config_dict = get_config_dict()
+    submitting_user = set_user_name_and_email(config_dict)[0]
+    output_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
+    return output_directory, submitting_user
+
+
+def make_stacked_bar_figures_from_seq_count_tables(date_time_str, output_directory, output_file_path_list):
+    for item in output_file_path_list:
+        if 'relative' in item:
+            svg_path, png_path = plotting.generate_stacked_bar_data_loading(
+                path_to_tab_delim_count=item, output_directory=output_directory, time_date_str=date_time_str)
+            print_figure_output_paths(png_path, svg_path)
+            break
+
+
+def print_figure_output_paths(png_path, svg_path):
+    print('Output figs:')
+    print(svg_path)
+    print(png_path)
+
+
+def perform_type_cout_table_output(args):
+    verify_data_analysis_uid_provided(args)
+    analysis_object, num_samples = set_type_output_params(args)
+    config_dict = get_config_dict()
+    submitting_user = set_user_name_and_email(config_dict)[0]
+    data_sub_collection_run.output_type_count_tables(
+        analysisobj=analysis_object, num_processors=args.num_proc, call_type='stand_alone',
+        num_samples=num_samples, datasubstooutput=args.print_output_types, no_figures=args.no_figures,
+        output_user=submitting_user)
+
+
+def verify_data_analysis_uid_provided(args):
+    if not args.data_analysis_id:
+        sys.exit(
+            'Please provide a data_analysis to ouput from by providing a data_analysis '
+            'ID to the --data_analysis_id flag. To see a list of data_analysis objects in the '
+            'framework\'s database, use the --display_analyses flag.')
+
+
+def set_type_output_params(args):
+    analysis_object = get_data_analysis_by_uid(args.data_analysis_id)
+    query_set_of_data_sets = get_data_sets_objects_for_analysis(args)
+    num_samples = get_number_samples_in_data_set_query(query_set_of_data_sets)
+    return analysis_object, num_samples
+
+
+def get_number_samples_in_data_set_query(query_set_of_data_sets):
+    return len(DataSetSample.objects.filter(data_submission_from__in=query_set_of_data_sets))
+
+
+def get_data_sets_objects_for_analysis(args):
+    data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
+    query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
+    return query_set_of_data_sets
+
+
+def get_data_analysis_by_uid(uid):
+    return DataAnalysis.objects.get(id=uid)
+
+
+def perform_data_analysis(args):
+    verify_name_arg_given(args)
+    custom_data_set_ids, num_proc, submitting_user, user_email, within_clade_cutoff = set_new_data_analysis_params(
+        args)
+    new_analysis_object = create_new_data_analysis_obj(args, custom_data_set_ids, submitting_user, user_email,
+                                                       within_clade_cutoff)
+    start_data_analysis(args, new_analysis_object, num_proc)
+    print('return code: 0\nAnalysis complete')
+
+
+def create_new_data_analysis_obj(args, custom_data_set_ids, submitting_user, user_email, within_clade_cutoff):
+    new_analysis_object = DataAnalysis(
+        list_of_data_set_uids=str(custom_data_set_ids), within_clade_cutoff=float(within_clade_cutoff),
+        name=args.name, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+        submitting_user=submitting_user, submitting_user_email=user_email)
+    new_analysis_object.description = args.description
+    new_analysis_object.save()
+    return new_analysis_object
+
+
+def start_data_analysis(args, new_analysis_object, num_proc):
+    data_sub_collection_run.main(
+        data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=args.no_figures,
+        no_ordinations=args.no_ordinations, distance_method=args.distance_method, no_output=args.no_output,
+        debug=args.debug)
+
+
+def set_new_data_analysis_params(args):
+    within_clade_cutoff = 0.03
+    num_proc = args.num_proc
+    custom_data_set_ids = args.analyse
+    if args.analyse == 'all':
+        custom_data_set_ids = generate_csv_dataset_uid_string(custom_data_set_ids)
+    config_dict = get_config_dict()
+    submitting_user, user_email = set_user_name_and_email(config_dict)
+    return custom_data_set_ids, num_proc, submitting_user, user_email, within_clade_cutoff
+
+
+def generate_csv_dataset_uid_string(custom_data_set_ids):
+    temp_list = []
+    for ds in DataSet.objects.all():
+        temp_list.append(str(ds.id))
+    string_list = ','.join(temp_list)
+    custom_data_set_ids = string_list
+    return custom_data_set_ids
+
+
+def perform_data_loading(args):
+    verify_name_arg_given(args)
+    new_data_set, screen_sub_eval_bool = make_new_dataset_object(args)
+    data_sheet_arg, debug_bool, distance_method_arg, \
+    input_dir, no_fig_arg, no_ord_arg, num_proc = set_params_for_data_load(args)
+    load_data(
+        data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg, no_ord_arg,
+        num_proc, screen_sub_eval_bool
+    )
+
+
+def verify_name_arg_given(args):
+    if args.name == 'noName':
+        sys.exit('Please provide a name using the --name flag. e.g. --name informative_name')
+
+
+def make_new_dataset_object(args):
+    config_dict = get_config_dict()
+    submitting_user, user_email, screen_sub_eval_bool = set_params_for_new_dataset_creation(
+        config_dict)
+    dataset_name = args.name
+    new_data_set = create_new_data_set_object_from_params(dataset_name, submitting_user,
+                                                          user_email)
+    return new_data_set, screen_sub_eval_bool
+
+
+def set_params_for_data_load(args):
+    # input directory should contain either paired .fastq.gz files of a single .zip file
+    input_dir = args.load
+    num_proc = args.num_proc
+    data_sheet_arg = args.data_sheet
+    no_fig_arg = args.no_figures
+    no_ord_arg = args.no_ordinations
+    debug_bool = args.debug
+    distance_method_arg = args.distance_method
+    return data_sheet_arg, debug_bool, distance_method_arg, input_dir, no_fig_arg, no_ord_arg, num_proc
+
+
+def set_params_for_new_dataset_creation(config_dict):
+    local_or_remote = set_system_type(config_dict)
+    new_data_set_submitting_user, new_data_set_user_email = set_user_name_and_email(config_dict)
+    screen_sub_evalue_bool = set_screen_sub_evalue(local_or_remote)
+    return new_data_set_submitting_user, new_data_set_user_email, screen_sub_evalue_bool
+
+
+def set_system_type(config_dict):
+    local_or_remote = config_dict['system_type']
+    return local_or_remote
+
+
+def get_config_dict():
+    with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
+        config_dict = json.load(f)
+    return config_dict
+
+
+def set_screen_sub_evalue(local_or_remote):
+    if local_or_remote == 'remote':
+        screen_sub_evalue_bool = True
+    else:
+        screen_sub_evalue_bool = False
+    return screen_sub_evalue_bool
+
+
+def set_user_name_and_email(config_dict):
+    new_data_set_submitting_user = config_dict['user_name']
+    new_data_set_user_email = config_dict['user_email']
+    return new_data_set_submitting_user, new_data_set_user_email
+
+
+def define_args():
+    parser = argparse.ArgumentParser(
+        description='Intragenomic analysis of the ITS2 region of the nrDNA',
+        epilog='For support email: symportal@gmail.com')
+    group = parser.add_mutually_exclusive_group(required=True)
+    define_mutually_exclusive_args(group)
+    define_additional_args(group, parser)
+    args = parser.parse_args()
+    return args
+
+
+def define_additional_args(group, parser):
+    parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
+    parser.add_argument('--name', help='A name for your input or analysis', default='noName')
+    parser.add_argument('--description', help='An optional description', default='No description')
+    parser.add_argument('--data_analysis_id', type=int, help='The ID of the data_analysis you wish to output from')
+    group.add_argument(
+        '--vacuum_database', action='store_true',
+        help='Vacuuming the database will free up memory from objects that have been deleted recently')
+    parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
+    parser.add_argument(
+        '--data_sheet',
+        help='An absolute path to the .xlsx file containing the meta-data information for the data_set\'s samples')
+    parser.add_argument('--no_figures', action='store_true', help='Skip figure production')
+    parser.add_argument('--no_ordinations', action='store_true', help='Skip ordination analysis')
+    parser.add_argument('--debug', action='store_true', help='Present additional stdout output', default=False)
+
+    parser.add_argument(
+        '--no_output', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
+
+    parser.add_argument(
+        '--distance_method', help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. The method to use when '
+                                  'calculating distances between its2 type profiles or samples.', default='braycurtis')
+    # when run as remote
+    parser.add_argument(
+        '--submitting_user_name',
+        help='Only for use when running as remote\nallows the association of a different user_name to the '
+             'data_set than the one listed in sp_config', default='not supplied')
+
+    parser.add_argument(
+        '--submitting_user_email',
+        help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
+             'than the one listed in sp_config', default='not supplied')
+
+
+def define_mutually_exclusive_args(group):
+    group.add_argument(
+        '--load', metavar='path_to_dir',
+        help='Run this to load data to the framework\'s database. The first argument to this command must be an '
+             'absolute path to a directory containing  the paired sequencing reads in .fastq.gz format. Alternatively, '
+             'this path can point directly to a single compressed file containing the same paired fastq.gz files. '
+             '\nA name must be associated with the data_set using the --name flag. \nThe number of processes to use '
+             'can also be specified using the --num_proc flag. \nA datasheet can also be uploaded using the '
+             '--data_sheet flag and the full path to the .xlsx data_sheet file (RECOMMENDED). \n'
+             'To skip the generation of figures pass the --no_figures flag.\n To skip the generation of '
+             'ordination files (pairwise distances and PCoA coordinates) pass the --no_ordinations flag')
+    group.add_argument(
+        '--analyse', metavar='data_set uids',
+        help='Analyse one or more data_set objects together. Enter comma separated uids of the data_set uids you '
+             'which to analyse. e.g.: 43,44,45. If you wish to use all available dataSubmissions, you may pass '
+             '\'all\' as an argument. To display all data_sets currently submitted to the framework\'s database, '
+             'including their ids, use the \'show_data_sets\' command\nTo skip the generation of figures pass the '
+             '--no_figures flag.\nTo skip the generation of ordination files (pairwise distances and PCoA coordinates) '
+             'pass the --no_ordinations flag')
+    group.add_argument(
+        '--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
+    group.add_argument(
+        '--display_analyses', action='store_true',
+        help=' Display data_analysis objects currently stored in the framework\'s database')
+    group.add_argument(
+        '--print_output_seqs', metavar='data_set uids',
+        help='Use this function to output ITS2 sequence count tables for given data_set instances')
+    group.add_argument(
+        '--print_output_types', metavar='data_set uids, analysis ID',
+        help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
+             'data_sets that have been run in a given analysis. Give the data_set uids that you wish to make outputs '
+             'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
+             'comma separate the uids of the data_set objects, e.g. 44,45,46. Give the ID of the analysis you wish to '
+             'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
+             '--no_figures flag.')
+    group.add_argument(
+        '--between_type_distances', metavar='data_set uids, analysis ID',
+        help='Use this function to output UniFrac pairwise distances between ITS2 type profiles clade separated')
+    group.add_argument(
+        '--between_sample_distances', metavar='data_set uids',
+        help='Use this function to output UniFrac pairwise distances between samples clade separated from a '
+             'given collection of data_set objects')
+    group.add_argument(
+        '--between_sample_distances_sample_set', metavar='data_set_sample uids',
+        help='Use this function to output UniFrac pairwise distances between samples clade '
+             'separated from a given collection of data_set_sample objects')
 
 
 def create_analysis_obj_and_run_analysis(
@@ -385,8 +461,8 @@ def create_analysis_obj_and_run_analysis(
     return analysis_uid, output_path_list
 
 
-def start_data_submission(data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg,
-                          no_ord_arg, num_proc, screen_sub_evalue_bool):
+def load_data(data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg,
+              no_ord_arg, num_proc, screen_sub_evalue_bool):
     if data_sheet_arg:
         if os.path.isfile(data_sheet_arg):
             data_set_uid, output_path_list = create_data_submission.main(

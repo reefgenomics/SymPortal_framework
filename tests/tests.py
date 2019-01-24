@@ -159,7 +159,7 @@ def perform_loading_test(
         data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg, no_ord_arg, num_proc,
         screen_sub_evalue_bool):
 
-    data_set_uid, output_path_list = main.start_data_submission(
+    data_set_uid, output_path_list = main.load_data(
         data_sheet_arg, debug_bool, distance_method_arg, input_dir,
         new_data_set, no_fig_arg, no_ord_arg, num_proc, screen_sub_evalue_bool
     )

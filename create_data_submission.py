@@ -14,10 +14,10 @@ import glob
 from datetime import datetime
 import sys
 import pandas as pd
-from output import div_output_pre_analysis_new_meta_and_new_dss_structure
+from output import output_sequence_count_tables
 from general import *
 from distance import generate_within_clade_unifrac_distances_samples, generate_within_clade_braycurtis_distances_samples
-from plotting import generate_stacked_bar_data_submission, plot_between_sample_distance_scatter
+from plotting import generate_stacked_bar_data_loading, plot_between_sample_distance_scatter
 
 
 def log_qc_error_and_continue(datasetsampleinstanceinq, samplename, errorreason):
@@ -757,7 +757,7 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
 
     # the below method will create the tab delimited output table and print out the output file paths
     # it will also return these paths so that we can use them to grab the data for figure plotting
-    output_path_list, date_time_str, num_samples = div_output_pre_analysis_new_meta_and_new_dss_structure(
+    output_path_list, date_time_str, num_samples = output_sequence_count_tables(
         datasubstooutput=str(data_set_identification),
         num_processors=num_proc,
         output_dir=output_directory, call_type='submission')
@@ -782,8 +782,8 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
                 if 'relative' in path:
                     path_to_rel_abund_data = path
 
-            svg_path, png_path = generate_stacked_bar_data_submission(path_to_rel_abund_data, output_directory,
-                                                                      time_date_str=date_time_str)
+            svg_path, png_path = generate_stacked_bar_data_loading(path_to_rel_abund_data, output_directory,
+                                                                   time_date_str=date_time_str)
             output_path_list.append(svg_path)
             output_path_list.append(png_path)
             sys.stdout.write('\nFigure generation complete')
