@@ -3,12 +3,10 @@ from dbApp.models import (SymportalFramework, DataSet, ReferenceSequence,
                           DataSetSampleSequence, DataSetSample, CladeCollection)
 from multiprocessing import Queue, Process, Manager
 from django import db
-
 import csv
 import numpy as np
 from collections import defaultdict
 import shutil
-
 import json
 import glob
 from datetime import datetime
@@ -677,17 +675,17 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
     return
 
 
-def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalue=False,
+def main(path_to_input_file, data_set_uid, num_proc, screen_sub_evalue=False,
          data_sheet_path=None, no_fig=False, no_ord=False, distance_method='braycurtis', debug=False):
-    # UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE
 
-    data_submission_in_q = DataSet.objects.get(id=data_set_identification)
+    # UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
-    # we will create the output dire early on so that we can use it to write out the sample by sample
-    # thrown away seqs.
-    output_directory = os.path.join(os.path.dirname(__file__),
-                                    'outputs/data_set_submissions/{}'.format(data_set_identification))
-    os.makedirs(output_directory, exist_ok=True)
+
+    data_submission_in_q = DataSet.objects.get(id=data_set_uid)
+
+    output_directory = setup_output_directory(data_set_uid)
+
+
     discarded_seqs_fasta = None
     new_seqs_added_count = None
     fasta_of_sig_sub_e_seqs = None
@@ -695,20 +693,20 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
     if not data_submission_in_q.initial_data_processed:
 
         # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
-        wkd, num_samples = generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set_identification,
+        wkd, num_samples = generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set_uid,
                                                                                    data_submission_in_q,
                                                                                    data_sheet_path, path_to_input_file)
 
         # PERFORM pre-MED QC
 
         if screen_sub_evalue:
-            new_seqs_added_count, discarded_seqs_fasta = pre_med_qc(data_set_identification, data_submission_in_q,
+            new_seqs_added_count, discarded_seqs_fasta = pre_med_qc(data_set_uid, data_submission_in_q,
                                                                     num_proc, wkd,
                                                                     screen_sub_evalue, output_dir=output_directory,
                                                                     debug=debug)
         else:
             fasta_of_sig_sub_e_seqs, fasta_of_sig_sub_e_seqs_path, discarded_seqs_fasta = \
-                pre_med_qc(data_set_identification, data_submission_in_q, num_proc, wkd, screen_sub_evalue,
+                pre_med_qc(data_set_uid, data_submission_in_q, num_proc, wkd, screen_sub_evalue,
                            output_dir=output_directory, debug=debug)
 
     # This function now performs the MEDs sample by sample, clade by clade.
@@ -758,12 +756,12 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
     # the below method will create the tab delimited output table and print out the output file paths
     # it will also return these paths so that we can use them to grab the data for figure plotting
     output_path_list, date_time_str, num_samples = output_sequence_count_tables(
-        datasubstooutput=str(data_set_identification),
+        datasubstooutput=str(data_set_uid),
         num_processors=num_proc,
         output_dir=output_directory, call_type='submission')
 
     # also write out the fasta of the sequences that were discarded
-    discarded_seqs_fasta_path = '{}/discarded_seqs_{}.fasta'.format(output_directory, data_set_identification)
+    discarded_seqs_fasta_path = '{}/discarded_seqs_{}.fasta'.format(output_directory, data_set_uid)
     write_list_to_destination(discarded_seqs_fasta_path, discarded_seqs_fasta)
     print('A fasta containing discarded sequences ({}) is output here:\n{}'.format(len(discarded_seqs_fasta) / 2,
                                                                                    discarded_seqs_fasta_path))
@@ -797,14 +795,14 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
         pcoa_paths_list = None
         if distance_method == 'unifrac':
             pcoa_paths_list = generate_within_clade_unifrac_distances_samples(
-                data_set_string=data_set_identification,
+                data_set_string=data_set_uid,
                 num_processors=num_proc,
                 method='mothur', call_type='submission',
                 date_time_string=date_time_str,
                 output_dir=output_directory)
         elif distance_method == 'braycurtis':
             pcoa_paths_list = generate_within_clade_braycurtis_distances_samples(
-                data_set_string=data_set_identification,
+                data_set_string=data_set_uid,
                 call_type='submission',
                 date_time_str=date_time_str,
                 output_dir=output_directory)
@@ -844,6 +842,13 @@ def main(path_to_input_file, data_set_identification, num_proc, screen_sub_evalu
 
     print('data_set ID is: {}'.format(data_submission_in_q.id))
     return data_submission_in_q.id, output_path_list
+
+
+def setup_output_directory(data_set_uid):
+    output_directory = os.path.join(os.path.dirname(__file__),
+                                    'outputs/data_set_submissions/{}'.format(data_set_uid))
+    os.makedirs(output_directory, exist_ok=True)
+    return output_directory
 
 
 def generate_and_write_below_evalue_fasta_for_screening(data_set_identification, data_submission_in_q,
@@ -1928,11 +1933,12 @@ def validate_taxon_screening_ref_blastdb(data_submission_in_q, debug):
             sys.exit('Failure in creating blast binaries')
 
 
-def generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set_identification, data_submission_in_q,
+def generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set_uid, data_submission_in_q,
                                                             data_sheet_path,
                                                             path_to_input_file):
     # decompress (if necessary) and move the input files to the working directory
-    wkd = copy_file_to_wkd(data_set_identification, path_to_input_file)
+    wkd = copy_files_to_wkd(data_set_uid, path_to_input_file)
+    #todo we got to here.
     # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
     if data_sheet_path:
         # if a data_sheet is provided ensure the samples names are derived from those in the data_sheet
@@ -2168,8 +2174,94 @@ def identify_sample_names_data_sheet(sample_meta_df, wkd):
     return fastq_file_to_sample_name_dict, list_of_names, fastq_or_fastq_gz
 
 
+
 # noinspection PyPep8
-def copy_file_to_wkd(data_set_identification, path_to_input_file):
+def copy_files_to_wkd(data_set_identification, path_to_input_file):
+    wkd = create_temp_working_directory(data_set_identification, path_to_input_file)
+
+    # Used for the pre minimum entropy decomposition (MED), quality controlled (QC), sequences dump
+    # Within this directory we will have a directory for each sample that will contain clade
+    # separated name and fasta pairs
+    create_pre_med_write_out_directory_path(wkd)
+
+    # Check to see if we are dealing with a single compressed file that contains the pairs of sample files
+    # or whether we are dealing with the pairs of sample files.
+    # If we are dealing with the pairs of files then simply copy the files over to the destination folder
+    # we do this copying so that we don't corrupt the original files
+    # we will delte these duplicate files after processing
+    file, single_file = determine_if_single_file_or_paired_input(path_to_input_file)
+    copy_and_decompress_input_files_to_temp_wkd(file, path_to_input_file, single_file, wkd)
+    return wkd
+
+
+def copy_and_decompress_input_files_to_temp_wkd(file, path_to_input_file, single_file, wkd):
+    if not single_file:
+        copy_fastq_files_from_input_dir_to_temp_wkd(file, path_to_input_file, wkd)
+
+    # if single_file then we are dealing with a single compressed file that should contain the fastq pairs
+    # Decompress the file to destination
+    else:
+        extract_single_compressed_file_to_temp_wkd(path_to_input_file, wkd)
+
+
+def extract_single_compressed_file_to_temp_wkd(path_to_input_file, wkd):
+    ext_components = path_to_input_file.split('.')
+    if ext_components[-1] == 'zip':  # .zip
+        subprocess.run(["unzip", path_to_input_file, '-d', wkd], stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
+    elif ext_components[-2] == 'tar' and ext_components[-1] == 'gz':  # .tar.gz
+        subprocess.run(["tar", "-xf", path_to_input_file, "-C", wkd], stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
+    elif ext_components[-1] == 'gz':  # .gz
+        subprocess.run(["gunzip", "-c", path_to_input_file, ">", wkd], stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
+
+
+def copy_fastq_files_from_input_dir_to_temp_wkd(file, path_to_input_file, wkd):
+    os.chdir('{}'.format(path_to_input_file))
+    # * asterix are only expanded in the shell and so don't work through subprocess
+    # need to use the glob library instead
+    # https://stackoverflow.com/questions/13875978/python-subprocess-popen-why-does-ls-txt-not-work
+    # files could be compressed (fastq.gz) or uncompressed (fastq). Either way, they should contain fastq.
+    if 'fastq' in file:
+        subprocess.run(['cp'] + glob.glob('*.fastq*') + [wkd], stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
+    elif 'fq' in file:
+        subprocess.run(['cp'] + glob.glob('*.fq*') + [wkd], stdout=subprocess.PIPE,
+                       stderr=subprocess.PIPE)
+
+
+def determine_if_single_file_or_paired_input(path_to_input_file):
+    single_file = True
+    file = os.listdir(path_to_input_file)[0]
+    if 'fastq' in file or 'fq' in file:
+        # Then there is a fastq.gz or fastq file already uncompressed in this folder
+        # In this case we will assume that the seq data is not a single file containing the pairs of files
+        # rather the pairs of files themselves.
+        # Copy to the wkd
+        single_file = False
+    return file, single_file
+
+
+def create_temp_working_directory(data_set_identification, path_to_input_file):
+    wkd = infer_temp_working_directory_path(data_set_identification, path_to_input_file)
+    delete_and_recreate_temp_wkd_if_exists(wkd)
+    return wkd
+
+
+def create_pre_med_write_out_directory_path(wkd):
+    pre_med_write_out_directory_path = wkd.replace('tempData', 'pre_MED_seqs')
+    os.makedirs(pre_med_write_out_directory_path, exist_ok=True)
+
+
+def delete_and_recreate_temp_wkd_if_exists(wkd):
+    # if the directory already exists remove it and start from scratch
+    if os.path.exists(wkd):
+        shutil.rmtree(wkd)
+    os.makedirs(wkd)
+
+
+def infer_temp_working_directory_path(data_set_identification, path_to_input_file):
     # working directory will be housed in a temp folder within the directory in which the sequencing data
     # is currently housed
     if '.' in path_to_input_file.split('/')[-1]:
@@ -2178,56 +2270,6 @@ def copy_file_to_wkd(data_set_identification, path_to_input_file):
     else:
         # then we assume that we are pointing to a directory and we can directly use that to make the wkd
         wkd = os.path.abspath('{}/tempData/{}'.format(path_to_input_file, data_set_identification))
-    # if the directory already exists remove it and start from scratch
-    if os.path.exists(wkd):
-        shutil.rmtree(wkd)
-
-    # create the directory that will act as the working directory for doing all of the QCing and MED in
-    os.makedirs(wkd)
-
-    # also create a directory that will be used for the pre MED QCed sequences dump
-    # Within this directory we will have sample folders which will contain clade separated name and fasta pairs
-    os.makedirs(wkd.replace('tempData', 'pre_MED_seqs'), exist_ok=True)
-
-    # Check to see if we are dealing with a single compressed file that contains the pairs of sample files
-    # or whether we are dealing with the pairs of sample files.
-    # If we are dealing with the pairs of files then simply copy the files over to the destination folder
-    # we do this copying so that we don't corrupt the original files
-    # we will delte these duplicate files after processing
-    single_file = True
-    for file in os.listdir(path_to_input_file):
-        if 'fastq' in file or 'fq' in file:
-            # Then there is a fastq.gz or fastq file already uncompressed in this folder
-            # In this case we will assume that the seq data is not a single file containing the pairs of files
-            # rather the pairs of files themselves.
-            # Copy to the wkd
-            single_file = False
-            os.chdir('{}'.format(path_to_input_file))
-
-            # * asterix are only expanded in the shell and so don't work through subprocess
-            # need to use the glob library instead
-            # https://stackoverflow.com/questions/13875978/python-subprocess-popen-why-does-ls-txt-not-work
-            # files could be compressed (fastq.gz) or uncompressed (fastq). Either way, they should contain fastq.
-            if 'fastq' in file:
-                subprocess.run(['cp'] + glob.glob('*.fastq*') + [wkd], stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-            elif 'fq' in file:
-                subprocess.run(['cp'] + glob.glob('*.fq*') + [wkd], stdout=subprocess.PIPE,
-                               stderr=subprocess.PIPE)
-            break
-    # if single_file then we are dealing with a single compressed file that should contain the fastq pairs
-    # Decompress the file to destination
-    if single_file:
-        ext_components = path_to_input_file.split('.')
-        if ext_components[-1] == 'zip':  # .zip
-            subprocess.run(["unzip", path_to_input_file, '-d', wkd], stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE)
-        elif ext_components[-2] == 'tar' and ext_components[-1] == 'gz':  # .tar.gz
-            subprocess.run(["tar", "-xf", path_to_input_file, "-C", wkd], stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE)
-        elif ext_components[-1] == 'gz':  # .gz
-            subprocess.run(["gunzip", "-c", path_to_input_file, ">", wkd], stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE)
     return wkd
 
 

@@ -41,10 +41,7 @@ import distance
 import argparse
 
 def main():
-
     args = define_args()
-
-    # Code to run the main functionality of SymPortal
     if args.load:
         perform_data_loading(args)
     elif args.analyse:
@@ -58,75 +55,99 @@ def main():
     elif args.display_analyses:
         perform_display_analysis_types()
     elif args.between_type_distances:
-        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        pcoa_path_list = None
-        if args.data_analysis_id:
-            if args.distance_method == 'unifrac':
-                pcoa_path_list = data_sub_collection_run.generate_within_clade_unifrac_distances_its2_type_profiles(
-                    data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
-                    data_analysis_id=args.data_analysis_id, method='mothur', call_type='stand_alone',
-                    date_time_string=dts, bootstrap_value=args.bootstrap)
-            elif args.distance_method == 'braycurtis':
-                pcoa_path_list = distance.generate_within_clade_braycurtis_distances_its2_type_profiles(
-                    data_submission_id_str=args.between_type_distances,
-                    data_analysis_id=args.data_analysis_id, call_type='stand_alone', date_time_string=dts)
-        else:
-            print(
-                'Please provide a data_analysis to ouput from by providing a data_analysis ID to '
-                'the --data_analysis_id argument. To see a list of data_analysis objects in the framework\'s '
-                'database, use the --display_analyses flag.')
-
-        for pcoa_path in pcoa_path_list:
-            if 'PCoA_coords' in pcoa_path:
-                sys.stdout.write('\nPlotting between its2 type profile distances clade {}\n'.format(
-                    os.path.dirname(pcoa_path).split('/')[-1]))
-                # then this is a pcoa csv that we should plot
-                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=dts)
-
+        perform_within_clade_type_distance_generation(args)
     elif args.between_sample_distances:
-        # we are swaping to bray curtis for the time being
-        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        pcoa_paths_list = None
-        if args.distance_method == 'unifrac':
-            pcoa_paths_list = distance.generate_within_clade_unifrac_distances_samples(
-                data_set_string=args.between_sample_distances, num_processors=args.num_proc,
-                method='mothur', call_type='stand_alone', date_time_string=dts, bootstrap_value=args.bootstrap)
-        elif args.distance_method == 'braycurtis':
-            pcoa_paths_list = distance.generate_within_clade_braycurtis_distances_samples(
-                data_set_string=args.between_sample_distances, call_type='stand_alone', date_time_str=dts)
-
-        for pcoa_path in pcoa_paths_list:
-            if 'PCoA_coords' in pcoa_path:
-                # then this is a full path to one of the .csv files that contains the coordinates that we can plot
-                # we will get the output directory from the passed in pcoa_path
-                sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
-                    os.path.dirname(pcoa_path).split('/')[-1]))
-                plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
-
+        perform_within_clade_sample_distance_generation_data_set_input(args)
     elif args.between_sample_distances_sample_set:
-        # this is a variation of the between_sample_distances where a set of sample uids are input rather
-        # than data_set uids. Currently it is only written into unifrac. Once we have this running
-        # we can then apply it to BrayCurtis
-        dts = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        pcoa_paths_list = None
-        if args.distance_method == 'unifrac':
-            pcoa_paths_list = distance.generate_within_clade_unifrac_distances_samples_sample_list_input(
-                smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
-                method='mothur', bootstrap_value=args.bootstrap,
-                date_time_string=dts)
-        elif args.distance_method == 'braycurtis':
-            pcoa_paths_list = distance.generate_within_clade_braycurtis_distances_samples_sample_list_input(
-                smpl_id_list_str=args.between_sample_distances_sample_set, date_time_string=dts)
-        for pcoa_path in pcoa_paths_list:
-            if 'PCoA_coords' in pcoa_path:
-                # then this is a full path to one of the .csv files that contains the coordinates that we can plot
-                # we will get the output directory from the passed in pcoa_path
-                sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
-                    os.path.dirname(pcoa_path).split('/')[-1]))
-                plotting.plot_between_sample_distance_scatter(pcoa_path, dts)
-
+        perform_within_clade_sample_distance_generation_sample_list_input(args)
     elif args.vacuumDatabase:
         perform_vacuum_database()
+
+def perform_within_clade_sample_distance_generation_sample_list_input(args):
+    # this is a variation of the between_sample_distances where a set of sample uids are input rather
+    # than data_set uids.
+    # todo Currently it is only written into unifrac. Once we have this running
+    # we can then apply it to BrayCurtis
+    date_time_string = generate_date_time_string()
+    pcoa_paths_list = run_within_clade_sample_distances_dependent_on_methods_sample_list_input(args, date_time_string)
+    perform_sample_distance_plotting(date_time_string, pcoa_paths_list)
+
+
+def perform_within_clade_sample_distance_generation_data_set_input(args):
+    # we are swaping to bray curtis for the time being
+    date_time_string = generate_date_time_string()
+    pcoa_paths_list = run_within_clade_sample_distances_dependent_on_methods_data_set_input(args, date_time_string)
+    perform_sample_distance_plotting(date_time_string, pcoa_paths_list)
+
+
+def run_within_clade_sample_distances_dependent_on_methods_data_set_input(args, date_time_string):
+    pcoa_paths_list = None
+    if args.distance_method == 'unifrac':
+        pcoa_paths_list = distance.generate_within_clade_unifrac_distances_samples(
+            data_set_string=args.between_sample_distances, num_processors=args.num_proc,
+            method='mothur', call_type='stand_alone', date_time_string=date_time_string, bootstrap_value=args.bootstrap)
+    elif args.distance_method == 'braycurtis':
+        pcoa_paths_list = distance.generate_within_clade_braycurtis_distances_samples(
+            data_set_string=args.between_sample_distances, call_type='stand_alone', date_time_str=date_time_string)
+    return pcoa_paths_list
+
+
+def run_within_clade_sample_distances_dependent_on_methods_sample_list_input(args, date_time_string):
+    pcoa_paths_list = None
+    if args.distance_method == 'unifrac':
+        pcoa_paths_list = distance.generate_within_clade_unifrac_distances_samples_sample_list_input(
+            smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
+            method='mothur', bootstrap_value=args.bootstrap,
+            date_time_string=date_time_string)
+    elif args.distance_method == 'braycurtis':
+        pcoa_paths_list = distance.generate_within_clade_braycurtis_distances_samples_sample_list_input(
+            smpl_id_list_str=args.between_sample_distances_sample_set, date_time_string=date_time_string)
+    return pcoa_paths_list
+
+
+def perform_sample_distance_plotting(date_time_string, pcoa_paths_list):
+    for pcoa_path in pcoa_paths_list:
+        if 'PCoA_coords' in pcoa_path:
+            # then this is a full path to one of the .csv files that contains the coordinates that we can plot
+            # we will get the output directory from the passed in pcoa_path
+            sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
+                os.path.dirname(pcoa_path).split('/')[-1]))
+            plotting.plot_between_sample_distance_scatter(pcoa_path, date_time_string)
+
+
+def perform_within_clade_type_distance_generation(args):
+    date_time_string = generate_date_time_string()
+    pcoa_path_list = None
+    verify_data_analysis_uid_provided(args)
+    pcoa_path_list = run_within_clade_type_distances_dependent_on_methods(args, date_time_string, pcoa_path_list)
+    perform_type_distance_plotting(date_time_string, pcoa_path_list)
+
+
+def perform_type_distance_plotting(date_time_string, pcoa_path_list):
+    for pcoa_path in pcoa_path_list:
+        if 'PCoA_coords' in pcoa_path:
+            sys.stdout.write('\nPlotting between its2 type profile distances clade {}\n'.format(
+                os.path.dirname(pcoa_path).split('/')[-1]))
+            # then this is a pcoa csv that we should plot
+            plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=date_time_string)
+
+
+def run_within_clade_type_distances_dependent_on_methods(args, date_time_string, pcoa_path_list):
+    if args.distance_method == 'unifrac':
+        pcoa_path_list = data_sub_collection_run.generate_within_clade_unifrac_distances_its2_type_profiles(
+            data_submission_id_str=args.between_type_distances, num_processors=args.num_proc,
+            data_analysis_id=args.data_analysis_id, method='mothur', call_type='stand_alone',
+            date_time_string=date_time_string, bootstrap_value=args.bootstrap)
+    elif args.distance_method == 'braycurtis':
+        pcoa_path_list = distance.generate_within_clade_braycurtis_distances_its2_type_profiles(
+            data_submission_id_str=args.between_type_distances,
+            data_analysis_id=args.data_analysis_id, call_type='stand_alone', date_time_string=date_time_string)
+    return pcoa_path_list
+
+
+def generate_date_time_string():
+    date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+    return date_time_string
 
 
 def perform_display_analysis_types():
@@ -207,7 +228,7 @@ def perform_type_cout_table_output(args):
 
 def verify_data_analysis_uid_provided(args):
     if not args.data_analysis_id:
-        sys.exit(
+        raise RuntimeError(
             'Please provide a data_analysis to ouput from by providing a data_analysis '
             'ID to the --data_analysis_id flag. To see a list of data_analysis objects in the '
             'framework\'s database, use the --display_analyses flag.')
@@ -266,13 +287,13 @@ def set_new_data_analysis_params(args):
     num_proc = args.num_proc
     custom_data_set_ids = args.analyse
     if args.analyse == 'all':
-        custom_data_set_ids = generate_csv_dataset_uid_string(custom_data_set_ids)
+        custom_data_set_ids = generate_csv_dataset_uid_string()
     config_dict = get_config_dict()
     submitting_user, user_email = set_user_name_and_email(config_dict)
     return custom_data_set_ids, num_proc, submitting_user, user_email, within_clade_cutoff
 
 
-def generate_csv_dataset_uid_string(custom_data_set_ids):
+def generate_csv_dataset_uid_string():
     temp_list = []
     for ds in DataSet.objects.all():
         temp_list.append(str(ds.id))
