@@ -30,7 +30,7 @@ application = get_wsgi_application()
 # Your application specific imports
 from dbApp.models import DataSet, DataSetSample, DataAnalysis
 ############################################
-
+import sp_config
 import data_sub_collection_run
 import create_data_submission
 import output
@@ -139,12 +139,12 @@ def main():
     parser.add_argument(
         '--submitting_user_name',
         help='Only for use when running as remote\nallows the association of a different user_name to the '
-             'data_set than the one listed in sp_config', default='not supplied')
+             'data_set than the one listed in sp_config.py', default='not supplied')
 
     parser.add_argument(
         '--submitting_user_email',
         help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
-             'than the one listed in sp_config', default='not supplied')
+             'than the one listed in sp_config.py', default='not supplied')
 
     args = parser.parse_args()
 
@@ -163,10 +163,7 @@ def main():
 
         name_for_data_set = args.name
 
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        local_or_remote = config_dict['system_type']
-        if local_or_remote == 'remote':
+        if sp_config.system_type == 'remote':
             screen_sub_evalue_bool = True
             if args.submitting_user_name and args.submitting_user_email:
                 new_data_set_submitting_user = args.submitting_user_name
@@ -175,8 +172,8 @@ def main():
                 print('Please supply --submitting_user_name and --submitting_user_email.')
                 sys.exit(1)
         else:
-            new_data_set_submitting_user = config_dict['user_name']
-            new_data_set_user_email = config_dict['user_email']
+            new_data_set_submitting_user = sp_config.user_name
+            new_data_set_user_email = sp_config.user_email
             screen_sub_evalue_bool = False
 
         # If working on the remote server a difference reference_fasta_database_used can be used.
@@ -211,10 +208,8 @@ def main():
             string_list = ','.join(temp_list)
             custom_data_set_ids = string_list
 
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        new_data_set_submitting_user = config_dict['user_name']
-        new_data_set_user_email = config_dict['user_email']
+        new_data_set_submitting_user = sp_config.user_name
+        new_data_set_user_email = sp_config.user_email
 
         new_analysis_object = DataAnalysis(
             list_of_data_set_uids=str(custom_data_set_ids), within_clade_cutoff=float(within_clade_cutoff),
@@ -230,9 +225,7 @@ def main():
         print('return code: 0\nAnalysis complete')
 
     elif args.print_output_types:
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        new_data_set_submitting_user = config_dict['user_name']
+        new_data_set_submitting_user = sp_config.user_name
         if args.data_analysis_id:
             analysis_object = DataAnalysis.objects.get(id=args.data_analysis_id)
             data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
@@ -341,15 +334,11 @@ def main():
 
     elif args.print_output_seqs:
         # this is a stand_alone and output and we should grab the user who is requresting it from the config file
-        with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-            config_dict = json.load(f)
-        new_data_set_submitting_user = config_dict['user_name']
-
         output_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
         output_file_path_list, date_time_str, num_samples = \
             output.div_output_pre_analysis_new_meta_and_new_dss_structure(
                 datasubstooutput=args.print_output_seqs, num_processors=args.num_proc, output_dir=output_directory,
-                call_type='stand_alone', output_user=new_data_set_submitting_user)
+                call_type='stand_alone', output_user=sp_config.user_name)
         if num_samples > 1000:
             print('Too many samples ({}) to generate plots'.format(num_samples))
         else:

@@ -13,6 +13,7 @@ from plotting import generate_stacked_bar_data_analysis_type_profiles, generate_
 import pickle
 from collections import Counter
 import numpy as np
+import sp_config
 
 
 def output_type_count_tables(
@@ -282,9 +283,7 @@ def output_type_count_tables(
     output_directory = os.path.abspath(
         os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysis_object.id)))
     os.makedirs(output_directory, exist_ok=True)
-    with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-        config_dict = json.load(f)
-    local_or_remote = config_dict['system_type']
+    local_or_remote = sp_config.system_type
     if local_or_remote == 'remote':
         pickle.dump(samples_by_uid_that_have_been_sorted,
                     open("{}/samples_that_have_been_sorted.pickle".format(output_directory), "wb"))

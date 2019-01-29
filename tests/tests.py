@@ -1,13 +1,19 @@
 #!/usr/bin/env python3.6
 import os
+import sp_config
 import main
-import json
 import general
 import sys
 from pathlib import Path
 import shutil
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from dbApp.models import DataAnalysis, DataSet
+
+output_dir_data_load = os.path.abspath(os.path.join(
+        Path(os.path.dirname(__file__), '..', 'outputs', 'data_set_submissions')))
+
+output_dir_data_analysis = directory_to_delete = os.path.abspath(os.path.join(
+        Path(os.path.dirname(__file__), '..', 'outputs', 'analyses')))
 
 def test_data_loading_without_command_line(
         test_data_directory, data_sheet_path, num_proc, debug_bool, distance_method_arg,
@@ -167,12 +173,9 @@ def perform_loading_test(
 
 
 def get_system_type_user_name_and_user_email():
-    sp_config_path = os.path.abspath(os.path.join(Path(__file__).parents[1], 'sp_config'))
-    with open(sp_config_path, 'r') as f:
-        config_dict = json.load(f)
-    local_or_remote = config_dict['system_type']
-    new_data_set_submitting_user = config_dict['user_name']
-    new_data_set_user_email = config_dict['user_email']
+    local_or_remote = sp_config.system_type
+    new_data_set_submitting_user = sp_config.user_name
+    new_data_set_user_email = sp_config.user_email
     return new_data_set_submitting_user, new_data_set_user_email, local_or_remote
 
 
@@ -270,16 +273,16 @@ def cleanup_after_previously_run_data_analysis_tests():
 
 
 def delete_data_load_output_object_directories(data_set_uid):
-    directory_to_delete = os.path.abspath(os.path.join(
-        Path(__file__).parents[1], 'outputs', 'data_set_submissions', str(data_set_uid)))
+    directory_to_delete = os.path.abspath(os.path.join(output_dir_data_load, str(data_set_uid)))
     if os.path.exists(directory_to_delete):
+        print(f'Deleting {directory_to_delete}')
         shutil.rmtree(directory_to_delete)
 
 
 def delete_data_analysis_output_object_directories(data_analysis_uid):
-    directory_to_delete = os.path.abspath(os.path.join(
-        Path(__file__).parents[1], 'outputs', 'analyses', str(data_analysis_uid)))
+    directory_to_delete = os.path.abspath(os.path.join(output_dir_data_analysis, str(data_analysis_uid)))
     if os.path.exists(directory_to_delete):
+        print(f'Deleting {directory_to_delete}')
         shutil.rmtree(directory_to_delete)
 
 
