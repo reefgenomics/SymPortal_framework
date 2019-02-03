@@ -264,7 +264,7 @@ def main():
 
             output.output_type_count_tables_data_set_id_input(
                 analysisobj=analysis_object, num_processors=args.num_proc,
-                data_set_sample_ids_to_output_string=args.print_output_types, no_figures=args.no_figures,
+                data_set_sample_ids_to_output_string=args.print_output_types_sample_set, no_figures=args.no_figures,
                 output_user=new_data_set_submitting_user)
         else:
             print(
@@ -385,7 +385,7 @@ def main():
         output_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
         output_file_path_list, date_time_str, num_samples = \
             output.div_output_pre_analysis_new_meta_and_new_dss_structure_data_set_id_input(
-                data_set_sample_ids_to_output_string =args.print_output_seqs, num_processors=args.num_proc, output_dir=output_directory,
+                data_set_sample_ids_to_output_string =args.print_output_seqs_sample_set, num_processors=args.num_proc, output_dir=output_directory,
                 output_user=sp_config.user_name)
         if num_samples > 1000:
             print('Too many samples ({}) to generate plots'.format(num_samples))
