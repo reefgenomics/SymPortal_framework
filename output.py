@@ -15,7 +15,6 @@ from collections import Counter
 import numpy as np
 import sp_config
 
-
 def output_type_count_tables(
         analysisobj, datasubstooutput, call_type, num_samples,
         num_processors=1, no_figures=False, output_user=None, time_date_str=None):
@@ -475,6 +474,492 @@ def output_type_count_tables(
         sorted_sample_uid_list=samples_by_uid_that_have_been_sorted, analysis_obj_id=analysisobj.id,
         call_type='analysis', time_date_str=date_time_string)
 
+    print('ITS2 type profile output files:')
+    for output_file in output_files_list:
+        print(output_file)
+        if 'relative' in output_file:
+            output_to_plot = output_file
+            break
+
+    output_files_list.extend(div_output_file_list)
+    # Finally lets produce output plots for the dataoutput. For the time being this should just be a
+    # plot for the ITS2 type profiles and one for the sequences
+    # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
+    output_dir = os.path.dirname(output_to_plot)
+    if not no_figures:
+        if num_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(num_samples))
+        else:
+            svg_path, png_path, sorted_sample_id_list = generate_stacked_bar_data_analysis_type_profiles(
+                path_to_tab_delim_count=output_to_plot, output_directory=output_dir,
+                analysis_obj_id=analysisobj.id, time_date_str=date_time_string)
+
+            print('Figure output files:')
+            print(svg_path)
+            print(png_path)
+            output_files_list.extend([svg_path, png_path])
+            for file in div_output_file_list:
+                if 'relative' in file:
+                    path_to_plot = file
+                    break
+
+            svg_path, png_path = generate_stacked_bar_data_submission(
+                path_to_tab_delim_count=path_to_plot, output_directory=output_dir,
+                time_date_str=date_time_string, sample_id_order_list=sorted_sample_id_list)
+
+            print('Figure output files:')
+            print(svg_path)
+            print(png_path)
+            output_files_list.extend([svg_path, png_path])
+
+    return output_dir, date_time_string, output_files_list
+
+def output_type_count_tables_data_set_id_input(
+        analysisobj, data_set_sample_ids_to_output_string, call_type, num_samples,
+        num_processors=1, no_figures=False, output_user=None, time_date_str=None):
+    analysis_object = analysisobj
+    # This is one of the last things to do before we can use our first dataset
+    # The table will have types as columns and rows as samples
+    # its rows will give various data about each type as well as how much they were present in each sample
+
+    # It will produce four output files, for DIV abundances and proportions and Type abundances and proportions.
+    # found in the given clade collection.
+    # Types will be listed first by clade and then by the number of clade collections the types were found in
+
+    # Each type's ID will also be given as a UID.
+    # The date the database was accessed and the version should also be noted
+    # The formal species descriptions which correspond to the found ITS2 type will be noted for each type
+    # Finally the AccessionNumber of each of the defining reference species will also be noted
+    clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+
+    # List of the paths to the files that have been output
+    output_files_list = []
+
+    data_set_sample_ids_to_output = [int(a) for a in str(data_set_sample_ids_to_output_string).split(',')]
+
+
+
+    # Get collection of types that are specific for the dataSubmissions we are looking at
+
+    query_set_of_data_set_samples = DataSetSample.objects.filter(id__in=data_set_sample_ids_to_output)
+
+    clade_collections_from_data_set_samples = CladeCollection.objects.filter(
+        data_set_sample_from__in=query_set_of_data_set_samples)
+
+
+    clade_collection_types_from_this_data_analysis_and_data_set = CladeCollectionType.objects.filter(
+        clade_collection_found_in__in=clade_collections_from_data_set_samples,
+        analysis_type_of__data_analysis_from=analysis_object).distinct()
+
+    at = set()
+    for cct in clade_collection_types_from_this_data_analysis_and_data_set:
+        sys.stdout.write('\rCollecting analysis_type from clade collection type {}'.format(cct))
+        at.add(cct.analysis_type_of)
+    at = list(at)
+
+    # Need to get a list of Samples that are part of the dataAnalysis
+    list_of_data_set_samples = list(query_set_of_data_set_samples)
+
+    # Now go through the types, firstly by clade and then by the number of cladeCollections they were found in
+    # Populate a 2D list of types with a list per clade
+    types_cladal_list = [[] for _ in clade_list]
+    for att in at:
+        try:
+            if len(att.list_of_clade_collections) > 0:
+                types_cladal_list[clade_list.index(att.clade)].append(att)
+        except:
+            pass
+
+    # Items for for creating the new samples sorted output
+    across_clade_type_sample_abund_dict = dict()
+    across_clade_sorted_type_order = []
+    # Go clade by clade
+    for i in range(len(types_cladal_list)):
+        if types_cladal_list[i]:
+            clade_in_question = clade_list[i]
+            # ##### CALCULATE REL ABUND AND SD OF DEF INTRAS FOR THIS TYPE ###############
+            #     # For each type we want to calculate the average proportions of the defining seqs in that type
+            #     # We will also calculate an SD.
+            #     # We will do both of these calculations using the footprint_sequence_abundances, list_of_clade_collections
+            #     # and orderedFoorprintList attributes of each type
+
+            # ######### MAKE GROUP COUNTER AND DICT ###########
+            # These are now going to be managed items for use in the MP
+            # We want to name the groups that types are found in sequencially
+            # To get the next number to name a group we will use the groupCount
+            # To look up what number has been assigned to groups that have
+            # already been printed we will use the groupDict
+            # groupCount = 0
+            # groupDict = {}
+            ###################################################
+
+            # sort types by the number of samples they were found in for this output (not across whole analysis)
+            # returns list of tuples, [0] = analysis_type object, [1] number of ccs found in for this output
+            sorted_list_of_types = sort_list_of_types_by_clade_collections_in_current_output(
+                types_cladal_list[i], clade_collection_types_from_this_data_analysis_and_data_set)
+
+            # Here we will MP at the type level
+            # i.e. each type will be processed on a differnt core. In order for this to work we should have a managed
+            # dictionary where the key can be the types ID and the value can be the datalist
+            # In order to get the types output in the correct order we should use the sortedListOfTypes to resort the
+            # data once the MPing has been done.
+
+            # This dict will hold all of the output rows that the MPing has created.
+            worker_manager = Manager()
+            type_output_managed_dict = worker_manager.dict({an_type: None for an_type in sorted_list_of_types})
+
+            # NB using shared items was considerably slowing us down so now I will just use copies of items
+            # we don't actually need to use managed items as they don't really need to be shared (i.e. input
+            # from different processes.
+            # a list that is the uids of each of the samples in the analyis
+            sample_uids_list = [smp.id for smp in list_of_data_set_samples]
+            # listOfDataSetSampleIDsManagedList = worker_manager.list(sample_uids_list)
+
+            # A corresponding dictionary that is the list of the clade collection uids for each of the samples
+            # that are in the ID list above.
+            sample_uid_to_clade_collection_uids_of_clade = {}
+            print('\nCreating sample_ID_to_cc_IDs dictionary clade {}'.format(clade_in_question))
+            for smp in list_of_data_set_samples:
+                sys.stdout.write('\rCollecting clade collections for sample {}'.format(smp))
+                try:
+                    sample_uid_to_clade_collection_uids_of_clade[smp.id] = CladeCollection.objects.get(
+                        data_set_sample_from=smp, clade=clade_in_question).id
+                except CladeCollection.DoesNotExist:
+                    sample_uid_to_clade_collection_uids_of_clade[smp.id] = None
+                except Exception as ex:  # Just incase there is some weird stuff going on
+                    print(ex)
+
+            type_input_queue = Queue()
+
+            for an_type in sorted_list_of_types:
+                type_input_queue.put(an_type)
+
+            for N in range(num_processors):
+                type_input_queue.put('STOP')
+
+            all_processes = []
+
+            # close all connections to the db so that they are automatically recreated for each process
+            # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+            db.connections.close_all()
+
+            sys.stdout.write('\nCalculating ITS2 type profile abundances clade {}\n'.format(clade_list[i]))
+            for N in range(num_processors):
+                p = Process(target=output_worker_one,
+                            args=(type_input_queue, sample_uids_list, type_output_managed_dict,
+                                  sample_uid_to_clade_collection_uids_of_clade))
+                all_processes.append(p)
+                p.start()
+
+            for p in all_processes:
+                p.join()
+
+            # So we have the current list of samples stored in a mangaed list that is the listOfDataSetSamplesManaged
+            # the dictionary that we have below is key = analysis_type and the value is two lists
+            # the first list is the raw counts and the second is the prop counts
+            # In each of these lists the string is a string of the row values for each of the types
+            # we can extract the seq abundances from these values.
+            # we are currently doing this by clade so we will have to extract this info for each clade
+            # I think we can simply add the items for each of the within clade dicts to each other and end up with
+            # an across clades dict then we should be able to work with this to get the order we are looking for
+
+            across_clade_type_sample_abund_dict.update(type_output_managed_dict)
+            across_clade_sorted_type_order.extend(sorted_list_of_types)
+            # ####################
+
+            # for antype in sortedListOfTypes:
+            #     outputTableOne.append(typeOutputManagedDict[antype][0])
+            #     outputTableTwo.append(typeOutputManagedDict[antype][1])
+
+    # At this stage we have the across_clade_type_sample_abund_dict that contains the type to row values
+    # Below is the pseudo code for getting the sorted list of samples
+    # get a list of the types for the output
+    # Ideally we want to have this list of types sorted according to the most abundant in the output first
+    # we currently don't have this except separated by clade
+    # We can get this from the dict though
+    type_to_abund_list = []
+    for analysis_type_obj in across_clade_type_sample_abund_dict.keys():
+        type_to_abund_list.append(
+            (analysis_type_obj, int(across_clade_type_sample_abund_dict[analysis_type_obj][0].split('\t')[4])))
+
+    # now we can sort this list according to the local abundance and this will give us the order of types that we want
+    sorted_analysis_type_abundance_list = [a[0] for a in sorted(type_to_abund_list, key=lambda x: x[1], reverse=True)]
+
+    # for the purposes of doing the sample sorting we will work with the relative df so that we can
+    # compare the abundance of types across samples
+    list_for_df_absolute = []
+    list_for_df_relative = []
+
+    # get list for the aboslute df
+    # need to make sure that this is ordered according to across_clade_sorted_type_order
+    for an_type in across_clade_sorted_type_order:
+        list_for_df_absolute.append(across_clade_type_sample_abund_dict[an_type][0].split('\t'))
+
+    # get list for the relative df
+    # need to make sure that this is ordered according to across_clade_sorted_type_order
+    for an_type in across_clade_sorted_type_order:
+        list_for_df_relative.append(across_clade_type_sample_abund_dict[an_type][1].split('\t'))
+
+    # headers can be same for each
+    pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence',
+                   'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
+    sample_headers = [dataSamp.id for dataSamp in list_of_data_set_samples]
+    post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
+    columns_for_df = pre_headers + sample_headers + post_headers
+
+    # make absolute
+    df_absolute = pd.DataFrame(list_for_df_absolute, columns=columns_for_df)
+    df_absolute.set_index('ITS2 type profile', drop=False, inplace=True)
+
+    df_relative = pd.DataFrame(list_for_df_relative, columns=columns_for_df)
+    df_relative.set_index('ITS2 type profile', drop=False, inplace=True)
+
+    # add a series that gives us the uids of the samples incase we have samples that have the same names
+    # this rather complex comprehension puts an nan into the list for the pre_header headers
+    # (i.e not sample headers) and then puts an ID value for the samples
+    # this seires works because we rely on the fact that it will just automatically
+    # put nan values for all of the headers after the samples
+    data_list_for_sample_name_series = [np.nan if i < len(pre_headers)
+                                        else list_of_data_set_samples[i - len(pre_headers)].name
+                                        for i in range(len(pre_headers) + len(sample_headers))]
+    sample_name_series = pd.Series(
+                        name='sample_name',
+                        data=data_list_for_sample_name_series,
+                        index=list(df_absolute)[:len(data_list_for_sample_name_series)])
+
+    # it turns out that you cannot have duplicate header values (which makes sense). So we're going to have to
+    # work with the sample uids as the header values and put the sample_name in as the secondary series
+
+    # now add the series to the df and then re order the df
+    df_absolute = df_absolute.append(sample_name_series)
+    df_relative = df_relative.append(sample_name_series)
+
+    # now reorder the index so that the sample_id_series is on top
+    index_list = df_absolute.index.values.tolist()
+    re_index_index = [index_list[-1]] + index_list[:-1]
+    df_absolute = df_absolute.reindex(re_index_index)
+    df_relative = df_relative.reindex(re_index_index)
+
+    # at this point we have both of the dfs. We will use the relative df for getting the ordered smpl list
+    # now go sample by sample find the samples max type and add to the dictionary where key is types, and value
+    # is list of tups, one for each sample which is sample name and rel_abund of the given type
+    # We should also produce a dict that holds the ID to sample_name for reordering purposes later on.
+    # sample_id_to_sample_name_dict = {}
+    type_to_sample_abund_dict = defaultdict(list)
+    typeless_samples_list_by_uid = []
+    for i in range(len(pre_headers), len(pre_headers) + len(list_of_data_set_samples)):
+        sys.stdout.write('\rGetting type abundance information for {}'.format(
+            list_of_data_set_samples[i - len(pre_headers)]))
+        sample_series = df_relative.iloc[:, i]
+        sample_abundances_series = sample_series[1:].astype('float')
+        max_type_label = sample_abundances_series.idxmax()
+        rel_abund_of_max_type = sample_abundances_series[max_type_label]
+        if not rel_abund_of_max_type > 0:
+            # append the ID of the sample to the list
+            smpl_id = sample_series.name
+            typeless_samples_list_by_uid.append(smpl_id)
+            # sample_id_to_sample_name_dict[smpl_id] = sample_series['sample_name']
+        else:
+            # append a tuple that is (sample_id, rel abundance of the max type)
+            smpl_id = sample_series.name
+            type_to_sample_abund_dict[max_type_label].append((smpl_id, rel_abund_of_max_type))
+            # sample_id_to_sample_name_dict[smpl_id] = sample_series.name
+
+    # here we have the dictionary populated. We can now go type by type according
+    # to the sorted_analysis_type_abundance_list and put the samples that had the given type as their most abundant
+    # type, into the sorted sample list, addtionaly sorted by how abund the type was in each of the samples
+    samples_by_uid_that_have_been_sorted = []
+    # we are only concerned with the types that had samples that had them as most abundant
+    for an_type_name in [at.name for at in sorted_analysis_type_abundance_list
+                         if at.name in type_to_sample_abund_dict.keys()]:
+        samples_by_uid_that_have_been_sorted.extend(
+            [a[0] for a in sorted(type_to_sample_abund_dict[an_type_name], key=lambda x: x[1], reverse=True)])
+
+    # here we should have a list of samples that have been sorted according to the types they were found to
+    # have as their most abundant
+    # now we just need to add the samples that didn't have a type in them to be associated to. Negative etc.
+    samples_by_uid_that_have_been_sorted.extend(typeless_samples_list_by_uid)
+
+    # now pickle out the samples_that_have_been_sorted list if we are running on the remote system
+    output_directory = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysis_object.id)))
+    os.makedirs(output_directory, exist_ok=True)
+    local_or_remote = sp_config.system_type
+    if local_or_remote == 'remote':
+        pickle.dump(samples_by_uid_that_have_been_sorted,
+                    open("{}/samples_that_have_been_sorted.pickle".format(output_directory), "wb"))
+
+    # rearange the sample columns so that they are in the new order
+    new_sample_headers = samples_by_uid_that_have_been_sorted
+    new_cols = pre_headers + new_sample_headers + post_headers
+
+    df_absolute = df_absolute[new_cols]
+    df_relative = df_relative[new_cols]
+
+    # transpose
+    df_absolute = df_absolute.T
+    df_relative = df_relative.T
+
+    os.chdir(output_directory)
+
+    # Finally append the species references to the tables
+    species_ref_dict = {
+        'S. microadriaticum': 'Freudenthal, H. D. (1962). Symbiodinium gen. nov. and Symbiodinium microadriaticum '
+                              'sp. nov., a Zooxanthella: Taxonomy, Life Cycle, and Morphology. The Journal of '
+                              'Protozoology 9(1): 45-52',
+        'S. pilosum': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                      'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                      'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                      'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                      'Journal of Phycology 23(3): 469-481.',
+        'S. natans': 'Hansen, G. and N. Daugbjerg (2009). Symbiodinium natans sp. nob.: A free-living '
+                     'dinoflagellate from Tenerife (northeast Atlantic Ocean). Journal of Phycology 45(1): 251-263.',
+        'S. tridacnidorum': 'Lee, S. Y., H. J. Jeong, N. S. Kang, T. Y. Jang, S. H. Jang and T. C. Lajeunesse (2015). '
+                            'Symbiodinium tridacnidorum sp. nov., a dinoflagellate common to Indo-Pacific giant clams,'
+                            ' and a revised morphological description of Symbiodinium microadriaticum Freudenthal, '
+                            'emended Trench & Blank. European Journal of Phycology 50(2): 155-172.',
+        'S. linucheae': 'Trench, R. K. and L.-v. Thinh (1995). Gymnodinium linucheae sp. nov.: The dinoflagellate '
+                        'symbiont of the jellyfish Linuche unguiculata. European Journal of Phycology 30(2): 149-154.',
+        'S. minutum': 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). A genetics-based description of '
+                      'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), two dinoflagellates '
+                      'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
+        'S. antillogorgium': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                             'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                             'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                             'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. pseudominutum': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                            'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                            'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                            'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. psygmophilum': 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). '
+                           'A genetics-based description of '
+                           'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), '
+                           'two dinoflagellates '
+                           'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
+        'S. muscatinei': 'No reference available',
+        'S. endomadracis': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                           'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                           'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                           'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. aenigmaticum': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                           'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                           'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                           'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. goreaui': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                      'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                      'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                      'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                      'Journal of Phycology 23(3): 469-481.',
+        'S. thermophilum': 'Hume, B. C. C., C. D`Angelo, E. G. Smith, J. R. Stevens, J. Burt and J. Wiedenmann (2015).'
+                           ' Symbiodinium thermophilum sp. nov., a thermotolerant symbiotic alga prevalent in corals '
+                           'of the world`s hottest sea, the Persian/Arabian Gulf. Sci. Rep. 5.',
+        'S. glynnii': 'LaJeunesse, T. C., D. T. Pettay, E. M. Sampayo, N. Phongsuwan, B. Brown, D. O. Obura, O. '
+                      'Hoegh-Guldberg and W. K. Fitt (2010). Long-standing environmental conditions, geographic '
+                      'isolation and host-symbiont specificity influence the relative ecological dominance and '
+                      'genetic diversification of coral endosymbionts in the genus Symbiodinium. Journal of '
+                      'Biogeography 37(5): 785-800.',
+        'S. trenchii': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
+                       '(2014). Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
+                       ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
+        'S. eurythalpos': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, '
+                          'S. Keshavmurthy and C. A. Chen '
+                          '(2014). Ecologically differentiated stress-tolerant '
+                          'endosymbionts in the dinoflagellate genus'
+                          ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
+        'S. boreum': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
+                     '(2014). "Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
+                     ' Symbiodinium (Dinophyceae) Clade D are different species." Phycologia 53(4): 305-319.',
+        'S. voratum': 'Jeong, H. J., S. Y. Lee, N. S. Kang, Y. D. Yoo, A. S. Lim, M. J. Lee, H. S. Kim, W. Yih, H. '
+                      'Yamashita and T. C. LaJeunesse (2014). Genetics and Morphology Characterize the Dinoflagellate'
+                      ' Symbiodinium voratum, n. sp., (Dinophyceae) as the Sole Representative of Symbiodinium Clade E'
+                      '. Journal of Eukaryotic Microbiology 61(1): 75-94.',
+        'S. kawagutii': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                        'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                        'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                        'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                        'Journal of Phycology 23(3): 469-481.'
+    }
+
+    species_set = set()
+    for analysis_type_obj in across_clade_sorted_type_order:
+        if analysis_type_obj.species != 'None':
+            species_set.update(analysis_type_obj.species.split(','))
+
+    # put in the species reference title
+    temp_series = pd.Series()
+    temp_series.name = 'Species references'
+    df_absolute = df_absolute.append(temp_series)
+    df_relative = df_relative.append(temp_series)
+
+    # now add the references for each of the associated species
+    for species in species_set:
+        if species in species_ref_dict.keys():
+            temp_series = pd.Series([species_ref_dict[species]], index=[list(df_relative)[0]])
+            temp_series.name = species
+            df_absolute = df_absolute.append(temp_series)
+            df_relative = df_relative.append(temp_series)
+
+    # Now append the meta infromation for the output. i.e. the user running the analysis or the standalone
+    # and the data_set submissions used in the analysis.
+    # two scenarios in which this can be called
+    # from the analysis: call_type = 'analysis'
+    # or as a stand alone: call_type = 'stand_alone'
+
+
+    # call_type=='stand_alone' call type will always be standalone when doing a data_set_sample id output
+    data_sets_of_the_data_set_samples_string = DataSet.objects.filter(
+        datasetsample__in=query_set_of_data_set_samples).distinct()
+    meta_info_string_items = [
+        'Stand_alone output by {} on {}; '
+        'data_analysis ID: {}; '
+        'Number of data_set objects as part of output = {}; '
+        'Number of data_set objects as part of analysis = {}'.format(
+            output_user, str(datetime.now()).replace(' ', '_').replace(':', '-'), analysisobj.id,
+            len(data_sets_of_the_data_set_samples_string), len(analysisobj.list_of_data_set_uids.split(',')))]
+
+    temp_series = pd.Series(meta_info_string_items, index=[list(df_relative)[0]], name='meta_info_summary')
+    df_absolute = df_absolute.append(temp_series)
+    df_relative = df_relative.append(temp_series)
+    for data_set_object in data_sets_of_the_data_set_samples_string:
+        data_set_meta_list = [
+            'Data_set ID: {}; Data_set name: {}; submitting_user: {}; time_stamp: {}'.format(
+                data_set_object.id, data_set_object.name,
+                data_set_object.submitting_user, data_set_object.time_stamp)]
+
+        temp_series = pd.Series(data_set_meta_list, index=[list(df_relative)[0]], name='data_set_info')
+        df_absolute = df_absolute.append(temp_series)
+        df_relative = df_relative.append(temp_series)
+
+    if time_date_str:
+        date_time_string = time_date_str
+    else:
+        date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+    os.makedirs(output_directory, exist_ok=True)
+
+    path_to_profiles_absolute = '{}/{}_{}_{}.profiles.absolute.txt'.format(
+        output_directory, analysis_object.id, analysis_object.name, date_time_string)
+
+    df_absolute.to_csv(path_to_profiles_absolute, sep="\t", header=False)
+    output_files_list.append(path_to_profiles_absolute)
+
+    del df_absolute
+
+    path_to_profiles_rel = '{}/{}_{}_{}.profiles.relative.txt'.format(
+        output_directory, analysis_object.id, analysis_object.name, date_time_string)
+
+    df_relative.to_csv(path_to_profiles_rel, sep="\t", header=False)
+    # write_list_to_destination(path_to_profiles_rel, outputTableTwo)
+    output_files_list.append(path_to_profiles_rel)
+
+    del df_relative
+
+    # ########################## ITS2 INTRA ABUND COUNT TABLE ################################
+    div_output_file_list, date_time_string, number_of_samples = div_output_pre_analysis_new_meta_and_new_dss_structure_data_set_id_input(
+        data_set_sample_ids_to_output_string=data_set_sample_ids_to_output_string, num_processors=num_processors,
+        output_dir=output_directory, sorted_sample_uid_list=samples_by_uid_that_have_been_sorted,
+        analysis_obj_id=analysisobj.id, time_date_str=date_time_string)
+
+    output_to_plot = None
     print('ITS2 type profile output files:')
     for output_file in output_files_list:
         print(output_file)
@@ -1111,7 +1596,7 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
     return output_path_list, date_time_string, len(sample_list)
 
 def div_output_pre_analysis_new_meta_and_new_dss_structure_data_set_id_input(
-        data_set_sample_ids_to_output_string, num_processors, output_dir, call_type,
+        data_set_sample_ids_to_output_string, num_processors, output_dir,
         sorted_sample_uid_list=None, analysis_obj_id=None, output_user=None, time_date_str=None):
 
     # ######################### ITS2 INTRA ABUND COUNT TABLE ################################
