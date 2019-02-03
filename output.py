@@ -16,7 +16,7 @@ import numpy as np
 import sp_config
 
 def output_type_count_tables(
-        analysisobj, datasubstooutput, call_type, num_samples,
+        analysisobj, datasubstooutput, call_type,
         num_processors=1, no_figures=False, output_user=None, time_date_str=None):
     analysis_object = analysisobj
     # This is one of the last things to do before we can use our first dataset
@@ -487,8 +487,8 @@ def output_type_count_tables(
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
     output_dir = os.path.dirname(output_to_plot)
     if not no_figures:
-        if num_samples > 1000:
-            print('Too many samples ({}) to generate plots'.format(num_samples))
+        if number_of_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(number_of_samples))
         else:
             svg_path, png_path, sorted_sample_id_list = generate_stacked_bar_data_analysis_type_profiles(
                 path_to_tab_delim_count=output_to_plot, output_directory=output_dir,
@@ -515,7 +515,7 @@ def output_type_count_tables(
     return output_dir, date_time_string, output_files_list
 
 def output_type_count_tables_data_set_id_input(
-        analysisobj, data_set_sample_ids_to_output_string, call_type, num_samples,
+        analysisobj, data_set_sample_ids_to_output_string,
         num_processors=1, no_figures=False, output_user=None, time_date_str=None):
     analysis_object = analysisobj
     # This is one of the last things to do before we can use our first dataset
@@ -973,8 +973,8 @@ def output_type_count_tables_data_set_id_input(
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
     output_dir = os.path.dirname(output_to_plot)
     if not no_figures:
-        if num_samples > 1000:
-            print('Too many samples ({}) to generate plots'.format(num_samples))
+        if number_of_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(number_of_samples))
         else:
             svg_path, png_path, sorted_sample_id_list = generate_stacked_bar_data_analysis_type_profiles(
                 path_to_tab_delim_count=output_to_plot, output_directory=output_dir,

@@ -77,16 +77,34 @@ def main():
         help=' Display data_analysis objects currently stored in the framework\'s database')
 
     group.add_argument(
-        '--print_output_seqs', metavar='data_set uids',
-        help='Use this function to output ITS2 sequence count tables for given data_set instances')
+        '--print_output_seqs', metavar='DataSet UIDs',
+        help='Use this function to output ITS2 sequence count tables for a given DataSet instance or collection of '
+             'DataSet instances. The input to this function should be a comma separated string of the UID(s) of the '
+             'DataSet instance(s) in question. e.g. 23,24 (two DataSet instances) or 23 (one DataSet instance)')
 
     group.add_argument(
-        '--print_output_types', metavar='data_set uids, analysis ID',
+        '--print_output_seqs_sample_set', metavar='DataSetSample UIDs',
+        help='Use this function to output ITS2 sequence count tables for a collection of DataSetSample instances. '
+             'The input to this function should be a comma separated string of the UIDs of the DataSetSample instances '
+             'in question. e.g. 345,346,347,348')
+
+    group.add_argument(
+        '--print_output_types', metavar='DataSet UIDs, analysis UID',
         help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
-             'data_sets that have been run in a given analysis. Give the data_set uids that you wish to make outputs '
-             'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
-             'comma separate the uids of the data_set objects, e.g. 44,45,46. Give the ID of the analysis you wish to '
-             'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
+             'DataSet objects that have been run in a given DataAnalysis. Give the DataSet UIDs that you wish to make '
+             'outputs from as arguments to the --print_output_types flag. To output for multiple DataSet objects, '
+             'comma separate the UIDs of the DataSet objects, e.g. 44,45,46. Give the UID of the DataAnalysis '
+             'you wish to output these from using the --data_analysis_id flag.\nTo skip the generation of figures '
+             'pass the --no_figures flag.')
+
+    group.add_argument(
+        '--print_output_types_sample_set', metavar='DataSet UIDs, analysis UID',
+        help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
+             'DataSetSample objects that have been run in a given DataAnalysis. Give the DataSetSample '
+             'UIDs that you wish to make outputs from as arguments to the --print_output_types flag. To output for '
+             'multiple DataSetSample objects, comma separate the UIDs of the DataSetSample objects, '
+             'e.g. 5644,5645,5646. Give the UID of the DataAnalysis you wish to output these from using the '
+             '--data_analysis_id flag.\nTo skip the generation of figures pass the '
              '--no_figures flag.')
 
     group.add_argument(
@@ -228,13 +246,25 @@ def main():
         new_data_set_submitting_user = sp_config.user_name
         if args.data_analysis_id:
             analysis_object = DataAnalysis.objects.get(id=args.data_analysis_id)
-            data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
-            query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
-            num_samples = len(DataSetSample.objects.filter(data_submission_from__in=query_set_of_data_sets))
 
-            data_sub_collection_run.output_type_count_tables(
+            output.output_type_count_tables(
                 analysisobj=analysis_object, num_processors=args.num_proc, call_type='stand_alone',
-                num_samples=num_samples, datasubstooutput=args.print_output_types, no_figures=args.no_figures,
+                datasubstooutput=args.print_output_types, no_figures=args.no_figures,
+                output_user=new_data_set_submitting_user)
+        else:
+            print(
+                'Please provide a data_analysis to ouput from by providing a data_analysis '
+                'ID to the --data_analysis_id flag. To see a list of data_analysis objects in the '
+                'framework\'s database, use the --display_analyses flag.')
+
+    elif args.print_output_types_sample_set:
+        new_data_set_submitting_user = sp_config.user_name
+        if args.data_analysis_id:
+            analysis_object = DataAnalysis.objects.get(id=args.data_analysis_id)
+
+            output.output_type_count_tables_data_set_id_input(
+                analysisobj=analysis_object, num_processors=args.num_proc,
+                data_set_sample_ids_to_output_string=args.print_output_types, no_figures=args.no_figures,
                 output_user=new_data_set_submitting_user)
         else:
             print(
@@ -350,6 +380,25 @@ def main():
                     print(svg_path)
                     print(png_path)
                     break
+    elif args.print_output_seqs_sample_set:
+        # this is a stand alone  output and we should grab the user who is requresting it from the config file
+        output_directory = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
+        output_file_path_list, date_time_str, num_samples = \
+            output.div_output_pre_analysis_new_meta_and_new_dss_structure_data_set_id_input(
+                data_set_sample_ids_to_output_string =args.print_output_seqs, num_processors=args.num_proc, output_dir=output_directory,
+                output_user=sp_config.user_name)
+        if num_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(num_samples))
+        else:
+            for item in output_file_path_list:
+                if 'relative' in item:
+                    svg_path, png_path = plotting.generate_stacked_bar_data_submission(
+                        path_to_tab_delim_count=item, output_directory=output_directory, time_date_str=date_time_str)
+                    print('Output figs:')
+                    print(svg_path)
+                    print(png_path)
+                    break
+
 
     elif args.vacuumDatabase:
         print('Vacuuming database')
