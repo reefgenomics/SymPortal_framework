@@ -1938,7 +1938,7 @@ def generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set
                                                             path_to_input_file):
     # decompress (if necessary) and move the input files to the working directory
     wkd = copy_files_to_wkd(data_set_uid, path_to_input_file)
-    #todo we got to here.
+    
     # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
     if data_sheet_path:
         # if a data_sheet is provided ensure the samples names are derived from those in the data_sheet
@@ -1997,31 +1997,37 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
     # in the github repo in a non-binary format
     # The sample_meta_df that is created from the data_sheet should be identical irrespective of whether a .csv
     # or a .xlsx is submitted.
-    if data_sheet_path.endswith('.xlsx'):
-        sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
-    elif data_sheet_path.endswith('.csv'):
-        sample_meta_df = pd.read_csv(filepath_or_buffer=data_sheet_path, header=0, index_col=0, skiprows=[0])
-    else:
-        sys.exit('Data sheet: {} is in an unrecognised format. '
-                 'Please ensure that it is either in .xlsx or .csv format.')
-    # if we are given a data_sheet then use these sample names given as the data_set_sample object names
-    fastq_file_to_sample_name_dict, list_of_names, fastq_or_fastq_gz = identify_sample_names_data_sheet(
-        sample_meta_df, wkd)
-    # Make a batch file for mothur, set input and output dir and create a .file file
-    sample_fastq_pairs = generate_mothur_dotfile_file(wkd, fastq_or_fastq_gz)
+    sample_meta_info_df = create_sample_meta_info_dataframe_from_datasheet_path(data_sheet_path)
+
+    # if we are given a data_sheet then use the sample names given as the DataSetSample object names
+    list_of_names = sample_meta_info_df.index.values.tolist()
+
+    # we should verify that all of the fastq files listed in the sample_meta_df
+    # are indeed found in the directory that we've been given
+    list_of_fastq_file_names_in_wkd = check_all_fastqs_in_datasheet_exist(sample_meta_info_df, wkd)
+
+    # we will also need to know how to relate the sample names to the fastq files
+    # for this we will make a dict of fastq file name to sample
+    fastq_file_to_sample_name_dict = create_fastq_file_to_sample_name_dict(sample_meta_info_df)
+
+
+    path_to_mothur_batch_file_for_dot_file_creation = generate_and_write_mothur_batch_file_for_dotfile_creation(list_of_fastq_file_names_in_wkd, wkd)
+
+    # noinspection PyPep8
+    execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file_for_dot_file_creation)
 
     # if we have a data_sheet_path then we will use the sample names that the user has associated to each
     # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
     # if we do not have a data_sheet path then we will get the sample name from the first
     # fastq using the end_index that we determined above
-    new_stability_file = generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, sample_fastq_pairs)
-    # write out the new stability file
-    write_list_to_destination(r'{0}/stability.files'.format(wkd), new_stability_file)
+    generate_and_write_new_stability_file_with_data_sheet(fastq_file_to_sample_name_dict, wkd)
 
     data_submission_in_q.working_directory = wkd
     data_submission_in_q.save()
+    # TODO we got this far in the refactoring. We are working through this create_data_sub code first
+    # we still need to transfer the equivalent into the DataLoading class.
     # Create data_set_sample instances
-    list_of_sample_objects = []
+    list_of_data_set_sample_objects = []
     sys.stdout.write('\nCreating data_set_sample objects\n')
     for sampleName in list_of_names:
         print('\rCreating data_set_sample {}'.format(sampleName))
@@ -2034,20 +2040,52 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
 
         dss = DataSetSample(name=sampleName, data_submission_from=data_submission_in_q,
                             cladal_seq_totals=empty_cladal_seq_totals,
-                            sample_type=sample_meta_df.loc[sampleName, 'sample_type'],
-                            host_phylum=sample_meta_df.loc[sampleName, 'host_phylum'],
-                            host_class=sample_meta_df.loc[sampleName, 'host_class'],
-                            host_order=sample_meta_df.loc[sampleName, 'host_order'],
-                            host_family=sample_meta_df.loc[sampleName, 'host_family'],
-                            host_genus=sample_meta_df.loc[sampleName, 'host_genus'],
-                            host_species=sample_meta_df.loc[sampleName, 'host_species'],
-                            collection_latitude=sample_meta_df.loc[sampleName, 'collection_latitude'],
-                            collection_longitude=sample_meta_df.loc[sampleName, 'collection_longitude'],
-                            collection_date=sample_meta_df.loc[sampleName, 'collection_date'],
-                            collection_depth=sample_meta_df.loc[sampleName, 'collection_depth']
+                            sample_type=sample_meta_info_df.loc[sampleName, 'sample_type'],
+                            host_phylum=sample_meta_info_df.loc[sampleName, 'host_phylum'],
+                            host_class=sample_meta_info_df.loc[sampleName, 'host_class'],
+                            host_order=sample_meta_info_df.loc[sampleName, 'host_order'],
+                            host_family=sample_meta_info_df.loc[sampleName, 'host_family'],
+                            host_genus=sample_meta_info_df.loc[sampleName, 'host_genus'],
+                            host_species=sample_meta_info_df.loc[sampleName, 'host_species'],
+                            collection_latitude=sample_meta_info_df.loc[sampleName, 'collection_latitude'],
+                            collection_longitude=sample_meta_info_df.loc[sampleName, 'collection_longitude'],
+                            collection_date=sample_meta_info_df.loc[sampleName, 'collection_date'],
+                            collection_depth=sample_meta_info_df.loc[sampleName, 'collection_depth']
                             )
-        list_of_sample_objects.append(dss)
-    return list_of_sample_objects
+        list_of_data_set_sample_objects.append(dss)
+    return list_of_data_set_sample_objects
+
+
+def execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file):
+    subprocess.run(['mothur', path_to_mothur_batch_file],
+                   stdout=subprocess.PIPE,
+                   stderr=subprocess.PIPE)
+
+
+def generate_and_write_mothur_batch_file_for_dotfile_creation(list_of_fastq_file_names_in_wkd, wkd):
+    mothur_batch_file_as_list = generate_mothur_batch_file_for_dotfile_creation_as_list(wkd,
+                                                                                        list_of_fastq_file_names_in_wkd)
+    path_to_mothur_batch_file = f'{wkd}/mothur_batch_file_makeFile'
+    write_list_to_destination(path_to_mothur_batch_file, mothur_batch_file_as_list)
+    return path_to_mothur_batch_file
+
+
+def check_all_fastqs_in_datasheet_exist(sample_meta_info_df, wkd):
+    list_of_fastq_files_in_wkd = [_ for _ in os.listdir(wkd) if 'fastq' in _]
+    list_of_meta_gz_files = get_list_of_fastq_file_names_that_should_be_in_directory(sample_meta_info_df)
+    if_fastq_files_missing_sys_exit(list_of_fastq_files_in_wkd, list_of_meta_gz_files, wkd)
+    return list_of_fastq_files_in_wkd
+
+
+def create_sample_meta_info_dataframe_from_datasheet_path(data_sheet_path):
+    if data_sheet_path.endswith('.xlsx'):
+        sample_meta_df = pd.read_excel(io=data_sheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+    elif data_sheet_path.endswith('.csv'):
+        sample_meta_df = pd.read_csv(filepath_or_buffer=data_sheet_path, header=0, index_col=0, skiprows=[0])
+    else:
+        sys.exit('Data sheet: {} is in an unrecognised format. '
+                 'Please ensure that it is either in .xlsx or .csv format.')
+    return sample_meta_df
 
 
 def generate_new_stability_file_inferred(end_index, sample_fastq_pairs):
@@ -2068,7 +2106,18 @@ def generate_new_stability_file_inferred(end_index, sample_fastq_pairs):
     return new_stability_file
 
 
-def generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, sample_fastq_pairs):
+def generate_and_write_new_stability_file_with_data_sheet(fastq_file_to_sample_name_dict, wkd):
+    # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
+    # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
+    sample_fastq_pairs = read_in_mothur_dot_file_creation_output(wkd)
+
+    new_stability_file = generate_new_stability_file_with_data_sheet(fastq_file_to_sample_name_dict, sample_fastq_pairs)
+
+    write_list_to_destination(r'{0}/stability.files'.format(wkd), new_stability_file)
+
+
+
+def generate_new_stability_file_with_data_sheet(fastq_file_to_sample_name_dict, sample_fastq_pairs):
     new_stability_file = []
     for stability_file_line in sample_fastq_pairs:
         pair_components = stability_file_line.split('\t')
@@ -2077,7 +2126,6 @@ def generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, sampl
         # column being the sample name. The second and third are the full paths of the .fastq files
         # the sample name at the moment is garbage, we will identify the sample name from the
         # first fastq path using the fastq_file_to_sample_name_dict
-
         new_stability_file.append(
             '{}\t{}\t{}'.format(
                 fastq_file_to_sample_name_dict[pair_components[1].split('/')[-1]].replace('-', '[dS]'),
@@ -2086,29 +2134,27 @@ def generate_new_stability_file_data_sheet(fastq_file_to_sample_name_dict, sampl
     return new_stability_file
 
 
-def generate_mothur_dotfile_file(wkd, fastq_or_fastq_gz):
-    if fastq_or_fastq_gz == 'fastq.gz':
+def read_in_mothur_dot_file_creation_output(wkd):
+    return read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
+
+
+def generate_mothur_batch_file_for_dotfile_creation_as_list(wkd, list_of_fastq_file_names_in_wkd):
+
+    fastqs_are_gz_compressed = check_if_fastqs_are_gz_compressed(list_of_fastq_file_names_in_wkd)
+
+    if fastqs_are_gz_compressed:
         mothur_batch_file = [
             r'set.dir(input={0})'.format(wkd),
             r'set.dir(output={0})'.format(wkd),
             r'make.file(inputdir={0}, type=gz, numcols=3)'.format(wkd)
         ]
-    elif fastq_or_fastq_gz == 'fastq':
+    else:
         mothur_batch_file = [
             r'set.dir(input={0})'.format(wkd),
             r'set.dir(output={0})'.format(wkd),
             r'make.file(inputdir={0}, type=fastq, numcols=3)'.format(wkd)
         ]
-
-    write_list_to_destination(r'{0}/mothur_batch_file_makeFile'.format(wkd), mothur_batch_file)
-    # noinspection PyPep8
-    subprocess.run(['mothur', r'{0}/mothur_batch_file_makeFile'.format(wkd)],
-                   stdout=subprocess.PIPE,
-                   stderr=subprocess.PIPE)
-    # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
-    # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
-    sample_fastq_pairs = read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
-    return sample_fastq_pairs
+    return mothur_batch_file
 
 
 def identify_sample_names_inferred(wkd):
@@ -2142,37 +2188,38 @@ def identify_sample_names_inferred(wkd):
     return end_index, list_of_names, fastq_or_fastq_gz
 
 
-def identify_sample_names_data_sheet(sample_meta_df, wkd):
-    # get the list of names from the index of the sample_meta_df
-    list_of_names = sample_meta_df.index.values.tolist()
-    # we will also need to know how to relate the samples to the fastq files
-    # for this we will make a dict of fastq file name to sample
-    # but before we do this we should verify that all of the fastq files listed in the sample_meta_df
-    # are indeed found in the directory that we've been given
-    list_of_fastq_files_in_wkd = [a for a in os.listdir(wkd) if 'fastq' in a]
-    list_of_meta_gz_files = []
-    list_of_meta_gz_files.extend(sample_meta_df['fastq_fwd_file_name'].values.tolist())
-    list_of_meta_gz_files.extend(sample_meta_df['fastq_rev_file_name'].values.tolist())
+
+def create_fastq_file_to_sample_name_dict(sample_meta_info_df):
+    fastq_file_to_sample_name_dict = {}
+    for sample_index in sample_meta_info_df.index.values.tolist():
+        fastq_file_to_sample_name_dict[sample_meta_info_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
+        fastq_file_to_sample_name_dict[sample_meta_info_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
+    return fastq_file_to_sample_name_dict
+
+
+def check_if_fastqs_are_gz_compressed(list_of_fastq_files_in_wkd):
+    if list_of_fastq_files_in_wkd[0].endswith('fastq.gz'):
+        fastqs_are_gz_compressed = True
+    elif list_of_fastq_files_in_wkd[0].endswith('fastq'):
+        fastqs_are_gz_compressed = False
+    else:
+        # TODO delete data_sub before exit
+        sys.exit('Unrecognised format of sequecing file: {}'.format(list_of_fastq_files_in_wkd[0]))
+    return fastqs_are_gz_compressed
+
+
+def if_fastq_files_missing_sys_exit(list_of_fastq_files_in_wkd, list_of_meta_gz_files, wkd):
     for fastq in list_of_meta_gz_files:
         if fastq not in list_of_fastq_files_in_wkd:
             sys.exit('{} listed in data_sheet not found'.format(fastq, wkd))
             # todo delete the current data_submission before exiting
-    # determine if we are dealing with fastq.gz files or fastq files
 
-    if list_of_fastq_files_in_wkd[0].endswith('fastq.gz'):
-        fastq_or_fastq_gz = 'fastq.gz'
-    elif list_of_fastq_files_in_wkd[0].endswith('fastq'):
-        fastq_or_fastq_gz = 'fastq'
-    else:
-        sys.exit('Unrecognised format of sequecing file: {}'.format(list_of_fastq_files_in_wkd[0]))
 
-    # now make the dictionary
-    fastq_file_to_sample_name_dict = {}
-    for sample_index in sample_meta_df.index.values.tolist():
-        fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
-        fastq_file_to_sample_name_dict[sample_meta_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
-    return fastq_file_to_sample_name_dict, list_of_names, fastq_or_fastq_gz
-
+def get_list_of_fastq_file_names_that_should_be_in_directory(sample_meta_info_df):
+    list_of_meta_gz_files = []
+    list_of_meta_gz_files.extend(sample_meta_info_df['fastq_fwd_file_name'].values.tolist())
+    list_of_meta_gz_files.extend(sample_meta_info_df['fastq_rev_file_name'].values.tolist())
+    return list_of_meta_gz_files
 
 
 # noinspection PyPep8

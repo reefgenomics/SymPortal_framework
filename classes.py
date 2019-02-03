@@ -1,9 +1,11 @@
 from dbApp.models import (SymportalFramework, DataSet, ReferenceSequence,
                           DataSetSampleSequence, DataSetSample, CladeCollection)
+import sys
 import os
 import shutil
 import subprocess
 import glob
+import pandas as pd
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -27,8 +29,19 @@ class DataLoading:
 
     def execute(self):
         self.copy_and_decompress_input_files_to_temp_wkd()
+        if self.datasheet_path:
+            sample_meta_info_df = self.create_pd_df_from_datasheet_path()
 
 
+    def create_pd_df_from_datasheet_path(self):
+        if self.datasheet_path.endswith('.xlsx'):
+            sample_meta_df = pd.read_excel(io=self.datasheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+        elif self.datasheet_path.endswith('.csv'):
+            sample_meta_df = pd.read_csv(filepath_or_buffer=self.datasheet_path, header=0, index_col=0, skiprows=[0])
+        else:
+            sys.exit('Data sheet: {} is in an unrecognised format. '
+                     'Please ensure that it is either in .xlsx or .csv format.')
+        return sample_meta_df
 
     def copy_and_decompress_input_files_to_temp_wkd(self):
         if not self.is_single_file_or_paired_input:
