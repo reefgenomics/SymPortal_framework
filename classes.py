@@ -10,12 +10,10 @@ class DataLoading:
     # level. E.g. All members of clade C belong to the genus Cladocopium.
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
-    def __init__(self, data_set_uid, user_input_path):
+    def __init__(self, data_set_uid, user_input_path, datasheet_path):
         self.dataset_object = DataSet.objects.get(id=data_set_uid)
         self.user_input_path = user_input_path
         self.output_directory = self.setup_output_directory()
-        self.output_directory = os.path.join(os.path.dirname(__file__),
-                                        'outputs/data_set_submissions/{}'.format(self.dataset_object.id))
         self.temp_working_directory = self.infer_temp_working_directory_path()
         self.create_temp_wkd()
         # Used for the pre minimum entropy decomposition (MED), quality controlled (QC), sequences dump
@@ -25,9 +23,12 @@ class DataLoading:
         # data can be loaded either as paired fastq or fastq.gz files or as a single compressed file containing
         # the afore mentioned paired files.
         self.is_single_file_or_paired_input = self.determine_if_single_file_or_paired_input()
+        self.datasheet_path = datasheet_path
 
     def execute(self):
         self.copy_and_decompress_input_files_to_temp_wkd()
+
+
 
     def copy_and_decompress_input_files_to_temp_wkd(self):
         if not self.is_single_file_or_paired_input:
