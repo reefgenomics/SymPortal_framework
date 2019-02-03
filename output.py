@@ -1110,6 +1110,394 @@ def div_output_pre_analysis_new_meta_and_new_dss_structure(
 
     return output_path_list, date_time_string, len(sample_list)
 
+def div_output_pre_analysis_new_meta_and_new_dss_structure_data_set_id_input(
+        data_set_sample_ids_to_output_string, num_processors, output_dir, call_type,
+        sorted_sample_uid_list=None, analysis_obj_id=None, output_user=None, time_date_str=None):
+
+    # ######################### ITS2 INTRA ABUND COUNT TABLE ################################
+    # This is where we're going to have to work with the sequences that aren't part of a type.
+    # Esentially we want to end up with the noName sequences divieded up cladally.
+    # So at the moment this will mean that we will divide up the current no names but also
+    # add information about the other cladal sequences that didn't make it into a cladeCollection
+
+    # list to hold the paths of the outputted files
+    output_path_list = []
+
+    # ############### GET ORDERED LIST OF INTRAS BY CLADE THEN ABUNDANCE #################
+    clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
+
+
+    data_set_samples_ids_to_output = [int(a) for a in data_set_sample_ids_to_output_string.split(',')]
+
+
+    # Get collection of data_sets that are specific for the dataSubmissions we are looking at
+
+    query_set_of_data_set_samples = DataSetSample.objects.filter(id__in=data_set_samples_ids_to_output)
+
+    reference_sequences_in_data_set_samples = ReferenceSequence.objects.filter(
+        datasetsamplesequence__data_set_sample_from__in=query_set_of_data_set_samples).distinct()
+
+
+
+    # Get list of clades found
+    clade_set = set()
+    for ref_seq in     reference_sequences_in_data_set_samples:
+        clade_set.add(ref_seq.clade)
+
+    # Order the list of clades alphabetically
+    # the only purpuse of this worker 2 is to end up with a set of sequences ordered by clade and then
+    # by abundance across all samples.
+    # I was doing this on a clade by clade basis on a sequence by sequence basis.
+    # but now we should get rid of the clade sorting and just do that afterwards.
+    # we should instad go by a sample by sample basis. This will allow us also to undertake the work that
+    # is happening in worker three.
+    # two birds one stone.
+    # this is actually also better because now we can count the abundance of the sequences in proportions
+    # rather than simply absolute values. Which is far more accurate.
+    sub_clade_list = [a for a in clade_list if a in clade_set]
+
+    sys.stdout.write('\n')
+
+    # The manager that we will build all of the shared dictionaries from below.
+    worker_manager = Manager()
+
+    sample_list = DataSetSample.objects.filter(id__in=data_set_samples_ids_to_output)
+
+    # Dictionary that will hold the list of data_set_sample_sequences for each sample
+    sample_to_dsss_list_shared_dict = worker_manager.dict()
+    print('Creating sample to data_set_sample_sequence dict:')
+    for dss in sample_list:
+        sys.stdout.write('\r{}'.format(dss.name))
+        sample_to_dsss_list_shared_dict[dss.id] = list(
+            DataSetSampleSequence.objects.filter(data_set_sample_from=dss))
+
+    # Queue that will hold the data set samples for the MP
+    data_set_sample_queue = Queue()
+
+    # I will have a set of three dictionaries to pass into worker 2
+    # 1 - Seqname to cumulative abundance of relative abundances (for getting the over lying order of ref seqs)
+    # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
+    # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
+
+    reference_sequence_names_annotated = [
+        ref_seq.name if ref_seq.has_name
+        else str(ref_seq.id) + '_{}'.format(ref_seq.clade) for ref_seq in     reference_sequences_in_data_set_samples]
+
+    generic_seq_to_abund_dict = {refSeq_name: 0 for refSeq_name in reference_sequence_names_annotated}
+
+    list_of_dicts_for_processors = []
+    for n in range(num_processors):
+        list_of_dicts_for_processors.append(
+            (worker_manager.dict(generic_seq_to_abund_dict), worker_manager.dict(), worker_manager.dict()))
+
+    for dss in sample_list:
+        data_set_sample_queue.put(dss)
+
+    for N in range(num_processors):
+        data_set_sample_queue.put('STOP')
+
+    all_processes = []
+
+    # close all connections to the db so that they are automatically recreated for each process
+    # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+    db.connections.close_all()
+
+    for n in range(num_processors):
+        p = Process(target=output_worker_two, args=(
+            data_set_sample_queue, list_of_dicts_for_processors[n][0], list_of_dicts_for_processors[n][1],
+            list_of_dicts_for_processors[n][2], reference_sequence_names_annotated, sample_to_dsss_list_shared_dict))
+        all_processes.append(p)
+        p.start()
+
+    for p in all_processes:
+        p.join()
+
+    print('\nCollecting results of data_set_sample_counting across {} dictionaries'.format(num_processors))
+    master_seq_abundance_counter = Counter()
+    master_smple_seq_dict = dict()
+    master_smple_no_name_clade_summary = dict()
+
+    # now we need to do different actions for each of the three dictionary sets. One set for each num_proc
+    # for the seqName counter we simply need to add to the master counter as we were doing before
+    # for both of the sample-centric dictionaries we simply need to update a master dictionary
+    for n in range(len(list_of_dicts_for_processors)):
+        sys.stdout.write('\rdictionary {}(0)/{}'.format(n, num_processors))
+        master_seq_abundance_counter += Counter(dict(list_of_dicts_for_processors[n][0]))
+        sys.stdout.write('\rdictionary {}(1)/{}'.format(n, num_processors))
+        master_smple_seq_dict.update(dict(list_of_dicts_for_processors[n][1]))
+        sys.stdout.write('\rdictionary {}(2)/{}'.format(n, num_processors))
+        master_smple_no_name_clade_summary.update(dict(list_of_dicts_for_processors[n][2]))
+
+    print('Collection complete.')
+
+    # we now need to separate by clade and sort within the clade
+    clade_abundance_ordered_ref_seq_list = []
+    for i in range(len(sub_clade_list)):
+        temp_within_clade_list_for_sorting = []
+        for seq_name, abund_val in master_seq_abundance_counter.items():
+            if seq_name.startswith(sub_clade_list[i]) or seq_name[-2:] == '_{}'.format(sub_clade_list[i]):
+                # then this is a seq of the clade in Q and we should add to the temp list
+                temp_within_clade_list_for_sorting.append((seq_name, abund_val))
+        # now sort the temp_within_clade_list_for_sorting and add to the cladeAbundanceOrderedRefSeqList
+        sorted_within_clade = [
+            a[0] for a in sorted(temp_within_clade_list_for_sorting, key=lambda x: x[1], reverse=True)]
+
+        clade_abundance_ordered_ref_seq_list.extend(sorted_within_clade)
+
+    # now delete the master_seq_abundance_counter as we are done with it
+    del master_seq_abundance_counter
+
+    # ##### WORKER THREE DOMAIN
+
+    # we will eventually have the outputs stored in pandas dataframes.
+    # in the worker below we will create a set of pandas.Series for each of the samples which will hold the abundances
+    # one for the absoulte abundance and one for the relative abundances.
+
+    # we will put together the headers piece by piece
+    header_pre = clade_abundance_ordered_ref_seq_list
+    no_name_summary_strings = ['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']]
+    qc_stats = [
+        'raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs', 'post_taxa_id_absolute_symbiodinium_seqs',
+        'post_taxa_id_unique_symbiodinium_seqs', 'size_screening_violation_absolute', 'size_screening_violation_unique',
+        'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_taxa_id_unique_non_symbiodinium_seqs', 'post_med_absolute',
+        'post_med_unique']
+
+    # append the noName sequences as individual sequence abundances
+    output_header = ['sample_name'] + qc_stats + no_name_summary_strings + header_pre
+
+    # #####################################################################################
+
+    # ########### POPULATE TABLE WITH clade_collection_object DATA #############
+
+    # In order to MP this we will have to pay attention to the order. As we can't keep the order as we work with the
+    # MPs we will do as we did above for the profies outputs and have an output dict that will have the sample as key
+    # and its corresponding data row as the value. Then when we have finished the MPing we will go through the
+    # sampleList order and output the data in this order.
+    # So we will need a managed output dict.
+
+    worker_manager = Manager()
+    managed_sample_output_dict = worker_manager.dict()
+
+    data_set_sample_queue = Queue()
+
+    for dss in sample_list:
+        data_set_sample_queue.put(dss)
+
+    for N in range(num_processors):
+        data_set_sample_queue.put('STOP')
+
+    all_processes = []
+
+    # close all connections to the db so that they are automatically recreated for each process
+    # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+    db.connections.close_all()
+
+    sys.stdout.write('\n\nOutputting seq data\n')
+    for N in range(num_processors):
+        p = Process(target=output_worker_three, args=(
+            data_set_sample_queue, managed_sample_output_dict, clade_abundance_ordered_ref_seq_list, output_header,
+            master_smple_seq_dict, master_smple_no_name_clade_summary))
+        all_processes.append(p)
+        p.start()
+
+    for p in all_processes:
+        p.join()
+
+    print('\nseq output complete\n')
+
+    managed_sample_output_dict_dict = dict(managed_sample_output_dict)
+
+    # now we need to populate the output dataframe with the sample series in order of the sorted_sample_list
+    # if there is one.
+    # If there is a sorted sample list, make sure that it matches the samples that we are outputting
+
+    # We were having an issue with data_sets having the same names. To fix this, we should do our ordering
+    # accoring to the uids of the samples
+
+    if sorted_sample_uid_list:
+        sys.stdout.write('\nValidating sorted sample list and ordering dataframe accordingly\n')
+        if len(sorted_sample_uid_list) != len(sample_list):
+            sys.exit('Number of items in sorted_sample_list do not match those to be outputted!')
+        if list(set(sorted_sample_uid_list).difference(set([s.id for s in sample_list]))):
+            # then there is a sample that doesn't match up from the sorted_sample_uid_list that
+            # has been passed in and the unordered sample list that we are working with in the code
+            sys.exit('Sample list passed in does not match sample list from db query')
+
+        # if we got to here then the sorted_sample_list looks good
+        # I was originally performing the concat directly on the managedSampleOutputDict but this was starting
+        # to produce errors. Starting to work on the managedSampleOutputDict_dict seems to not produce these
+        # errors.
+        # it may be a good idea to break this down to series by series instead of a one liner so that we can
+        # print out progress
+        # we can use the
+        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a while...')
+        output_df_absolute = pd.concat(
+            [list_of_series[0] for list_of_series in managed_sample_output_dict_dict.values()], axis=1)
+        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a while...')
+        output_df_relative = pd.concat(
+            [list_of_series[1] for list_of_series in managed_sample_output_dict_dict.values()], axis=1)
+
+        # now transpose
+        output_df_absolute = output_df_absolute.T
+        output_df_relative = output_df_relative.T
+
+        # now make sure that the order is correct.
+        output_df_absolute = output_df_absolute.reindex(sorted_sample_uid_list)
+        output_df_relative = output_df_relative.reindex(sorted_sample_uid_list)
+
+    else:
+
+        # this returns a list which is simply the names of the samples
+        # This will order the samples according to which sequence is their most abundant.
+        # I.e. samples found to have the sequence which is most abundant in the largest number of sequences
+        # will be first. Within each maj sequence, the samples will be sorted by the abundance of that sequence
+        # in the sample.
+        # At the moment we are also ordering by clade just so that you see samples with the A's at the top
+        # of the output so that we minimise the number of 0's in the top left of the output
+        # honestly I think we could perhaps get rid of this and just use the over all abundance of the sequences
+        # discounting clade. THis is what we do for the clade order when plotting.
+        sys.stdout.write('\nGenerating ordered sample list and ordering dataframe accordingly\n')
+        ordered_sample_list_by_uid = generate_ordered_sample_list(managed_sample_output_dict_dict)
+
+        # if we got to here then the sorted_sample_list looks good
+        # I was originally performing the concat directly on the managedSampleOutputDict but this was starting
+        # to produce errors. Starting to work on the managedSampleOutputDict_dict seems to not produce these
+        # errors.
+        sys.stdout.write('\rPopulating the absolute dataframe with series. This could take a while...')
+        output_df_absolute = pd.concat(
+            [list_of_series[0] for list_of_series in managed_sample_output_dict_dict.values()], axis=1)
+        sys.stdout.write('\rPopulating the relative dataframe with series. This could take a while...')
+        output_df_relative = pd.concat(
+            [list_of_series[1] for list_of_series in managed_sample_output_dict_dict.values()], axis=1)
+
+        # now transpose
+        sys.stdout.write('\rTransposing...')
+        output_df_absolute = output_df_absolute.T
+        output_df_relative = output_df_relative.T
+
+        # now make sure that the order is correct.
+        sys.stdout.write('\rReordering index...')
+        output_df_absolute = output_df_absolute.reindex(ordered_sample_list_by_uid)
+        output_df_relative = output_df_relative.reindex(ordered_sample_list_by_uid)
+
+    # when adding the accession numbers below, we have to go through every sequence and look up its object
+    # We also have to do this when we are outputting the fasta.
+    # to prevent us having to make every look up twice, we should also make the fasta at the same time
+    # Output a .fasta for of all of the sequences found in the analysis
+    # we will write out the fasta right at the end.
+    fasta_output_list = []
+
+    # Now add the accesion number / UID for each of the DIVs
+    sys.stdout.write('\nGenerating accession and fasta\n')
+
+    # go column name by column name and if the col name is in seq_annotated_name
+    # then get the accession and add to the accession_list
+    # else do nothing and a blank should be automatically added for us.
+    # This was painfully slow because we were doing individual calls to the dictionary
+    # I think this will be much faster if do two queries of the db to get the named and
+    # non named refseqs and then make two dicts for each of these and use these to populate the below
+    reference_sequences_in_data_sets_no_name = ReferenceSequence.objects.filter(
+        datasetsamplesequence__data_set_sample_from__in=query_set_of_data_set_samples,
+        has_name=False).distinct()
+    reference_sequences_in_data_sets_has_name = ReferenceSequence.objects.filter(
+        datasetsamplesequence__data_set_sample_from__in=query_set_of_data_set_samples,
+        has_name=True).distinct()
+    # no name dict should be a dict of id to sequence
+    no_name_dict = {rs.id: rs.sequence for rs in reference_sequences_in_data_sets_no_name}
+    # has name dict should be a dict of name to sequence
+    has_name_dict = {rs.name: (rs.id, rs.sequence) for rs in reference_sequences_in_data_sets_has_name}
+
+    # for the time being we are going to ignore whether a refseq has an assession as we have not put this
+    # into use yet.
+    accession_list = []
+    num_cols = len(list(output_df_relative))
+    for i, col_name in enumerate(list(output_df_relative)):
+        sys.stdout.write('\rAppending accession info and creating fasta {}: {}/{}'.format(col_name, i, num_cols))
+        if col_name in clade_abundance_ordered_ref_seq_list:
+            if col_name[-2] == '_':
+                col_name_id = int(col_name[:-2])
+                accession_list.append(str(col_name_id))
+                fasta_output_list.append('>{}'.format(col_name))
+                fasta_output_list.append(no_name_dict[col_name_id])
+            else:
+                col_name_tup = has_name_dict[col_name]
+                accession_list.append(str(col_name_tup[0]))
+                fasta_output_list.append('>{}'.format(col_name))
+                fasta_output_list.append(col_name_tup[1])
+        else:
+            accession_list.append(np.nan)
+
+    temp_series = pd.Series(accession_list, name='seq_accession', index=list(output_df_relative))
+    output_df_absolute = output_df_absolute.append(temp_series)
+    output_df_relative = output_df_relative.append(temp_series)
+
+    # Now append the meta infromation for each of the data_sets that make up the output contents
+    # this is information like the submitting user, what the uids of the datasets are etc.
+    # There are several ways that this can be called.
+    # it can be called as part of the submission: call_type = submission
+    # part of an analysis output: call_type = analysis
+    # or stand alone: call_type = 'stand_alone'
+    # we should have an output for each scenario
+
+
+    # call_type=='stand_alone' call type will always be standalone when we are doing a specific data_set_sample output
+    meta_info_string_items = [
+        'Stand alone output by {} on {}; Number of DataSetSample objects as part of output = {}'.format(
+            output_user, str(datetime.now()).replace(' ', '_').replace(':', '-'), len(query_set_of_data_set_samples))]
+
+    temp_series = pd.Series(meta_info_string_items, index=[list(output_df_absolute)[0]], name='meta_info_summary')
+    output_df_absolute = output_df_absolute.append(temp_series)
+    output_df_relative = output_df_relative.append(temp_series)
+
+    data_sets_of_the_data_set_samples_string = DataSet.objects.filter(datasetsample__in=query_set_of_data_set_samples).distinct()
+
+    for data_set_object in data_sets_of_the_data_set_samples_string:
+        # query of the DataSet objects the DataSetSamples are from
+        data_set_meta_list = [
+            'Data_set ID: {}; Data_set name: {}; submitting_user: {}; time_stamp: {}'.format(
+                data_set_object.id, data_set_object.name, data_set_object.submitting_user,
+                data_set_object.time_stamp)]
+
+        temp_series = pd.Series(data_set_meta_list, index=[list(output_df_absolute)[0]], name='data_set_info')
+        output_df_absolute = output_df_absolute.append(temp_series)
+        output_df_relative = output_df_relative.append(temp_series)
+
+    # Here we have the tables populated and ready to output
+    if not time_date_str:
+        date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+    else:
+        date_time_string = time_date_str
+    if analysis_obj_id:
+        data_analysis_obj = DataAnalysis.objects.get(id=analysis_obj_id)
+        path_to_div_absolute = '{}/{}_{}_{}.seqs.absolute.txt'.format(output_dir, analysis_obj_id,
+                                                                      data_analysis_obj.name, date_time_string)
+        path_to_div_relative = '{}/{}_{}_{}.seqs.relative.txt'.format(output_dir, analysis_obj_id,
+                                                                      data_analysis_obj.name, date_time_string)
+        fasta_path = '{}/{}_{}_{}.seqs.fasta'.format(output_dir, analysis_obj_id,
+                                                     data_analysis_obj.name, date_time_string)
+
+    else:
+        path_to_div_absolute = '{}/{}.seqs.absolute.txt'.format(output_dir, date_time_string)
+        path_to_div_relative = '{}/{}.seqs.relative.txt'.format(output_dir, date_time_string)
+        fasta_path = '{}/{}.seqs.fasta'.format(output_dir, date_time_string)
+
+    os.makedirs(output_dir, exist_ok=True)
+    output_df_absolute.to_csv(path_to_div_absolute, sep="\t")
+    output_path_list.append(path_to_div_absolute)
+
+    output_df_relative.to_csv(path_to_div_relative, sep="\t")
+    output_path_list.append(path_to_div_relative)
+
+    # we created the fasta above.
+    write_list_to_destination(fasta_path, fasta_output_list)
+    output_path_list.append(fasta_path)
+
+    print('\nITS2 sequence output files:')
+    for path_item in output_path_list:
+        print(path_item)
+
+    return output_path_list, date_time_string, len(sample_list)
+
 
 def output_worker_two(input_queue, seq_rel_abund_dict, smpl_seq_dict, sample_no_name_clade_summary_dict,
                       reference_sequence_names_annotated, sample_to_dsss_list_shared_dict):
