@@ -675,7 +675,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
     return
 
 
-def main(path_to_input_file, data_set_uid, num_proc, screen_sub_evalue=False,
+def main(input_path, data_set_uid, num_proc, screen_sub_evalue=False,
          data_sheet_path=None, no_fig=False, no_ord=False, distance_method='braycurtis', debug=False):
 
     # UNZIP FILE, CREATE LIST OF SAMPLES AND WRITE stability.files FILE
@@ -684,7 +684,6 @@ def main(path_to_input_file, data_set_uid, num_proc, screen_sub_evalue=False,
     data_submission_in_q = DataSet.objects.get(id=data_set_uid)
 
     output_directory = setup_output_directory(data_set_uid)
-
 
     discarded_seqs_fasta = None
     new_seqs_added_count = None
@@ -695,10 +694,9 @@ def main(path_to_input_file, data_set_uid, num_proc, screen_sub_evalue=False,
         # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
         wkd, num_samples = generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set_uid,
                                                                                    data_submission_in_q,
-                                                                                   data_sheet_path, path_to_input_file)
+                                                                                   data_sheet_path, input_path)
 
         # PERFORM pre-MED QC
-
         if screen_sub_evalue:
             new_seqs_added_count, discarded_seqs_fasta = pre_med_qc(data_set_uid, data_submission_in_q,
                                                                     num_proc, wkd,
@@ -728,7 +726,7 @@ def main(path_to_input_file, data_set_uid, num_proc, screen_sub_evalue=False,
     data_submission_in_q.save()
 
     # WRITE OUT REPORT OF HOW MANY SAMPLES WERE SUCCESSFULLY PROCESSED
-    processed_samples_status(data_submission_in_q, path_to_input_file)
+    processed_samples_status(data_submission_in_q, input_path)
 
     # Here I also want to by default output a sequence drop that is a drop of the named sequences and their associated
     # sequences so that we mantain a link of the sequences to the names of the sequences
@@ -739,7 +737,7 @@ def main(path_to_input_file, data_set_uid, num_proc, screen_sub_evalue=False,
     # just in case multiple
     print('Cleaning up temp folders')
     os.chdir(os.path.abspath(os.path.dirname(__file__)))
-    dir_to_del = os.path.abspath('{}/tempData'.format(path_to_input_file))
+    dir_to_del = os.path.abspath('{}/tempData'.format(input_path))
     if os.path.exists(dir_to_del):
         shutil.rmtree(dir_to_del)
 
@@ -1938,41 +1936,48 @@ def generate_new_stability_file_and_data_set_sample_objects(clade_list, data_set
                                                             path_to_input_file):
     # decompress (if necessary) and move the input files to the working directory
     wkd = copy_files_to_wkd(data_set_uid, path_to_input_file)
-    
+
     # Identify sample names and generate new stability file, generate data_set_sample objects in bulk
     if data_sheet_path:
         # if a data_sheet is provided ensure the samples names are derived from those in the data_sheet
-        list_of_sample_objects = generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list,
-                                                                                                data_submission_in_q,
-                                                                                                data_sheet_path, wkd)
+        list_of_sample_objects = generate_stability_file_and_data_set_sample_objects_with_datasheet(clade_list,
+                                                                                                    data_submission_in_q,
+                                                                                                    data_sheet_path, wkd)
     else:
         # if no data_sheet then infer the names of the samples from the .fastq files
-        list_of_sample_objects = generate_stability_file_and_data_set_sample_objects_inferred(clade_list,
-                                                                                              data_submission_in_q,
-                                                                                              wkd)
-    # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-    DataSetSample.objects.bulk_create(list_of_sample_objects)
+        list_of_sample_objects = generate_stability_file_and_data_set_sample_objects_without_datasheet(clade_list,
+                                                                                                       data_submission_in_q,
+                                                                                                       wkd)
     return wkd, len(list_of_sample_objects)
 
 
-def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, data_submission_in_q, wkd):
+def generate_stability_file_and_data_set_sample_objects_without_datasheet(clade_list, data_submission_in_q, wkd):
     # else, we have to infer what the samples names are
     # we do this by taking off the part of the fastq name that samples have in common
-    end_index, list_of_names, fastq_or_fastq_gz = identify_sample_names_inferred(wkd)
-    # Make a batch file for mothur, set input and output dir and create a .file file
-    sample_fastq_pairs = generate_mothur_dotfile_file(wkd, fastq_or_fastq_gz)
+    list_of_fastq_file_names_in_wkd = [a for a in os.listdir(wkd) if 'fastq' in a]
+    end_index, list_of_names = identify_sample_names_without_datasheet(list_of_fastq_file_names_in_wkd)
 
-    # if we have a data_sheet_path then we will use the sample names that the user has associated to each
-    # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
-    # if we do not have a data_sheet path then we will get the sample name from the first
-    # fastq using the end_index that we determined above
-    new_stability_file = generate_new_stability_file_inferred(end_index, sample_fastq_pairs)
+    # Make a batch file for mothur, set input and output dir and create a .file file
+    path_to_mothur_batch_file_for_dot_file_creation = generate_and_write_mothur_batch_file_for_dotfile_creation(
+        list_of_fastq_file_names_in_wkd, wkd)
+    execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file_for_dot_file_creation)
+    sample_fastq_pairs = read_in_mothur_dot_file_creation_output(wkd)
+
+    # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
+    new_stability_file = generate_new_stability_file_without_datasheet(end_index, sample_fastq_pairs)
     # write out the new stability file
     write_list_to_destination(r'{0}/stability.files'.format(wkd), new_stability_file)
 
     data_submission_in_q.working_directory = wkd
     data_submission_in_q.save()
     # Create data_set_sample instances
+    list_of_sample_objects = create_data_set_sample_objects_in_bulk_without_datasheet(clade_list, data_submission_in_q,
+
+                                                                                      list_of_names)
+    return list_of_sample_objects
+
+
+def create_data_set_sample_objects_in_bulk_without_datasheet(clade_list, data_submission_in_q, list_of_names):
     list_of_sample_objects = []
     sys.stdout.write('\nCreating data_set_sample objects\n')
     for sampleName in list_of_names:
@@ -1987,11 +1992,13 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
         dss = DataSetSample(name=sampleName, data_submission_from=data_submission_in_q,
                             cladal_seq_totals=empty_cladal_seq_totals)
         list_of_sample_objects.append(dss)
+    # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
+    DataSetSample.objects.bulk_create(list_of_sample_objects)
     return list_of_sample_objects
 
 
-def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, data_submission_in_q, data_sheet_path,
-                                                                   wkd):
+def generate_stability_file_and_data_set_sample_objects_with_datasheet(clade_list, data_submission_in_q, data_sheet_path,
+                                                                       wkd):
     # Create a pandas df from the data_sheet if it was provided
     # allow the data_sheet to be in a .csv format or .xlsx format. This is so that we can store a datasheet
     # in the github repo in a non-binary format
@@ -2016,17 +2023,21 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
     # noinspection PyPep8
     execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file_for_dot_file_creation)
 
-    # if we have a data_sheet_path then we will use the sample names that the user has associated to each
-    # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
-    # if we do not have a data_sheet path then we will get the sample name from the first
-    # fastq using the end_index that we determined above
+    # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
     generate_and_write_new_stability_file_with_data_sheet(fastq_file_to_sample_name_dict, wkd)
 
     data_submission_in_q.working_directory = wkd
     data_submission_in_q.save()
     # TODO we got this far in the refactoring. We are working through this create_data_sub code first
     # we still need to transfer the equivalent into the DataLoading class.
+
     # Create data_set_sample instances
+    list_of_data_set_sample_objects = create_data_set_sample_objects_in_bulk_with_datasheet(clade_list, data_submission_in_q,
+                                                                                            list_of_names, sample_meta_info_df)
+    return list_of_data_set_sample_objects
+
+
+def create_data_set_sample_objects_in_bulk_with_datasheet(clade_list, data_submission_in_q, list_of_names, sample_meta_info_df):
     list_of_data_set_sample_objects = []
     sys.stdout.write('\nCreating data_set_sample objects\n')
     for sampleName in list_of_names:
@@ -2035,8 +2046,7 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
         # The cladal_seq_totals property of the data_set_sample object keeps track of the seq totals for the
         # sample divided by clade. This is used in the output to keep track of sequences that are not
         # included in cladeCollections
-        clade_zeroes_list = [0 for _ in clade_list]
-        empty_cladal_seq_totals = json.dumps(clade_zeroes_list)
+        empty_cladal_seq_totals = json.dumps([0 for _ in clade_list])
 
         dss = DataSetSample(name=sampleName, data_submission_from=data_submission_in_q,
                             cladal_seq_totals=empty_cladal_seq_totals,
@@ -2053,6 +2063,8 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
                             collection_depth=sample_meta_info_df.loc[sampleName, 'collection_depth']
                             )
         list_of_data_set_sample_objects.append(dss)
+    # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
+    DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
     return list_of_data_set_sample_objects
 
 
@@ -2063,8 +2075,10 @@ def execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file):
 
 
 def generate_and_write_mothur_batch_file_for_dotfile_creation(list_of_fastq_file_names_in_wkd, wkd):
+    fastqs_are_gz_compressed = check_if_fastqs_are_gz_compressed(list_of_fastq_file_names_in_wkd)
+
     mothur_batch_file_as_list = generate_mothur_batch_file_for_dotfile_creation_as_list(wkd,
-                                                                                        list_of_fastq_file_names_in_wkd)
+                                                                                        fastqs_are_gz_compressed)
     path_to_mothur_batch_file = f'{wkd}/mothur_batch_file_makeFile'
     write_list_to_destination(path_to_mothur_batch_file, mothur_batch_file_as_list)
     return path_to_mothur_batch_file
@@ -2083,12 +2097,13 @@ def create_sample_meta_info_dataframe_from_datasheet_path(data_sheet_path):
     elif data_sheet_path.endswith('.csv'):
         sample_meta_df = pd.read_csv(filepath_or_buffer=data_sheet_path, header=0, index_col=0, skiprows=[0])
     else:
+        # todo delte the datasubmission in question before exit
         sys.exit('Data sheet: {} is in an unrecognised format. '
                  'Please ensure that it is either in .xlsx or .csv format.')
     return sample_meta_df
 
 
-def generate_new_stability_file_inferred(end_index, sample_fastq_pairs):
+def generate_new_stability_file_without_datasheet(end_index, sample_fastq_pairs):
     new_stability_file = []
     for stability_file_line in sample_fastq_pairs:
         pair_components = stability_file_line.split('\t')
@@ -2138,9 +2153,7 @@ def read_in_mothur_dot_file_creation_output(wkd):
     return read_defined_file_to_list(r'{0}/stability.files'.format(wkd))
 
 
-def generate_mothur_batch_file_for_dotfile_creation_as_list(wkd, list_of_fastq_file_names_in_wkd):
-
-    fastqs_are_gz_compressed = check_if_fastqs_are_gz_compressed(list_of_fastq_file_names_in_wkd)
+def generate_mothur_batch_file_for_dotfile_creation_as_list(wkd, fastqs_are_gz_compressed):
 
     if fastqs_are_gz_compressed:
         mothur_batch_file = [
@@ -2157,17 +2170,29 @@ def generate_mothur_batch_file_for_dotfile_creation_as_list(wkd, list_of_fastq_f
     return mothur_batch_file
 
 
-def identify_sample_names_inferred(wkd):
-    list_of_fastq_files_in_wkd = [a for a in os.listdir(wkd) if 'fastq' in a]
-    # determine if fastq or fastq.gz
-    if list_of_fastq_files_in_wkd[0].endswith('fastq.gz'):
-        fastq_or_fastq_gz = 'fastq.gz'
-    elif list_of_fastq_files_in_wkd[0].endswith('fastq'):
-        fastq_or_fastq_gz = 'fastq'
-    else:
-        sys.exit('Unrecognised format of sequencing file: {}'.format(list_of_fastq_files_in_wkd[0]))
+def identify_sample_names_without_datasheet(list_of_fastq_files_in_wkd):
+
     # I think the simplest way to get sample names is to find what parts are common between all samples
     # well actually 50% of the samples so that we also remove the R1 and R2 parts.
+    end_index = get_num_chars_in_common_with_fastq_names(list_of_fastq_files_in_wkd)
+
+    list_of_sample_names = get_sample_names_from_fastq_files_using_index(end_index, list_of_fastq_files_in_wkd)
+
+    return end_index, list_of_sample_names
+
+
+def get_sample_names_from_fastq_files_using_index(end_index, list_of_fastq_files_in_wkd):
+    list_of_names_non_unique = []
+    for file in list_of_fastq_files_in_wkd:
+        list_of_names_non_unique.append(file[:-end_index])
+    list_of_sample_names = list(set(list_of_names_non_unique))
+    if len(list_of_sample_names) != len(list_of_fastq_files_in_wkd) / 2:
+        # TODO delete the data_set before exit
+        sys.exit('Error in sample name extraction')
+    return list_of_sample_names
+
+
+def get_num_chars_in_common_with_fastq_names(list_of_fastq_files_in_wkd):
     i = 1
     while 1:
         list_of_endings = []
@@ -2179,14 +2204,7 @@ def identify_sample_names_inferred(wkd):
             i += 1
             # then this is one i too many and our magic i was i-1
     end_index = i - 1
-    list_of_names_non_unique = []
-    for file in list_of_fastq_files_in_wkd:
-        list_of_names_non_unique.append(file[:-end_index])
-    list_of_names = list(set(list_of_names_non_unique))
-    if len(list_of_names) != len(list_of_fastq_files_in_wkd) / 2:
-        sys.exit('Error in sample name extraction')
-    return end_index, list_of_names, fastq_or_fastq_gz
-
+    return end_index
 
 
 def create_fastq_file_to_sample_name_dict(sample_meta_info_df):

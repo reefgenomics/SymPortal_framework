@@ -4,6 +4,7 @@ import pickle
 # Ensure settings are read
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
+import subprocess
 
 # Your application specific imports
 from dbApp.models import DataSet, DataAnalysis
@@ -65,6 +66,12 @@ def convert_interleaved_to_sequencial_fasta(fasta_in):
         out_fasta.extend(['>{}'.format(name), seq])
 
     return out_fasta
+
+def execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file, mothur_exec_str='mothur'):
+    return subprocess.run(
+        [mothur_exec_str, path_to_mothur_batch_file], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+
 
 
 def read_byte_object_from_defined_directory(directory):
