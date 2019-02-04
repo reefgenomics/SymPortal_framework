@@ -5,7 +5,7 @@ import pickle
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 import subprocess
-
+import sys
 # Your application specific imports
 from dbApp.models import DataSet, DataAnalysis
 # ###########################################
@@ -93,11 +93,38 @@ def create_no_space_fasta_file(fasta_list):
     return temp_list
 
 
-def create_dict_from_fasta(fasta_list):
-    temporary_dictionary = {}
-    i = 0
-    while i < len(fasta_list):
-        sequence = fasta_list[i][1:]
-        temporary_dictionary[sequence] = fasta_list[i + 1]
-        i += 2
-    return temporary_dictionary
+def create_dict_from_fasta(fasta_list=None, fasta_path=None):
+    if fasta_list is None and fasta_path is None:
+        sys.exit('Please provide either a fasta_as_list OR a fasta_path as arguments to create_dict_from_fasta')
+    elif fasta_list and fasta_path:
+        sys.exit('Please provide either a fasta_as_list OR a fasta_path as arguments to create_dict_from_fasta')
+    else:
+        if fasta_list:
+            temporary_dictionary = {}
+            i = 0
+            while i < len(fasta_list):
+                sequence = fasta_list[i][1:]
+                temporary_dictionary[sequence] = fasta_list[i + 1]
+                i += 2
+            return temporary_dictionary
+        if fasta_path:
+            fasta_file_as_list = read_defined_file_to_list(fasta_path)
+            temporary_dictionary = {}
+            i = 0
+            while i < len(fasta_file_as_list):
+                sequence = fasta_file_as_list[i][1:]
+                temporary_dictionary[sequence] = fasta_file_as_list[i + 1]
+                i += 2
+            return temporary_dictionary
+
+def make_new_blast_db(input_fasta_to_make_db_from, db_title, db_type='nucl',makeblastdb_exec_str='makeblastdb', pipe_stdout_sterr=True):
+    if pipe_stdout_sterr:
+        completed_process = subprocess.run(
+            [makeblastdb_exec_str, '-in', input_fasta_to_make_db_from, '-dbtype', db_type, '-title', db_title],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+    else:
+        completed_process = subprocess.run(
+            [makeblastdb_exec_str, '-in', input_fasta_to_make_db_from, '-dbtype', db_type, '-title', db_title]
+        )
+    return completed_process
