@@ -117,6 +117,29 @@ def create_dict_from_fasta(fasta_list=None, fasta_path=None):
                 i += 2
             return temporary_dictionary
 
+def create_seq_name_to_abundance_dict_from_name_file(name_file_list = None, name_file_path = None):
+    if name_file_list is None and name_file_path is None:
+        sys.exit(
+            'Please provide either a name_file_list OR a name_file_path as '
+            'arguments to create_seq_name_to_abundance_dict_from_name_file')
+    elif name_file_list and name_file_path:
+        sys.exit(
+            'Please provide either a name_file_list OR a name_file_path '
+            'as arguments to create_seq_name_to_abundance_dict_from_name_file')
+    else:
+        if name_file_list:
+            temporary_dictionary = {}
+            for i in range(len(name_file_list)):
+                temporary_dictionary[name_file_list.split('\t')[0]] = len(
+                    name_file_list.split('\t')[1].split(','))
+            return temporary_dictionary
+        if name_file_path:
+            name_file_as_list = read_defined_file_to_list(name_file_path)
+            temporary_dictionary = {}
+            for i in range(len(name_file_as_list)):
+                temporary_dictionary[name_file_as_list.split('\t')[0]] = len(
+                    name_file_as_list.split('\t')[1].split(','))
+            return temporary_dictionary
 def make_new_blast_db(input_fasta_to_make_db_from, db_title, db_type='nucl',makeblastdb_exec_str='makeblastdb', pipe_stdout_sterr=True):
     if pipe_stdout_sterr:
         completed_process = subprocess.run(
@@ -128,3 +151,6 @@ def make_new_blast_db(input_fasta_to_make_db_from, db_title, db_type='nucl',make
             [makeblastdb_exec_str, '-in', input_fasta_to_make_db_from, '-dbtype', db_type, '-title', db_title]
         )
     return completed_process
+
+def decode_utf8_binary_to_list(bin_to_decode):
+    return bin_to_decode.decode('utf-8').split('\n')

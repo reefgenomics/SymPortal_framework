@@ -10,6 +10,7 @@ import general
 import json
 from multiprocessing import Queue, Manager, Process
 from django import db
+from analysis_classes import InitialMothurWorker
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -102,56 +103,46 @@ class DataLoading:
     def worker_initial_mothur(self, input_q, error_sample_list):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
+        This QC includes making contigs, screening for ambigous calls (0 allowed) and homopolymer (maxhomop=5)
+        Discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
+
         :param input_q:
         :param error_sample_list:
         :return:
         """
 
+        for contigpair in iter(input_q.get, 'STOP'):
 
-        for contigPair in iter(input_q.get, 'STOP'):
-            sample_name = contigPair.split('\t')[0].replace('[dS]', '-')
+            initial_morthur_worker = InitialMothurWorker(
+                contig_pair=contigpair, data_set_object=self.dataset_object)
 
-            data_set_sample_instance_in_q = DataSetSample.objects.get(
-                name=sample_name, data_submission_from=self.dataset_object
-            )
+            initial_morthur_worker.execute()
+
 
 
             # todo I have written in a make contig method into the Mothur analysis. Incorporate this here.
-            
+
+
+
+
+
             # NB We will always crop with the SYMVAR primers as they produce the shortest product
             #todo aim to use the MothurAnalysis class that I made
-            primer_fwd_seq = 'GAATTGCAGAACTCCGTGAACC'  # Written 5'-->3'
-            primer_rev_seq = 'CGGGTTCWCTTGTYTGACTTCATGC'  # Written 5'-->3'
-
-            oligo_file = [
-                r'#SYM_VAR_5.8S2',
-                'forward\t{0}'.format(primer_fwd_seq),
-                r'#SYM_VAR_REV',
-                'reverse\t{0}'.format(primer_rev_seq)
-            ]
-
-            # Initial Mothur QC, making contigs, screening for ambiguous calls and homopolymers
-            # Uniqueing, discarding <2 abundance seqs, removing primers and adapters
-            sys.stdout.write('{0}: QC started\n'.format(sample_name))
-            current_directory = r'{0}/{1}/'.format(wkd, sample_name)
 
             # Make the sample by sample directory that we will be working in
             # this will be inside the wkd directory (the temp data directory for the data_set submission)
-            os.makedirs(current_directory, exist_ok=True)
-
             # We also need to make the same sample by sample directories for the pre MED sequence dump
-            os.makedirs(current_directory.replace('tempData', 'pre_MED_seqs'), exist_ok=True)
 
-            stability_file = [contigPair]
-            stability_file_name = r'{0}{1}'.format(sample_name, 'stability.files')
-            root_name = r'{0}stability'.format(sample_name)
-            stability_file_path = r'{0}{1}'.format(current_directory, stability_file_name)
 
-            # write out the stability file. This will be a single pair of contigs with a sample name
-            write_list_to_destination(stability_file_path, stability_file)
+            # stability_file = [contigPair]
+            # stability_file_name = r'{0}{1}'.format(sample_name, 'stability.files')
+            # root_name = r'{0}stability'.format(sample_name)
+            # stability_file_path = r'{0}{1}'.format(current_directory, stability_file_name)
+            #
+            # # write out the stability file. This will be a single pair of contigs with a sample name
+            # write_list_to_destination(stability_file_path, stability_file)
 
-            # Write oligos file to directory. This file contains the primer sequences used for PCR cropping
-            write_list_to_destination('{0}{1}'.format(current_directory, 'primers.oligos'), oligo_file)
+
 
             # NB mothur is working very strangely with the python subprocess command. For some
             # reason it is adding in an extra 'mothur' before the filename in the input directory
@@ -159,16 +150,16 @@ class DataLoading:
 
             # The mothur batch file that will be run by mothur.
             mothur_batch_file = [
-                r'set.dir(input={0})'.format(current_directory),
-                r'set.dir(output={0})'.format(current_directory),
-                r'make.contigs(file={}{})'.format(current_directory, stability_file_name),
-                r'summary.seqs(fasta={}{}.trim.contigs.fasta)'.format(current_directory, root_name),
-                r'screen.seqs(fasta={0}{1}.trim.contigs.fasta, group={0}{1}.contigs.groups, '
-                r'maxambig=0, maxhomop=5)'.format(current_directory, root_name),
-                r'summary.seqs(fasta={0}{1}.trim.contigs.good.fasta)'.format(current_directory, root_name),
-                r'unique.seqs(fasta={0}{1}.trim.contigs.good.fasta)'.format(current_directory, root_name),
-                r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.fasta, '
-                r'name={0}{1}.trim.contigs.good.names)'.format(current_directory, root_name),
+                # r'set.dir(input={0})'.format(current_directory),
+                # r'set.dir(output={0})'.format(current_directory),
+                # r'make.contigs(file={}{})'.format(current_directory, stability_file_name),
+                # r'summary.seqs(fasta={}{}.trim.contigs.fasta)'.format(current_directory, root_name),
+                # r'screen.seqs(fasta={0}{1}.trim.contigs.fasta, group={0}{1}.contigs.groups, '
+                # r'maxambig=0, maxhomop=5)'.format(current_directory, root_name),
+                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.fasta)'.format(current_directory, root_name),
+                # r'unique.seqs(fasta={0}{1}.trim.contigs.good.fasta)'.format(current_directory, root_name),
+                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.fasta, '
+                # r'name={0}{1}.trim.contigs.good.names)'.format(current_directory, root_name),
                 r'split.abund(cutoff=2, fasta={0}{1}.trim.contigs.good.unique.fasta, '
                 r'name={0}{1}.trim.contigs.good.names, group={0}{1}.contigs.good.groups)'.format(
                     current_directory,
@@ -307,16 +298,7 @@ class DataLoading:
                 log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, 'generic_error')
                 continue
 
-            # Get number of sequences after make.contig
-            last_summary = read_defined_file_to_list(
-                '{}{}.trim.contigs.summary'.format(current_directory, root_name))
-            number_of_seqs_contig_absolute = len(last_summary) - 1
-            data_set_sample_instance_in_q.num_contigs = number_of_seqs_contig_absolute
-            sys.stdout.write(
-                '{}: data_set_sample_instance_in_q.num_contigs = {}\n'.format(
-                    sample_name, number_of_seqs_contig_absolute))
-
-            # Get number of sequences after unique
+            # Get unique number of sequences after after sequence QC
             last_summary = read_defined_file_to_list(
                 '{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(current_directory, root_name))
             number_of_seqs_contig_unique = len(last_summary) - 1
