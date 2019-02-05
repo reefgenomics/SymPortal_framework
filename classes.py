@@ -160,14 +160,14 @@ class DataLoading:
                 # r'unique.seqs(fasta={0}{1}.trim.contigs.good.fasta)'.format(current_directory, root_name),
                 # r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.fasta, '
                 # r'name={0}{1}.trim.contigs.good.names)'.format(current_directory, root_name),
-                r'split.abund(cutoff=2, fasta={0}{1}.trim.contigs.good.unique.fasta, '
-                r'name={0}{1}.trim.contigs.good.names, group={0}{1}.contigs.good.groups)'.format(
-                    current_directory,
-                    root_name),
-                r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.fasta, '
-                r'name={0}{1}.trim.contigs.good.abund.names)'.format(current_directory, root_name),
-                r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.rare.fasta, '
-                r'name={0}{1}.trim.contigs.good.rare.names)'.format(current_directory, root_name),
+                # r'split.abund(cutoff=2, fasta={0}{1}.trim.contigs.good.unique.fasta, '
+                # r'name={0}{1}.trim.contigs.good.names, group={0}{1}.contigs.good.groups)'.format(
+                #     current_directory,
+                #     root_name),
+                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.fasta, '
+                # r'name={0}{1}.trim.contigs.good.abund.names)'.format(current_directory, root_name),
+                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.rare.fasta, '
+                # r'name={0}{1}.trim.contigs.good.rare.names)'.format(current_directory, root_name),
                 r'pcr.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.fasta, group={0}{1}.contigs.good.abund.groups, '
                 r'name={0}{1}.trim.contigs.good.abund.names, '
                 r'oligos={0}primers.oligos, pdiffs=2, rdiffs=2)'.format(current_directory, root_name)

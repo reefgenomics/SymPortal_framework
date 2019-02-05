@@ -271,8 +271,39 @@ class MothurAnalysis:
         self.__execute_summary()
 
 
-    # def execute_split_abund(self):
+    def execute_split_abund(self, abund_cutoff=2):
 
+        self.__split_abund_make_and_write_mothur_batch()
+
+        self.__run_mothur_batch_file()
+
+        self.name_file_path, self.fasta_path = self.__split_abund_extract_output_path_name_and_fasta()
+
+        self.__update_sequence_collection_from_fasta_name_pair()
+
+        self.__execute_summary()
+
+    def __split_abund_extract_output_path_name_and_fasta(self):
+        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process.stdout)
+        for i in range(len(stdout_string_as_list)):
+            print(stdout_string_as_list[i])
+            if 'Output File Names' in stdout_string_as_list[i]:
+                return stdout_string_as_list[i + 2], stdout_string_as_list[i + 4]
+
+    def __split_abund_make_and_write_mothur_batch(self):
+        if self.name_file_path:
+            mothur_batch_file = [
+                f'set.dir(input={self.input_dir})',
+                f'set.dir(output={self.output_dir})',
+                f'split.abund(fasta={self.fasta_path}, name={self.name_file_path}, cutoff={abund_cutoff})'
+            ]
+        else:
+            raise RuntimeError(
+                'Non name_file_path present. '
+                'A name file is necessary to be able to assess the abundances of sequences in the .fasta file'
+            )
+        self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
+        write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
     def __execute_summary(self):
         self.__summarise_make_and_write_mothur_batch()
@@ -282,11 +313,18 @@ class MothurAnalysis:
 
     # #####################
     def __unique_seqs_make_and_write_mothur_batch(self):
-        mothur_batch_file = [
-            f'set.dir(input={self.input_dir})',
-            f'set.dir(output={self.output_dir})',
-            f'unique.seqs(fasta={self.fasta_path})'
-        ]
+        if self.name_file_path:
+            mothur_batch_file = [
+                f'set.dir(input={self.input_dir})',
+                f'set.dir(output={self.output_dir})',
+                f'unique.seqs(fasta={self.fasta_path}, name={self.name_file_path})'
+            ]
+        else:
+            mothur_batch_file = [
+                f'set.dir(input={self.input_dir})',
+                f'set.dir(output={self.output_dir})',
+                f'unique.seqs(fasta={self.fasta_path})'
+            ]
         self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
         write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
@@ -607,6 +645,12 @@ class InitialMothurWorker:
         self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig':0, 'maxhomop':5})
 
         # unique seqs
+        self.mothur_analysis_object.execute_unique_seqs()
+
+        # split abund
+        self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
+
+        # reunique
         self.mothur_analysis_object.execute_unique_seqs()
 
 
