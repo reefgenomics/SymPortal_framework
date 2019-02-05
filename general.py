@@ -140,6 +140,7 @@ def create_seq_name_to_abundance_dict_from_name_file(name_file_list = None, name
                 temporary_dictionary[name_file_as_list.split('\t')[0]] = len(
                     name_file_as_list.split('\t')[1].split(','))
             return temporary_dictionary
+
 def make_new_blast_db(input_fasta_to_make_db_from, db_title, db_type='nucl',makeblastdb_exec_str='makeblastdb', pipe_stdout_sterr=True):
     if pipe_stdout_sterr:
         completed_process = subprocess.run(

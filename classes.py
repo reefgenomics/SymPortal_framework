@@ -105,222 +105,23 @@ class DataLoading:
         This worker performs the pre-MED processing that is primarily mothur-based.
         This QC includes making contigs, screening for ambigous calls (0 allowed) and homopolymer (maxhomop=5)
         Discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
-
-        :param input_q:
-        :param error_sample_list:
-        :return:
+        This is all done through the use of an InitialMothurWorker class which in turn makes use of the MothurAnalysis
+        class that does the heavy lifting of running the mothur commands in sequence.
         """
 
         for contigpair in iter(input_q.get, 'STOP'):
 
             initial_morthur_worker = InitialMothurWorker(
-                contig_pair=contigpair, data_set_object=self.dataset_object)
+                contig_pair=contigpair,
+                data_set_object=self.dataset_object,
+                temp_wkd=self.temp_working_directory,
+                debug=self.debug
+            )
 
-            initial_morthur_worker.execute()
-
-
-
-            # todo I have written in a make contig method into the Mothur analysis. Incorporate this here.
-
-
-
-
-
-            # NB We will always crop with the SYMVAR primers as they produce the shortest product
-            #todo aim to use the MothurAnalysis class that I made
-
-            # Make the sample by sample directory that we will be working in
-            # this will be inside the wkd directory (the temp data directory for the data_set submission)
-            # We also need to make the same sample by sample directories for the pre MED sequence dump
-
-
-            # stability_file = [contigPair]
-            # stability_file_name = r'{0}{1}'.format(sample_name, 'stability.files')
-            # root_name = r'{0}stability'.format(sample_name)
-            # stability_file_path = r'{0}{1}'.format(current_directory, stability_file_name)
-            #
-            # # write out the stability file. This will be a single pair of contigs with a sample name
-            # write_list_to_destination(stability_file_path, stability_file)
-
-
-
-            # NB mothur is working very strangely with the python subprocess command. For some
-            # reason it is adding in an extra 'mothur' before the filename in the input directory
-            # As such we will have to enter all of the paths to files absolutely
-
-            # The mothur batch file that will be run by mothur.
-            mothur_batch_file = [
-                # r'set.dir(input={0})'.format(current_directory),
-                # r'set.dir(output={0})'.format(current_directory),
-                # r'make.contigs(file={}{})'.format(current_directory, stability_file_name),
-                # r'summary.seqs(fasta={}{}.trim.contigs.fasta)'.format(current_directory, root_name),
-                # r'screen.seqs(fasta={0}{1}.trim.contigs.fasta, group={0}{1}.contigs.groups, '
-                # r'maxambig=0, maxhomop=5)'.format(current_directory, root_name),
-                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.fasta)'.format(current_directory, root_name),
-                # r'unique.seqs(fasta={0}{1}.trim.contigs.good.fasta)'.format(current_directory, root_name),
-                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.fasta, '
-                # r'name={0}{1}.trim.contigs.good.names)'.format(current_directory, root_name),
-                # r'split.abund(cutoff=2, fasta={0}{1}.trim.contigs.good.unique.fasta, '
-                # r'name={0}{1}.trim.contigs.good.names, group={0}{1}.contigs.good.groups)'.format(
-                #     current_directory,
-                #     root_name),
-                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.fasta, '
-                # r'name={0}{1}.trim.contigs.good.abund.names)'.format(current_directory, root_name),
-                # r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.rare.fasta, '
-                # r'name={0}{1}.trim.contigs.good.rare.names)'.format(current_directory, root_name),
-                r'pcr.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.fasta, group={0}{1}.contigs.good.abund.groups, '
-                r'name={0}{1}.trim.contigs.good.abund.names, '
-                r'oligos={0}primers.oligos, pdiffs=2, rdiffs=2)'.format(current_directory, root_name)
-            ]
-
-            # Write out the batch file
-            mothur_batch_file_path = r'{0}{1}{2}'.format(current_directory, 'mothur_batch_file', sample_name)
-            write_list_to_destination(mothur_batch_file_path, mothur_batch_file)
-
-            error = False
-            # NB the mothur return code doesn't seem to work. We just get None type.
-            # apparently they have fixed this in the newest mothur but we have not upgraded to that yet.
-            # so for the time being we will check for error by hand in the stdout.
-            with subprocess.Popen(['mothur', '{0}'.format(mothur_batch_file_path)], stdout=subprocess.PIPE,
-                                  bufsize=1,
-                                  universal_newlines=True) as p:
-                # Here look for the specific blank fasta name warning (which should be interpreted as an error)
-                # and any other error that may be arising
-                # if found, log error.
-                for line in p.stdout:
-                    if debug:
-                        print(line)
-                    if '[WARNING]: Blank fasta name, ignoring read.' in line:
-                        p.terminate()
-                        error_reason = 'Blank fasta name'
-                        log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
-                        error = True
-                        error_sample_list.append(sample_name)
-                        break
-                    if 'ERROR' in line:
-                        p.terminate()
-                        error_reason = 'error in inital QC'
-                        log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
-                        error = True
-                        error_sample_list.append(sample_name)
-                        break
-
-            if error:
-                continue
-
-            # Here check the outputted files to see if they are reverse complement
-            # or not by running the pcr.seqs and checking the results
-            # Check to see if there are sequences in the PCR output file
-            last_summary = read_defined_file_to_list(
-                '{}{}.trim.contigs.good.unique.abund.pcr.fasta'.format(current_directory, root_name))
-
-            # If this file is empty
-            #  Then these sequences may well be reverse complement so we need to try to rev first
-            if len(last_summary) == 0:
-
-                # RC batch file
-                mothur_batch_reverse = [
-                    r'reverse.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.fasta)'.format(
-                        current_directory, root_name),
-                    r'pcr.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.rc.fasta, '
-                    r'group={0}{1}.contigs.good.abund.groups, name={0}{1}.trim.contigs.good.abund.names, '
-                    r'oligos={0}primers.oligos, pdiffs=2, rdiffs=2)'.format(current_directory, root_name)
-                ]
-                mothur_batch_file_path = r'{0}{1}{2}'.format(current_directory, 'mothur_batch_file', sample_name)
-                # write out RC batch file
-                write_list_to_destination(mothur_batch_file_path, mothur_batch_reverse)
-
-                if not debug:
-                    subprocess.run(
-                        ['mothur', r'{0}'.format(mothur_batch_file_path)],
-                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                    # At this point the sequences will be reversed and they will have been renamed so we
-                    # can just change the name of the .rc file to the orignal .fasta file that we inputted with
-                    # This way we don't need to change the rest of the mothur pipe.
-                    subprocess.run(
-                        [r'mv', r'{0}{1}.trim.contigs.good.unique.abund.rc.pcr.fasta'.format(current_directory,
-                                                                                             root_name),
-                         r'{0}{1}.trim.contigs.good.unique.abund.pcr.fasta'.format(current_directory, root_name)],
-                        stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-                elif debug:
-                    subprocess.run(
-                        ['mothur', r'{0}'.format(mothur_batch_file_path)])
-                    subprocess.run(
-                        [r'mv', r'{0}{1}.trim.contigs.good.unique.abund.rc.pcr.fasta'.format(current_directory,
-                                                                                             root_name),
-                         r'{0}{1}.trim.contigs.good.unique.abund.pcr.fasta'.format(current_directory, root_name)])
-
-            # Check again to see if the RC has fixed the problem of having an empty fasta
-            # If this file is still empty, then the problem was not solved by reverse complementing
-            last_summary = read_defined_file_to_list(
-                '{}{}.trim.contigs.good.unique.abund.pcr.fasta'.format(current_directory, root_name))
-
-            if len(last_summary) == 0:
-                error_reason = 'error in inital QC'
-                log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
-                error_sample_list.append(sample_name)
-                continue
-
-            # after having completed the RC checks redo the unique.
-            mothur_batch_file_cont = [
-                r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.pcr.fasta, '
-                r'name={0}{1}.trim.contigs.good.abund.pcr.names)'.format(current_directory, root_name),
-                r'unique.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.pcr.fasta, '
-                r'name={0}{1}.trim.contigs.good.abund.pcr.names)'.format(current_directory, root_name),
-                r'summary.seqs(fasta={0}{1}.trim.contigs.good.unique.abund.pcr.unique.fasta, '
-                r'name={0}{1}.trim.contigs.good.unique.abund.pcr.names)'.format(current_directory, root_name)
-            ]
-
-            mothur_batch_file_path = r'{0}{1}{2}'.format(current_directory, 'mothur_batch_file', sample_name)
-            write_list_to_destination(mothur_batch_file_path, mothur_batch_file_cont)
-
-            completed_process = subprocess.run(
-                ['mothur', r'{0}'.format(mothur_batch_file_path)], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-            if completed_process.returncode == 1 or 'ERROR' in completed_process.stdout.decode('utf-8'):
-                if debug:
-                    print(completed_process.stdout.decode('utf-8'))
-                error_reason = 'error in inital QC'
-                log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
-                error_sample_list.append(sample_name)
-                continue
-
-            # Check to see if there are sequences in the PCR output file
             try:
-                last_summary = read_defined_file_to_list(
-                    '{}{}.trim.contigs.good.unique.abund.pcr.unique.fasta'.format(current_directory, root_name))
-                if len(last_summary) == 0:  # If this file is empty
-                    error_reason = 'error in inital QC'
-                    log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, error_reason)
-                    error_sample_list.append(sample_name)
-                    continue
-            except FileNotFoundError:  # If there is no file then we can assume sample has a problem
-                log_qc_error_and_continue(data_set_sample_instance_in_q, sample_name, 'generic_error')
-                continue
-
-            # Get unique number of sequences after after sequence QC
-            last_summary = read_defined_file_to_list(
-                '{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(current_directory, root_name))
-            number_of_seqs_contig_unique = len(last_summary) - 1
-            data_set_sample_instance_in_q.post_qc_unique_num_seqs = number_of_seqs_contig_unique
-            sys.stdout.write(
-                '{}: data_set_sample_instance_in_q.post_qc_unique_num_seqs = {}\n'.format(
-                    sample_name, number_of_seqs_contig_unique))
-
-            # Get absolute number of sequences after after sequence QC
-            last_summary = read_defined_file_to_list(
-                '{}{}.trim.contigs.good.unique.abund.pcr.unique.summary'.format(current_directory, root_name))
-            absolute_count = 0
-            for line in last_summary[1:]:
-                absolute_count += int(line.split('\t')[6])
-            data_set_sample_instance_in_q.post_qc_absolute_num_seqs = absolute_count
-            data_set_sample_instance_in_q.save()
-            sys.stdout.write('{}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {}\n'.format(
-                sample_name, absolute_count))
-
-            sys.stdout.write('{}: Initial mothur complete\n'.format(sample_name))
-            # Each sampleDataDir should contain a set of .fasta, .name and .group
-            # files that we can use to do local blasts with
+                initial_morthur_worker.execute()
+            except RuntimeError as e:
+                error_sample_list.append(e.sample_name)
 
         return
 

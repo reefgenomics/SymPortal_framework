@@ -6,7 +6,7 @@ import pandas as pd
 from collections import defaultdict
 from dbApp.models import DataSetSample
 from general import (
-    decode_utf8_binary_to_list, create_dict_from_fasta, create_seq_name_to_abundance_dict_from_name_file)
+    decode_utf8_binary_to_list, create_dict_from_fasta, create_seq_name_to_abundance_dict_from_name_file, decode_utf8_binary_to_list)
 
 class BlastnAnalysis:
     def __init__(
@@ -52,23 +52,24 @@ class MothurAnalysis:
 
     def __init__(
             self, sequence_collection=None,  input_dir=None, output_dir=None, name=None,
-            fastq_gz_fwd_path=None, fastq_gz_rev_path=None,  fasta_path=None,
+            fastq_gz_fwd_path=None, fastq_gz_rev_path=None,
              name_file_path=None, mothur_execution_path='mothur', auto_convert_fastq_to_fasta=True,
             pcr_fwd_primer=None, pcr_rev_primer=None, pcr_oligo_file_path=None,
-            pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None, num_processors=10
+            pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None, num_processors=10,
+            stdout_and_sterr_to_pipe=True
             ):
 
-        self.setup_core_attributes(auto_convert_fastq_to_fasta, fasta_path, fastq_gz_fwd_path, fastq_gz_rev_path,
+        self.setup_core_attributes(auto_convert_fastq_to_fasta, fastq_gz_fwd_path, fastq_gz_rev_path,
                                    input_dir, mothur_execution_path, name, name_file_path, output_dir,
-                                   sequence_collection, num_processors)
+                                   sequence_collection, num_processors, stdout_and_sterr_to_pipe)
 
 
         self.setup_pcr_analysis_attributes(pcr_analysis_name, pcr_fwd_primer, pcr_fwd_primer_mismatch,
                                            pcr_oligo_file_path, pcr_rev_primer, pcr_rev_primer_mismatch)
 
-    def setup_core_attributes(self, auto_convert_fastq_to_fasta, fasta_path, fastq_gz_fwd_path, fastq_gz_rev_path,
+    def setup_core_attributes(self, auto_convert_fastq_to_fasta, fastq_gz_fwd_path, fastq_gz_rev_path,
                               input_dir, mothur_execution_path, name, name_file_path, output_dir,
-                              sequence_collection, num_processors):
+                              sequence_collection, num_processors, stdout_and_sterr_to_pipe):
 
         self.verify_that_is_either_sequence_collection_or_fastq_pair(fastq_gz_fwd_path, fastq_gz_rev_path,
                                                                  sequence_collection)
@@ -78,11 +79,11 @@ class MothurAnalysis:
         elif sequence_collection is None:
             self.setup_fastq_attributes(fastq_gz_fwd_path, fastq_gz_rev_path)
 
-        self.setup_remainder_of_core_attributes(fasta_path, input_dir, mothur_execution_path, name_file_path,
-                                                output_dir, sequence_collection, num_processors)
+        self.setup_remainder_of_core_attributes(input_dir, mothur_execution_path, name_file_path,
+                                                output_dir, sequence_collection, num_processors, stdout_and_sterr_to_pipe)
 
-    def setup_remainder_of_core_attributes(self, fasta_path, input_dir, mothur_execution_path, name_file_path,
-                                           output_dir, sequence_collection, num_processors):
+    def setup_remainder_of_core_attributes(self, input_dir, mothur_execution_path, name_file_path,
+                                           output_dir, sequence_collection, num_processors, stdout_and_sterr_to_pipe):
         self.exec_path = mothur_execution_path
         if input_dir is None:
             self.input_dir = os.path.dirname(sequence_collection.file_path)
@@ -96,9 +97,15 @@ class MothurAnalysis:
         self.name_file_path = name_file_path
         self.mothur_batch_file_path = None
         self.processors = num_processors
-        self.latest_completed_process = None
+        # we need to have seperate latest completed process objects for the actual commands and for the summaries
+        # this is so that we can still extract useful information housed in the stdout from running the command
+        # once the execute... function has been completed. Else, this information is lost due to it being replaced
+        # by the completed_process of the summary that is automatically run after each command.
+        self.latest_completed_process_command = None
+        self.latest_completed_process_summary = None
         self.latest_summary_output_as_list = None
         self.latest_summary_path = None
+        self.stdout_and_sterr_to_pipe = stdout_and_sterr_to_pipe
 
     def setup_fastq_attributes(self, fastq_gz_fwd_path, fastq_gz_rev_path):
         self.fastq_gz_fwd_path = fastq_gz_fwd_path
@@ -156,22 +163,28 @@ class MothurAnalysis:
     # init class methods for the MothurAnalysis
     @classmethod
     def from_pair_of_fastq_gz_files(cls, name, fastq_gz_fwd_path, fastq_gz_rev_path,
-                                    output_dir=None, mothur_execution_string='mothur', num_processors=10):
+                                    output_dir=None, mothur_execution_string='mothur', num_processors=10,
+                                    stdout_and_sterr_to_pipe=True
+                                    ):
         return cls(name=name, sequence_collection=None, mothur_execution_path=mothur_execution_string,
                    input_dir=os.path.dirname(os.path.abspath(fastq_gz_fwd_path)), output_dir=output_dir,
                    fastq_gz_fwd_path=fastq_gz_fwd_path, fastq_gz_rev_path=fastq_gz_rev_path,
-                   fasta_path=None, name_file_path=None, num_processors=num_processors)
+                   name_file_path=None, num_processors=num_processors,
+                   stdout_and_sterr_to_pipe=stdout_and_sterr_to_pipe)
 
     @classmethod
     def from_sequence_collection(cls, sequence_collection, name=None, input_dir=None,
                                  output_dir=None, mothur_execution_path='mothur',
                                  pcr_fwd_primer=None, pcr_rev_primer=None, pcr_oligo_file_path=None,
-                                 pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None, num_processors=10):
+                                 pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None,
+                                 num_processors=10, stdout_and_sterr_to_pipe=True):
         return cls(
             name=name, sequence_collection=sequence_collection, input_dir=input_dir,
             output_dir=output_dir, mothur_execution_path=mothur_execution_path, pcr_fwd_primer=pcr_fwd_primer,
-            pcr_rev_primer=pcr_rev_primer, pcr_oligo_file_path=pcr_oligo_file_path, pcr_fwd_primer_mismatch=pcr_fwd_primer_mismatch,
-            pcr_rev_primer_mismatch=pcr_rev_primer_mismatch, pcr_analysis_name=pcr_analysis_name, num_processors=num_processors
+            pcr_rev_primer=pcr_rev_primer, pcr_oligo_file_path=pcr_oligo_file_path,
+            pcr_fwd_primer_mismatch=pcr_fwd_primer_mismatch, pcr_rev_primer_mismatch=pcr_rev_primer_mismatch,
+            pcr_analysis_name=pcr_analysis_name, num_processors=num_processors,
+            stdout_and_sterr_to_pipe=stdout_and_sterr_to_pipe
         )
 
     # ########################################
@@ -185,7 +198,7 @@ class MothurAnalysis:
         argument_dictionary = {'max_length':'500', 'min_length':'100'}
         """
         self.__screen_seqs_make_and_write_mothur_batch_file(argument_dictionary)
-        self.__run_mothur_batch_file()
+        self.__run_mothur_batch_file_command()
         good_fasta_path = self.__screen_seqs_extract_good_output_path()
         self.fasta_path = good_fasta_path
         self.__update_sequence_collection_from_fasta_file()
@@ -202,7 +215,7 @@ class MothurAnalysis:
 
         self.__pcr_make_and_write_mothur_batch_file()
 
-        self.__run_mothur_batch_file()
+        self.__run_mothur_batch_file_command()
 
         fwd_output_scrapped_fasta_path, fwd_output_good_fasta_path = self.__pcr_extract_good_and_scrap_output_paths()
 
@@ -217,10 +230,10 @@ class MothurAnalysis:
         if do_reverse_pcr_as_well:
             self.fasta_path = fwd_output_scrapped_fasta_path
             self.__rev_comp_make_and_write_mothur_batch_file()
-            self.__run_mothur_batch_file()
+            self.__run_mothur_batch_file_command()
             self.fasta_path = self.__extract_output_path_first_line()
             self.__pcr_make_and_write_mothur_batch_file()
-            self.__run_mothur_batch_file()
+            self.__run_mothur_batch_file_command()
             rev_output_good_fasta_path = self.__pcr_extract_good_and_scrap_output_paths()[1]
             remove_primer_mismatch_annotations_from_fasta(rev_output_good_fasta_path)
             self.__make_new_fasta_path_for_fwd_rev_combined(rev_output_good_fasta_path)
@@ -233,8 +246,10 @@ class MothurAnalysis:
             )
         else:
             self.fasta_path = fwd_output_good_fasta_path
-
-        self.__update_sequence_collection_from_fasta_file()
+        if self.name_file_path:
+            self.__update_sequence_collection_from_fasta_name_pair()
+        else:
+            self.__update_sequence_collection_from_fasta_file()
 
     def execute_make_contigs(self):
         """
@@ -250,7 +265,7 @@ class MothurAnalysis:
 
         self.__make_contig_make_and_write_mothur_batch(dot_file_file_path)
 
-        self.__run_mothur_batch_file()
+        self.__run_mothur_batch_file_command()
 
         self.fasta_path = self.__extract_output_path_first_line()
 
@@ -262,7 +277,7 @@ class MothurAnalysis:
 
         self.__unique_seqs_make_and_write_mothur_batch()
 
-        self.__run_mothur_batch_file()
+        self.__run_mothur_batch_file_command()
 
         self.name_file_path, self.fasta_path = self.__extract_output_path_two_lines()
 
@@ -273,9 +288,9 @@ class MothurAnalysis:
 
     def execute_split_abund(self, abund_cutoff=2):
 
-        self.__split_abund_make_and_write_mothur_batch()
+        self.__split_abund_make_and_write_mothur_batch(abund_cutoff)
 
-        self.__run_mothur_batch_file()
+        self.__run_mothur_batch_file_command()
 
         self.name_file_path, self.fasta_path = self.__split_abund_extract_output_path_name_and_fasta()
 
@@ -283,14 +298,22 @@ class MothurAnalysis:
 
         self.__execute_summary()
 
+    def __execute_summary(self):
+        self.__summarise_make_and_write_mothur_batch()
+        self.__run_mothur_batch_file_command()
+        self.latest_summary_path = self.__extract_output_path_first_line()
+        self.latest_summary_output_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+
+    # #####################
+
     def __split_abund_extract_output_path_name_and_fasta(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process.stdout)
+        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             print(stdout_string_as_list[i])
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i + 2], stdout_string_as_list[i + 4]
 
-    def __split_abund_make_and_write_mothur_batch(self):
+    def __split_abund_make_and_write_mothur_batch(self, abund_cutoff):
         if self.name_file_path:
             mothur_batch_file = [
                 f'set.dir(input={self.input_dir})',
@@ -305,13 +328,6 @@ class MothurAnalysis:
         self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
         write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
-    def __execute_summary(self):
-        self.__summarise_make_and_write_mothur_batch()
-        self.__run_mothur_batch_file()
-        self.latest_summary_path = self.__extract_output_path_first_line()
-        self.latest_summary_output_as_list = decode_utf8_binary_to_list(self.latest_completed_process.stdout)
-
-    # #####################
     def __unique_seqs_make_and_write_mothur_batch(self):
         if self.name_file_path:
             mothur_batch_file = [
@@ -384,21 +400,21 @@ class MothurAnalysis:
         return mothur_batch_file
 
     def __extract_output_path_first_line(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process.stdout)
+        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             print(stdout_string_as_list[i])
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i+1]
 
     def __extract_output_path_two_lines(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process.stdout)
+        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             print(stdout_string_as_list[i])
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i + 1], stdout_string_as_list[i + 2]
 
     def __pcr_extract_good_and_scrap_output_paths(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process.stdout)
+        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             print(stdout_string_as_list[i])
             if 'Output File Names' in stdout_string_as_list[i]:
@@ -407,17 +423,31 @@ class MothurAnalysis:
                 return output_scrapped_fasta_path, output_good_fasta_path
 
     def __screen_seqs_extract_good_output_path(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process.stdout)
+        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             print(stdout_string_as_list[i])
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i + 1]
 
-    def __run_mothur_batch_file(self):
-        self.latest_completed_process = subprocess.run(
-            [self.exec_path, self.mothur_batch_file_path],
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE
-        )
+    def __run_mothur_batch_file_command(self):
+        if self.stdout_and_sterr_to_pipe:
+            self.latest_completed_process_command = subprocess.run(
+                [self.exec_path, self.mothur_batch_file_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            self.latest_completed_process_command = subprocess.run(
+                [self.exec_path, self.mothur_batch_file_path])
+
+    def __run_mothur_batch_file_summary(self, stdout_and_sterr_to_pipe=False):
+        if stdout_and_sterr_to_pipe:
+            self.latest_completed_process_summary = subprocess.run(
+                [self.exec_path, self.mothur_batch_file_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            self.latest_completed_process_summary = subprocess.run(
+                [self.exec_path, self.mothur_batch_file_path])
 
     def __pcr_make_and_write_mothur_batch_file(self):
         mothur_batch_file = self.__pcr_make_mothur_batch_file()
@@ -483,14 +513,14 @@ class MothurAnalysis:
     def __pcr_validate_attributes_are_set(self):
         sys.stdout.write(f'\nValidating PCR attributes are set\n')
         if self.fasta_path is None:
-            raise ValueError('fasta_path is None. A valid fasta_path is required to perform the pcr method.')
+            raise RuntimeError('Fasta_path is None. A valid fasta_path is required to perform the pcr method.')
         if self.pcr_fwd_primer is None or self.pcr_rev_primer is None:
             if self.pcr_fwd_primer is None and self.pcr_rev_primer is None:
-                raise ValueError('Please set fwd_primer and rev_primer: ')
+                raise RuntimeError('Please set fwd_primer and rev_primer: ')
             elif self.pcr_fwd_primer is None:
-                raise ValueError('Please set fwd_primer.')
+                raise RuntimeError('Please set fwd_primer.')
             elif self.pcr_rev_primer is None:
-                raise ValueError('Please set fwd_primer.')
+                raise RuntimeError('Please set fwd_primer.')
         sys.stdout.write(f'\nPCR attributes: OK\n')
 
 
@@ -504,7 +534,7 @@ class SequenceCollection:
         self.file_path = path_to_file
         # self.file_as_list = read_defined_file_to_list(self.file_path)
         self.file_type = self.infer_file_type()
-        self.list_of_nucleotide_sequencs = None
+        self.list_of_nucleotide_sequences = None
         self.set_list_of_nucleotide_sequences_from_fasta_or_fastq()
         if auto_convert_to_fasta:
             self.convert_to_fasta()
@@ -515,7 +545,7 @@ class SequenceCollection:
         self.file_type = 'fasta'
 
     def __len__(self):
-        return(len(self.__sequence_collection))
+        return(len(self.list_of_nucleotide_sequences))
 
     def write_out_as_fasta(self, path_for_fasta_file = None):
         if self.file_type == 'fasta':
@@ -554,7 +584,7 @@ class SequenceCollection:
             list_of_nucleotide_sequence_objects.append(
                 NucleotideSequence(sequence=seq_sequence, name=seq_name, abundance=seq_name_to_abundace_dict[seq_name])
             )
-        self.list_of_nucleotide_sequencs = list_of_nucleotide_sequence_objects
+        self.list_of_nucleotide_sequences = list_of_nucleotide_sequence_objects
 
     def parse_fasta_file_and_extract_nucleotide_sequence_objects(self, alternative_fasta_file_path=None):
         list_of_nucleotide_sequence_objects = []
@@ -565,7 +595,7 @@ class SequenceCollection:
             list_of_nucleotide_sequence_objects.append(
                 NucleotideSequence(sequence=fasta_file[i+1], name=fasta_file[i][1:])
             )
-        self.list_of_nucleotide_sequencs = list_of_nucleotide_sequence_objects
+        self.list_of_nucleotide_sequences = list_of_nucleotide_sequence_objects
 
     def parse_fastq_file_and_extract_nucleotide_sequence_objects(self):
         list_of_nuleotide_sequence_objects = []
@@ -574,7 +604,7 @@ class SequenceCollection:
             if i < len(fastq_file_as_list) - 2:
                 if self.is_fastq_defline(fastq_file_as_list, i):
                     self.create_new_nuc_seq_object_and_add_to_list(fastq_file_as_list, i, list_of_nuleotide_sequence_objects)
-        self.list_of_nucleotide_sequencs = list_of_nuleotide_sequence_objects
+        self.list_of_nucleotide_sequences = list_of_nuleotide_sequence_objects
 
     def is_fastq_defline(self, fastsq_file, index_value):
         if fastsq_file[index_value].startswith('@') and fastsq_file[index_value + 2][0] == '+':
@@ -599,7 +629,7 @@ class SequenceCollection:
 
     def as_fasta(self):
         fasta_file = []
-        for seq_obj in self.__sequence_collection:
+        for seq_obj in self.list_of_nucleotide_sequences:
             fasta_file.extend([f'>{seq_obj.name}', f'{seq_obj.sequence}'])
         return fasta_file
 
@@ -611,7 +641,7 @@ class NucleotideSequence:
         self.abundance = abundance
 
 class InitialMothurWorker:
-    def __init__(self, contig_pair, data_set_object, temp_wkd):
+    def __init__(self, contig_pair, data_set_object, temp_wkd, debug):
         self.sample_name = contig_pair.split('\t')[0].replace('[dS]', '-')
         self.data_set_sample = DataSetSample.objects.get(
                 name=self.sample_name, data_submission_from=data_set_object
@@ -625,15 +655,61 @@ class InitialMothurWorker:
             input_dir=self.cwd,
             output_dir=self.cwd,
             fastq_gz_fwd_path=contig_pair.split('\t')[1],
-            fastq_gz_rev_path=contig_pair.split('\t')[2])
-
-
+            fastq_gz_rev_path=contig_pair.split('\t')[2],
+            stdout_and_sterr_to_pipe=debug)
+        self.debug = debug
 
     def execute(self):
         sys.stdout.write(f'{self.sample_name}: QC started\n')
 
-        # perform make.contigs
+        self.do_make_contigs()
+
+        self.set_absolute_num_seqs_after_make_contigs()
+
+        self.do_screen_seqs()
+
+        self.do_unique_seqs()
+
+        self.do_split_abund()
+
+        self.do_unique_seqs()
+
+        self.do_fwd_and_rev_pcr()
+
+        self.do_unique_seqs()
+
+        self.set_unique_num_seqs_after_initial_qc()
+
+        self.set_absolute_num_seqs_after_inital_qc()
+
+        self.save_changes_to_data_set_sample()
+
+        sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
+
+    def save_changes_to_data_set_sample(self):
+        self.data_set_sample.save()
+
+    def do_fwd_and_rev_pcr(self):
+        self.mothur_analysis_object.execute_pcr(do_reverse_pcr_as_well=True)
+        self.check_for_no_seqs_after_pcr_and_raise_runtime_error()
+
+    def do_split_abund(self):
+        self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
+        self.check_for_error_and_raise_runtime_error()
+
+    def do_unique_seqs(self):
+        self.mothur_analysis_object.execute_unique_seqs()
+        self.check_for_error_and_raise_runtime_error()
+
+    def do_screen_seqs(self):
+        self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig': 0, 'maxhomop': 5})
+        self.check_for_error_and_raise_runtime_error()
+
+    def do_make_contigs(self):
         self.mothur_analysis_object.execute_make_contigs()
+        self.check_for_error_and_raise_runtime_error()
+
+    def set_absolute_num_seqs_after_make_contigs(self):
         number_of_contig_seqs_absolute = len(
             read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)
         ) - 1
@@ -641,24 +717,47 @@ class InitialMothurWorker:
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.num_contigs = {number_of_contig_seqs_absolute}\n')
 
-        # screen seqs
-        self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig':0, 'maxhomop':5})
+    def set_unique_num_seqs_after_initial_qc(self):
+        number_of_contig_seqs_unique = len(
+            read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)) - 1
+        self.data_set_sample.post_qc_unique_num_seqs = number_of_contig_seqs_unique
+        sys.stdout.write(
+            f'{self.sample_name}: '
+            f'data_set_sample_instance_in_q.post_qc_unique_num_seqs = {number_of_contig_seqs_unique}\n')
 
-        # unique seqs
-        self.mothur_analysis_object.execute_unique_seqs()
+    def set_absolute_num_seqs_after_inital_qc(self):
+        last_summary = read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)
+        absolute_count = 0
+        for line in last_summary[1:]:
+            absolute_count += int(line.split('\t')[6])
+        self.data_set_sample.post_qc_absolute_num_seqs = absolute_count
+        sys.stdout.write(
+            f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {absolute_count}\n')
 
-        # split abund
-        self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
+    def check_for_no_seqs_after_pcr_and_raise_runtime_error(self):
+        if len(self.mothur_analysis_object.sequence_collection) == 0:
+            self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
+            raise RuntimeError(sample_name=self.sample_name)
 
-        # reunique
-        self.mothur_analysis_object.execute_unique_seqs()
+    def check_for_error_and_raise_runtime_error(self):
+        for stdout_line in decode_utf8_binary_to_list(
+                self.mothur_analysis_object.latest_completed_process_command.stdout
+        ):
+            if '[WARNING]: Blank fasta name, ignoring read.' in stdout_line:
+                self.log_qc_error_and_continue(errorreason='Blank fasta name')
+                raise RuntimeError(sample_name=self.sample_name)
+            if 'ERROR' in stdout_line:
+                self.log_qc_error_and_continue(errorreason='error in inital QC')
+                raise RuntimeError(sample_name=self.sample_name)
 
-
-
-
-
-
-
+    def log_qc_error_and_continue(self, errorreason):
+        print('Error in processing sample: {}'.format(self.sample_name))
+        self.data_set_sample.unique_num_sym_seqs = 0
+        self.data_set_sample.absolute_num_sym_seqs = 0
+        self.data_set_sample.initial_processing_complete = True
+        self.data_set_sample.error_in_processing = True
+        self.data_set_sample.error_reason = errorreason
+        self.save_changes_to_data_set_sample()
 
 
 def return_list_of_file_names_in_directory(directory_to_list):
