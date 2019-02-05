@@ -10,7 +10,10 @@ import general
 import json
 from multiprocessing import Queue, Manager, Process
 from django import db
-from analysis_classes import InitialMothurWorker
+from analysis_classes import InitialMothurWorker, TaxonomicScreeningWorker, TaxonomicScreeningHandler
+from datetime import datetime
+from general import write_list_to_destination, read_defined_file_to_list, create_no_space_fasta_file, create_dict_from_fasta
+import pickle
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -45,8 +48,17 @@ class DataLoading:
         self.fastq_file_to_sample_name_dict = None
         self.num_of_samples = None
         self.sample_fastq_pairs = None
-        self.screen_sub_evalue = screen_sub_evalue
         self.samples_that_caused_errors_in_qc_list = []
+        self.post_initial_qc_name_file_name = None
+        self.post_initial_qc_fasta_file_name = None
+        # args for the taxonomic screening
+        self.screen_sub_evalue = screen_sub_evalue
+        self.new_seqs_added_count = None
+        self.fasta_of_significant_sub_e_seqs_as_list = None
+        self.fasta_of_significant_sub_e_seqs_path = None
+        self.discarded_seqs_fasta = None
+        self.checked_samples_with_no_additional_symbiodinium_sequences = []
+        self.taxonomic_screening_handler = None
 
     def execute(self):
         self.copy_and_decompress_input_files_to_temp_wkd()
@@ -63,6 +75,235 @@ class DataLoading:
         # First execute the initial mothur QC. This should leave us with a set of fastas, name and groupfiles etc in
         # a directory from each sample.
         self.execute_worker_initial_mothur()
+        self.taxonomic_screening()
+
+    def taxonomic_screening(self):
+        """
+        This screening is to identify the Symbiodinium sequences in the sequences that have already been through the
+        initial quality control for each of the samples. We have two versions of this taxonomic screening.
+        The version that screens the 'sub_e_value' sequences and the version that doesn't. The sub_e_values
+        sequences are those that gave a match to
+        the symClade.fa database (reference database containing Symbiodinium samples) but that had e-values lower than the
+        required threshold. For local instances the sub e value screening is turned off because the screening requires
+        running blastn analyses againt the NCBI nt databse. This is likely to big a computational effort for most local
+        users who will be running on a personal machine. On the remote system (i.e. when run on the servers that host
+        the remote SymPortal the sub e value screening will be run by default. This sub e value screening is done
+        iteratively. If sub evalues are found in the initial taxonomic screening (blastn analysis against the symClade.fa
+        databse) then these sub evalues are screened againt the nt datbase. If some of the sequnces are found to be
+        symbiodinium, these are added to the symClade datbase, and the initial screening is run again. This processs is
+        repeated until no further sub evalues are found or if none of the sub evlaues being screened are found to be
+        Symbiodinium in origin.
+        """
+
+
+        fasta_out = None
+        fasta_out_path = None
+        if self.screen_sub_evalue:
+
+            # To make this faster, rather than check every sample in every iteration we will keep track of when a sample
+            # has been checked and found to contain no additional Symbiodinium sequences.
+            # This way we can skip these sequences in the iterative rounds of screening.
+
+            self.new_seqs_added_count = 0
+
+            # making backup in case we somehow delte or corrupt the symClade
+            # database in this iterative screening process
+            self.create_symclade_backup()
+
+            found_additional_symbiodinium_sequences_in_iteration = True
+            while found_additional_symbiodinium_sequences_in_iteration:
+                # everytime that the execute_worker is run it pickles out the files needed for the next worker
+                self.setup_and_execute_worker_taxa_screening()
+
+                if len(self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict) == 0:
+                    # then there are no sub_e_seqs to screen and we can exit
+                    break
+                # TODO we have got here with the refactoring and class
+
+                # this is where we will do the screening.
+                # the outcome of this should be an updated symClade.fa that we should then make a blastdb from
+                # if we indeed find that some of the sequences that were below the evalue cut off are symbiodinium
+                # then this should return True. else False.
+
+                # From the e_value_multi_proc_dict generate a fasta of the sequences that were found in more than 3 samples
+                # pass this to the screen_sub_e_seqs
+
+                # The number of samples a sequence must have been found in for us to consider it for screening is taken into
+                # account when the fasta is written out.
+                # This function will reuturn False if we end up with no sequences to screen
+                # It will outherwise reutrn the list that is the fasta that was written out.
+                fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(
+                    data_set_uid, data_submission_in_q, e_value_multi_proc_dict, wkd, debug)
+
+                # we only need to screen if we have a fasta to screen
+                if fasta_out:
+                    # if found_add... is false. no new seqs were added to the symClade database
+                    found_additional_symbiodinium_sequences_in_iteration, num_new_seqs = screen_sub_e_seqs(
+                        data_set_id=data_set_uid, wkd=wkd)
+                    self.new_seqs_added_count += num_new_seqs
+                else:
+                    found_additional_symbiodinium_sequences_in_iteration = False
+
+        else:
+            # if not doing the screening we can simply run the execute_worker_taxa_screening once.
+            # During its run it will have output all of the files we need to run the following workers.
+            # We can also run the generate_and_write_below_evalue_fasta_for_screening function to write out a
+            # fasta of significant sequences we can then report to the user using that object
+            e_value_multi_proc_dict = execute_worker_taxa_screening(data_submission_in_q, error_sample_list, num_proc,
+                                                                    sample_fastq_pairs, wkd, debug=debug)
+
+            fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(data_set_uid,
+                                                                                            data_submission_in_q,
+                                                                                            e_value_multi_proc_dict,
+                                                                                            wkd,
+                                                                                            debug)
+
+        # Create the queues that will hold the sample information
+        input_q = Queue()
+
+        # The list that contains the names of the samples that returned errors during the initial mothur
+        worker_manager = Manager()
+        error_sample_list_shared = worker_manager.list(error_sample_list)
+
+        # we want to collect all of the discarded sequences so that we can print this to a fasta and
+        # output this in the data_set's submission output directory
+        # to do this we'll need a list that we can use to collect all of these sequences
+        # once we have collected them all we can then set them and use this to make a fasta to output
+        # we want to do this on a sample by sample basis, so we now write out directly from
+        # the worker as well as doing the 'total' method.
+        # we have already created the output dir early on and I will pass it down to here so that we can pass
+        # it to the below method
+        list_of_discarded_sequences = worker_manager.list()
+
+        # create the directory that will be used for the output for the output of the throw away sequences on
+        # a sample by sample basis (one fasta and one name file per sample)
+        throw_away_seqs_dir = '{}/throw_awayseqs'.format(output_dir)
+        os.makedirs(throw_away_seqs_dir, exist_ok=True)
+
+        # load up the input q
+        for contigPair in sample_fastq_pairs:
+            input_q.put(contigPair)
+
+        # load in the STOPs
+        for n in range(num_proc):
+            input_q.put('STOP')
+
+        all_processes = []
+        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+        db.connections.close_all()
+        sys.stdout.write('\nPerforming QC\n')
+
+        for n in range(num_proc):
+            p = Process(target=worker_taxonomy_write_out, args=(
+                input_q, error_sample_list_shared, wkd, data_set_uid, list_of_discarded_sequences,
+                throw_away_seqs_dir))
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+        # now create a fasta from the list
+        discarded_seqs_fasta = []
+        discarded_seqs_name_counter = 0
+        for seq in set(list(list_of_discarded_sequences)):
+            discarded_seqs_fasta.extend(
+                ['>discard_seq_{}_data_sub_{}'.format(discarded_seqs_name_counter, data_set_uid), seq])
+            discarded_seqs_name_counter += 1
+
+        if self.screen_sub_evalue:
+            # If we are screening then we want to be returning the number of seqs added
+            return discarded_seqs_fasta
+        else:
+            # if we are not screening then we want to return the fasta that contains the significant sub_e_value seqs
+            return fasta_out, fasta_out_path, discarded_seqs_fasta
+
+    def create_symclade_backup(self):
+        back_up_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'symClade_backup'))
+        os.makedirs(back_up_dir, exist_ok=True)
+        src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/symClade.fa'
+        time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        dst_fasta_path = back_up_dir + '/symClade_{}.fa'.format(time_stamp)
+        dst_readme_path = back_up_dir + '/symClade_{}.readme'.format(time_stamp)
+        # then write a copy to it.
+        shutil.copyfile(src_path, dst_fasta_path)
+        # Then write out a very breif readme
+        read_me = [
+            'This is a symClade.fa backup created during datasubmission of data_set ID: {}'.format(
+                self.dataset_object.id)]
+        write_list_to_destination(dst_readme_path, read_me)
+
+    def setup_and_execute_worker_taxa_screening(self):
+        self.init_taxonomic_screening_handler()
+
+        self.execute_taxonomy_screening()
+
+        self.taxa_screening_update_checked_samples_list()
+
+    def taxa_screening_update_checked_samples_list(self):
+        self.checked_samples_with_no_additional_symbiodinium_sequences = \
+            list(self.taxonomic_screening_handler.checked_samples_mp_list)
+
+    def execute_taxonomy_screening(self):
+        all_processes = []
+        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+        db.connections.close_all()
+        sys.stdout.write('\nPerforming QC\n')
+        for n in range(self.num_proc):
+            new_process = Process(
+                target=self.worker_taxonomy_screening,
+                args=(
+                    self.taxonomic_screening_handler.input_queue,
+                    self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict,
+                    self.taxonomic_screening_handler.error_samples_mp_list,
+                    self.taxonomic_screening_handler.checked_samples_mp_list))
+
+            all_processes.append(new_process)
+            new_process.start()
+        for process in all_processes:
+            process.join()
+
+    def init_taxonomic_screening_handler(self):
+        self.taxonomic_screening_handler = TaxonomicScreeningHandler(
+            samples_that_caused_errors_in_qc_list=self.samples_that_caused_errors_in_qc_list,
+            checked_samples_list=self.checked_samples_with_no_additional_symbiodinium_sequences,
+            list_of_samples_names=self.list_of_samples_names, num_proc=self.num_proc
+        )
+
+    def worker_taxonomy_screening(self, input_q, e_val_collection_dict, err_smpl_list, checked_samples):
+        """
+        :param input_q: The multiprocessing queue that holds a list of the sample names
+        :param e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
+        1 - provided a match in the blast analysis
+        2 - is of suitable size
+        3 - but has an evalue match below the cuttof
+        the value of the dict is an int that represents how many samples this nucleotide sequence was found in
+        :param err_smpl_list: This is a managed list containing sample names of the samples that had errors during the
+        initial mothur qc and therefore don't require taxonomic screening performed on them
+        :param checked_samples: This is a list of sample names for samples that were found to contain only
+        Symbiodinium sequences or have already had all potential Symbiodinium sequences screened and so don't
+        require any further taxonomic screening
+        :return: Whilst this doesn't return anything a number of objects are picked out in each of the local
+        working directories for use in the workers that follow this one.
+        """
+        for sample_name in iter(input_q.get, 'STOP'):
+
+            # If the sample gave an error during the inital mothur then we don't consider it here.
+            if sample_name in err_smpl_list:
+                continue
+
+            # A sample will be in this list if we have already performed this worker on it and none of its sequences
+            # gave matches to the symClade database at below the evalue threshold
+            if sample_name in checked_samples:
+                continue
+
+            taxonomic_screening_worker = TaxonomicScreeningWorker(
+                sample_name=sample_name, wkd=self.temp_working_directory,
+                path_to_symclade_db=self.symclade_db_full_path, debug=self.debug, checked_samples_list=checked_samples,
+                e_val_collection_dict=e_val_collection_dict)
+
+
+            taxonomic_screening_worker.execute()
 
     def execute_worker_initial_mothur(self):
 

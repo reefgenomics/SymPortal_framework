@@ -6,7 +6,11 @@ import pandas as pd
 from collections import defaultdict
 from dbApp.models import DataSetSample
 from general import (
-    decode_utf8_binary_to_list, create_dict_from_fasta, create_seq_name_to_abundance_dict_from_name_file, decode_utf8_binary_to_list)
+    decode_utf8_binary_to_list, create_dict_from_fasta, create_seq_name_to_abundance_dict_from_name_file,
+    decode_utf8_binary_to_list)
+from pickle import dump, load
+from multiprocessing import Queue, Manager, Process
+from django import db
 
 class BlastnAnalysis:
     def __init__(
@@ -523,7 +527,6 @@ class MothurAnalysis:
                 raise RuntimeError('Please set fwd_primer.')
         sys.stdout.write(f'\nPCR attributes: OK\n')
 
-
 class SequenceCollection:
     """ A sequence collection is a set of sequences either generated from a fastq file or from a fasta file.
     It cannot be created directly from binary files or from paired files. As such, to generate a SequenceCollection
@@ -686,6 +689,17 @@ class InitialMothurWorker:
 
         sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
 
+        self.write_out_final_name_and_fasta_for_tax_screening()
+
+
+    def write_out_final_name_and_fasta_for_tax_screening(self):
+        name_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
+        taxonomic_screening_name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
+        write_list_to_destination(taxonomic_screening_name_file_path, name_file_as_list)
+        fasta_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.fasta_path)
+        taxonomic_screening_fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
+        write_list_to_destination(taxonomic_screening_fasta_file_path, fasta_file_as_list)
+
     def save_changes_to_data_set_sample(self):
         self.data_set_sample.save()
 
@@ -758,6 +772,175 @@ class InitialMothurWorker:
         self.data_set_sample.error_in_processing = True
         self.data_set_sample.error_reason = errorreason
         self.save_changes_to_data_set_sample()
+
+class TaxonomicScreeningHandler:
+    def __init__(self, samples_that_caused_errors_in_qc_list, checked_samples_list, list_of_samples_names, num_proc):
+        self.input_queue = Queue()
+        self.manager = Manager()
+        self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict = self.manager.dict()
+        self.error_samples_mp_list = self.manager.list(samples_that_caused_errors_in_qc_list)
+        self.checked_samples_mp_list = self.manager.list(checked_samples_list)
+        self.list_of_sample_names = list_of_samples_names
+        self.num_proc = num_proc
+        self.load_input_queue()
+
+    def load_input_queue(self):
+        # load up the input q
+        for sample_name in self.list_of_sample_names:
+            self.input_queue.put(sample_name)
+        # load in the STOPs
+        for n in range(self.num_proc):
+            self.input_queue.put('STOP')
+
+    def worker_taxonomy_screening(self, input_q, e_val_collection_dict, err_smpl_list, checked_samples):
+        """
+        :param input_q: The multiprocessing queue that holds a list of the sample names
+        :param e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
+        1 - provided a match in the blast analysis
+        2 - is of suitable size
+        3 - but has an evalue match below the cuttof
+        the value of the dict is an int that represents how many samples this nucleotide sequence was found in
+        :param err_smpl_list: This is a managed list containing sample names of the samples that had errors during the
+        initial mothur qc and therefore don't require taxonomic screening performed on them
+        :param checked_samples: This is a list of sample names for samples that were found to contain only
+        Symbiodinium sequences or have already had all potential Symbiodinium sequences screened and so don't
+        require any further taxonomic screening
+        :return: Whilst this doesn't return anything a number of objects are picked out in each of the local
+        working directories for use in the workers that follow this one.
+        """
+        for sample_name in iter(input_q.get, 'STOP'):
+
+            # If the sample gave an error during the inital mothur then we don't consider it here.
+            if sample_name in err_smpl_list:
+                continue
+
+            # A sample will be in this list if we have already performed this worker on it and none of its sequences
+            # gave matches to the symClade database at below the evalue threshold
+            if sample_name in checked_samples:
+                continue
+
+            taxonomic_screening_worker = TaxonomicScreeningWorker(
+                sample_name=sample_name, wkd=self.temp_working_directory,
+                path_to_symclade_db=self.symclade_db_full_path, debug=self.debug, checked_samples_list=checked_samples,
+                e_val_collection_dict=e_val_collection_dict)
+
+
+            taxonomic_screening_worker.execute()
+
+
+class TaxonomicScreeningWorker:
+    def __init__(self, sample_name, wkd, path_to_symclade_db, debug, e_val_collection_dict, checked_samples_list):
+        self.sample_name = sample_name
+        self.cwd = os.path.join(wkd, self.sample_name)
+        self.fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
+        self.fasta_dict = create_dict_from_fasta(fasta_path=self.fasta_file_path)
+        self.name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
+        self.name_dict = {a.split('\t')[0]: a for a in read_defined_file_to_list(self.name_file_path)}
+        self.path_to_symclade_db = path_to_symclade_db
+        self.debug = debug
+        # This is a managed dictionary where key is a nucleotide sequence that has:
+        # 1 - provided a match in the blast analysis
+        # 2 - is of suitable size
+        # 3 - but has an evalue match below the cuttof
+        # the value of the dict is an int that represents how many samples this nucleotide sequence was found in
+        self.e_val_collection_dict = e_val_collection_dict
+        self.non_symbiodinium_sequences_list = []
+        self.sequence_name_to_clade_dict = None
+
+        self.blast_output_as_list = None
+        self.already_processed_blast_seq_result = []
+        # this is a managed list that holds the names of samples from which no sequences were thrown out from
+        # it will be used in downstream processes.
+        self.checked_samples_list = checked_samples_list
+
+    def execute(self):
+        sys.stdout.write(f'{self.sample_name}: verifying seqs are Symbiodinium and determining clade\n')
+
+        blastn_analysis = BlastnAnalysis(
+            input_file_path=self.fasta_file_path,
+            output_file_path=os.path.join(self.cwd, 'blast.out'), db_path=self.path_to_symclade_db,
+            output_format_string="6 qseqid sseqid staxids evalue pident qcovs")
+
+        if self.debug:
+            blastn_analysis.execute(pipe_stdout_sterr=False)
+        else:
+            blastn_analysis.execute(pipe_stdout_sterr=True)
+
+        sys.stdout.write(f'{self.sample_name}: BLAST complete\n')
+
+        self.blast_output_as_list = blastn_analysis.return_blast_output_as_list()
+
+        self.if_debug_warn_if_blast_out_empty_or_low_seqs()
+
+        self.sequence_name_to_clade_dict = {
+            blast_out_line.split('\t')[0]: blast_out_line.split('\t')[1][-1] for blast_out_line in self.blast_output_as_list}
+
+        self.add_seqs_with_no_blast_match_to_non_sym_list()
+
+        # NB blast results sometimes return several matches for the same seq.
+        # as such we will use the already_processed_blast_seq_resulst to make sure that we only
+        # process each sequence once.
+        self.identify_and_allocate_non_sym_and_sub_e_seqs()
+
+        if not self.non_symbiodinium_sequences_list:
+            self.checked_samples_list.append(self.sample_name)
+
+        self.pickle_out_objects_to_cwd_for_use_in_next_worker()
+
+    def pickle_out_objects_to_cwd_for_use_in_next_worker(self):
+        dump(self.name_dict, open(f'{self.cwd}/name_dict.pickle', 'wb'))
+        dump(self.fasta_dict, open(f'{self.cwd}/fasta_dict.pickle', 'wb'))
+        dump(self.non_symbiodinium_sequences_list, open(f'{self.cwd}/throw_away_seqs.pickle', 'wb'))
+        dump(self.sequence_name_to_clade_dict, open(f'{self.cwd}/blast_dict.pickle', 'wb'))
+
+    def identify_and_allocate_non_sym_and_sub_e_seqs(self):
+        for line in self.blast_output_file:
+            seq_in_q = line.split('\t')[0]
+            if seq_in_q in self.already_processed_blast_seq_result:
+                continue
+            self.already_processed_blast_seq_result.append(seq_in_q)
+            identity = float(line.split('\t')[4])
+            coverage = float(line.split('\t')[5])
+
+            # noinspection PyPep8,PyBroadException
+            # here we are looking for sequences to add to the non_symbiodinium_sequence_list
+            # if a sequence fails at any of our if statements it will be added to the non_symbiodinium_sequence_list
+            try:
+                evalue_power = int(line.split('\t')[3].split('-')[1])
+                # With the smallest sequences i.e. 185bp it is impossible to get above the 100 threshold
+                # even if there is an exact match. As such, we sould also look at the match identity and coverage
+                if evalue_power < 100:  # evalue cut off, collect sequences that don't make the cut
+                    self.if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(coverage, identity, seq_in_q)
+            except:
+                # here we weren't able to extract the evalue_power for some reason.
+                self.if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(coverage, identity, seq_in_q)
+
+    def if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(self, coverage, identity, seq_in_q):
+        if identity < 80 or coverage < 95:
+            self.non_symbiodinium_sequences_list.append(seq_in_q)
+            # incorporate the size cutoff here that would normally happen below
+            if 184 < len(self.fasta_dict[seq_in_q]) < 310:
+                if self.fasta_dict[seq_in_q] in self.e_val_collection_dict.keys():
+                    self.e_val_collection_dict[self.fasta_dict[seq_in_q]] += 1
+                else:
+                    self.e_val_collection_dict[self.fasta_dict[seq_in_q]] = 1
+
+    def add_seqs_with_no_blast_match_to_non_sym_list(self):
+        sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - set(self.sequence_name_to_clade_dict.keys())
+        self.non_symbiodinium_sequences_list.extend(list(sequences_with_no_blast_match_as_set))
+        sys.stdout.write(
+            f'{self.sample_name}: {len(sequences_with_no_blast_match_as_set)} sequences thrown out '
+            f'initially due to being too divergent from reference sequences\n')
+
+    def if_debug_warn_if_blast_out_empty_or_low_seqs(self):
+        if self.debug:
+            if not self.blast_output_as_list:
+                print(f'WARNING blast output file is empty for {self.sample_name}')
+            else:
+                if len(self.blast_output_as_list) < 10:
+                    print(
+                        f'WARNING blast output file for {self.sample_name} '
+                        f'is only {len(self.blast_output_as_list)} lines long')
 
 
 def return_list_of_file_names_in_directory(directory_to_list):

@@ -975,8 +975,9 @@ def taxonomic_screening(wkd, data_set_uid, num_proc, data_submission_in_q, error
                         output_dir, debug):
     """
     This screening is to identify the Symbiodinium sequences in the sequences that have already been through the
-    initial quality control. We have two versions of this taxonomic screening. The version that screens the
-    'sub_e_value' sequences and the version that doesn't. The sub_e_values sequences are those that gave a match to
+    initial quality control for each of the samples. We have two versions of this taxonomic screening.
+    The version that screens the 'sub_e_value' sequences and the version that doesn't. The sub_e_values
+    sequences are those that gave a match to
     the symClade.fa database (reference database containing Symbiodinium samples) but that had e-values lower than the
     required threshold. For local instances the sub e value screening is turned off because the screening requires
     running blastn analyses againt the NCBI nt databse. This is likely to big a computational effort for most local
@@ -1006,7 +1007,6 @@ def taxonomic_screening(wkd, data_set_uid, num_proc, data_submission_in_q, error
 
 
         found_additional_symbiodinium_sequences_in_iteration = True
-
         while found_additional_symbiodinium_sequences_in_iteration:
             # everytime that the execute_worker is run it pickles out the files needed for the next worker
             e_value_multi_proc_dict, \
@@ -1806,7 +1806,7 @@ def pre_med_qc(data_set_identification, data_submission_in_q, num_proc, wkd, scr
     # a directory from each sample.
     error_sample_list = execute_worker_initial_mothur(data_set_identification, num_proc, wkd, debug)
 
-    # Now do the iterative screening
+    # Now do the iterative taxonomic screening
     # this should contain two parts, the screening and the handling of the screening results
     # it should also contain the writing out of the screened seqs.
     new_seqs_added_count = None
@@ -1814,7 +1814,8 @@ def pre_med_qc(data_set_identification, data_submission_in_q, num_proc, wkd, scr
     fasta_of_sig_sub_e_seqs_path = None
     if screen_sub_evalue:
         new_seqs_added_count, discarded_seqs_fasta = taxonomic_screening(
-            data_set_uid=data_set_identification, data_submission_in_q=data_submission_in_q,
+            data_set_uid=data_set_identification,
+            data_submission_in_q=data_submission_in_q,
             wkd=wkd,
             num_proc=num_proc,
             error_sample_list=error_sample_list,
