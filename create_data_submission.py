@@ -1355,7 +1355,7 @@ def worker_taxonomy_screening(input_q, wkd, reference_db_name, e_val_collection_
             # noinspection PyPep8,PyBroadException
             try:
                 evalue_power = int(line.split('\t')[3].split('-')[1])
-                # TODO with the smallest sequences i.e. 185bp it is impossible to get above the 100 threshold
+                # with the smallest sequences i.e. 185bp it is impossible to get above the 100 threshold
                 # even if there is an exact match. As such, we sould also look at the match identity and coverage
                 if evalue_power < 100:  # evalue cut off, collect sequences that don't make the cut
                     if identity < 80 or coverage < 95:
@@ -2341,7 +2341,7 @@ def screen_sub_e_value_sequences(ds_id, data_sub_data_dir, iteration_id, seq_sam
     # perhaps something like 60%.
     # we then need to see if there is a 'Symbiodinium' sequence that matches the query and all of these
     # requirements. If so then we consider the sequence to be Symbiodinium
-    # TODO make sure that we have metrics that show how many sequences were kicked out for each iterarion that we
+    # make sure that we have metrics that show how many sequences were kicked out for each iterarion that we
     # do the database update.
     # We should write out the new database with an iteration indicator so that we can keep track of the progress of the
     # database creations. We can then run the database submissions using specific iterations of the symclade dataase

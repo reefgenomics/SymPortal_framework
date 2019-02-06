@@ -778,6 +778,7 @@ class TaxonomicScreeningHandler:
         self.input_queue = Queue()
         self.manager = Manager()
         self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict = self.manager.dict()
+        self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = self.manager.dict()
         self.error_samples_mp_list = self.manager.list(samples_that_caused_errors_in_qc_list)
         self.checked_samples_mp_list = self.manager.list(checked_samples_list)
         self.list_of_sample_names = list_of_samples_names
@@ -792,44 +793,12 @@ class TaxonomicScreeningHandler:
         for n in range(self.num_proc):
             self.input_queue.put('STOP')
 
-    def worker_taxonomy_screening(self, input_q, e_val_collection_dict, err_smpl_list, checked_samples):
-        """
-        :param input_q: The multiprocessing queue that holds a list of the sample names
-        :param e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
-        1 - provided a match in the blast analysis
-        2 - is of suitable size
-        3 - but has an evalue match below the cuttof
-        the value of the dict is an int that represents how many samples this nucleotide sequence was found in
-        :param err_smpl_list: This is a managed list containing sample names of the samples that had errors during the
-        initial mothur qc and therefore don't require taxonomic screening performed on them
-        :param checked_samples: This is a list of sample names for samples that were found to contain only
-        Symbiodinium sequences or have already had all potential Symbiodinium sequences screened and so don't
-        require any further taxonomic screening
-        :return: Whilst this doesn't return anything a number of objects are picked out in each of the local
-        working directories for use in the workers that follow this one.
-        """
-        for sample_name in iter(input_q.get, 'STOP'):
-
-            # If the sample gave an error during the inital mothur then we don't consider it here.
-            if sample_name in err_smpl_list:
-                continue
-
-            # A sample will be in this list if we have already performed this worker on it and none of its sequences
-            # gave matches to the symClade database at below the evalue threshold
-            if sample_name in checked_samples:
-                continue
-
-            taxonomic_screening_worker = TaxonomicScreeningWorker(
-                sample_name=sample_name, wkd=self.temp_working_directory,
-                path_to_symclade_db=self.symclade_db_full_path, debug=self.debug, checked_samples_list=checked_samples,
-                e_val_collection_dict=e_val_collection_dict)
-
-
-            taxonomic_screening_worker.execute()
 
 
 class TaxonomicScreeningWorker:
-    def __init__(self, sample_name, wkd, path_to_symclade_db, debug, e_val_collection_dict, checked_samples_list):
+    def __init__(
+            self, sample_name, wkd, path_to_symclade_db, debug, e_val_collection_mp_dict,
+            checked_samples_mp_list, sub_evalue_nucleotide_sequence_to_clade_mp_dict):
         self.sample_name = sample_name
         self.cwd = os.path.join(wkd, self.sample_name)
         self.fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
@@ -843,7 +812,10 @@ class TaxonomicScreeningWorker:
         # 2 - is of suitable size
         # 3 - but has an evalue match below the cuttof
         # the value of the dict is an int that represents how many samples this nucleotide sequence was found in
-        self.e_val_collection_dict = e_val_collection_dict
+        self.e_val_collection_mp_dict = e_val_collection_mp_dict
+        # This dictionary will be used outside of the multiprocessing to append the clade of a given sequences
+        # that is being added to the symClade reference database
+        self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = sub_evalue_nucleotide_sequence_to_clade_mp_dict
         self.non_symbiodinium_sequences_list = []
         self.sequence_name_to_clade_dict = None
 
@@ -851,7 +823,7 @@ class TaxonomicScreeningWorker:
         self.already_processed_blast_seq_result = []
         # this is a managed list that holds the names of samples from which no sequences were thrown out from
         # it will be used in downstream processes.
-        self.checked_samples_list = checked_samples_list
+        self.checked_samples_mp_list = checked_samples_mp_list
 
     def execute(self):
         sys.stdout.write(f'{self.sample_name}: verifying seqs are Symbiodinium and determining clade\n')
@@ -883,7 +855,7 @@ class TaxonomicScreeningWorker:
         self.identify_and_allocate_non_sym_and_sub_e_seqs()
 
         if not self.non_symbiodinium_sequences_list:
-            self.checked_samples_list.append(self.sample_name)
+            self.checked_samples_mp_list.append(self.sample_name)
 
         self.pickle_out_objects_to_cwd_for_use_in_next_worker()
 
@@ -894,11 +866,11 @@ class TaxonomicScreeningWorker:
         dump(self.sequence_name_to_clade_dict, open(f'{self.cwd}/blast_dict.pickle', 'wb'))
 
     def identify_and_allocate_non_sym_and_sub_e_seqs(self):
-        for line in self.blast_output_file:
-            seq_in_q = line.split('\t')[0]
-            if seq_in_q in self.already_processed_blast_seq_result:
+        for line in self.blast_output_as_list:
+            name_of_current_sequence = line.split('\t')[0]
+            if name_of_current_sequence in self.already_processed_blast_seq_result:
                 continue
-            self.already_processed_blast_seq_result.append(seq_in_q)
+            self.already_processed_blast_seq_result.append(name_of_current_sequence)
             identity = float(line.split('\t')[4])
             coverage = float(line.split('\t')[5])
 
@@ -910,20 +882,34 @@ class TaxonomicScreeningWorker:
                 # With the smallest sequences i.e. 185bp it is impossible to get above the 100 threshold
                 # even if there is an exact match. As such, we sould also look at the match identity and coverage
                 if evalue_power < 100:  # evalue cut off, collect sequences that don't make the cut
-                    self.if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(coverage, identity, seq_in_q)
+                    self.if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(
+                        coverage, identity, name_of_current_sequence
+                    )
             except:
                 # here we weren't able to extract the evalue_power for some reason.
-                self.if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(coverage, identity, seq_in_q)
+                self.if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(
+                    coverage, identity, name_of_current_sequence
+                )
 
-    def if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(self, coverage, identity, seq_in_q):
+    def if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(self, coverage, identity, name_of_current_sequence):
+        """This method will add nucleotide sequences that gave blast matches but that were below the evalue
+        or indentity and coverage thresholds to the evalue collection dict and
+        record how many samples that sequence was found in.
+        It will also take into account the size thresholds that would normally happen later in the code during further mothur qc.
+        Finally, it will also populate a nucleotide sequence to clade dictionary that will be used outside of
+        the MPing to append the clade of a given sequences that is being added to the symClade reference database.
+        """
         if identity < 80 or coverage < 95:
-            self.non_symbiodinium_sequences_list.append(seq_in_q)
-            # incorporate the size cutoff here that would normally happen below
-            if 184 < len(self.fasta_dict[seq_in_q]) < 310:
-                if self.fasta_dict[seq_in_q] in self.e_val_collection_dict.keys():
-                    self.e_val_collection_dict[self.fasta_dict[seq_in_q]] += 1
+            self.non_symbiodinium_sequences_list.append(name_of_current_sequence)
+            # incorporate the size cutoff here that would normally happen in the further mothur qc later in the code
+            if 184 < len(self.fasta_dict[name_of_current_sequence]) < 310:
+                if self.fasta_dict[name_of_current_sequence] in self.e_val_collection_mp_dict.keys():
+                    self.e_val_collection_mp_dict[self.fasta_dict[name_of_current_sequence]] += 1
                 else:
-                    self.e_val_collection_dict[self.fasta_dict[seq_in_q]] = 1
+                    self.e_val_collection_mp_dict[self.fasta_dict[name_of_current_sequence]] = 1
+                    self.sub_evalue_nucleotide_sequence_to_clade_mp_dict[
+                        self.fasta_dict[name_of_current_sequence]
+                    ] = self.sequence_name_to_clade_dict[name_of_current_sequence]
 
     def add_seqs_with_no_blast_match_to_non_sym_list(self):
         sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - set(self.sequence_name_to_clade_dict.keys())

@@ -10,9 +10,9 @@ import general
 import json
 from multiprocessing import Queue, Manager, Process
 from django import db
-from analysis_classes import InitialMothurWorker, TaxonomicScreeningWorker, TaxonomicScreeningHandler
+from analysis_classes import InitialMothurWorker, TaxonomicScreeningWorker, TaxonomicScreeningHandler, BlastnAnalysis
 from datetime import datetime
-from general import write_list_to_destination, read_defined_file_to_list, create_no_space_fasta_file, create_dict_from_fasta
+from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 import pickle
 
 class DataLoading:
@@ -53,12 +53,21 @@ class DataLoading:
         self.post_initial_qc_fasta_file_name = None
         # args for the taxonomic screening
         self.screen_sub_evalue = screen_sub_evalue
-        self.new_seqs_added_count = None
-        self.fasta_of_significant_sub_e_seqs_as_list = None
-        self.fasta_of_significant_sub_e_seqs_path = None
+        self.new_seqs_added_in_iteration = 0
+        self.new_seqs_added_running_total = 0
         self.discarded_seqs_fasta = None
         self.checked_samples_with_no_additional_symbiodinium_sequences = []
         self.taxonomic_screening_handler = None
+        self.sequences_to_screen_fasta_as_list = []
+        self.sequences_to_screen_fasta_path = os.path.join(
+            self.temp_working_directory, 'taxa_screening_seqs_to_screen.fa'
+        )
+        # the number of samples that a sub evalue sequences must be
+        # found in for us to carry it through for taxonomic screening
+        self.required_sample_support_for_sub_evalue_sequencs = 3
+        # the number of sequences in the 10 matches that must be annotated as Symbiodinium or Symbiodiniaceae in order
+        # for a sequences to be added into the reference symClade database.
+        self.required_symbiodinium_matches = 3
 
     def execute(self):
         self.copy_and_decompress_input_files_to_temp_wkd()
@@ -93,6 +102,9 @@ class DataLoading:
         symbiodinium, these are added to the symClade datbase, and the initial screening is run again. This processs is
         repeated until no further sub evalues are found or if none of the sub evlaues being screened are found to be
         Symbiodinium in origin.
+        To make this faster, rather than check every sample in every iteration we will keep track of when a sample
+        has been checked and found to contain no non -ymbiodinium sequences.
+        This way we can skip these sequences in the iterative rounds of screening.
         """
 
 
@@ -100,63 +112,30 @@ class DataLoading:
         fasta_out_path = None
         if self.screen_sub_evalue:
 
-            # To make this faster, rather than check every sample in every iteration we will keep track of when a sample
-            # has been checked and found to contain no additional Symbiodinium sequences.
-            # This way we can skip these sequences in the iterative rounds of screening.
+            self.create_symclade_backup_incase_of_accidental_deletion_of_corruption()
 
-            self.new_seqs_added_count = 0
+            while 1:
+                # This method simply identifies whether there are sequences that need screening.
+                # Everytime that the execute_worker is run it pickles out the files needed for the next worker
+                self.make_fasta_of_sequences_that_need_taxa_screening()
 
-            # making backup in case we somehow delte or corrupt the symClade
-            # database in this iterative screening process
-            self.create_symclade_backup()
-
-            found_additional_symbiodinium_sequences_in_iteration = True
-            while found_additional_symbiodinium_sequences_in_iteration:
-                # everytime that the execute_worker is run it pickles out the files needed for the next worker
-                self.setup_and_execute_worker_taxa_screening()
-
-                if len(self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict) == 0:
-                    # then there are no sub_e_seqs to screen and we can exit
+                if self.sequences_to_screen_fasta_as_list:
+                    # Now do the screening
+                    # The outcome of this will be an updated symClade.fa that we should then make a blastdb from it.
+                    self.screen_sub_e_seqs()
+                    if self.new_seqs_added_in_iteration == 0:
+                        break
+                else:
                     break
                 # TODO we have got here with the refactoring and class
-
-                # this is where we will do the screening.
-                # the outcome of this should be an updated symClade.fa that we should then make a blastdb from
-                # if we indeed find that some of the sequences that were below the evalue cut off are symbiodinium
-                # then this should return True. else False.
-
-                # From the e_value_multi_proc_dict generate a fasta of the sequences that were found in more than 3 samples
-                # pass this to the screen_sub_e_seqs
-
-                # The number of samples a sequence must have been found in for us to consider it for screening is taken into
-                # account when the fasta is written out.
-                # This function will reuturn False if we end up with no sequences to screen
-                # It will outherwise reutrn the list that is the fasta that was written out.
-                fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(
-                    data_set_uid, data_submission_in_q, e_value_multi_proc_dict, wkd, debug)
-
-                # we only need to screen if we have a fasta to screen
-                if fasta_out:
-                    # if found_add... is false. no new seqs were added to the symClade database
-                    found_additional_symbiodinium_sequences_in_iteration, num_new_seqs = screen_sub_e_seqs(
-                        data_set_id=data_set_uid, wkd=wkd)
-                    self.new_seqs_added_count += num_new_seqs
-                else:
-                    found_additional_symbiodinium_sequences_in_iteration = False
 
         else:
             # if not doing the screening we can simply run the execute_worker_taxa_screening once.
             # During its run it will have output all of the files we need to run the following workers.
             # We can also run the generate_and_write_below_evalue_fasta_for_screening function to write out a
             # fasta of significant sequences we can then report to the user using that object
-            e_value_multi_proc_dict = execute_worker_taxa_screening(data_submission_in_q, error_sample_list, num_proc,
-                                                                    sample_fastq_pairs, wkd, debug=debug)
+            self.make_fasta_of_sequences_that_need_taxa_screening()
 
-            fasta_out, fasta_out_path = generate_and_write_below_evalue_fasta_for_screening(data_set_uid,
-                                                                                            data_submission_in_q,
-                                                                                            e_value_multi_proc_dict,
-                                                                                            wkd,
-                                                                                            debug)
 
         # Create the queues that will hold the sample information
         input_q = Queue()
@@ -218,7 +197,116 @@ class DataLoading:
             # if we are not screening then we want to return the fasta that contains the significant sub_e_value seqs
             return fasta_out, fasta_out_path, discarded_seqs_fasta
 
-    def create_symclade_backup(self):
+    def screen_sub_e_seqs(self):
+        """This function screens a fasta file to see if the sequences are Symbiodinium in origin.
+        This fasta file contains the below_e_cutoff sequences that need to be screened. These sequences are the sequences
+        that were found to have a match in the initial screening against the symClade.fa database but were below
+        the required evalue cut off. Here we run these sequences against the entire NCBI 'nt' database to verify if they
+        or of Symbiodinium origin of not.
+        The fasta we are screening only contains seuqences that were found in at least 3 samples.
+        We will call a sequence symbiodinium if it has a match that covers at least 95% of its sequence at a 60% or higher
+        identity. It must also have Symbiodinium or Symbiodiniaceae in the name. We will also require that a
+        sub_e_value seq has at least the required_sybiodinium_matches (3 at the moment) before we call it Symbiodinium.
+        """
+
+        blastn_analysis_object = BlastnAnalysis(
+            input_file_path=self.sequences_to_screen_fasta_path,
+            output_file_path=os.path.join(self.temp_working_directory, 'blast.out'),
+            max_target_seqs=10,
+            num_threads=str(self.num_proc)
+        )
+
+        blastn_analysis_object.execute()
+
+        blast_output_dict = blastn_analysis_object.return_blast_results_dict()
+
+        query_sequences_verified_as_symbiodinium_list = self.get_list_of_seqs_in_blast_result_that_are_symbiodinium(
+            blast_output_dict
+        )
+
+        self.new_seqs_added_in_iteration = len(query_sequences_verified_as_symbiodinium_list)
+        self.new_seqs_added_running_total += self.new_seqs_added_in_iteration
+
+        if query_sequences_verified_as_symbiodinium_list:
+            self.taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(query_sequences_verified_as_symbiodinium_list)
+
+
+    def taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(self, query_sequences_verified_as_symbiodinium_list):
+        new_symclade_fasta_as_list = self.taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
+            query_sequences_verified_as_symbiodinium_list
+        )
+        combined_fasta = self.taxa_screening_combine_new_symclade_seqs_with_current(new_symclade_fasta_as_list)
+        self.taxa_screening_make_new_symclade_db(combined_fasta)
+
+    def taxa_screening_make_new_symclade_db(self, combined_fasta):
+        write_list_to_destination(self.symclade_db_full_path, combined_fasta)
+        make_new_blast_db(input_fasta_to_make_db_from=self.symclade_db_full_path, db_title='symClade')
+
+    def taxa_screening_combine_new_symclade_seqs_with_current(self, new_symclade_fasta_as_list):
+        old_symclade_fasta_as_list = read_defined_file_to_list(self.symclade_db_full_path)
+        combined_fasta = new_symclade_fasta_as_list + old_symclade_fasta_as_list
+        return combined_fasta
+
+    def taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(self,
+                                                                                  query_sequences_verified_as_symbiodinium_list):
+        screened_seqs_fasta_dict = create_dict_from_fasta(
+            fasta_path=self.sequences_to_screen_fasta_path
+        )
+        new_symclade_fasta_as_list = []
+        for name_of_symbiodinium_sequence_to_add_to_symclade_db in query_sequences_verified_as_symbiodinium_list:
+            new_symclade_fasta_as_list.extend(
+                [
+                    f'>{name_of_symbiodinium_sequence_to_add_to_symclade_db}',
+                    f'{screened_seqs_fasta_dict[name_of_symbiodinium_sequence_to_add_to_symclade_db]}'
+                ]
+            )
+        return new_symclade_fasta_as_list
+
+    def get_list_of_seqs_in_blast_result_that_are_symbiodinium(self, blast_output_dict):
+        query_sequences_verified_as_symbiodinium_list = []
+        for query_sequence_name, blast_result_list_for_query_sequence in blast_output_dict.items():
+            sym_count = 0
+            for result_str in blast_result_list_for_query_sequence:
+                if 'Symbiodinium' in result_str or 'Symbiodiniaceae' in result_str:
+                    percentage_coverage = float(result_str.split('\t')[4])
+                    percentage_identity_match = float(result_str.split('\t')[3])
+                    if percentage_coverage > 95 and percentage_identity_match > 60:
+                        sym_count += 1
+                        if sym_count == self.required_symbiodinium_matches:
+                            query_sequences_verified_as_symbiodinium_list.append(query_sequence_name)
+                            break
+        return query_sequences_verified_as_symbiodinium_list
+
+    def make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening(self):
+        """ The below_e_cutoff_dict has nucleotide sequencs as the
+        key and the number of samples that sequences was found in as the value.
+        """
+        sub_evalue_nuclotide_sequence_to_number_of_samples_found_in_dict = dict(
+            self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict)
+        self.sequences_to_screen_fasta_as_list = []
+        sequence_number_counter = 0
+        for nucleotide_sequence, num_samples_found_in in sub_evalue_nuclotide_sequence_to_number_of_samples_found_in_dict.items():
+            if num_samples_found_in >= self.required_sample_support_for_sub_evalue_sequencs:
+                # then this is a sequences that was found in three or more samples
+                clade_of_sequence = self.taxonomic_screening_handler.sub_evalue_nucleotide_sequence_to_clade_mp_dict[
+                    nucleotide_sequence
+                ]
+                self.sequences_to_screen_fasta_as_list.extend(
+                    [
+                        f'>sub_e_seq_count_{sequence_number_counter}_'
+                        f'{self.dataset_object.id}_{num_samples_found_in}_'
+                        f'{clade_of_sequence}',
+                        nucleotide_sequence
+                    ]
+                )
+                sequence_number_counter += 1
+        if self.sequences_to_screen_fasta_as_list:
+            write_list_to_destination(self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
+
+
+
+
+    def create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
         back_up_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'symClade_backup'))
         os.makedirs(back_up_dir, exist_ok=True)
         src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/symClade.fa'
@@ -233,12 +321,15 @@ class DataLoading:
                 self.dataset_object.id)]
         write_list_to_destination(dst_readme_path, read_me)
 
-    def setup_and_execute_worker_taxa_screening(self):
+    def make_fasta_of_sequences_that_need_taxa_screening(self):
         self.init_taxonomic_screening_handler()
 
+        # the self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict is populated here
         self.execute_taxonomy_screening()
 
         self.taxa_screening_update_checked_samples_list()
+
+        self.make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening()
 
     def taxa_screening_update_checked_samples_list(self):
         self.checked_samples_with_no_additional_symbiodinium_sequences = \
@@ -256,7 +347,9 @@ class DataLoading:
                     self.taxonomic_screening_handler.input_queue,
                     self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict,
                     self.taxonomic_screening_handler.error_samples_mp_list,
-                    self.taxonomic_screening_handler.checked_samples_mp_list))
+                    self.taxonomic_screening_handler.checked_samples_mp_list,
+                    self.taxonomic_screening_handler.sub_evalue_nucleotide_sequence_to_clade_mp_dict,
+                ))
 
             all_processes.append(new_process)
             new_process.start()
@@ -270,7 +363,9 @@ class DataLoading:
             list_of_samples_names=self.list_of_samples_names, num_proc=self.num_proc
         )
 
-    def worker_taxonomy_screening(self, input_q, e_val_collection_dict, err_smpl_list, checked_samples):
+    def worker_taxonomy_screening(
+            self, input_q, e_val_collection_mp_dict, err_smpl_list_mp_list,
+            checked_samples_mp_list, sub_evalue_nucleotide_sequence_to_clade_mp_dict):
         """
         :param input_q: The multiprocessing queue that holds a list of the sample names
         :param e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
@@ -289,18 +384,19 @@ class DataLoading:
         for sample_name in iter(input_q.get, 'STOP'):
 
             # If the sample gave an error during the inital mothur then we don't consider it here.
-            if sample_name in err_smpl_list:
+            if sample_name in err_smpl_list_mp_list:
                 continue
 
             # A sample will be in this list if we have already performed this worker on it and none of its sequences
             # gave matches to the symClade database at below the evalue threshold
-            if sample_name in checked_samples:
+            if sample_name in checked_samples_mp_list:
                 continue
 
             taxonomic_screening_worker = TaxonomicScreeningWorker(
                 sample_name=sample_name, wkd=self.temp_working_directory,
-                path_to_symclade_db=self.symclade_db_full_path, debug=self.debug, checked_samples_list=checked_samples,
-                e_val_collection_dict=e_val_collection_dict)
+                path_to_symclade_db=self.symclade_db_full_path, debug=self.debug,
+                checked_samples_mp_list=checked_samples_mp_list, e_val_collection_mp_dict=e_val_collection_mp_dict,
+                sub_evalue_nucleotide_sequence_to_clade_mp_dict=sub_evalue_nucleotide_sequence_to_clade_mp_dict)
 
 
             taxonomic_screening_worker.execute()
