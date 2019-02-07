@@ -8,6 +8,8 @@ import subprocess
 import sys
 # Your application specific imports
 from dbApp.models import DataSet, DataAnalysis
+from plumbum import local
+import pandas as pd
 # ###########################################
 
 
@@ -38,11 +40,10 @@ def write_list_to_destination(destination, list_to_write):
 
 def read_defined_file_to_list(filename):
     with open(filename, mode='r') as reader:
-        temp_list = [line.rstrip() for line in reader]
-    return temp_list
+        return [line.rstrip() for line in reader]
 
 
-def convert_interleaved_to_sequencial_fasta(fasta_in):
+def convert_interleaved_to_sequencial_fasta_first_line_removal(fasta_in):
     list_seq_names = []
     list_seq_sequences = []
     num_seqs = int(fasta_in[0].split()[0])
@@ -66,6 +67,22 @@ def convert_interleaved_to_sequencial_fasta(fasta_in):
         out_fasta.extend(['>{}'.format(name), seq])
 
     return out_fasta
+
+def convert_interleaved_to_sequencial_fasta(fasta_as_list):
+    new_fasta = []
+    temp_seq_string_list = []
+    for i, fasta_line in enumerate(fasta_as_list):
+        if fasta_line.startswith('>'):
+            if temp_seq_string_list:
+                new_fasta.append(''.join(temp_seq_string_list))
+                temp_seq_string_list = []
+                new_fasta.append(fasta_line)
+            else:
+                new_fasta.append(fasta_line)
+        else:
+            temp_seq_string_list.append(fasta_line)
+    new_fasta.append(''.join(temp_seq_string_list))
+    return new_fasta
 
 def execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file, mothur_exec_str='mothur'):
     return subprocess.run(
@@ -141,7 +158,9 @@ def create_seq_name_to_abundance_dict_from_name_file(name_file_list = None, name
                     name_file_as_list.split('\t')[1].split(','))
             return temporary_dictionary
 
-def make_new_blast_db(input_fasta_to_make_db_from, db_title, db_type='nucl',makeblastdb_exec_str='makeblastdb', pipe_stdout_sterr=True):
+def make_new_blast_db(
+        input_fasta_to_make_db_from, db_title, db_type='nucl',
+        makeblastdb_exec_str='makeblastdb', pipe_stdout_sterr=True):
     if pipe_stdout_sterr:
         completed_process = subprocess.run(
             [makeblastdb_exec_str, '-in', input_fasta_to_make_db_from, '-dbtype', db_type, '-title', db_title],
@@ -155,3 +174,106 @@ def make_new_blast_db(input_fasta_to_make_db_from, db_title, db_type='nucl',make
 
 def decode_utf8_binary_to_list(bin_to_decode):
     return bin_to_decode.decode('utf-8').split('\n')
+
+def mafft_align_fasta(input_path, output_path, method='auto', mafft_exec_string='mafft', num_proc=1, iterations=1000):
+    # TODO add an algorythm argument so that the particular style of alignemtn can be chosen
+    # http://plumbum.readthedocs.io/en/latest/local_commands.html#pipelining
+    print(f'Aligning {input_path}')
+    if method == 'auto':
+        mafft = local[f'{mafft_exec_string}']
+        (mafft['--auto', '--thread', f'{num_proc}', input_path] > output_path)()
+    if method == 'linsi':
+        mafft = local[f'{mafft_exec_string}']
+        (mafft['--localpair', '--maxiterate', f'{iterations}', '--thread', f'{num_proc}', input_path] > output_path)()
+    print(f'Writing to {output_path}')
+
+def remove_gaps_from_fasta(fasta_as_list):
+    gapless_fasta = []
+    for fasta_line in fasta_as_list:
+        if fasta_line.startswith('>'):
+            gapless_fasta.append(fasta_line)
+        else:
+            gapless_fasta.append(fasta_line.replace('-', ''))
+    return gapless_fasta
+
+
+def fasta_to_pandas_df(fasta_as_list):
+    temp_df = pd.DataFrame([list(line) for line in fasta_as_list if not line.startswith('>')])
+    seq_names = [line[1:] for line in fasta_as_list if line.startswith('>')]
+    temp_df.index=seq_names
+    return temp_df
+
+
+def pandas_df_to_fasta(cropped_fasta_df):
+    temp_fasta = []
+    for ind in cropped_fasta_df.index.tolist():
+        temp_fasta.extend(['>{}'.format(ind), ''.join(list(cropped_fasta_df.loc[ind]))])
+    return temp_fasta
+
+def combine_two_fasta_files(path_one, path_two, path_for_combined):
+    one_file_one = read_defined_file_to_list(path_one)
+    one_file_two = read_defined_file_to_list(path_two)
+    one_file_one.extend(one_file_two)
+    write_list_to_destination(path_for_combined, one_file_one)
+
+def remove_primer_mismatch_annotations_from_fasta(fasta_path):
+    temp_fasta = []
+    fasta_to_clean = read_defined_file_to_list(fasta_path)
+    for i in range(len(fasta_to_clean) - 1):
+        if fasta_to_clean[i]:
+            if fasta_to_clean[i][0] == '>' and fasta_to_clean[i + 1]:
+                if '|' in fasta_to_clean[i]:
+                    temp_fasta.extend([fasta_to_clean[i].split('|')[0], fasta_to_clean[i + 1]])
+                else:
+                    temp_fasta.extend([fasta_to_clean[i].split('\t')[0], fasta_to_clean[i + 1]])
+    write_list_to_destination(fasta_path, temp_fasta)
+
+def read_defined_file_to_generator(filename):
+    with open(filename, mode='r') as reader:
+        return (line.rstrip() for line in reader)
+
+def return_list_of_file_names_in_directory(directory_to_list):
+    """
+    return a list that contains the filenames found in the specified directory
+    :param directory_to_list: the directory that the file names should be returned from
+    :return: list of strings that are the file names found in the directory_to_list
+    """
+    list_of_file_names_in_directory = []
+    for (dirpath, dirnames, filenames) in os.walk(directory_to_list):
+        list_of_file_names_in_directory.extend(filenames)
+        return list_of_file_names_in_directory
+
+def return_list_of_file_paths_in_directory(directory_to_list):
+    """
+    return a list that contains the full paths of each of the files found in the specified directory
+    :param directory_to_list: the directory that the file paths should be returned from
+    :return: list of strings that are the file paths found in the directory_to_list
+    """
+    list_of_file_paths_in_directory = []
+    for (dirpath, dirnames, filenames) in os.walk(directory_to_list):
+        list_of_file_paths_in_directory.extend([os.path.join(directory_to_list, file_name) for file_name in filenames])
+        return list_of_file_paths_in_directory
+
+def return_list_of_directory_names_in_directory(directory_to_list):
+    """
+        return a list that contains the directory names found in the specified directory
+        :param directory_to_list: the directory that the directory names should be returned from
+        :return: list of strings that are the directory names found in the directory_to_list
+        """
+    list_of_directory_names_in_directory = []
+    for (dirpath, dirnames, filenames) in os.walk(directory_to_list):
+        list_of_directory_names_in_directory.extend(dirnames)
+        return list_of_directory_names_in_directory
+
+
+def return_list_of_directory_paths_in_directory(directory_to_list):
+    """
+        return a list that contains the full paths of each of the directories found in the specified directory
+        :param directory_to_list: the directory that the directory paths should be returned from
+        :return: list of strings that are the directory paths found in the directory_to_list
+        """
+    list_of_directory_paths_in_directory = []
+    for (dirpath, dirnames, filenames) in os.walk(directory_to_list):
+        list_of_directory_paths_in_directory.extend([
+            os.path.join(directory_to_list, dir_name) for dir_name in dirnames])
+        return list_of_directory_paths_in_directory

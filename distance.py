@@ -12,7 +12,7 @@ import subprocess
 import re
 import numpy as np
 from skbio.stats.ordination import pcoa
-from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta
+from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta_first_line_removal
 import itertools
 from scipy.spatial.distance import braycurtis
 
@@ -1326,7 +1326,7 @@ def mothur_unifrac_pipeline_mp_worker(input_queue, output_queue, fseqboot_base, 
         sys.stdout.write('\rProcessing p={} with {}'.format(p, current_process().name))
         # convert the interleaved fasta to sequential fasta
         interleaved_fast = read_defined_file_to_list('{}{}'.format(fseqboot_base, p))
-        sequen_fast = convert_interleaved_to_sequencial_fasta(interleaved_fast)
+        sequen_fast = convert_interleaved_to_sequencial_fasta_first_line_removal(interleaved_fast)
         write_list_to_destination('{}{}.sequential.fasta'.format(fseqboot_base, p), sequen_fast)
         mothur_batch_dist = [
             'set.dir(input={}/out_seq_boot_reps/, output={}/out_seq_boot_reps/)'.format(clade_wkd, clade_wkd),
