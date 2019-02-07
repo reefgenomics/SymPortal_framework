@@ -529,6 +529,7 @@ def create_data_set_sample_sequences_from_med_nodes(identification, med_dirs, de
         if debug:
             if len(node_file) < 10:
                 print('WARNING node file for {} is only {} lines'.format(directory, len(node_file)))
+
         list_of_ref_seqs = []
         for i in range(len(node_file)):
             # We were having a problem here where some of the seqs were 1bp shorter than the reference seqs

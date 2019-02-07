@@ -103,6 +103,30 @@ class DataLoading:
 
         self.taxonomic_screening()
 
+        #TODO run med
+        # todo for each sample that is not in the error list
+        # make a deuniqued fasta file (this may be easier to do previously, lets see if we actually need the
+        # .fasta .name set for some reason)
+        # pad the fasta
+        # and run alignment
+
+        # TODO make data_set_sample_sequences from the med nodes
+        # (previously the output of the above was a list of the directories in which the med files was found)
+        # A = assign nodes to reference sequences or make new reference sequence
+        # 1 - look at the node sequences from the med
+        # 2 - check to see if they already associate to a sp reference squences
+        # 3 - if so hold this relation in a dict
+        # 4 - if not, then create a new refernece sequence object
+        # 5 - take into account that two nodes could be assigned to the same reference sequence
+        # this is fine but we need to take this into account when we look at the abundances below
+
+        # read in the abundance table and if more than 200 create clade collection
+        # then go trough the count table and make dataSetSampleSequences and associate to the clade collection
+        # if a clade collection has been made
+
+
+
+
     def do_initial_mothur_qc(self):
 
         if not self.sample_fastq_pairs:

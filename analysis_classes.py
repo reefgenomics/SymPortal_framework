@@ -1129,7 +1129,7 @@ class SymNonSymTaxScreeningWorker:
         also to the output dir
         3 - and finally the symbiodiniaceae sequences that do not violate our size range thresholds (sequences that
         will be carried through into med decomposition). These are also written out both as clade seperated
-        .fasta and .name files in the temp working directory (for med processing), and as a non clade separated .name
+        (one redundant fasta for each clade) in the temp working directory (for med processing), and as a non clade separated .name
         .file set (pre-med-seqs) in the output directory.
         This method also populates all of the dataset qc metadata attributes accordingly.
         """
@@ -1149,44 +1149,26 @@ class SymNonSymTaxScreeningWorker:
     def _write_out_no_size_violation_seqs(self):
         self._write_out_no_size_violation_seqs_to_pre_med_dirs()
         clades_of_non_violation_seqs = self._get_set_of_clades_represented_by_no_size_violation_seqs()
-        self._write_out_no_size_violation_seqs_clade_separated(clades_of_non_violation_seqs)
+        self._write_out_no_size_violation_seqs_redundant_fasta_clade_separated(clades_of_non_violation_seqs)
 
-    def _write_out_no_size_violation_seqs_clade_separated(self, clades_of_non_violation_seqs):
+    def _write_out_no_size_violation_seqs_redundant_fasta_clade_separated(self, clades_of_non_violation_seqs):
         for clade_of_sequences_to_write_out in clades_of_non_violation_seqs:
             sequence_names_of_clade = self._get_sequence_names_of_clade_for_no_size_violation_sequences(
                 clade_of_sequences_to_write_out
             )
 
-            self._write_out_no_size_violation_clade_specific_fasta(
-                clade_of_sequences_to_write_out, sequence_names_of_clade
+            sample_clade_fasta_path = os.path.join(
+                self.cwd,
+                clade_of_sequences_to_write_out,
+                f'seqs_for_med_{self.sample_name}_clade_{clade_of_sequences_to_write_out}.redundant.fasta'
             )
-
-            self._write_out_no_size_violation_clade_specific_names_file(
-                clade_of_sequences_to_write_out, sequence_names_of_clade
-            )
-
-    def _write_out_no_size_violation_clade_specific_names_file(
-            self, clade_of_sequences_to_write_out, sequence_names_of_clade):
-        sample_clade_names_file_path = os.path.join(
-            self.cwd,
-            clade_of_sequences_to_write_out,
-            f'seqs_for_med_{self.sample_name}_clade_{clade_of_sequences_to_write_out}.names'
-        )
-        with open(sample_clade_names_file_path, 'w') as f:
-            for sequence_name in sequence_names_of_clade:
-                f.write(f'{self.name_dict[sequence_name]}\n')
-
-    def _write_out_no_size_violation_clade_specific_fasta(
-            self, clade_of_sequences_to_write_out, sequence_names_of_clade):
-        sample_clade_fasta_path = os.path.join(
-            self.cwd,
-            clade_of_sequences_to_write_out,
-            f'seqs_for_med_{self.sample_name}_clade_{clade_of_sequences_to_write_out}.fasta'
-        )
-        with open(sample_clade_fasta_path, 'w') as f:
-            for sequence_name in sequence_names_of_clade:
-                f.write(f'>{sequence_name}\n')
-                f.write(f'{self.fasta_dict[sequence_name]}\n')
+            with open(sample_clade_fasta_path, 'w') as f:
+                for sequence_name in sequence_names_of_clade:
+                    sequence_counter = 0
+                    for i in range(len(self.name_dict[sequence_name].split('\t')[1].split(','))):
+                        f.write(f'>{sequence_name}_{sequence_counter}\n')
+                        f.write(f'{self.fasta_dict[sequence_name]}\n')
+                        sequence_counter += 1
 
     def _get_sequence_names_of_clade_for_no_size_violation_sequences(self, clade_of_sequences_to_write_out):
         sequence_names_of_clade = [
