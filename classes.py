@@ -12,7 +12,7 @@ from multiprocessing import Queue, Manager, Process
 from django import db
 from analysis_classes import (
     InitialMothurHandler, PotentialSymTaxScreeningHandler,
-    BlastnAnalysis, SymNonSymTaxScreeningHandler)
+    BlastnAnalysis, SymNonSymTaxScreeningHandler, PerformMEDHandler)
 from datetime import datetime
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 import pickle
@@ -84,6 +84,11 @@ class DataLoading:
         # the number of sequences in the 10 matches that must be annotated as Symbiodinium or Symbiodiniaceae in order
         # for a sequences to be added into the reference symClade database.
         self.required_symbiodinium_matches = 3
+        # med
+        self.list_of_med_output_directories = []
+        self.path_to_med_padding_executable = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/o_pad_with_gaps.py')
+        self.path_to_med_decompose_executable = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/decompose.py')
+        self.perform_med_handler_instance = None
 
     def execute(self):
         self.copy_and_decompress_input_files_to_temp_wkd()
@@ -103,14 +108,12 @@ class DataLoading:
 
         self.taxonomic_screening()
 
-        #TODO run med
-        # todo for each sample that is not in the error list
-        # make a deuniqued fasta file (this may be easier to do previously, lets see if we actually need the
-        # .fasta .name set for some reason)
-        # pad the fasta
-        # and run alignment
+        self.do_med_decomposition()
+        
 
+        # This cannot be mp.
         # TODO make data_set_sample_sequences from the med nodes
+        # this will be a data_set_sample_sequence_creator (non MP)
         # (previously the output of the above was a list of the directories in which the med files was found)
         # A = assign nodes to reference sequences or make new reference sequence
         # 1 - look at the node sequences from the med
@@ -124,8 +127,18 @@ class DataLoading:
         # then go trough the count table and make dataSetSampleSequences and associate to the clade collection
         # if a clade collection has been made
 
+    def do_med_decomposition(self):
+        self.perform_med_handler_instance = PerformMEDHandler(
+            data_loading_temp_working_directory=self.temp_working_directory,
+            data_loading_num_proc=self.num_proc,
+            data_loading_list_of_samples_names=self.list_of_samples_names)
 
+        self.perform_med_handler_instance.execute_perform_med_worker(
+            data_loading_debug=self.debug,
+            data_loading_path_to_med_decompoase_executable=self.path_to_med_decompose_executable,
+            data_loading_path_to_med_padding_executable=self.path_to_med_padding_executable)
 
+        self.list_of_med_output_directories = self.perform_med_handler_instance.list_of_med_result_dirs
 
     def do_initial_mothur_qc(self):
 
@@ -211,7 +224,8 @@ class DataLoading:
             data_loading_pre_med_sequence_output_directory_path=self.pre_med_sequence_output_directory_path,
             data_loading_dataset_object=self.dataset_object,
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
-            self.non_symbiodiniaceae_and_size_violation_base_directory_path
+            self.non_symbiodiniaceae_and_size_violation_base_directory_path,
+            data_loading_debug=self.debug
         )
         self.samples_that_caused_errors_in_qc_list = list(
             self.sym_non_sym_tax_screening_handler.samples_that_caused_errors_in_qc_mp_list

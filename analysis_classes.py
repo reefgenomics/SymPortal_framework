@@ -1045,13 +1045,68 @@ class PotentialSymTaxScreeningWorker:
                         f'is only {len(self.blast_output_as_list)} lines long')
 
 
+class SymNonSymTaxScreeningHandler:
+    def __init__(
+            self, data_loading_samples_that_caused_errors_in_qc_mp_list, data_loading_list_of_samples_names,
+            data_loading_num_proc):
+        self.sample_name_mp_input_queue = Queue()
+        self.sym_non_sym_mp_manager = Manager()
+        self.samples_that_caused_errors_in_qc_mp_list = self.sym_non_sym_mp_manager.list(
+            data_loading_samples_that_caused_errors_in_qc_mp_list
+        )
+        self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
+        self.num_proc = data_loading_num_proc
+        self._populate_input_queue(data_loading_list_of_samples_names)
+
+    def _populate_input_queue(self, data_loading_list_of_samples_names):
+        for sample_name in data_loading_list_of_samples_names:
+            self.sample_name_mp_input_queue.put(sample_name)
+        for n in range(self.num_proc):
+            self.sample_name_mp_input_queue.put('STOP')
+
+    def execute_sym_non_sym_tax_screening(self, data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
+        all_processes = []
+        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+        db.connections.close_all()
+        sys.stdout.write('\nPerforming QC\n')
+
+        for n in range(self.num_proc):
+            p = Process(target=self.__sym_non_sym_tax_screening_worker, args=(data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug))
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+    def __sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
+
+        for sample_name in iter(self.sample_name_mp_input_queue.get, 'STOP'):
+            if sample_name in self.samples_that_caused_errors_in_qc_mp_list:
+                continue
+
+            sym_non_sym_tax_screening_worker_object = SymNonSymTaxScreeningWorker(
+                data_loading_temp_working_directory=data_loading_temp_working_directory,
+                data_loading_dataset_object=data_loading_dataset_object, sample_name=sample_name,
+                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
+                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
+                data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
+                data_loading_debug=data_loading_debug
+            )
+
+            try:
+                sym_non_sym_tax_screening_worker_object.execute()
+            except RuntimeError as e:
+                self.samples_that_caused_errors_in_qc_mp_list.append(e.sample_name)
+
+
 class SymNonSymTaxScreeningWorker:
     def __init__(
             self, data_loading_temp_working_directory, sample_name, data_loading_dataset_object,
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
-            data_loading_pre_med_sequence_output_directory_path
+            data_loading_pre_med_sequence_output_directory_path, data_loading_debug
     ):
-        self._init_core_class_attributes(data_loading_dataset_object, data_loading_temp_working_directory, sample_name)
+        self._init_core_class_attributes(
+            data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug)
         self._init_fasta_name_blast_and_clade_dict_attributes()
         self._init_non_sym_and_size_violation_output_paths(
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path)
@@ -1113,12 +1168,13 @@ class SymNonSymTaxScreeningWorker:
         }
 
     def _init_core_class_attributes(
-            self, data_loading_dataset_object, data_loading_temp_working_directory, sample_name):
+            self, data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug):
         self.sample_name = sample_name
         self.cwd = os.path.join(data_loading_temp_working_directory, sample_name)
         self.dataset_object = DataSetSample.objects.get(
             name=sample_name, data_submission_from=data_loading_dataset_object
         )
+        self.debug = data_loading_debug
 
     def execute(self):
         """This method completes the pre-med quality control.
@@ -1166,9 +1222,20 @@ class SymNonSymTaxScreeningWorker:
                 for sequence_name in sequence_names_of_clade:
                     sequence_counter = 0
                     for i in range(len(self.name_dict[sequence_name].split('\t')[1].split(','))):
-                        f.write(f'>{sequence_name}_{sequence_counter}\n')
+                        f.write(f'>{self.sample_name}_{sequence_name}_{sequence_counter}\n')
                         f.write(f'{self.fasta_dict[sequence_name]}\n')
                         sequence_counter += 1
+
+            self._if_debug_check_length_of_deuniqued_fasta(sample_clade_fasta_path)
+
+    def _if_debug_check_length_of_deuniqued_fasta(self, sample_clade_fasta_path):
+        if self.debug:
+            deuniqued_fasta = read_defined_file_to_list(sample_clade_fasta_path)
+            if deuniqued_fasta:
+                if len(deuniqued_fasta) < 100:
+                    print(f'{self.sample_name}: WARNING the dequniqed fasta is < {len(deuniqued_fasta)} lines')
+            else:
+                print(f'{self.sample_name}: ERROR deuniqued fasta is empty')
 
     def _get_sequence_names_of_clade_for_no_size_violation_sequences(self, clade_of_sequences_to_write_out):
         sequence_names_of_clade = [
@@ -1338,54 +1405,102 @@ class SymNonSymTaxScreeningWorker:
             self.non_symbiodinium_sequence_name_set_for_sample.add(name_of_current_sequence)
 
 
-class SymNonSymTaxScreeningHandler:
-    def __init__(
-            self, data_loading_samples_that_caused_errors_in_qc_mp_list, data_loading_list_of_samples_names,
-            data_loading_num_proc):
-        self.sample_name_mp_input_queue = Queue()
-        self.sym_non_sym_mp_manager = Manager()
-        self.samples_that_caused_errors_in_qc_mp_list = self.sym_non_sym_mp_manager.list(
-            data_loading_samples_that_caused_errors_in_qc_mp_list
-        )
-        self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
+class PerformMEDWorker:
+    def __init__(self, redundant_fasta_path, data_loading_path_to_med_padding_executable, data_loading_debug, data_loading_path_to_med_decompose_executable):
+        self.redundant_fasta_path_unpadded = redundant_fasta_path
+        self.redundant_fasta_path_padded = self.redundant_fasta_path_unpadded.replace('.fasta', '.padded.fasta')
+        self.cwd = os.path.dirname(self.redundant_fasta_path_unpadded)
+        self.sample_name = self.cwd.split('/')[-2]
+        self.debug = data_loading_debug
+        self.path_to_med_padding_executable = data_loading_path_to_med_padding_executable
+        self.path_to_med_decompose_executable = data_loading_path_to_med_decompose_executable
+        self.med_output_dir = os.path.join(os.path.dirname(self.redundant_fasta_path_unpadded), 'MEDOUT')
+        os.makedirs(self.med_output_dir, exist_ok=True)
+        self.med_m_value = self._get_med_m_value()
+
+    def execute(self):
+        # TODO check this business about how MED determines the sample name, i.e. whether the underscores matter.
+        sys.stdout.write(f'{self.sample_name}: starting MED analysis\n')
+        sys.stdout.write(f'{self.sample_name}: padding sequences\n')
+        subprocess.run([
+            self.path_to_med_padding_executable,
+            '-o', self.redundant_fasta_path_padded,
+            self.redundant_fasta_path_unpadded], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        sys.stdout.write(f'{self.sample_name}: decomposing\n')
+        self._do_the_decomposition()
+        sys.stdout.write(f'{self.sample_name}: MED analysis complete\n')
+
+    def _do_the_decomposition(self):
+        if not self.debug:
+            subprocess.run(
+                [self.path_to_med_decompose_executable, '-M', str(self.med_m_value), '--skip-gexf-files',
+                 '--skip-gen-figures',
+                 '--skip-gen-html', '--skip-check-input', '-o',
+                 self.med_output_dir, self.redundant_fasta_path_padded], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        elif self.debug:
+            subprocess.run(
+                [self.path_to_med_decompose_executable, '-M', str(self.med_m_value), '--skip-gexf-files',
+                 '--skip-gen-figures',
+                 '--skip-gen-html',
+                 '--skip-check-input', '-o',
+                 self.med_output_dir, self.redundant_fasta_path_padded])
+
+    def _get_med_m_value(self):
+        # Define MED M value dynamically.
+        # The M value is a cutoff that looks at the abundance of the most abundant unique sequence in a node
+        # if the abundance is lower than M then the node is discarded
+        # we have been working recently with an M that equivaltes to 0.4% of 0.004. This was
+        # calculated when working with a modelling project where I was subsampling to 1000 sequences. In this
+        # scenario the M was set to 4.
+        # We should also take care that M doesn't go below 4, so we should use a max choice for the M
+        num_of_seqs_to_decompose = len(read_defined_file_to_list(self.redundant_fasta_path_padded)) / 2
+        return max(4, int(0.004 * num_of_seqs_to_decompose))
+
+
+class PerformMEDHandler:
+    def __init__(self, data_loading_list_of_samples_names, data_loading_temp_working_directory, data_loading_num_proc):
+        # need to get list of the directories in which to perform the MED
+        # we want to get a list of the .
+        self.list_of_samples = data_loading_list_of_samples_names
+        self.temp_working_directory = data_loading_temp_working_directory
         self.num_proc = data_loading_num_proc
-        self._populate_input_queue(data_loading_list_of_samples_names)
+        self.list_of_redundant_fasta_paths = []
+        self._populate_list_of_redundant_fasta_paths()
+        self.input_queue_of_redundant_fasta_paths = Queue()
+        self._populate_input_queue_of_redundant_fasta_paths()
+        self.list_of_med_result_dirs = [
+            os.path.join(os.path.dirname(path_to_redundant_fasta), 'MEDOUT') for
+            path_to_redundant_fasta in self.list_of_redundant_fasta_paths]
 
-    def _populate_input_queue(self, data_loading_list_of_samples_names):
-        for sample_name in data_loading_list_of_samples_names:
-            self.sample_name_mp_input_queue.put(sample_name)
-        for n in range(self.num_proc):
-            self.sample_name_mp_input_queue.put('STOP')
-
-    def execute_sym_non_sym_tax_screening(self, data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path):
+    def execute_perform_med_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable):
         all_processes = []
-        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
-        db.connections.close_all()
-        sys.stdout.write('\nPerforming QC\n')
 
+        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         for n in range(self.num_proc):
-            p = Process(target=self.__sym_non_sym_tax_screening_worker, args=(data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path))
+            p = Process(target=self._deunique_worker, args=(
+                self.input_queue_of_redundant_fasta_paths,
+                data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable))
             all_processes.append(p)
             p.start()
 
         for p in all_processes:
             p.join()
 
-    def __sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path):
+    def _populate_list_of_redundant_fasta_paths(self):
+        for dirpath, dirnames, files in os.walk(self.temp_working_directory):
+            for file_name in files:
+                if file_name.endswith('redundant.fasta'):
+                    self.list_of_redundant_fasta_paths.append(os.path.join(dirpath, file_name))
 
-        for sample_name in iter(self.sample_name_mp_input_queue.get, 'STOP'):
-            if sample_name in self.samples_that_caused_errors_in_qc_mp_list:
-                continue
+    def _populate_input_queue_of_redundant_fasta_paths(self):
+        for redundant_fasta_path in self.list_of_redundant_fasta_paths:
+            self.input_queue_of_redundant_fasta_paths.put(redundant_fasta_path)
+        for n in range(self.num_proc):
+            self.input_queue_of_redundant_fasta_paths.put('STOP')
 
-            sym_non_sym_tax_screening_worker_object = SymNonSymTaxScreeningWorker(
-                data_loading_temp_working_directory=data_loading_temp_working_directory,
-                data_loading_dataset_object=data_loading_dataset_object, sample_name=sample_name,
-                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
-                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
-                data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path
-            )
+    def _deunique_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable):
+        for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
 
-            try:
-                sym_non_sym_tax_screening_worker_object.execute()
-            except RuntimeError as e:
-                self.samples_that_caused_errors_in_qc_mp_list.append(e.sample_name)
+            perform_med_worker_instance = PerformMEDWorker(redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable)
+
+            perform_med_worker_instance.execute()
