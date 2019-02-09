@@ -54,6 +54,7 @@ class BlastnAnalysis:
             blast_output_dict[line.split('\t')[0]].append('\t'.join(line.split('\t')[1:]))
         return blast_output_file_as_list
 
+
 class MothurAnalysis:
 
     def __init__(
@@ -529,6 +530,7 @@ class MothurAnalysis:
                 raise RuntimeError('Please set fwd_primer.')
         sys.stdout.write(f'\nPCR attributes: OK\n')
 
+
 class SequenceCollection:
     """ A sequence collection is a set of sequences either generated from a fastq file or from a fasta file.
     It cannot be created directly from binary files or from paired files. As such, to generate a SequenceCollection
@@ -638,12 +640,14 @@ class SequenceCollection:
             fasta_file.extend([f'>{seq_obj.name}', f'{seq_obj.sequence}'])
         return fasta_file
 
+
 class NucleotideSequence:
     def __init__(self, sequence, name=None, abundance=None):
         self.sequence = sequence
         self.length = len(sequence)
         self.name = name
         self.abundance = abundance
+
 
 class InitialMothurHandler:
     def __init__(self, sample_fastq_pairs, num_proc):
@@ -704,6 +708,7 @@ class InitialMothurHandler:
             except RuntimeError as e:
                 self.samples_that_caused_errors_in_qc_mp_list.append(e.sample_name)
         return
+
 
 class InitialMothurWorker:
     def __init__(self, contig_pair, data_set_object, temp_wkd, debug):
@@ -1072,14 +1077,14 @@ class SymNonSymTaxScreeningHandler:
         sys.stdout.write('\nPerforming QC\n')
 
         for n in range(self.num_proc):
-            p = Process(target=self.__sym_non_sym_tax_screening_worker, args=(data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug))
+            p = Process(target=self._sym_non_sym_tax_screening_worker, args=(data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug))
             all_processes.append(p)
             p.start()
 
         for p in all_processes:
             p.join()
 
-    def __sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
+    def _sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
 
         for sample_name in iter(self.sample_name_mp_input_queue.get, 'STOP'):
             if sample_name in self.samples_that_caused_errors_in_qc_mp_list:
@@ -1405,6 +1410,7 @@ class SymNonSymTaxScreeningWorker:
             # incorporate the size cutoff here that would normally happen in the further mothur qc later in the code
             self.non_symbiodinium_sequence_name_set_for_sample.add(name_of_current_sequence)
 
+
 class PerformMEDHandler:
     def __init__(self, data_loading_list_of_samples_names, data_loading_temp_working_directory, data_loading_num_proc):
         # need to get list of the directories in which to perform the MED
@@ -1452,6 +1458,7 @@ class PerformMEDHandler:
             perform_med_worker_instance = PerformMEDWorker(redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable)
 
             perform_med_worker_instance.execute()
+
 
 class PerformMEDWorker:
     def __init__(self, redundant_fasta_path, data_loading_path_to_med_padding_executable, data_loading_debug, data_loading_path_to_med_decompose_executable):

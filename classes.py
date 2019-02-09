@@ -16,6 +16,7 @@ from analysis_classes import (
 from datetime import datetime
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 import pickle
+from datetime import datetime
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -26,8 +27,10 @@ class DataLoading:
         self.dataset_object = DataSet.objects.get(id=data_set_uid)
         self.user_input_path = user_input_path
         self.output_directory = self.setup_output_directory()
-        self.temp_working_directory = self.set_temp_working_directory()
-        self.create_temp_wkd()
+        self.temp_working_directory = self.setup_temp_working_directory()
+        self.data_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        # this is the path of the file we will use to deposit a backup copy of the reference sequences
+        self.seq_dump_file_path = self.setup_sequence_dump_file_path()
         self.dataset_object.working_directory = self.temp_working_directory
         self.dataset_object.save()
         # This is the directory that sequences that have undergone QC for each sample will be written out as
@@ -65,7 +68,6 @@ class DataLoading:
         self.screen_sub_evalue = screen_sub_evalue
         self.new_seqs_added_in_iteration = 0
         self.new_seqs_added_running_total = 0
-        self.discarded_seqs_fasta = None
         self.checked_samples_with_no_additional_symbiodinium_sequences = []
         self.taxonomic_screening_handler = None
         self.sequences_to_screen_fasta_as_list = []
@@ -101,11 +103,8 @@ class DataLoading:
         else:
             self.generate_stability_file_and_data_set_sample_objects_without_datasheet()
 
-
         self.if_symclade_binaries_not_present_remake_db()
 
-        # First execute the initial mothur QC. This should leave us with a set of fastas, name and groupfiles etc in
-        # a directory from each sample.
         self.do_initial_mothur_qc()
 
         self.taxonomic_screening()
@@ -114,14 +113,56 @@ class DataLoading:
 
         self.create_data_set_sample_sequences_from_med_nodes()
 
-        self.dataset_object.currently_being_processed = False
-        self.dataset_object.save()
+        self.print_sample_successful_or_failed_summary()
+
+        self.perform_sequence_drop()
+
+        self.delete_temp_working_directory_and_log_files()
+
+
+
+    def delete_temp_working_directory_and_log_files(self):
+        if os.path.exists(self.temp_working_directory):
+            shutil.rmtree(self.temp_working_directory)
+        # del any log file in the database directory that may have been created by mothur analyses
+        log_file_list = [f for f in os.listdir(os.path.dirname(self.symclade_db_full_path)) if f.endswith(".logfile")]
+        for f in log_file_list:
+            os.remove(os.path.join(os.path.dirname(self.symclade_db_full_path), f))
+
+    def perform_sequence_drop(self):
+        sequence_drop_file = self.generate_sequence_drop_file()
+        sys.stdout.write(f'\n\nBackup of named reference_sequences output to {self.seq_dump_file_path}\n')
+        write_list_to_destination(self.seq_dump_file_path, sequence_drop_file)
+
+    def generate_sequence_drop_file(self):
+        header_string = ','.join(['seq_name', 'seq_uid', 'seq_clade', 'seq_sequence'])
+        sequence_drop_list = [header_string]
+        for ref_seq in ReferenceSequence.objects.filter(has_name=True):
+            sequence_drop_list.append(','.join([ref_seq.name, str(ref_seq.id), ref_seq.clade, ref_seq.sequence]))
+        return sequence_drop_list
+
+    def print_sample_successful_or_failed_summary(self):
+        print(f'\n\n SAMPLE PROCESSING SUMMARY')
+        failed_count = 0
+        successful_count = 0
+        for data_set_sample in DataSetSample.objects.filter(data_submission_from=self.dataset_object):
+            if data_set_sample.error_in_processing:
+                failed_count += 1
+                print(f'{data_set_sample.name}: Error in processing: {data_set_sample.error_reason}')
+            else:
+                successful_count += 1
+                print(f'{data_set_sample.name}: Successful')
+
+        print(f'\n\n{successful_count} out of {successful_count + failed_count} samples successfully passed QC.\n'
+              f'{failed_count} samples produced erorrs\n')
 
     def create_data_set_sample_sequences_from_med_nodes(self):
         self.data_set_sample_creator_handler_instance = DataSetSampleCreatorHandler()
         self.data_set_sample_creator_handler_instance.execute_data_set_sample_creation(
             data_loading_list_of_med_output_directories=self.list_of_med_output_directories,
             data_loading_debug=self.debug, data_loading_dataset_object=self.dataset_object)
+        self.dataset_object.currently_being_processed = False
+        self.dataset_object.save()
 
     def do_med_decomposition(self):
         self.perform_med_handler_instance = PerformMEDHandler(
@@ -718,17 +759,24 @@ class DataLoading:
         os.makedirs(output_directory, exist_ok=True)
         return output_directory
 
-    def set_temp_working_directory(self):
+    def setup_sequence_dump_file_path(self):
+        seq_dump_file_path = os.path.join(os.path.dirname(__file__), f'/dbBackUp/seq_dumps/seq_dump_{self.data_time_string}')
+        os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
+        return seq_dump_file_path
+
+    def setup_temp_working_directory(self):
         # working directory will be housed in a temp folder within the directory in which the sequencing data
         # is currently housed
         if '.' in self.user_input_path.split('/')[-1]:
             # then this path points to a file rather than a directory and we should pass through the path only
-            temp_working_directory = os.path.abspath(
-                '{}/tempData/{}'.format(os.path.dirname(self.user_input_path), self.dataset_object.id))
+            self.temp_working_directory = os.path.abspath(
+                f'{os.path.dirname(self.user_input_path)}/tempData/{self.dataset_object.id}')
         else:
             # then we assume that we are pointing to a directory and we can directly use that to make the wkd
-            temp_working_directory = os.path.abspath('{}/tempData/{}'.format(self.user_input_path, self.dataset_object.id))
-        return temp_working_directory
+            self.temp_working_directory = os.path.abspath(
+                f'{self.user_input_path}/tempData/{self.dataset_object.id}')
+        self.create_temp_wkd()
+        return self.temp_working_directory
 
 
 

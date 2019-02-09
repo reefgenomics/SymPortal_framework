@@ -940,7 +940,7 @@ def perform_sequence_drop():
     sequence_drop_path = '{}{}{}'.format(
         os.path.dirname(__file__),
         '/dbBackUp/seq_dumps/seq_dump_',
-        str(datetime.now()).replace(' ', '_', ).replace(':', '-'))
+        str(datetime.now()).replace(' ', '_').replace(':', '-'))
     sys.stdout.write('\n\nBackup of named reference_sequences output to {}\n'.format(sequence_drop_path))
     write_list_to_destination(sequence_drop_path, sequence_drop_file)
 
