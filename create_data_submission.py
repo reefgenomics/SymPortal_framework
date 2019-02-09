@@ -713,10 +713,6 @@ def main(input_path, data_set_uid, num_proc, screen_sub_evalue=False,
     sys.stdout.write('\n\nStarting MED analysis\n')
     med_dirs = perform_med(data_submission_in_q.working_directory, data_submission_in_q.id, num_proc, debug)
 
-    if debug:
-        print('MED dirs:')
-        for directory in med_dirs:
-            print(directory)
 
     create_data_set_sample_sequences_from_med_nodes(data_submission_in_q.id,
                                                     med_dirs,

@@ -3,8 +3,8 @@ import subprocess
 import sys
 from plumbum import local
 import pandas as pd
-from collections import defaultdict
-from dbApp.models import DataSetSample
+from collections import defaultdict, Counter
+from dbApp.models import DataSetSample, ReferenceSequence, CladeCollection, DataSetSampleSequence
 from general import (
     decode_utf8_binary_to_list, create_dict_from_fasta, create_seq_name_to_abundance_dict_from_name_file,
     combine_two_fasta_files, remove_primer_mismatch_annotations_from_fasta, write_list_to_destination,
@@ -12,6 +12,7 @@ from general import (
 from pickle import dump, load
 from multiprocessing import Queue, Manager, Process
 from django import db
+import json
 
 class BlastnAnalysis:
     def __init__(
@@ -1404,6 +1405,53 @@ class SymNonSymTaxScreeningWorker:
             # incorporate the size cutoff here that would normally happen in the further mothur qc later in the code
             self.non_symbiodinium_sequence_name_set_for_sample.add(name_of_current_sequence)
 
+class PerformMEDHandler:
+    def __init__(self, data_loading_list_of_samples_names, data_loading_temp_working_directory, data_loading_num_proc):
+        # need to get list of the directories in which to perform the MED
+        # we want to get a list of the .
+        self.list_of_samples = data_loading_list_of_samples_names
+        self.temp_working_directory = data_loading_temp_working_directory
+        self.num_proc = data_loading_num_proc
+        self.list_of_redundant_fasta_paths = []
+        self._populate_list_of_redundant_fasta_paths()
+        self.input_queue_of_redundant_fasta_paths = Queue()
+        self._populate_input_queue_of_redundant_fasta_paths()
+        self.list_of_med_result_dirs = [
+            os.path.join(os.path.dirname(path_to_redundant_fasta), 'MEDOUT') for
+            path_to_redundant_fasta in self.list_of_redundant_fasta_paths]
+
+    def execute_perform_med_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable):
+        all_processes = []
+
+        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+        for n in range(self.num_proc):
+            p = Process(target=self._deunique_worker, args=(
+                self.input_queue_of_redundant_fasta_paths,
+                data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable))
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+    def _populate_list_of_redundant_fasta_paths(self):
+        for dirpath, dirnames, files in os.walk(self.temp_working_directory):
+            for file_name in files:
+                if file_name.endswith('redundant.fasta'):
+                    self.list_of_redundant_fasta_paths.append(os.path.join(dirpath, file_name))
+
+    def _populate_input_queue_of_redundant_fasta_paths(self):
+        for redundant_fasta_path in self.list_of_redundant_fasta_paths:
+            self.input_queue_of_redundant_fasta_paths.put(redundant_fasta_path)
+        for n in range(self.num_proc):
+            self.input_queue_of_redundant_fasta_paths.put('STOP')
+
+    def _deunique_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable):
+        for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
+
+            perform_med_worker_instance = PerformMEDWorker(redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable)
+
+            perform_med_worker_instance.execute()
 
 class PerformMEDWorker:
     def __init__(self, redundant_fasta_path, data_loading_path_to_med_padding_executable, data_loading_debug, data_loading_path_to_med_decompose_executable):
@@ -1457,50 +1505,263 @@ class PerformMEDWorker:
         return max(4, int(0.004 * num_of_seqs_to_decompose))
 
 
-class PerformMEDHandler:
-    def __init__(self, data_loading_list_of_samples_names, data_loading_temp_working_directory, data_loading_num_proc):
-        # need to get list of the directories in which to perform the MED
-        # we want to get a list of the .
-        self.list_of_samples = data_loading_list_of_samples_names
-        self.temp_working_directory = data_loading_temp_working_directory
-        self.num_proc = data_loading_num_proc
-        self.list_of_redundant_fasta_paths = []
-        self._populate_list_of_redundant_fasta_paths()
-        self.input_queue_of_redundant_fasta_paths = Queue()
-        self._populate_input_queue_of_redundant_fasta_paths()
-        self.list_of_med_result_dirs = [
-            os.path.join(os.path.dirname(path_to_redundant_fasta), 'MEDOUT') for
-            path_to_redundant_fasta in self.list_of_redundant_fasta_paths]
+class DataSetSampleCreatorWorker:
+    """This class will be responsible for handling a set of med outputs. Objects will be things like the directory,
+    the count table, number of samples, number of nodes, these sorts of things."""
+    def __init__(self, med_output_directory,
+                 data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict,
+                 data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict, data_loading_dataset_obj):
+        self.output_directory = med_output_directory
+        self.sample_name = self.output_directory.split('/')[-4]
+        self.clade = self.output_directory.split('/')[-3]
+        self.nodes_list_of_nucleotide_sequences = []
+        self._populate_nodes_list_of_nucleotide_sequences()
+        self.num_med_nodes = len(self.nodes_list_of_nucleotide_sequences)
+        self.node_sequence_name_to_ref_seq_id = {}
+        self.ref_seq_sequence_to_ref_seq_id_dict = data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict
+        self.ref_seq_uid_to_ref_seq_name_dict = data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict
+        self.node_abundance_df = pd.read_csv(
+            os.path.join(self.output_directory, 'MATRIX-COUNT.txt'), delimiter='\t', header=0)
+        self.total_num_sequences = sum(self.node_abundance_df.iloc[0])
+        self.dataset_sample_object = DataSetSample.objects.get(
+            data_submission_from=data_loading_dataset_obj, name=self.sample_name)
+        self.clade_collection_object = None
 
-    def execute_perform_med_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable):
-        all_processes = []
+    def _populate_nodes_list_of_nucleotide_sequences(self):
+        node_file_path = os.path.join(self.output_directory, 'NODE-REPRESENTATIVES.fasta')
+        try:
+            node_file_as_list = read_defined_file_to_list(node_file_path)
+        except FileNotFoundError:
+            raise RuntimeError(med_output_directory=self.output_directory)
 
-        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
-        for n in range(self.num_proc):
-            p = Process(target=self._deunique_worker, args=(
-                self.input_queue_of_redundant_fasta_paths,
-                data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable))
-            all_processes.append(p)
-            p.start()
+        for i in range(0, len(node_file_as_list), 2):
+            node_seq_name = node_file_as_list[i].split('|')[0][1:]
+            node_seq_abundance = int(node_file_as_list[i].split('|')[1].split(':')[1])
+            node_seq_sequence = node_file_as_list[i+1].replace('-','')
+            self.nodes_list_of_nucleotide_sequences.append(
+                NucleotideSequence(name=node_seq_name, abundance=node_seq_abundance, sequence=node_seq_sequence))
 
-        for p in all_processes:
-            p.join()
+    def execute(self):
+        for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
+            if not self._assign_node_sequence_to_existing_ref_seq(node_nucleotide_sequence_object):
+                self._assign_node_sequence_to_new_ref_seq(node_nucleotide_sequence_object)
 
-    def _populate_list_of_redundant_fasta_paths(self):
-        for dirpath, dirnames, files in os.walk(self.temp_working_directory):
-            for file_name in files:
-                if file_name.endswith('redundant.fasta'):
-                    self.list_of_redundant_fasta_paths.append(os.path.join(dirpath, file_name))
+        if self._two_or_more_nodes_associated_to_the_same_reference_sequence():
+            self._make_associations_and_abundances_in_node_abund_df_unique_again()
 
-    def _populate_input_queue_of_redundant_fasta_paths(self):
-        for redundant_fasta_path in self.list_of_redundant_fasta_paths:
-            self.input_queue_of_redundant_fasta_paths.put(redundant_fasta_path)
-        for n in range(self.num_proc):
-            self.input_queue_of_redundant_fasta_paths.put('STOP')
+        self._update_data_set_sample_med_qc_meta_data_and_clade_totals()
 
-    def _deunique_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable):
-        for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
+        self._if_more_than_200_seqs_create_clade_collection()
 
-            perform_med_worker_instance = PerformMEDWorker(redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable)
+        self._create_data_set_sample_sequences()
 
-            perform_med_worker_instance.execute()
+    def _create_data_set_sample_sequences(self):
+        if self._we_made_a_clade_collection():
+            self._create_data_set_sample_sequences_with_clade_collection()
+        else:
+            self._create_data_set_sample_sequences_without_clade_collection()
+
+    def _create_data_set_sample_sequences_without_clade_collection(self):
+        data_set_sample_sequence_list = []
+        for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
+            associated_ref_seq_id = self.node_sequence_name_to_ref_seq_id[node_nucleotide_sequence_object.name]
+            associated_ref_seq_object = ReferenceSequence.objects.get(id=associated_ref_seq_id)
+            df_index_label = self.node_abundance_df.index.values.tolist()[0]
+            dss = DataSetSampleSequence(reference_sequence_of=associated_ref_seq_object,
+                                        abundance=self.node_abundance_df.at[
+                                            df_index_label, node_nucleotide_sequence_object.name],
+                                        data_set_sample_from=self.dataset_sample_object)
+            data_set_sample_sequence_list.append(dss)
+        DataSetSampleSequence.objects.bulk_create(data_set_sample_sequence_list)
+
+    def _create_data_set_sample_sequences_with_clade_collection(self):
+        data_set_sample_sequence_list = []
+        associated_ref_seq_uid_as_str_list = []
+        for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
+            associated_ref_seq_id = self.node_sequence_name_to_ref_seq_id[node_nucleotide_sequence_object.name]
+            associated_ref_seq_uid_as_str_list.append(str(associated_ref_seq_id))
+            associated_ref_seq_object = ReferenceSequence.objects.get(id=associated_ref_seq_id)
+            df_index_label = self.node_abundance_df.index.values.tolist()[0]
+            dss = DataSetSampleSequence(
+                reference_sequence_of=associated_ref_seq_object,
+                clade_collection_found_in=self.clade_collection_object,
+                abundance=self.node_abundance_df.at[df_index_label, node_nucleotide_sequence_object.name],
+                data_set_sample_from=self.dataset_sample_object)
+            data_set_sample_sequence_list.append(dss)
+        # Save all of the newly created dss
+        DataSetSampleSequence.objects.bulk_create(data_set_sample_sequence_list)
+        self.clade_collection_object.footprint = ','.join(associated_ref_seq_uid_as_str_list)
+        self.clade_collection_object.save()
+
+    def _we_made_a_clade_collection(self):
+        return self.total_num_sequences > 200
+
+    def _if_more_than_200_seqs_create_clade_collection(self):
+        if self.total_num_sequences > 200:
+            sys.stdout.write(
+                f'\n{self.sample_name} clade {self.clade}: '
+                f'{self.total_num_sequences} sequences. Creating CladeCollection_object\n')
+            new_cc = CladeCollection(clade=self.clade, data_set_sample_from=self.dataset_sample_object)
+            new_cc.save()
+            self.clade_collection_object = new_cc
+        else:
+            sys.stdout.write(
+                f'\n{self.sample_name} clade {self.clade}: {self.total_num_sequences} sequences. '
+                f'Insufficient sequence to create a CladeCollection_object\n')
+
+    def _update_data_set_sample_med_qc_meta_data_and_clade_totals(self):
+        self.dataset_sample_object.post_med_absolute += self.total_num_sequences
+        self.dataset_sample_object.post_med_unique += len(self.node_abundance_df.iloc[0])
+        # Update the cladal_seq_totals
+        cladal_seq_abundance_counter = [int(a) for a in json.loads(self.dataset_sample_object.cladal_seq_totals)]
+        clade_index = list('ABCDEFGHI').index(self.clade)
+        cladal_seq_abundance_counter[clade_index] = self.total_num_sequences
+        self.dataset_sample_object.cladal_seq_totals = json.dumps([str(a) for a in cladal_seq_abundance_counter])
+        self.dataset_sample_object.save()
+
+    def _two_or_more_nodes_associated_to_the_same_reference_sequence(self):
+        """Multiple nodes may be assigned to the same reference sequence. We only want to create one
+        data set sample sequence object per reference sequence. As such we need to consolidate abundances
+        """
+        return len(set(self.node_sequence_name_to_ref_seq_id.values())) != len(self.node_sequence_name_to_ref_seq_id.keys())
+
+    def _make_associations_and_abundances_in_node_abund_df_unique_again(self):
+        list_of_non_unique_ref_seq_uids = [
+            ref_seq_uid for ref_seq_uid, count in
+            Counter(self.node_sequence_name_to_ref_seq_id.values()).items() if count > 1]
+        for non_unique_ref_seq_uid in list_of_non_unique_ref_seq_uids:
+
+            node_names_to_be_consolidated = self._get_list_of_node_names_that_need_consolidating(non_unique_ref_seq_uid)
+
+            summed_abund_of_nodes_of_ref_seq = self._get_summed_abundances_of_the_nodes_to_be_consolidated(
+                node_names_to_be_consolidated)
+
+            self._del_all_but_first_of_non_unique_nodes_from_df_and_node_to_ref_seq_dict(node_names_to_be_consolidated)
+
+            self._update_node_name_abund_in_df(node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq)
+
+    def _get_list_of_node_names_that_need_consolidating(self, non_unique_ref_seq_uid):
+        node_names_to_be_consolidated = [
+            node_name for node_name in self.node_sequence_name_to_ref_seq_id.keys() if
+            self.node_sequence_name_to_ref_seq_id[node_name] == non_unique_ref_seq_uid]
+        return node_names_to_be_consolidated
+
+    def _update_node_name_abund_in_df(self, node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq):
+        df_index_name = self.node_abundance_df.index.values.tolist()[0]
+        self.node_abundance_df.at[df_index_name, node_names_to_be_consolidated[0]] = summed_abund_of_nodes_of_ref_seq
+
+    def _del_all_but_first_of_non_unique_nodes_from_df_and_node_to_ref_seq_dict(self, node_names_to_be_consolidated):
+        # now delete columns for all but the first of the node_names_to_be_consolidated from df
+        self.node_abundance_df = self.node_abundance_df.drop(columns=node_names_to_be_consolidated[1:])
+        # and from the node_names_to_ref_seq_id dict
+        for node_name in node_names_to_be_consolidated[1:]:
+            del self.node_sequence_name_to_ref_seq_id[node_name]
+
+    def _get_summed_abundances_of_the_nodes_to_be_consolidated(self, node_names_to_be_consolidated):
+        summed_abund_of_nodes_of_ref_seq = sum(self.node_abundance_df[node_names_to_be_consolidated].iloc[0])
+        return summed_abund_of_nodes_of_ref_seq
+
+    def _assign_node_sequence_to_existing_ref_seq(self, node_nucleotide_sequence_object):
+        """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
+        This take into account whether the seq_in_q could be a subset or super set of one of the
+        ref_seq.sequences.
+        Will return false if no ref_seq match is found
+        """
+        if self._node_sequence_exactly_matches_reference_sequence_sequence(node_nucleotide_sequence_object):
+            return self._associate_node_seq_to_ref_seq_by_exact_match_and_return_true(node_nucleotide_sequence_object)
+        elif self._node_sequence_matches_reference_sequence_sequence_plus_adenine(node_nucleotide_sequence_object):  # This was a seq shorter than refseq but we can associate
+            return self._associate_node_seq_to_ref_seq_by_adenine_match_and_return_true(node_nucleotide_sequence_object)
+        else:
+            return self._search_for_super_set_match_and_associate_if_found_else_return_false(
+                node_nucleotide_sequence_object)
+
+    def _node_sequence_exactly_matches_reference_sequence_sequence(self, node_nucleotide_sequence_object):
+        return node_nucleotide_sequence_object.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _node_sequence_matches_reference_sequence_sequence_plus_adenine(self, node_nucleotide_sequence_object):
+        return 'A' + node_nucleotide_sequence_object.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _search_for_super_set_match_and_associate_if_found_else_return_false(self, node_nucleotide_sequence_object):
+        # or if the seq in question is bigger than a refseq sequence and is a super set of it
+        # In either of these cases we should consider this a match and use the refseq matched to.
+        # This might be very coputationally expensive but lets give it a go
+        for ref_seq_sequence in self.ref_seq_sequence_to_ref_seq_id_dict.keys():
+            if node_nucleotide_sequence_object.sequence in ref_seq_sequence or \
+                    ref_seq_sequence in node_nucleotide_sequence_object.sequence:
+                # Then this is a match
+                self.node_sequence_name_to_ref_seq_id[node_nucleotide_sequence_object.name] = \
+                self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
+                name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]]
+                self._print_succesful_association_details_to_stdout(node_nucleotide_sequence_object,
+                                                                    name_of_reference_sequence)
+                return True
+        return False
+
+    def _associate_node_seq_to_ref_seq_by_adenine_match_and_return_true(self, node_nucleotide_sequence_object):
+        self.node_sequence_name_to_ref_seq_id[
+            node_nucleotide_sequence_object.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            'A' + node_nucleotide_sequence_object.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict['A' + node_nucleotide_sequence_object.sequence]]
+        self._print_succesful_association_details_to_stdout(node_nucleotide_sequence_object, name_of_reference_sequence)
+        return True
+
+    def _associate_node_seq_to_ref_seq_by_exact_match_and_return_true(self, node_nucleotide_sequence_object):
+        self.node_sequence_name_to_ref_seq_id[
+            node_nucleotide_sequence_object.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            node_nucleotide_sequence_object.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict[node_nucleotide_sequence_object.sequence]]
+        self._print_succesful_association_details_to_stdout(node_nucleotide_sequence_object, name_of_reference_sequence)
+        return True
+
+    def _print_succesful_association_details_to_stdout(self, node_nucleotide_sequence_object, name_of_reference_sequence):
+        sys.stdout.write(f'\r{self.sample_name} clade {self.clade}:\n'
+                         f'Assigning MED node {node_nucleotide_sequence_object.name} '
+                         f'to existing reference sequence {name_of_reference_sequence}')
+
+    def _assign_node_sequence_to_new_ref_seq(self, node_nucleotide_sequence_object):
+        new_ref_seq = ReferenceSequence(clade=self.clade, sequence=node_nucleotide_sequence_object.sequence)
+        new_ref_seq.save()
+        new_ref_seq.name = str(new_ref_seq.id)
+        new_ref_seq.save()
+        self.ref_seq_sequence_to_ref_seq_id_dict[new_ref_seq.sequence] = new_ref_seq.id
+        self.node_sequence_name_to_ref_seq_id[node_nucleotide_sequence_object.name] = new_ref_seq.id
+        self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
+
+        sys.stdout.write(f'\r{self.sample_name} clade {self.clade}:\n'
+                         f'Assigning MED node {node_nucleotide_sequence_object.name} '
+                         f'to new reference sequence {new_ref_seq.name}')
+
+
+class DataSetSampleCreatorHandler:
+    """This class will be where we run the code for creating reference sequences, data set sample sequences and
+    clade collections."""
+    def __init__(self):
+        # dictionaries to save us having to do lots of database look ups
+        self.ref_seq_uid_to_ref_seq_name_dict = {
+            ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
+        self.ref_seq_sequence_to_ref_seq_id_dict = {
+            ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
+
+
+    def execute_data_set_sample_creation(self, data_loading_list_of_med_output_directories, data_loading_debug, data_loading_dataset_object):
+        for med_output_directory in data_loading_list_of_med_output_directories:
+            try:
+                med_output_object = DataSetSampleCreatorWorker(
+                    med_output_directory=med_output_directory,
+                    data_loading_dataset_obj=data_loading_dataset_object,
+                    data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict=
+                    self.ref_seq_sequence_to_ref_seq_id_dict,
+                    data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict=
+                    self.ref_seq_uid_to_ref_seq_name_dict)
+            except RuntimeError as e:
+                print(f'{e.med_output_directory}: File not found during DataSetSample creation.')
+                continue
+            if data_loading_debug:
+                if med_output_object.num_med_nodes < 10:
+                    print(f'{med_output_directory}: WARNING node file contains only {med_output_object.num_med_nodes} sequences.')
+            sys.stdout.write(
+                f'\n\nPopulating {med_output_object.sample_name} with clade {med_output_object.clade} sequences\n')
+

@@ -12,7 +12,7 @@ from multiprocessing import Queue, Manager, Process
 from django import db
 from analysis_classes import (
     InitialMothurHandler, PotentialSymTaxScreeningHandler,
-    BlastnAnalysis, SymNonSymTaxScreeningHandler, PerformMEDHandler)
+    BlastnAnalysis, SymNonSymTaxScreeningHandler, PerformMEDHandler, DataSetSampleCreatorHandler)
 from datetime import datetime
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 import pickle
@@ -89,6 +89,8 @@ class DataLoading:
         self.path_to_med_padding_executable = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/o_pad_with_gaps.py')
         self.path_to_med_decompose_executable = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/decompose.py')
         self.perform_med_handler_instance = None
+        # data set sample creation
+        self.data_set_sample_creator_handler_instance = None
 
     def execute(self):
         self.copy_and_decompress_input_files_to_temp_wkd()
@@ -109,23 +111,17 @@ class DataLoading:
         self.taxonomic_screening()
 
         self.do_med_decomposition()
-        
 
-        # This cannot be mp.
-        # TODO make data_set_sample_sequences from the med nodes
-        # this will be a data_set_sample_sequence_creator (non MP)
-        # (previously the output of the above was a list of the directories in which the med files was found)
-        # A = assign nodes to reference sequences or make new reference sequence
-        # 1 - look at the node sequences from the med
-        # 2 - check to see if they already associate to a sp reference squences
-        # 3 - if so hold this relation in a dict
-        # 4 - if not, then create a new refernece sequence object
-        # 5 - take into account that two nodes could be assigned to the same reference sequence
-        # this is fine but we need to take this into account when we look at the abundances below
+        self.create_data_set_sample_sequences_from_med_nodes()
 
-        # read in the abundance table and if more than 200 create clade collection
-        # then go trough the count table and make dataSetSampleSequences and associate to the clade collection
-        # if a clade collection has been made
+        self.dataset_object.currently_being_processed = False
+        self.dataset_object.save()
+
+    def create_data_set_sample_sequences_from_med_nodes(self):
+        self.data_set_sample_creator_handler_instance = DataSetSampleCreatorHandler()
+        self.data_set_sample_creator_handler_instance.execute_data_set_sample_creation(
+            data_loading_list_of_med_output_directories=self.list_of_med_output_directories,
+            data_loading_debug=self.debug, data_loading_dataset_object=self.dataset_object)
 
     def do_med_decomposition(self):
         self.perform_med_handler_instance = PerformMEDHandler(
@@ -139,6 +135,11 @@ class DataLoading:
             data_loading_path_to_med_padding_executable=self.path_to_med_padding_executable)
 
         self.list_of_med_output_directories = self.perform_med_handler_instance.list_of_med_result_dirs
+
+        if self.debug:
+            print('MED dirs:')
+            for med_output_directory in self.list_of_med_output_directories:
+                print(med_output_directory)
 
     def do_initial_mothur_qc(self):
 
@@ -266,7 +267,8 @@ class DataLoading:
             self.taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(query_sequences_verified_as_symbiodinium_list)
 
 
-    def taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(self, query_sequences_verified_as_symbiodinium_list):
+    def taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(
+            self, query_sequences_verified_as_symbiodinium_list):
         new_symclade_fasta_as_list = self.taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
             query_sequences_verified_as_symbiodinium_list
         )
@@ -282,8 +284,8 @@ class DataLoading:
         combined_fasta = new_symclade_fasta_as_list + old_symclade_fasta_as_list
         return combined_fasta
 
-    def taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(self,
-                                                                                  query_sequences_verified_as_symbiodinium_list):
+    def taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
+            self, query_sequences_verified_as_symbiodinium_list):
         screened_seqs_fasta_dict = create_dict_from_fasta(
             fasta_path=self.sequences_to_screen_fasta_path
         )
@@ -320,7 +322,8 @@ class DataLoading:
             self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict)
         self.sequences_to_screen_fasta_as_list = []
         sequence_number_counter = 0
-        for nucleotide_sequence, num_samples_found_in in sub_evalue_nuclotide_sequence_to_number_of_samples_found_in_dict.items():
+        for nucleotide_sequence, num_samples_found_in in \
+                sub_evalue_nuclotide_sequence_to_number_of_samples_found_in_dict.items():
             if num_samples_found_in >= self.required_sample_support_for_sub_evalue_sequencs:
                 # then this is a sequences that was found in three or more samples
                 clade_of_sequence = self.taxonomic_screening_handler.sub_evalue_nucleotide_sequence_to_clade_mp_dict[
@@ -524,10 +527,6 @@ class DataLoading:
         # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
         self.generate_and_write_new_stability_file_with_data_sheet()
 
-        # TODO we got this far in the refactoring. We are working through this create_data_sub code first
-        # we still need to transfer the equivalent into the DataLoading class.
-
-        # Create data_set_sample instances
         self.create_data_set_sample_objects_in_bulk_with_datasheet()
 
 
