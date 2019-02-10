@@ -11,8 +11,8 @@ import json
 from multiprocessing import Queue, Manager, Process
 from django import db
 from analysis_classes import (
-    InitialMothurHandler, PotentialSymTaxScreeningHandler,
-    BlastnAnalysis, SymNonSymTaxScreeningHandler, PerformMEDHandler, DataSetSampleCreatorHandler)
+    InitialMothurHandler, PotentialSymTaxScreeningHandler, BlastnAnalysis, SymNonSymTaxScreeningHandler,
+    PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator)
 from datetime import datetime
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 import pickle
@@ -26,16 +26,16 @@ class DataLoading:
     def __init__(self, data_set_uid, user_input_path, datasheet_path, screen_sub_evalue=False, debug=False, num_proc=1):
         self.dataset_object = DataSet.objects.get(id=data_set_uid)
         self.user_input_path = user_input_path
-        self.output_directory = self.setup_output_directory()
-        self.temp_working_directory = self.setup_temp_working_directory()
+        self.output_directory = self._setup_output_directory()
+        self.temp_working_directory = self._setup_temp_working_directory()
         self.data_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         # this is the path of the file we will use to deposit a backup copy of the reference sequences
-        self.seq_dump_file_path = self.setup_sequence_dump_file_path()
+        self.seq_dump_file_path = self._setup_sequence_dump_file_path()
         self.dataset_object.working_directory = self.temp_working_directory
         self.dataset_object.save()
         # This is the directory that sequences that have undergone QC for each sample will be written out as
         # .names and .fasta pairs BEFORE MED decomposition
-        self.pre_med_sequence_output_directory_path = self.create_pre_med_write_out_directory_path()
+        self.pre_med_sequence_output_directory_path = self._create_pre_med_write_out_directory_path()
         self.num_proc = num_proc
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
         # .names and .fasta files of the non_symbiodinium_sequences that were thrown out for that sample
@@ -45,7 +45,7 @@ class DataLoading:
         os.makedirs(self.non_symbiodiniaceae_and_size_violation_base_directory_path, exist_ok=True)
         # data can be loaded either as paired fastq or fastq.gz files or as a single compressed file containing
         # the afore mentioned paired files.
-        self.is_single_file_or_paired_input = self.determine_if_single_file_or_paired_input()
+        self.is_single_file_or_paired_input = self._determine_if_single_file_or_paired_input()
         self.datasheet_path = datasheet_path
         self.debug = debug
         self.symclade_db_directory_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
@@ -94,40 +94,42 @@ class DataLoading:
         # data set sample creation
         self.data_set_sample_creator_handler_instance = None
 
-    def execute(self):
-        self.copy_and_decompress_input_files_to_temp_wkd()
+    def load_data(self):
+        self._copy_and_decompress_input_files_to_temp_wkd()
 
         # the stability file generated here is used as the base of the initial mothur QC
         if self.datasheet_path:
-            self.generate_stability_file_and_data_set_sample_objects_with_datasheet()
+            self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
         else:
-            self.generate_stability_file_and_data_set_sample_objects_without_datasheet()
+            self._generate_stability_file_and_data_set_sample_objects_without_datasheet()
 
-        self.if_symclade_binaries_not_present_remake_db()
+        self._if_symclade_binaries_not_present_remake_db()
 
-        self.do_initial_mothur_qc()
+        self._do_initial_mothur_qc()
 
-        self.taxonomic_screening()
+        self._taxonomic_screening()
 
-        self.do_med_decomposition()
+        self._do_med_decomposition()
 
-        self.create_data_set_sample_sequences_from_med_nodes()
+        self._create_data_set_sample_sequences_from_med_nodes()
 
-        self.print_sample_successful_or_failed_summary()
+        self._print_sample_successful_or_failed_summary()
 
-        self.perform_sequence_drop()
+        self._perform_sequence_drop()
 
-        self.delete_temp_working_directory_and_log_files()
+        self._delete_temp_working_directory_and_log_files()
 
-        output_path_list, date_time_str, num_samples = output_sequence_count_tables(
-            datasubstooutput=str(data_set_uid),
-            num_processors=num_proc,
-            output_dir=output_directory, call_type='submission')
+        self._output_seqs_count_table()
 
-    def output_sequence_count_tables(self):
-        apples = 'asdf'
+    def _output_seqs_count_table(self):
+        sequence_count_table_creator = SequenceCountTableCreator(
+            call_type='submission',
+            output_dir=self.output_directory,
+            data_set_uids_to_output_as_comma_sep_string=set(self.dataset_object.id),
+            num_proc=self.num_proc, time_date_str=self.data_time_string)
+        sequence_count_table_creator.execute_output()
 
-    def delete_temp_working_directory_and_log_files(self):
+    def _delete_temp_working_directory_and_log_files(self):
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)
         # del any log file in the database directory that may have been created by mothur analyses
@@ -135,19 +137,19 @@ class DataLoading:
         for f in log_file_list:
             os.remove(os.path.join(os.path.dirname(self.symclade_db_full_path), f))
 
-    def perform_sequence_drop(self):
-        sequence_drop_file = self.generate_sequence_drop_file()
+    def _perform_sequence_drop(self):
+        sequence_drop_file = self._generate_sequence_drop_file()
         sys.stdout.write(f'\n\nBackup of named reference_sequences output to {self.seq_dump_file_path}\n')
         write_list_to_destination(self.seq_dump_file_path, sequence_drop_file)
 
-    def generate_sequence_drop_file(self):
+    def _generate_sequence_drop_file(self):
         header_string = ','.join(['seq_name', 'seq_uid', 'seq_clade', 'seq_sequence'])
         sequence_drop_list = [header_string]
         for ref_seq in ReferenceSequence.objects.filter(has_name=True):
             sequence_drop_list.append(','.join([ref_seq.name, str(ref_seq.id), ref_seq.clade, ref_seq.sequence]))
         return sequence_drop_list
 
-    def print_sample_successful_or_failed_summary(self):
+    def _print_sample_successful_or_failed_summary(self):
         print(f'\n\n SAMPLE PROCESSING SUMMARY')
         failed_count = 0
         successful_count = 0
@@ -162,7 +164,7 @@ class DataLoading:
         print(f'\n\n{successful_count} out of {successful_count + failed_count} samples successfully passed QC.\n'
               f'{failed_count} samples produced erorrs\n')
 
-    def create_data_set_sample_sequences_from_med_nodes(self):
+    def _create_data_set_sample_sequences_from_med_nodes(self):
         self.data_set_sample_creator_handler_instance = DataSetSampleCreatorHandler()
         self.data_set_sample_creator_handler_instance.execute_data_set_sample_creation(
             data_loading_list_of_med_output_directories=self.list_of_med_output_directories,
@@ -170,7 +172,7 @@ class DataLoading:
         self.dataset_object.currently_being_processed = False
         self.dataset_object.save()
 
-    def do_med_decomposition(self):
+    def _do_med_decomposition(self):
         self.perform_med_handler_instance = PerformMEDHandler(
             data_loading_temp_working_directory=self.temp_working_directory,
             data_loading_num_proc=self.num_proc,
@@ -188,10 +190,10 @@ class DataLoading:
             for med_output_directory in self.list_of_med_output_directories:
                 print(med_output_directory)
 
-    def do_initial_mothur_qc(self):
+    def _do_initial_mothur_qc(self):
 
         if not self.sample_fastq_pairs:
-            self.exit_and_del_data_set_sample('Sample fastq pairs list empty')
+            self._exit_and_del_data_set_sample('Sample fastq pairs list empty')
 
         self.initial_mothur_handler = InitialMothurHandler(num_proc=self.num_proc, sample_fastq_pairs=self.sample_fastq_pairs)
 
@@ -204,7 +206,7 @@ class DataLoading:
         self.samples_that_caused_errors_in_qc_list = list(
             self.initial_mothur_handler.samples_that_caused_errors_in_qc_mp_list)
 
-    def taxonomic_screening(self):
+    def _taxonomic_screening(self):
         """
         There are only two things to achieve as part of this taxonomy screening.
         1 - identify the sequences that are Symbiodinium/Symbiodiniaceae in origin
@@ -234,18 +236,18 @@ class DataLoading:
 
         if self.screen_sub_evalue:
 
-            self.create_symclade_backup_incase_of_accidental_deletion_of_corruption()
+            self._create_symclade_backup_incase_of_accidental_deletion_of_corruption()
 
             while 1:
                 self.new_seqs_added_in_iteration = 0
                 # This method simply identifies whether there are sequences that need screening.
                 # Everytime that the execute_worker is run it pickles out the files needed for the next worker
-                self.make_fasta_of_sequences_that_need_taxa_screening()
+                self._make_fasta_of_sequences_that_need_taxa_screening()
 
                 if self.sequences_to_screen_fasta_as_list:
                     # Now do the screening
                     # The outcome of this will be an updated symClade.fa that we should then make a blastdb from it.
-                    self.screen_sub_e_seqs()
+                    self._screen_sub_e_seqs()
                     if self.new_seqs_added_in_iteration == 0:
                         break
                 else:
@@ -257,11 +259,11 @@ class DataLoading:
             # During its run it will have output all of the files we need to run the following workers.
             # We can also run the generate_and_write_below_evalue_fasta_for_screening function to write out a
             # fasta of sub_evalue sequences we can then report to the user using that object
-            self.make_fasta_of_sequences_that_need_taxa_screening()
+            self._make_fasta_of_sequences_that_need_taxa_screening()
 
-        self.do_sym_non_sym_tax_screening()
+        self._do_sym_non_sym_tax_screening()
 
-    def do_sym_non_sym_tax_screening(self):
+    def _do_sym_non_sym_tax_screening(self):
         self.sym_non_sym_tax_screening_handler = SymNonSymTaxScreeningHandler(
             data_loading_list_of_samples_names=self.list_of_samples_names,
             data_loading_num_proc=self.num_proc,
@@ -280,7 +282,7 @@ class DataLoading:
         )
 
 
-    def screen_sub_e_seqs(self):
+    def _screen_sub_e_seqs(self):
         """This function screens a fasta file to see if the sequences are Symbiodinium in origin.
         This fasta file contains the below_e_cutoff sequences that need to be screened. These sequences are the sequences
         that were found to have a match in the initial screening against the symClade.fa database but were below
@@ -303,7 +305,7 @@ class DataLoading:
 
         blast_output_dict = blastn_analysis_object.return_blast_results_dict()
 
-        query_sequences_verified_as_symbiodinium_list = self.get_list_of_seqs_in_blast_result_that_are_symbiodinium(
+        query_sequences_verified_as_symbiodinium_list = self._get_list_of_seqs_in_blast_result_that_are_symbiodinium(
             blast_output_dict
         )
 
@@ -311,27 +313,27 @@ class DataLoading:
         self.new_seqs_added_running_total += self.new_seqs_added_in_iteration
 
         if query_sequences_verified_as_symbiodinium_list:
-            self.taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(query_sequences_verified_as_symbiodinium_list)
+            self._taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(query_sequences_verified_as_symbiodinium_list)
 
 
-    def taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(
+    def _taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(
             self, query_sequences_verified_as_symbiodinium_list):
-        new_symclade_fasta_as_list = self.taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
+        new_symclade_fasta_as_list = self._taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
             query_sequences_verified_as_symbiodinium_list
         )
-        combined_fasta = self.taxa_screening_combine_new_symclade_seqs_with_current(new_symclade_fasta_as_list)
-        self.taxa_screening_make_new_symclade_db(combined_fasta)
+        combined_fasta = self._taxa_screening_combine_new_symclade_seqs_with_current(new_symclade_fasta_as_list)
+        self._taxa_screening_make_new_symclade_db(combined_fasta)
 
-    def taxa_screening_make_new_symclade_db(self, combined_fasta):
+    def _taxa_screening_make_new_symclade_db(self, combined_fasta):
         write_list_to_destination(self.symclade_db_full_path, combined_fasta)
         make_new_blast_db(input_fasta_to_make_db_from=self.symclade_db_full_path, db_title='symClade')
 
-    def taxa_screening_combine_new_symclade_seqs_with_current(self, new_symclade_fasta_as_list):
+    def _taxa_screening_combine_new_symclade_seqs_with_current(self, new_symclade_fasta_as_list):
         old_symclade_fasta_as_list = read_defined_file_to_list(self.symclade_db_full_path)
         combined_fasta = new_symclade_fasta_as_list + old_symclade_fasta_as_list
         return combined_fasta
 
-    def taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
+    def _taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
             self, query_sequences_verified_as_symbiodinium_list):
         screened_seqs_fasta_dict = create_dict_from_fasta(
             fasta_path=self.sequences_to_screen_fasta_path
@@ -346,7 +348,7 @@ class DataLoading:
             )
         return new_symclade_fasta_as_list
 
-    def get_list_of_seqs_in_blast_result_that_are_symbiodinium(self, blast_output_dict):
+    def _get_list_of_seqs_in_blast_result_that_are_symbiodinium(self, blast_output_dict):
         query_sequences_verified_as_symbiodinium_list = []
         for query_sequence_name, blast_result_list_for_query_sequence in blast_output_dict.items():
             sym_count = 0
@@ -361,7 +363,7 @@ class DataLoading:
                             break
         return query_sequences_verified_as_symbiodinium_list
 
-    def make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening(self):
+    def _make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening(self):
         """ The below_e_cutoff_dict has nucleotide sequencs as the
         key and the number of samples that sequences was found in as the value.
         """
@@ -388,7 +390,7 @@ class DataLoading:
         if self.sequences_to_screen_fasta_as_list:
             write_list_to_destination(self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
 
-    def create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
+    def _create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
         back_up_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'symClade_backup'))
         os.makedirs(back_up_dir, exist_ok=True)
         src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/symClade.fa'
@@ -403,8 +405,8 @@ class DataLoading:
                 self.dataset_object.id)]
         write_list_to_destination(dst_readme_path, read_me)
 
-    def make_fasta_of_sequences_that_need_taxa_screening(self):
-        self.init_potential_sym_tax_screen_handler()
+    def _make_fasta_of_sequences_that_need_taxa_screening(self):
+        self._init_potential_sym_tax_screen_handler()
 
         # the self.taxonomic_screening_handler.sub_evalue_sequence_to_num_sampes_found_in_mp_dict is populated here
         self.taxonomic_screening_handler.execute_potential_sym_tax_screening(
@@ -413,15 +415,15 @@ class DataLoading:
             data_loading_debug=self.debug
         )
 
-        self.taxa_screening_update_checked_samples_list()
+        self._taxa_screening_update_checked_samples_list()
 
-        self.make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening()
+        self._make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening()
 
-    def taxa_screening_update_checked_samples_list(self):
+    def _taxa_screening_update_checked_samples_list(self):
         self.checked_samples_with_no_additional_symbiodinium_sequences = \
             list(self.taxonomic_screening_handler.checked_samples_mp_list)
 
-    def init_potential_sym_tax_screen_handler(self):
+    def _init_potential_sym_tax_screen_handler(self):
 
         self.taxonomic_screening_handler = PotentialSymTaxScreeningHandler(
             samples_that_caused_errors_in_qc_list=self.samples_that_caused_errors_in_qc_list,
@@ -429,8 +431,7 @@ class DataLoading:
             list_of_samples_names=self.list_of_samples_names, num_proc=self.num_proc
         )
 
-
-    def if_symclade_binaries_not_present_remake_db(self):
+    def _if_symclade_binaries_not_present_remake_db(self):
         list_of_binaries_that_should_exist = [
             self.dataset_object.reference_fasta_database_used + extension for extension in ['.nhr', '.nin', '.nsq']
         ]
@@ -460,20 +461,20 @@ class DataLoading:
                 if item in list_of_binaries_that_should_exist:
                     binary_count += 1
             if binary_count != 3:
-                self.exit_and_del_data_set_sample('Failure in creating blast binaries')
+                self._exit_and_del_data_set_sample('Failure in creating blast binaries')
 
-    def generate_stability_file_and_data_set_sample_objects_without_datasheet(self):
+    def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self):
 
         self.list_of_fastq_file_names_in_wkd = [a for a in os.listdir(self.temp_working_directory) if 'fastq' in a]
 
-        self.generate_and_write_mothur_batch_file_for_dotfile_creation()
+        self._generate_and_write_mothur_batch_file_for_dotfile_creation()
         general.execute_mothur_batch_file_with_piped_stoud_sterr(self.path_to_latest_mothur_batch_file)
 
-        self.generate_and_write_new_stability_file_without_datasheet()
+        self._generate_and_write_new_stability_file_without_datasheet()
 
-        self.create_data_set_sample_objects_in_bulk_without_datasheet()
+        self._create_data_set_sample_objects_in_bulk_without_datasheet()
 
-    def create_data_set_sample_objects_in_bulk_without_datasheet(self):
+    def _create_data_set_sample_objects_in_bulk_without_datasheet(self):
         list_of_sample_objects = []
         sys.stdout.write('\nCreating data_set_sample objects\n')
         for sampleName in self.list_of_samples_names:
@@ -491,16 +492,15 @@ class DataLoading:
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_sample_objects)
 
-    def generate_and_write_new_stability_file_without_datasheet(self):
-        self.read_in_mothur_dot_file_creation_output()
+    def _generate_and_write_new_stability_file_without_datasheet(self):
+        self._read_in_mothur_dot_file_creation_output()
         # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
-        end_index = self.identify_sample_names_without_datasheet()
-        new_stability_file = self.generate_new_stability_file_without_datasheet(end_index)
+        end_index = self._identify_sample_names_without_datasheet()
+        new_stability_file = self._generate_new_stability_file_without_datasheet(end_index)
         # write out the new stability file
         general.write_list_to_destination(f'{self.temp_working_directory}/stability.files', new_stability_file)
 
-
-    def generate_new_stability_file_without_datasheet(self, end_index):
+    def _generate_new_stability_file_without_datasheet(self, end_index):
         new_stability_file = []
         for stability_file_line in self.sample_fastq_pairs:
             pair_components = stability_file_line.split('\t')
@@ -517,7 +517,7 @@ class DataLoading:
                     pair_components[2]))
         return new_stability_file
 
-    def get_num_chars_in_common_with_fastq_names(self):
+    def _get_num_chars_in_common_with_fastq_names(self):
         i = 1
         while 1:
             list_of_endings = []
@@ -531,53 +531,53 @@ class DataLoading:
         end_index = i - 1
         return end_index
 
-    def get_sample_names_from_fastq_files_using_index(self, end_index):
+    def _get_sample_names_from_fastq_files_using_index(self, end_index):
         list_of_names_non_unique = []
         for file in self.list_of_fastq_files_in_wkd:
             list_of_names_non_unique.append(file[:-end_index])
         list_of_sample_names = list(set(list_of_names_non_unique))
         if len(list_of_sample_names) != len(self.list_of_fastq_files_in_wkd) / 2:
             warning_str = 'Error in sample name extraction'
-            self.exit_and_del_data_set_sample(warning_str)
+            self._exit_and_del_data_set_sample(warning_str)
         self.list_of_samples_names = list_of_sample_names
 
-    def identify_sample_names_without_datasheet(self):
+    def _identify_sample_names_without_datasheet(self):
         # I think the simplest way to get sample names is to find what parts are common between all samples
         # well actually 50% of the samples so that we also remove the R1 and R2 parts.
-        end_index = self.get_num_chars_in_common_with_fastq_names()
-        self.get_sample_names_from_fastq_files_using_index(end_index)
+        end_index = self._get_num_chars_in_common_with_fastq_names()
+        self._get_sample_names_from_fastq_files_using_index(end_index)
 
         return end_index
-    def generate_stability_file_and_data_set_sample_objects_with_datasheet(self):
+
+    def _generate_stability_file_and_data_set_sample_objects_with_datasheet(self):
         # Create a pandas df from the data_sheet if it was provided
         # allow the data_sheet to be in a .csv format or .xlsx format. This is so that we can store a datasheet
         # in the github repo in a non-binary format
         # The sample_meta_df that is created from the data_sheet should be identical irrespective of whether a .csv
         # or a .xlsx is submitted.
-        sample_meta_info_df = self.create_sample_meta_info_dataframe_from_datasheet_path()
+        sample_meta_info_df = self._create_sample_meta_info_dataframe_from_datasheet_path()
 
         # if we are given a data_sheet then use the sample names given as the DataSetSample object names
         self.list_of_samples_names = sample_meta_info_df.index.values.tolist()
 
         # we should verify that all of the fastq files listed in the sample_meta_df
         # are indeed found in the directory that we've been given
-        self.check_all_fastqs_in_datasheet_exist()
+        self._check_all_fastqs_in_datasheet_exist()
 
-        self.generate_and_write_mothur_batch_file_for_dotfile_creation()
+        self._generate_and_write_mothur_batch_file_for_dotfile_creation()
 
         # noinspection PyPep8
         general.execute_mothur_batch_file_with_piped_stoud_sterr(self.path_to_latest_mothur_batch_file)
 
         # we will also need to know how to relate the sample names to the fastq files
         # for this we will make a dict of fastq file name to sample
-        self.create_fastq_file_to_sample_name_dict()
+        self._create_fastq_file_to_sample_name_dict()
         # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
-        self.generate_and_write_new_stability_file_with_data_sheet()
+        self._generate_and_write_new_stability_file_with_data_sheet()
 
-        self.create_data_set_sample_objects_in_bulk_with_datasheet()
+        self._create_data_set_sample_objects_in_bulk_with_datasheet()
 
-
-    def create_data_set_sample_objects_in_bulk_with_datasheet(self):
+    def _create_data_set_sample_objects_in_bulk_with_datasheet(self):
         list_of_data_set_sample_objects = []
         sys.stdout.write('\nCreating data_set_sample objects\n')
         for sampleName in self.list_of_samples_names:
@@ -606,21 +606,19 @@ class DataLoading:
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
 
-
-    def generate_and_write_new_stability_file_with_data_sheet(self):
+    def _generate_and_write_new_stability_file_with_data_sheet(self):
         # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
         # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
-        self.read_in_mothur_dot_file_creation_output()
+        self._read_in_mothur_dot_file_creation_output()
 
-        new_stability_file = self.generate_new_stability_file_with_data_sheet()
+        new_stability_file = self._generate_new_stability_file_with_data_sheet()
 
         general.write_list_to_destination(
             r'{0}/stability.files'.format(self.temp_working_directory),
             new_stability_file
         )
 
-
-    def generate_new_stability_file_with_data_sheet(self):
+    def _generate_new_stability_file_with_data_sheet(self):
         new_stability_file = []
         for stability_file_line in self.sample_fastq_pairs:
             pair_components = stability_file_line.split('\t')
@@ -636,28 +634,28 @@ class DataLoading:
                     pair_components[2]))
         return new_stability_file
 
-    def read_in_mothur_dot_file_creation_output(self):
+    def _read_in_mothur_dot_file_creation_output(self):
         self.sample_fastq_pairs = general.read_defined_file_to_list(f'{self.temp_working_directory}/stability.files')
 
-    def create_fastq_file_to_sample_name_dict(self):
+    def _create_fastq_file_to_sample_name_dict(self):
         fastq_file_to_sample_name_dict = {}
         for sample_index in self.sample_meta_info_df.index.values.tolist():
             fastq_file_to_sample_name_dict[self.sample_meta_info_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
             fastq_file_to_sample_name_dict[self.sample_meta_info_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
         self.fastq_file_to_sample_name_dict = fastq_file_to_sample_name_dict
 
-    def execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file):
+    def _execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file):
         subprocess.run(['mothur', path_to_mothur_batch_file],
                        stdout=subprocess.PIPE,
                        stderr=subprocess.PIPE)
 
-    def generate_and_write_mothur_batch_file_for_dotfile_creation(self):
-        self.check_if_fastqs_are_gz_compressed()
-        mothur_batch_file_as_list = self.generate_mothur_batch_file_for_dotfile_creation_as_list()
+    def _generate_and_write_mothur_batch_file_for_dotfile_creation(self):
+        self._check_if_fastqs_are_gz_compressed()
+        mothur_batch_file_as_list = self._generate_mothur_batch_file_for_dotfile_creation_as_list()
         self.path_to_latest_mothur_batch_file = f'{self.temp_working_directory}/mothur_batch_file_makeFile'
         general.write_list_to_destination(self.path_to_latest_mothur_batch_file, mothur_batch_file_as_list)
 
-    def generate_mothur_batch_file_for_dotfile_creation_as_list(self):
+    def _generate_mothur_batch_file_for_dotfile_creation_as_list(self):
         if self.fastqs_are_gz_compressed:
             mothur_batch_file = [
                 r'set.dir(input={0})'.format(self.temp_working_directory),
@@ -672,37 +670,37 @@ class DataLoading:
             ]
         return mothur_batch_file
 
-    def check_if_fastqs_are_gz_compressed(self):
+    def _check_if_fastqs_are_gz_compressed(self):
         if self.list_of_fastq_files_in_wkd[0].endswith('fastq.gz'):
             self.fastqs_are_gz_compressed = True
         elif self.list_of_fastq_files_in_wkd[0].endswith('fastq'):
             self.fastqs_are_gz_compressed = False
         else:
             warning_str = f'Unrecognised format of sequecing file: {self.list_of_fastq_files_in_wkd[0]}'
-            self.exit_and_del_data_set_sample(warning_str)
+            self._exit_and_del_data_set_sample(warning_str)
 
-    def check_all_fastqs_in_datasheet_exist(self):
+    def _check_all_fastqs_in_datasheet_exist(self):
         self.list_of_fastq_files_in_wkd = [_ for _ in os.listdir(self.temp_working_directory) if 'fastq' in _]
-        list_of_meta_gz_files = self.get_list_of_fastq_file_names_that_should_be_in_directory()
-        self.if_fastq_files_missing_sys_exit(list_of_meta_gz_files)
+        list_of_meta_gz_files = self._get_list_of_fastq_file_names_that_should_be_in_directory()
+        self._if_fastq_files_missing_sys_exit(list_of_meta_gz_files)
 
-    def if_fastq_files_missing_sys_exit(self, list_of_meta_gz_files):
+    def _if_fastq_files_missing_sys_exit(self, list_of_meta_gz_files):
         for fastq in list_of_meta_gz_files:
             if fastq not in self.list_of_fastq_files_in_wkd:
                 warning_str = f'{fastq} not found'
-                self.exit_and_del_data_set_sample(warning_str)
+                self._exit_and_del_data_set_sample(warning_str)
 
-    def exit_and_del_data_set_sample(self, warning_str):
+    def _exit_and_del_data_set_sample(self, warning_str):
         self.dataset_object.delete()
         sys.exit(warning_str)
 
-    def get_list_of_fastq_file_names_that_should_be_in_directory(sample_meta_info_df):
+    def _get_list_of_fastq_file_names_that_should_be_in_directory(sample_meta_info_df):
         list_of_meta_gz_files = []
         list_of_meta_gz_files.extend(sample_meta_info_df['fastq_fwd_file_name'].values.tolist())
         list_of_meta_gz_files.extend(sample_meta_info_df['fastq_rev_file_name'].values.tolist())
         return list_of_meta_gz_files
 
-    def create_sample_meta_info_dataframe_from_datasheet_path(self):
+    def _create_sample_meta_info_dataframe_from_datasheet_path(self):
         if self.datasheet_path.endswith('.xlsx'):
             self.sample_meta_info_df = pd.read_excel(io=self.datasheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
         elif self.datasheet_path.endswith('.csv'):
@@ -711,14 +709,13 @@ class DataLoading:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
 
-
-    def copy_and_decompress_input_files_to_temp_wkd(self):
+    def _copy_and_decompress_input_files_to_temp_wkd(self):
         if not self.is_single_file_or_paired_input:
-            self.copy_fastq_files_from_input_dir_to_temp_wkd()
+            self._copy_fastq_files_from_input_dir_to_temp_wkd()
         else:
-            self.extract_single_compressed_file_to_temp_wkd()
+            self._extract_single_compressed_file_to_temp_wkd()
 
-    def extract_single_compressed_file_to_temp_wkd(self):
+    def _extract_single_compressed_file_to_temp_wkd(self):
         ext_components = self.user_input_path.split('.')
         if ext_components[-1] == 'zip':  # .zip
             subprocess.run(["unzip", self.user_input_path, '-d', self.temp_working_directory], stdout=subprocess.PIPE,
@@ -732,7 +729,7 @@ class DataLoading:
                            stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE)
 
-    def copy_fastq_files_from_input_dir_to_temp_wkd(self):
+    def _copy_fastq_files_from_input_dir_to_temp_wkd(self):
         file = os.listdir(self.user_input_path)[0]
         os.chdir('{}'.format(self.user_input_path))
         # * asterix are only expanded in the shell and so don't work through subprocess
@@ -746,7 +743,7 @@ class DataLoading:
             subprocess.run(['cp'] + glob.glob('*.fq*') + [self.temp_working_directory], stdout=subprocess.PIPE,
                            stderr=subprocess.PIPE)
 
-    def determine_if_single_file_or_paired_input(self):
+    def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):
             if 'fastq' in file or 'fq' in file:
                 # Then there is a fastq.gz or fastq file already uncompressed in this folder
@@ -754,23 +751,23 @@ class DataLoading:
                 # rather the pairs of files themselves.
                 return False
 
-    def create_pre_med_write_out_directory_path(self):
+    def _create_pre_med_write_out_directory_path(self):
         pre_med_write_out_directory_path = os.path.join(self.output_directory, 'pre_med_seqs')
         os.makedirs(pre_med_write_out_directory_path, exist_ok=True)
         return pre_med_write_out_directory_path
 
-    def setup_output_directory(self):
+    def _setup_output_directory(self):
         output_directory = os.path.join(os.path.dirname(__file__),
                                         'outputs/data_set_submissions/{}'.format(self.dataset_object.id))
         os.makedirs(output_directory, exist_ok=True)
         return output_directory
 
-    def setup_sequence_dump_file_path(self):
+    def _setup_sequence_dump_file_path(self):
         seq_dump_file_path = os.path.join(os.path.dirname(__file__), f'/dbBackUp/seq_dumps/seq_dump_{self.data_time_string}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 
-    def setup_temp_working_directory(self):
+    def _setup_temp_working_directory(self):
         # working directory will be housed in a temp folder within the directory in which the sequencing data
         # is currently housed
         if '.' in self.user_input_path.split('/')[-1]:
@@ -781,13 +778,10 @@ class DataLoading:
             # then we assume that we are pointing to a directory and we can directly use that to make the wkd
             self.temp_working_directory = os.path.abspath(
                 f'{self.user_input_path}/tempData/{self.dataset_object.id}')
-        self.create_temp_wkd()
+        self._create_temp_wkd()
         return self.temp_working_directory
 
-
-
-
-    def create_temp_wkd(self):
+    def _create_temp_wkd(self):
         # if the directory already exists remove it and start from scratch
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)

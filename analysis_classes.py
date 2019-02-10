@@ -1781,6 +1781,15 @@ class SequenceCountTableCreator:
 
     """
     def __init__(self, call_type, output_dir, data_set_uids_to_output_as_comma_sep_string, num_proc, sorted_sample_uid_list=None, analysis_obj_id=None, time_date_str=None, output_user=None):
+        self._init_core_vars(
+            analysis_obj_id, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc,
+            output_dir, output_user, sorted_sample_uid_list, time_date_str)
+        self._init_seq_abundance_collection_objects()
+        self._init_vars_for_putting_together_the_dfs()
+        self._init_output_paths()
+
+    def _init_core_vars(self, analysis_obj_id, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc,
+                        output_dir, output_user, sorted_sample_uid_list, time_date_str):
         self.num_proc = num_proc
         self.output_dir = output_dir
         os.makedirs(self.output_dir, exist_ok=True)
@@ -1792,32 +1801,34 @@ class SequenceCountTableCreator:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.call_type = call_type
         self.output_user = output_user
-        self.output_paths_list = []
         self.clade_list = list('ABCDEFGHI')
         uids_of_data_sets_to_output = [int(a) for a in data_set_uids_to_output_as_comma_sep_string.split(',')]
         self.data_set_objects_to_output = DataSet.objects.filter(id__in=uids_of_data_sets_to_output)
         self.ref_seqs_in_datasets = ReferenceSequence.objects.filter(
-        datasetsamplesequence__data_set_sample_from__data_submission_from__in=self.data_set_objects_to_output).distinct()
+            datasetsamplesequence__data_set_sample_from__data_submission_from__in=self.data_set_objects_to_output).distinct()
         set_of_clades_found = {ref_seq.clade for ref_seq in self.ref_seqs_in_datasets}
         self.ordered_list_of_clades_found = [clade for clade in self.clade_list if clade in set_of_clades_found]
         self.list_of_data_set_sample_objects = DataSetSample.objects.filter(
             data_submission_from__in=self.data_set_objects_to_output)
-        # output objects from first worker to be used by second worker
+
+    def _init_seq_abundance_collection_objects(self):
+        """Output objects from first worker to be used by second worker"""
         self.dss_id_to_list_of_dsss_objects_dict_mp_dict = None
         self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = None
         self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = None
         # this is the list that we will use the self.annotated_dss_name_to_cummulative_rel_abund_mp_dict to create
         # it is a list of the ref_seqs_ordered first by clade then by abundance.
         self.clade_abundance_ordered_ref_seq_list = []
+
+    def _init_vars_for_putting_together_the_dfs(self):
         # variables concerned with putting together the dataframes
         self.dss_id_to_pandas_series_results_list_dict = None
         self.output_df_absolute = None
         self.output_df_relative = None
         self.output_seqs_fasta_as_list = []
-        # output paths
-        self._init_output_paths()
 
     def _init_output_paths(self):
+        self.output_paths_list = []
         if self.analysis_obj_id:
             data_analysis_obj = DataAnalysis.objects.get(id=self.analysis_obj_id)
             self.path_to_seq_output_df_absolute = os.path.join(
@@ -1837,7 +1848,7 @@ class SequenceCountTableCreator:
                                                                f'{self.time_date_str}.seqs.relative.txt')
             self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
 
-    def execute(self):
+    def execute_output(self):
         self._collect_abundances_for_creating_the_output()
 
         self._generate_sample_output_series()
@@ -1931,7 +1942,7 @@ class SequenceCountTableCreator:
             self.output_df_relative = self.output_df_relative.append(temp_series)
 
     def _add_uids_for_seqs_to_dfs(self):
-        # Now add the accesion number / UID for each of the DIVs
+        """Now add the UID for each of the sequences"""
         sys.stdout.write('\nGenerating accession and fasta\n')
         reference_sequences_in_data_sets_no_name = ReferenceSequence.objects.filter(
             datasetsamplesequence__data_set_sample_from__data_submission_from__in=self.list_of_data_set_sample_objects,
@@ -1963,6 +1974,8 @@ class SequenceCountTableCreator:
         self.output_df_relative = self.output_df_relative.append(temp_series)
 
     def _create_ordered_output_dfs_from_series(self):
+        """Put together the pandas series that hold sequences abundance outputs for each sample in order of the samples
+        either according to a predefined ordered list or by an order that will be generated below."""
         if self.sorted_sample_uid_list:
             sys.stdout.write('\nValidating sorted sample list and ordering dataframe accordingly\n')
             self._check_sorted_sample_list_is_valid()
@@ -2109,9 +2122,10 @@ class SequenceCountTableCreator:
         return list(set(self.sorted_sample_uid_list).difference(set([dss.id for dss in self.list_of_data_set_sample_objects])))
 
     def _generate_sample_output_series(self):
-        """This generate a pandas series for each of the samples. One for absolute abundances and one for relative
-        abundances. These series will be put together and ordered to construct the output data frames that
-        will be written out for the user.
+        """This generate a pandas series for each of the samples. It uses the ordered ReferenceSequence list created
+         in the previous method as well as the other two dictionaries made.
+         One df for absolute abundances and one for relative abundances. These series will be put together
+         and ordered to construct the output data frames that will be written out for the user.
         """
         seq_count_table_output_series_generator_handler = SequenceCountTableOutputSeriesGeneratorHandler(
             clade_abundance_ordered_ref_seq_list=self.clade_abundance_ordered_ref_seq_list,
@@ -2167,6 +2181,9 @@ class SequenceCountTableCollectAbundanceHandler:
     dss = DataSetSample
     dsss = DataSetSampleSequence
     ref_seq = ReferenceSeqeunce
+    The end product of this method will be returned to the count table creator. The first dict will be used to create a
+    list of the ReferenceSequence objects of this output ordered first by clade and then by cumulative relative
+    abundance across all samples in the output.
     """
     def __init__(self, seq_count_table_creator_list_of_data_set_sample_objects, seq_count_table_creator_ref_seqs_in_datasets, seq_count_table_creator_num_procesors, seq_count_table_creator_ordered_list_of_clades_found):
 
