@@ -119,7 +119,13 @@ class DataLoading:
 
         self.delete_temp_working_directory_and_log_files()
 
+        output_path_list, date_time_str, num_samples = output_sequence_count_tables(
+            datasubstooutput=str(data_set_uid),
+            num_processors=num_proc,
+            output_dir=output_directory, call_type='submission')
 
+    def output_sequence_count_tables(self):
+        apples = 'asdf'
 
     def delete_temp_working_directory_and_log_files(self):
         if os.path.exists(self.temp_working_directory):

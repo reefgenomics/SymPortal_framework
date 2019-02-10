@@ -707,7 +707,6 @@ def main(input_path, data_set_uid, num_proc, screen_sub_evalue=False,
             data_set_uid, data_submission_in_q, debug, discarded_seqs_fasta, fasta_of_sig_sub_e_seqs,
             fasta_of_sig_sub_e_seqs_path, new_seqs_added_count, num_proc, output_directory, screen_sub_evalue, wkd)
 
-    # TODO we've got this far in the refactorying and making of the class.
     # This function now performs the MEDs sample by sample, clade by clade.
     # The list of outputed paths lead to the MED directories where node info etc can be found
     sys.stdout.write('\n\nStarting MED analysis\n')

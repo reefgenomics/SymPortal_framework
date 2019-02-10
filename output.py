@@ -752,7 +752,9 @@ def output_sequence_count_tables(
 
     # Dictionary that will hold the list of data_set_sample_sequences for each sample
     sample_to_dsss_list_shared_dict = worker_manager.dict()
+
     print('Creating sample to data_set_sample_sequence dict:')
+
     for dss in sample_list:
         sys.stdout.write('\r{}'.format(dss.name))
         sample_to_dsss_list_shared_dict[dss.id] = list(
@@ -761,16 +763,15 @@ def output_sequence_count_tables(
     # Queue that will hold the data set samples for the MP
     data_set_sample_queue = Queue()
 
-    # I will have a set of three dictionaries to pass into worker 2
-    # 1 - Seqname to cumulative abundance of relative abundances (for getting the over lying order of ref seqs)
-    # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
-    # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
+    # 1 - Seqname to cumulative relative abundance for each sequence across all sampples (for getting the over lying order of ref seqs)
+    # 2 - sample_id : list(dict(ref_seq_of_sample_name:absolute_abundance_of_dsss_in_sample), dict(ref_seq_of_sample_name:relative_abundance_of_dsss_in_sample))
+    # 3 - sample_id : list(dict(clade:total_abund_of_no_name_seqs_of_clade_in_q_), dict(clade:relative_abund_of_no_name_seqs_of_clade_in_q_)
 
-    reference_sequence_names_annotated = [
+    reference_sequence_names_clade_annotated = [
         ref_seq.name if ref_seq.has_name
         else str(ref_seq.id) + '_{}'.format(ref_seq.clade) for ref_seq in reference_sequences_in_data_sets]
 
-    generic_seq_to_abund_dict = {refSeq_name: 0 for refSeq_name in reference_sequence_names_annotated}
+    generic_seq_to_abund_dict = {refSeq_name: 0 for refSeq_name in reference_sequence_names_clade_annotated}
 
     list_of_dicts_for_processors = []
     for n in range(num_processors):
@@ -792,7 +793,7 @@ def output_sequence_count_tables(
     for n in range(num_processors):
         p = Process(target=output_worker_two, args=(
             data_set_sample_queue, list_of_dicts_for_processors[n][0], list_of_dicts_for_processors[n][1],
-            list_of_dicts_for_processors[n][2], reference_sequence_names_annotated, sample_to_dsss_list_shared_dict))
+            list_of_dicts_for_processors[n][2], reference_sequence_names_clade_annotated, sample_to_dsss_list_shared_dict))
         all_processes.append(p)
         p.start()
 
@@ -900,7 +901,7 @@ def output_sequence_count_tables(
 
     # We were having an issue with data_sets having the same names. To fix this, we should do our ordering
     # accoring to the uids of the samples
-
+    # TODO this is where we're at with the refactoring and class abstraction
     if sorted_sample_uid_list:
         sys.stdout.write('\nValidating sorted sample list and ordering dataframe accordingly\n')
         if len(sorted_sample_uid_list) != len(sample_list):
@@ -1114,9 +1115,9 @@ def output_sequence_count_tables(
 
 def output_worker_two(input_queue, seq_rel_abund_dict, smpl_seq_dict, sample_no_name_clade_summary_dict,
                       reference_sequence_names_annotated, sample_to_dsss_list_shared_dict):
-    # 1 - Seqname to cumulative abundance of relative abundances (for getting the over lying order of ref seqs)
-    # 2 - sample_id : list(dict(seq:abund), dict(seq:rel_abund))
-    # 3 - sample_id : list(dict(noNameClade:abund), dict(noNameClade:rel_abund)
+    # 1 - Seqname to cumulative relative abundance for each sequence across all sampples (for getting the over lying order of ref seqs)
+    # 2 - sample_id : list(dict(ref_seq_of_sample_name:absolute_abundance_of_dsss_in_sample), dict(ref_seq_of_sample_name:relative_abundance_of_dsss_in_sample))
+    # 3 - sample_id : list(dict(clade:total_abund_of_no_name_seqs_of_clade_in_q_), dict(clade:relative_abund_of_no_name_seqs_of_clade_in_q_)
     for dss in iter(input_queue.get, 'STOP'):
         sys.stdout.write('\rCounting seqs for {}'.format(dss))
 
