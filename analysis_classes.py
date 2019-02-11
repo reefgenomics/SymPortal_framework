@@ -9,9 +9,9 @@ from dbApp.models import DataSet, DataSetSample, DataSetSampleSequence, CladeCol
 from general import (
     decode_utf8_binary_to_list, create_dict_from_fasta, create_seq_name_to_abundance_dict_from_name_file,
     combine_two_fasta_files, remove_primer_mismatch_annotations_from_fasta, write_list_to_destination,
-    read_defined_file_to_list)
+    read_defined_file_to_list, mafft_align_fasta)
 from pickle import dump, load
-from multiprocessing import Queue, Manager, Process
+from multiprocessing import Queue, Manager, Process, current_process
 from django import db
 import json
 from datetime import datetime
@@ -25,6 +25,7 @@ plt.ioff()
 import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
+import re
 
 class BlastnAnalysis:
     def __init__(
@@ -2852,7 +2853,6 @@ class LegendPlotter:
         return leg_box_x, leg_box_y
 
 
-
 class SeqStackedBarPlotter:
     def __init__(self, seq_relative_abund_count_table_path, output_directory, time_date_str=None, ordered_sample_uid_list=None):
         self.seq_relative_abund_count_table_path = seq_relative_abund_count_table_path
@@ -3138,6 +3138,374 @@ class SeqStackedBarPlotter:
             "#00B57F",
             "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
         return colour_list
+
+class UnifracSeqAbundanceMPCollection:
+    """The purpose of this class is to be used during the UnifracDistanceCreator as a tidy holder for the
+     sequences information that is collected from each CladeCollection that is part of the output."""
+    def __init__(self, clade_collection, proc_id):
+        self.fasta_dict = {}
+        self.name_dict = {}
+        self.group_list = []
+        self.ref_seq_id_list = []
+        self.clade_collection = clade_collection
+        self.proc_id = proc_id
+
+    def collect_seq_info(self):
+        sys.stdout.write('\rProcessing cc: {} with {}'.format(self.clade_collection, self.proc_id))
+        for data_set_sample_seq in DataSetSampleSequence.objects.filter(
+                clade_collection_found_in=self.clade_collection):
+            ref_seq_id = data_set_sample_seq.reference_sequence_of.id
+            self.ref_seq_id_list.append(ref_seq_id)
+            unique_seq_name_base = '{}_id{}'.format(ref_seq_id, self.clade_collection.id)
+
+            smp_name = str(self.clade_collection.id)
+            self.fasta_dict['{}_{}'.format(unique_seq_name_base, 0)] = data_set_sample_seq.reference_sequence_of.sequence
+            temp_name_list = []
+
+            for i in range(data_set_sample_seq.abundance):
+                temp_name_list.append('{}_{}'.format(unique_seq_name_base, i))
+                self.group_list.append('{}\t{}'.format('{}_{}'.format(unique_seq_name_base, i), smp_name))
+
+            self.name_dict['{}_{}'.format(unique_seq_name_base, 0)] = temp_name_list
+
+class SequenceCollectionComplete(Exception): pass
+
+class UnifracDistanceCreatorHandlerOne:
+    """The purpose of this handler will be to setup the sequence collection for a given clade"""
+    def __init__(self, parent_unifrac_dist_creator, clade_in_question):
+        self.parent_unifrac_dist_creator = parent_unifrac_dist_creator
+        self.clade = clade_in_question
+        self.output_dir = os.path.join(self.parent_unifrac_dist_creator.output_dir, self.clade)
+        self.clade_collections_of_clade = self.parent_unifrac_dist_creator.clade_collections_from_data_sets.filter(
+            clade=self.clade)
+        self._raise_runtime_error_if_not_enough_clade_collections()
+        self.input_clade_collection_queue = Queue()
+        self.output_unifrac_seq_abund_mp_collection_queue = Queue()
+        self._populate_input_queue()
+        # variables for processing and consolidating the sequence collection outputs
+        self.master_fasta_dict = {}
+        self.master_unique_fasta_seq_list = []
+        self.master_name_dict = {}
+        self.master_group_file_as_list = []
+        # this dict will link the ref_seq ID to the name of the instance of the ref_seq_id that was used
+        self.master_name_unique_id_dict = {}
+        # we will have the worker of each process put a 'EXIT' into its output que when it has finished
+        # this way we can count how many 'EXIT's we have had output and when this equals the number of processors
+        # we started then we know that they have all finished and we have processed all of the outputs
+        self.stop_count = 0
+        self.master_names_file_as_list = []
+        self.master_fasta_file_as_list = []
+        self.master_names_file_path = os.path.join(self.output_dir, 'unifrac_master_names_file.names')
+        self.master_fasta_file_path = os.path.join(self.output_dir, 'unifrac_master_fasta_file.fasta')
+        self.master_group_file_path = os.path.join(self.output_dir, 'unifrac_master_group_file.fasta')
+
+    def _unifrac_distance_creator_worker_one(self):
+        proc_id = current_process().name
+        for cc in iter(self.input_clade_collection_queue.get, 'STOP'):
+            unifrac_seq_abundance_mp_collection = UnifracSeqAbundanceMPCollection(clade_collection=cc, proc_id=proc_id)
+            unifrac_seq_abundance_mp_collection.collect_seq_info()
+            self.output_unifrac_seq_abund_mp_collection_queue.put(unifrac_seq_abundance_mp_collection)
+        self.output_unifrac_seq_abund_mp_collection_queue.put('EXIT')
+
+    def execute_unifrac_distance_creator_worker_one(self):
+        all_processes = self._start_sequence_collection_running()
+
+        self._populate_the_master_seq_collection_objects()
+
+        self._once_complete_wait_for_processes_to_complete(all_processes)
+
+        self._write_out_master_fasta_names_and_group_files()
+
+    def _write_out_master_fasta_names_and_group_files(self):
+        write_list_to_destination(self.master_fasta_file_path, self.master_fasta_file_as_list)
+        write_list_to_destination(self.master_names_file_path, self.master_names_file_as_list)
+        write_list_to_destination(self.master_group_file_path, self.master_group_file_as_list)
+
+    def _once_complete_wait_for_processes_to_complete(self, all_processes):
+        # process the outputs of the sub processess before we pause to wait for them to complete.
+        for p in all_processes:
+            p.join()
+
+    def _populate_the_master_seq_collection_objects(self):
+        """This method collects the output of the sequence collection mp methods and populates the objects that
+        represnt the master names, fasta and group files that we are creating to calculate the UniFrac"""
+        for seq_collection_object in iter(self.output_unifrac_seq_abund_mp_collection_queue.get, 'STOP'):
+            try:
+                self._check_if_all_seq_collection_objects_have_been_processed(seq_collection_object)
+
+                sys.stdout.write(
+                    f'\rAdding {seq_collection_object.clade_collection.name} to master fasta and name files')
+
+                self._update_master_group_list(seq_collection_object)
+
+                for seq_id in seq_collection_object.ref_seq_id_list:
+                    seq_name = f'{seq_id}_id{seq_collection_object.clade_collection.id}_0'
+                    if seq_id not in self.master_unique_fasta_seq_list:
+                        self._populate_new_seq_info_in_master_dict_objects(seq_collection_object, seq_id, seq_name)
+                    else:
+                        self._populate_existing_seq_info_in_master_dict_objects(seq_collection_object, seq_id, seq_name)
+            except SequenceCollectionComplete:
+                break
+
+    def _populate_existing_seq_info_in_master_dict_objects(self, seq_collection_object, seq_id, seq_name):
+        # then this ref seq is already in the fasta so we just need to update the master name dict
+        self.master_name_dict[self.master_name_unique_id_dict[seq_id]] += seq_collection_object.name_dict[seq_name]
+
+    def _populate_new_seq_info_in_master_dict_objects(self, seq_collection_object, seq_id, seq_name):
+        self.master_unique_fasta_seq_list.append(seq_id)
+        # then this ref seq has not yet been added to the fasta and it needs to be
+        # populate the master fasta
+        self.master_fasta_dict[seq_name] = seq_collection_object.fasta_dict[seq_name]
+        # update the master_name_unique_id_dict to keep track of
+        # which sequence name represents the ref_seq_id
+        self.master_name_unique_id_dict[seq_id] = seq_name
+        # create a name dict entry
+        self.master_name_dict[seq_name] = seq_collection_object.name_dict[seq_name]
+
+    def _update_master_group_list(self, seq_collection_object):
+        self.master_group_file_as_list += seq_collection_object.group_list
+
+    def _check_if_all_seq_collection_objects_have_been_processed(self, seq_collection_object):
+        if seq_collection_object == 'EXIT':
+            self.stop_count += 1
+            if self.stop_count == self.parent_unifrac_dist_creator.num_proc:
+                raise SequenceCollectionComplete
+
+    def _start_sequence_collection_running(self):
+        all_processes = []
+        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
+        db.connections.close_all()
+        for n in range(self.parent_unifrac_dist_creator.num_proc):
+            p = Process(target=self._unifrac_distance_creator_worker_one, args=())
+            all_processes.append(p)
+            p.start()
+        return all_processes
+
+    def _populate_input_queue(self):
+        for cc in self.clade_collections_of_clade:
+            self.output_unifrac_seq_abund_mp_collection_queue.put(cc)
+
+        for n in range(self.parent_unifrac_dist_creator.num_proc):
+            self.output_unifrac_seq_abund_mp_collection_queue.put('STOP')
+
+
+    def _raise_runtime_error_if_not_enough_clade_collections(self):
+        if len(self.clade_collections_of_clade) < 2:
+            raise RuntimeWarning({'message' : 'insufficient clade collections'})
+
+
+class FseqbootAlignmentGenerator:
+    """This class is to be used in the UnifracDistanceCreator to handle the creation of the fseqboot alignments
+    for a given clade."""
+    def __init__(self, parent_unifrac_dist_creator, clade_in_question, num_reps):
+        self.parent_unifrac_dist_creator = parent_unifrac_dist_creator
+        self.clade = clade_in_question
+        self.num_reps = num_reps
+        self.input_fasta_path = self.parent_unifrac_dist_creator.master_fasta_file_aligned_path
+        self.output_seqboot_file_path = self.input_fasta_path + '.fseqboot'
+        self.fseqboot_local = None
+        self._setup_fseqboot_plum_bum_local()
+        self.output_dir = os.path.join(self.parent_unifrac_dist_creator.output_dir, self.clade)
+        # this is the base of the path that will be used to build the path of each of the alignment replicates
+        # to build the complete path a rep_count string (str(count)) will be appended to this base.
+        self.fseqboot_base = os.path.join(self.output_dir, 'out_seq_boot_reps', 'fseqboot_rep_')
+        self.fseqboot_file_as_list = None
+        self.rep_count = 0
+        self.fseqboot_individual_alignment_as_list = None
+
+    def do_fseqboot_alignment_generation(self):
+        self._execute_fseqboot()
+
+        self.fseqboot_file_as_list = read_defined_file_to_list(self.output_seqboot_file_path)
+
+        self._divide_fseqboot_file_into_indi_alignments_and_write_out()
+
+    def _divide_fseqboot_file_into_indi_alignments_and_write_out(self):
+        # Now divide the fseqboot file up into its 100 different alignments
+        # here we use the re to match if its the end of an alignment. More often it will not be and so we will just
+        # add the next line to the alignment.
+        # when we do find the end of an alignmnet then we write it out. And grab the next line to start the next
+        # alignment
+        self.fseqboot_individual_alignment_as_list = [self.fseqboot_file_as_list[0]]
+        reg_ex = re.compile('[0-9]+$')
+        for line in self.fseqboot_file_as_list[1:]:
+            reg_ex_matches_list = reg_ex.findall(line)
+            if len(reg_ex_matches_list) == 1:
+                write_list_to_destination('{}{}'.format(self.fseqboot_base, self.rep_count),
+                                          self.fseqboot_individual_alignment_as_list)
+                self.fseqboot_individual_alignment_as_list = [line]
+                self.rep_count += 1
+            else:
+                self.fseqboot_individual_alignment_as_list.append(line)
+        write_list_to_destination(f'{fseqboot_base}{rep_count}', self.fseqboot_individual_alignment_as_list)
+
+    def _execute_fseqboot(self):
+        sys.stdout.write('\rGenerating multiple fseqboot alignments')
+        (self.fseqboot_local[
+            '-sequence', self.input_fasta_path, '-outfile', self.output_seqboot_file_path,
+            '-test', 'b', '-reps', self.num_reps])()
+
+    def _setup_fseqboot_plum_bum_local(self):
+        is_installed = subprocess.call(['which', 'fseqboot'])
+        if is_installed == 0:
+            self.fseqboot_local = local["fseqboot"]
+        else:
+            fseqboot_path = os.path.join(self.parent_unifrac_dist_creator.symportal_root_dir, 'lib', 'phylipnew', 'fseqboot')
+            if os.path.isfile(fseqboot_path):
+                self.fseqboot_local = local[fseqboot_path]
+            else:
+                raise RuntimeError('Cannot find fseqboot in PATH or in local installation at ./lib/phylipnew/fseqboot\n'
+                         'For instructions on installing the phylipnew dependencies please visit the SymPortal'
+                         'GitHub page: https://github.com/didillysquat/SymPortal_framework/'
+                         'wiki/SymPortal-setup#6-third-party-dependencies')
+
+class UnifracDistanceCreator:
+    """
+    This method will generate a distance matrix between samples using the UniFrac method.
+    One for each clade.
+
+    The call_type argument will be used to determine which setting this method is being called from.
+    if it is being called as part of the initial submission call_type='submission',
+    then we will always be working with a single
+    data_set. In this case we should output to the same folder that the submission results were output
+    to. In the case of being output in a standalone manner (call_type='stand_alone') then we may be outputting
+    comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
+    into the initial submissions folder. In this case we will use the directory structure that is already
+    in place which will put it in the ordination folder.
+
+    I have been giving some thought as to which level we should be generating these distance matrices on.
+    If we do them on the all sequence level, i.e. mixture of clades then we are going to end up with the ordination
+    separations based primarily on the presence or absence of clades and this will mask the within clade differences
+    Biologically it is more important to be able to tell the difference between within clade different types
+    than be able to see if they contain different cladal proportions. After all, SP is about the increased resolution
+    So... what I propose is that the researcher do a clade level analysis seperately to look at the differnces between
+    clades and then they do ordinations clade by clade.
+
+    Now, with the within-clade analyses we have to chose between ITS2 type profile collection based ordinations
+    (i.e. only looking at the sequences contained in a clade_collection_type) or working with all of the sequnces that
+    are found within a sample of the given clade. With the former, this will require that the sample has gone through
+    an analysis, this is not possible for environmental samples. For coral samples this is of course possible, and we
+    would then need to choose about whether you would want to have one clade_collection_type / sample pairing per clade
+    collection type or whether you would plot a sample with all of its clade_collection_types plotted. I think the
+    latter would be better as this would really be telling the difference between the samples rather than the types
+    found within the samples. However, I'm now thinking about the cases where samples are missing one or two DIVs and
+    maybe SymPortal hasn't done the best job of resolving the true type they contain. In this case the distance
+    should still give a true representation of the similarity of this sample to another sample. Then you might start
+    to wonder what the point of the ITS2 type profiles are. Well, they would be to tell us WHAT the types are
+    whereas the distance matrix would not be able to do this but give us quantification of similarity. So they would
+    in fact be nicely complementary.
+
+    So for the time being, given the above logic, we will work on creating cladally separated distance matrices
+    for samples of a given data_set or collection of dataSubmissions. For each sample we will use all sequences
+    of the given clade found within the sample to calculate the distances. This will output the distance matrix
+    in the outputs folder.
+    """
+    def __init__(self, symportal_root_directory, data_set_string, num_processors, method, call_type, date_time_string, bootstrap_value=100, output_dir=None):
+        self.symportal_root_dir = symportal_root_directory
+        self.call_type = call_type
+        self.data_sets_to_output = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
+        self.num_proc = num_processors
+        self.method = method
+        self.date_time_string = date_time_string
+        self.bootstrap_value = bootstrap_value
+        self.output_file_paths = []
+        self.clade_collections_from_data_sets = CladeCollection.objects.filter(
+            data_set_sample_from__data_submission_from__in=self.data_sets_to_output)
+        self.clades_of_clade_collections_list = list(set([a.clade for a in self.clade_collections_from_data_sets]))
+        self.output_dir = self._setup_output_dir(call_type, data_set_string, output_dir)
+        self.output_path_list = []
+        # the paths output from the creation of the master fasta, names and group files
+        self.master_names_file_path = None
+        self.master_fasta_file_unaligned_path = None
+        self.master_fasta_file_aligned_path = None
+        self.master_group_file_path = None
+
+    def main(self):
+        for clade_in_question in self.clade_collections_from_data_sets:
+            try:
+                self._create_and_write_out_master_fasta_names_and_group_files(clade_in_question)
+            except RuntimeWarning as w:
+                if w.message == 'insufficient clade collections':
+                    continue
+
+            self._align_master_fasta()
+
+            # ## I am really strugling to get the jmodeltest to run through python.
+            # I will therefore work with a fixed model that has been chosen by running jmodeltest on the command line
+            # phyml  -i /tmp/jmodeltest7232692498672152838.phy -d nt -n 1 -b 0
+            # --run_id TPM1uf+I -m 012210 -f m -v e -c 1 --no_memory_check -o tlr -s BEST
+            # The production of an ML tree is going to be unrealistic with the larger number of sequences
+            # it will simply take too long to compute.
+            # Instead I will create an NJ consnsus tree.
+            # This will involve using the embassy version of the phylip executables
+
+            # First I will have to create random data sets
+            fseqboot_alignment_generator = FseqbootAlignmentGenerator(clade_in_question=clade_in_question, parent_unifrac_dist_creator=self)
+            fseqboot_alignment_generator.do_fseqboot_alignment_generation()
+            
+            # TODO you got here with refactoring and class abstraction
+
+            unifrac_path = None
+            unifrac_dist = None
+            if method == 'mothur':
+                unifrac_dist, unifrac_path = mothur_unifrac_pipeline_mp(
+                    clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors,
+                    date_time_string=date_time_string)
+            elif method == 'phylip':
+                unifrac_dist, unifrac_path = phylip_unifrac_pipeline_mp(
+                    clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+
+            pcoa_path = generate_pcoa_coords(clade_wkd, unifrac_dist, date_time_string=date_time_string)
+            pcoa_path_lists.append(pcoa_path)
+            # Delete the tempDataFolder and contents
+            file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
+            os.chdir(os.path.abspath(os.path.dirname(__file__)))
+            shutil.rmtree(path=file_to_del)
+
+            output_file_paths.append(pcoa_path)
+            output_file_paths.append(unifrac_path)
+
+            # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
+            list_of_dir = os.listdir(clade_wkd)
+            for item in list_of_dir:
+                if '.csv' not in item and '.dist' not in item:
+                    os.remove(os.path.join(clade_wkd, item))
+
+    def _align_master_fasta(self):
+        self.master_fasta_file_aligned_path = self.master_fasta_file_unaligned_path.replace('.fasta', '.aligned.fasta')
+        mafft_align_fasta(
+            input_path=self.master_fasta_file_unaligned_path,
+            output_path=self.master_fasta_file_aligned_path,
+            num_proc=self.num_proc)
+
+
+    def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
+        sys.stdout.write('Creating master .name and .fasta files for UniFrac')
+        try:
+            unifrac_dist_creator_handler_one = UnifracDistanceCreatorHandlerOne(
+                clade_in_question=clade_in_question,
+                parent_unifrac_dist_creator=self)
+        except RuntimeWarning as w:
+            if w.message == 'insufficient clade collections':
+                raise RuntimeWarning({'message': 'insufficient clade collections'})
+            else:
+                raise RuntimeError(f'Unknown error in {UnifracDistanceCreatorHandlerOne.__name__} init')
+        unifrac_dist_creator_handler_one.execute_unifrac_distance_creator_worker_one()
+        self.master_names_file_path = unifrac_dist_creator_handler_one.master_names_file_path
+        self.master_fasta_file_unaligned_path = unifrac_dist_creator_handler_one.master_fasta_file_path
+        self.master_group_file_path = unifrac_dist_creator_handler_one.master_group_file_path
+
+def _setup_output_dir(self, call_type, data_set_string, output_dir):
+        if call_type == 'stand_alone':
+            output_dir = os.path.abspath(
+                os.path.join(self.symportal_root_dir, 'outputs', 'ordination', '_'.join(data_set_string.split(',')),
+                             'between_samples'))
+        else:
+            # call_type == 'submission':
+            output_dir = output_dir + '/between_sample_distances'
+        return output_dir
+
+
 
 
 

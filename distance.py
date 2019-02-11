@@ -244,7 +244,7 @@ def generate_within_clade_unifrac_distances_samples_sample_list_input(
         # we started then we know that they have all finished and we have processed all of the outputs
         stop_count = 0
         # the fasta_name_set ouput by the worker can simply be a tuple containing
-        # (temp_fasta_dict, temp_name_dict, temp_group_list, list_of_IDs, proc_name)
+        # (temp_fasta_dict, temp_name_dict, temp_group_list, list_of_IDs, cc_id, cc_name)
         for fasta_name_set in iter(output_queue.get, 'STOP'):
             if fasta_name_set == 'EXIT':
                 stop_count += 1
@@ -349,12 +349,10 @@ def generate_within_clade_unifrac_distances_samples(
     # if it is being called as part of the initial submission call_type='submission',
     # then we will always be working with a single
     # data_set. In this case we should output to the same folder that the submission results were output
-    # to. In the case of being output in a standalone manner call_type='stand_alone' then we may be outputting
+    # to. In the case of being output in a standalone manner (call_type='stand_alone') then we may be outputting
     # comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
     # into the initial submissions folder. In this case we will use the directory structure that is already
     # in place which will put it in the ordination folder.
-    # TODO
-    # we can now also colour the ordination plots according to the meta data of the samples, if this is available.
 
     """
     This method will generate a distance matrix between samples
@@ -1047,6 +1045,8 @@ def mafft_align_fasta(clade_wkd, num_proc):
 
 
 def uni_frac_worker_two(input_queue, output):
+    """The purpose of this worker is to collect the sequences and abundance information in each clade collection
+    and return them through the output pipe for making a master fasta and name file outside of the MP."""
     # We can fix this so that it is more multithreadable.
     # first we can fix the having to have a a numerical_name_dict, by just having a counter per
     # process and append the process id to make sure that the sequences are unique
@@ -1207,6 +1207,7 @@ def generate_fseqboot_alignments(clade_wkd, num_reps, out_file):
     # run fseqboot
     sys.stdout.write('\rGenerating multiple datasets')
     (fseqboot['-sequence', in_file_seqboot, '-outfile', out_file_seqboot, '-test', 'b', '-reps', num_reps])()
+
     # Now divide the fseqboot file up into its 100 different alignments
     fseqboot_file = read_defined_file_to_list(out_file_seqboot)
     rep_count = 0

@@ -9,7 +9,7 @@ import general
 import json
 from analysis_classes import (
     InitialMothurHandler, PotentialSymTaxScreeningHandler, BlastnAnalysis, SymNonSymTaxScreeningHandler,
-    PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator)
+    PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator, SeqStackedBarPlotter)
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 from datetime import datetime
 
@@ -22,6 +22,7 @@ class DataLoading:
     def __init__(
             self, data_set_uid, user_input_path, datasheet_path, screen_sub_evalue=False,
             debug=False, num_proc=1, no_fig=False, no_ord=False, distance_method='braycurtis'):
+        self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
@@ -50,7 +51,7 @@ class DataLoading:
         self.is_single_file_or_paired_input = self._determine_if_single_file_or_paired_input()
         self.datasheet_path = datasheet_path
         self.debug = debug
-        self.symclade_db_directory_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB'))
+        self.symclade_db_directory_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB'))
         self.symclade_db_full_path = os.path.join(self.symclade_db_directory_path, 'symClade.fa')
         self.sample_meta_info_df = None
         self.list_of_samples_names = None
@@ -91,9 +92,9 @@ class DataLoading:
         # med
         self.list_of_med_output_directories = []
         self.path_to_med_padding_executable = os.path.join(
-            os.path.dirname(__file__), 'lib/med_decompose/o_pad_with_gaps.py')
+            self.symportal_root_directory, 'lib/med_decompose/o_pad_with_gaps.py')
         self.path_to_med_decompose_executable = os.path.join(
-            os.path.dirname(__file__), 'lib/med_decompose/decompose.py')
+            self.symportal_root_directory, 'lib/med_decompose/decompose.py')
         self.perform_med_handler_instance = None
         # data set sample creation
         self.data_set_sample_creator_handler_instance = None
@@ -127,20 +128,58 @@ class DataLoading:
 
         self._output_seqs_count_table()
 
+        self._output_seqs_stacked_bar_plot()
+
+        if not self.no_ord:
+            print('Calculating between sample pairwise distances')
+            pcoa_paths_list = None
+            if distance_method == 'unifrac':
+                pcoa_paths_list = generate_within_clade_unifrac_distances_samples(
+                    data_set_string=data_set_uid,
+                    num_processors=num_proc,
+                    method='mothur', call_type='submission',
+                    date_time_string=date_time_str,
+                    output_dir=output_directory)
+            elif distance_method == 'braycurtis':
+                pcoa_paths_list = generate_within_clade_braycurtis_distances_samples(
+                    data_set_string=data_set_uid,
+                    call_type='submission',
+                    date_time_str=date_time_str,
+                    output_dir=output_directory)
+            # distance plotting
+            output_path_list.extend(pcoa_paths_list)
+            if not no_fig:
+                if num_samples > 1000:
+                    print('Too many samples ({}) to generate plots'.format(num_samples))
+                else:
+                    for pcoa_path in pcoa_paths_list:
+                        if 'PCoA_coords' in pcoa_path:
+                            # then this is a full path to one of the .csv files that contains the
+                            # coordinates that we can plot we will get the output directory from the passed in pcoa_path
+                            sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
+                                os.path.dirname(pcoa_path).split('/')[-1]))
+                            ordination_figure_output_paths_list = plot_between_sample_distance_scatter(
+                                csv_path=pcoa_path,
+                                date_time_str=date_time_str
+                            )
+                            output_path_list.extend(ordination_figure_output_paths_list)
+
+    def _output_seqs_stacked_bar_plot(self):
         if not self.no_fig:
             if self.num_of_samples > 1000:
                 print(f'Too many samples ({num_samples}) to generate plots')
             else:
                 sys.stdout.write('\nGenerating sequence count table figures\n')
 
-                svg_path, png_path = generate_stacked_bar_data_loading(path_to_rel_abund_data, output_directory,
-                                                                       time_date_str=date_time_str)
-                output_path_list.append(svg_path)
-                output_path_list.append(png_path)
+                seq_stacked_bar_plotter = SeqStackedBarPlotter(output_directory=self.output_directory,
+                                                               seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path)
+                seq_stacked_bar_plotter.plot_stacked_bar_seqs()
+                self.output_path_list.extend(seq_stacked_bar_plotter.output_path_list)
+                # TODO don't for get to add the output path for the non-sym and size violation output
                 sys.stdout.write('\nFigure generation complete')
                 sys.stdout.write('\nFigures output to:')
-                sys.stdout.write('\n{}'.format(svg_path))
-                sys.stdout.write('\n{}\n'.format(png_path))
+                for path in seq_stacked_bar_plotter.output_path_list:
+                    sys.stdout.write(f'\n{path}')
 
     def _output_seqs_count_table(self):
         sys.stdout.write('\nGenerating count tables\n')
@@ -422,9 +461,9 @@ class DataLoading:
             write_list_to_destination(self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
 
     def _create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
-        back_up_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'symClade_backup'))
+        back_up_dir = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade_backup'))
         os.makedirs(back_up_dir, exist_ok=True)
-        src_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB')) + '/symClade.fa'
+        src_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB')) + '/symClade.fa'
         time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
         dst_fasta_path = back_up_dir + '/symClade_{}.fa'.format(time_stamp)
         dst_readme_path = back_up_dir + '/symClade_{}.readme'.format(time_stamp)
@@ -787,14 +826,14 @@ class DataLoading:
         return pre_med_write_out_directory_path
 
     def _setup_output_directory(self):
-        output_directory = os.path.join(os.path.dirname(__file__),
-                                        'outputs/data_set_submissions/{}'.format(self.dataset_object.id))
+        output_directory = os.path.join(self.symportal_root_directory,
+                                        'outputs', 'data_set_submissions', f'{self.dataset_object.id}')
         os.makedirs(output_directory, exist_ok=True)
         return output_directory
 
     def _setup_sequence_dump_file_path(self):
         seq_dump_file_path = os.path.join(
-            os.path.dirname(__file__), f'/dbBackUp/seq_dumps/seq_dump_{self.data_time_string}')
+            self.symportal_root_directory, f'/dbBackUp/seq_dumps/seq_dump_{self.data_time_string}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 
