@@ -1,5 +1,4 @@
-from dbApp.models import (SymportalFramework, DataSet, ReferenceSequence,
-                          DataSetSampleSequence, DataSetSample, CladeCollection)
+from dbApp.models import (DataSet, ReferenceSequence, DataSetSample)
 import sys
 import os
 import shutil
@@ -8,22 +7,25 @@ import glob
 import pandas as pd
 import general
 import json
-from multiprocessing import Queue, Manager, Process
-from django import db
 from analysis_classes import (
     InitialMothurHandler, PotentialSymTaxScreeningHandler, BlastnAnalysis, SymNonSymTaxScreeningHandler,
     PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator)
-from datetime import datetime
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
-import pickle
 from datetime import datetime
+
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
     # level. E.g. All members of clade C belong to the genus Cladocopium.
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
-    def __init__(self, data_set_uid, user_input_path, datasheet_path, screen_sub_evalue=False, debug=False, num_proc=1):
+    def __init__(
+            self, data_set_uid, user_input_path, datasheet_path, screen_sub_evalue=False,
+            debug=False, num_proc=1, no_fig=False, no_ord=False, distance_method='braycurtis'):
+        self.output_path_list = []
+        self.no_fig = no_fig
+        self.no_ord = no_ord
+        self.distance_method = distance_method
         self.dataset_object = DataSet.objects.get(id=data_set_uid)
         self.user_input_path = user_input_path
         self.output_directory = self._setup_output_directory()
@@ -39,10 +41,10 @@ class DataLoading:
         self.num_proc = num_proc
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
         # .names and .fasta files of the non_symbiodinium_sequences that were thrown out for that sample
-        self.non_symbiodiniaceae_and_size_violation_base_directory_path = os.path.join(
+        self.non_symb_and_size_violation_base_dir_path = os.path.join(
             self.output_directory, 'non_symbiodiniaceae_and_size_violation_sequences'
         )
-        os.makedirs(self.non_symbiodiniaceae_and_size_violation_base_directory_path, exist_ok=True)
+        os.makedirs(self.non_symb_and_size_violation_base_dir_path, exist_ok=True)
         # data can be loaded either as paired fastq or fastq.gz files or as a single compressed file containing
         # the afore mentioned paired files.
         self.is_single_file_or_paired_input = self._determine_if_single_file_or_paired_input()
@@ -88,11 +90,15 @@ class DataLoading:
         self.required_symbiodinium_matches = 3
         # med
         self.list_of_med_output_directories = []
-        self.path_to_med_padding_executable = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/o_pad_with_gaps.py')
-        self.path_to_med_decompose_executable = os.path.join(os.path.dirname(__file__), 'lib/med_decompose/decompose.py')
+        self.path_to_med_padding_executable = os.path.join(
+            os.path.dirname(__file__), 'lib/med_decompose/o_pad_with_gaps.py')
+        self.path_to_med_decompose_executable = os.path.join(
+            os.path.dirname(__file__), 'lib/med_decompose/decompose.py')
         self.perform_med_handler_instance = None
         # data set sample creation
         self.data_set_sample_creator_handler_instance = None
+        # plotting sequence output
+        self.seq_abundance_relative_output_path = None
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
@@ -121,13 +127,37 @@ class DataLoading:
 
         self._output_seqs_count_table()
 
+        if not self.no_fig:
+            if self.num_of_samples > 1000:
+                print(f'Too many samples ({num_samples}) to generate plots')
+            else:
+                sys.stdout.write('\nGenerating sequence count table figures\n')
+
+                svg_path, png_path = generate_stacked_bar_data_loading(path_to_rel_abund_data, output_directory,
+                                                                       time_date_str=date_time_str)
+                output_path_list.append(svg_path)
+                output_path_list.append(png_path)
+                sys.stdout.write('\nFigure generation complete')
+                sys.stdout.write('\nFigures output to:')
+                sys.stdout.write('\n{}'.format(svg_path))
+                sys.stdout.write('\n{}\n'.format(png_path))
+
     def _output_seqs_count_table(self):
+        sys.stdout.write('\nGenerating count tables\n')
         sequence_count_table_creator = SequenceCountTableCreator(
             call_type='submission',
             output_dir=self.output_directory,
             data_set_uids_to_output_as_comma_sep_string=set(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.data_time_string)
         sequence_count_table_creator.execute_output()
+        # TODO don't for get to write out where the non-sym and size violation seqs were output
+        self.output_directory.extend(sequence_count_table_creator.output_paths_list)
+        self._set_seq_abundance_relative_output_path(sequence_count_table_creator)
+
+    def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
+        for path in sequence_count_table_creator.output_paths_list:
+            if 'relative' in path:
+                self.seq_abundance_relative_output_path = path
 
     def _delete_temp_working_directory_and_log_files(self):
         if os.path.exists(self.temp_working_directory):
@@ -142,7 +172,8 @@ class DataLoading:
         sys.stdout.write(f'\n\nBackup of named reference_sequences output to {self.seq_dump_file_path}\n')
         write_list_to_destination(self.seq_dump_file_path, sequence_drop_file)
 
-    def _generate_sequence_drop_file(self):
+    @staticmethod
+    def _generate_sequence_drop_file():
         header_string = ','.join(['seq_name', 'seq_uid', 'seq_clade', 'seq_sequence'])
         sequence_drop_list = [header_string]
         for ref_seq in ReferenceSequence.objects.filter(has_name=True):
@@ -195,7 +226,8 @@ class DataLoading:
         if not self.sample_fastq_pairs:
             self._exit_and_del_data_set_sample('Sample fastq pairs list empty')
 
-        self.initial_mothur_handler = InitialMothurHandler(num_proc=self.num_proc, sample_fastq_pairs=self.sample_fastq_pairs)
+        self.initial_mothur_handler = InitialMothurHandler(
+            num_proc=self.num_proc, sample_fastq_pairs=self.sample_fastq_pairs)
 
         self.initial_mothur_handler.execute_worker_initial_mothur(
             data_loading_dataset_object=self.dataset_object,
@@ -253,7 +285,6 @@ class DataLoading:
                 else:
                     break
 
-
         else:
             # if not doing the screening we can simply run the execute_worker_taxa_screening once.
             # During its run it will have output all of the files we need to run the following workers.
@@ -273,23 +304,23 @@ class DataLoading:
             data_loading_temp_working_directory=self.temp_working_directory,
             data_loading_pre_med_sequence_output_directory_path=self.pre_med_sequence_output_directory_path,
             data_loading_dataset_object=self.dataset_object,
-            data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
-            self.non_symbiodiniaceae_and_size_violation_base_directory_path,
+            non_symb_and_size_violation_base_dir_path=self.non_symb_and_size_violation_base_dir_path,
             data_loading_debug=self.debug
         )
         self.samples_that_caused_errors_in_qc_list = list(
             self.sym_non_sym_tax_screening_handler.samples_that_caused_errors_in_qc_mp_list
         )
 
-
     def _screen_sub_e_seqs(self):
         """This function screens a fasta file to see if the sequences are Symbiodinium in origin.
-        This fasta file contains the below_e_cutoff sequences that need to be screened. These sequences are the sequences
+        This fasta file contains the below_e_cutoff sequences that need to be screened.
+        These sequences are the sequences
         that were found to have a match in the initial screening against the symClade.fa database but were below
         the required evalue cut off. Here we run these sequences against the entire NCBI 'nt' database to verify if they
         or of Symbiodinium origin of not.
         The fasta we are screening only contains seuqences that were found in at least 3 samples.
-        We will call a sequence symbiodinium if it has a match that covers at least 95% of its sequence at a 60% or higher
+        We will call a sequence symbiodinium if it has a match that covers at least 95% of its sequence
+        at a 60% or higher
         identity. It must also have Symbiodinium or Symbiodiniaceae in the name. We will also require that a
         sub_e_value seq has at least the required_sybiodinium_matches (3 at the moment) before we call it Symbiodinium.
         """
@@ -313,8 +344,8 @@ class DataLoading:
         self.new_seqs_added_running_total += self.new_seqs_added_in_iteration
 
         if query_sequences_verified_as_symbiodinium_list:
-            self._taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(query_sequences_verified_as_symbiodinium_list)
-
+            self._taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(
+                query_sequences_verified_as_symbiodinium_list)
 
     def _taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(
             self, query_sequences_verified_as_symbiodinium_list):
@@ -555,10 +586,10 @@ class DataLoading:
         # in the github repo in a non-binary format
         # The sample_meta_df that is created from the data_sheet should be identical irrespective of whether a .csv
         # or a .xlsx is submitted.
-        sample_meta_info_df = self._create_sample_meta_info_dataframe_from_datasheet_path()
+        self._create_sample_meta_info_dataframe_from_datasheet_path()
 
         # if we are given a data_sheet then use the sample names given as the DataSetSample object names
-        self.list_of_samples_names = sample_meta_info_df.index.values.tolist()
+        self.list_of_samples_names = self.sample_meta_info_df.index.values.tolist()
 
         # we should verify that all of the fastq files listed in the sample_meta_df
         # are indeed found in the directory that we've been given
@@ -640,14 +671,11 @@ class DataLoading:
     def _create_fastq_file_to_sample_name_dict(self):
         fastq_file_to_sample_name_dict = {}
         for sample_index in self.sample_meta_info_df.index.values.tolist():
-            fastq_file_to_sample_name_dict[self.sample_meta_info_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
-            fastq_file_to_sample_name_dict[self.sample_meta_info_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
+            fastq_file_to_sample_name_dict[
+                self.sample_meta_info_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
+            fastq_file_to_sample_name_dict[
+                self.sample_meta_info_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
         self.fastq_file_to_sample_name_dict = fastq_file_to_sample_name_dict
-
-    def _execute_mothur_batch_file_with_piped_stoud_sterr(path_to_mothur_batch_file):
-        subprocess.run(['mothur', path_to_mothur_batch_file],
-                       stdout=subprocess.PIPE,
-                       stderr=subprocess.PIPE)
 
     def _generate_and_write_mothur_batch_file_for_dotfile_creation(self):
         self._check_if_fastqs_are_gz_compressed()
@@ -702,9 +730,11 @@ class DataLoading:
 
     def _create_sample_meta_info_dataframe_from_datasheet_path(self):
         if self.datasheet_path.endswith('.xlsx'):
-            self.sample_meta_info_df = pd.read_excel(io=self.datasheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+            self.sample_meta_info_df = pd.read_excel(
+                io=self.datasheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
         elif self.datasheet_path.endswith('.csv'):
-            self.sample_meta_info_df = pd.read_csv(filepath_or_buffer=self.datasheet_path, header=0, index_col=0, skiprows=[0])
+            self.sample_meta_info_df = pd.read_csv(
+                filepath_or_buffer=self.datasheet_path, header=0, index_col=0, skiprows=[0])
         else:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
@@ -763,7 +793,8 @@ class DataLoading:
         return output_directory
 
     def _setup_sequence_dump_file_path(self):
-        seq_dump_file_path = os.path.join(os.path.dirname(__file__), f'/dbBackUp/seq_dumps/seq_dump_{self.data_time_string}')
+        seq_dump_file_path = os.path.join(
+            os.path.dirname(__file__), f'/dbBackUp/seq_dumps/seq_dump_{self.data_time_string}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 

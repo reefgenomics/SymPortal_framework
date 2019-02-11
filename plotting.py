@@ -22,7 +22,6 @@ plt.ioff()
 def generate_stacked_bar_data_loading(
         path_to_tab_delim_count, output_directory, time_date_str=None, sample_id_order_list=None):
     print('Generating stacked bar data submission')
-    # /Users/humebc/Documents/SymPortal_testing_repo/SymPortal_framework/outputs/non_analysis/35.DIVs.relative.txt
 
     # Here we will generate our standard stacked bar output.
     # We should take into account that we don't know how many samples will be coming through.
@@ -30,7 +29,7 @@ def generate_stacked_bar_data_loading(
     # I.e. we should split up very large sets of samples into multiple plots to keep interpretability
     # as high as possible.
 
-    # read in the SymPortal relative abundance output
+    # Read in the SymPortal relative abundance output
     sp_output_df = pd.read_csv(path_to_tab_delim_count, sep='\t', lineterminator='\n', header=0, index_col=0)
 
     # In order to be able to drop the DIV row at the end and the meta information rows, we should
@@ -80,8 +79,8 @@ def generate_stacked_bar_data_loading(
     # and white if they are in there for the most abundant sequencs.
     # if we have more than this number of sequences in the dataset then we should simply work ourway through a grey
     # palette for the remainder of the sequences.
-    # when doing the plotting using the matplotlib library I want to try a new approach of creating the rectangle
-    # patches individually and holding them in a list before adding them all to the plot at once. Previously we had
+    # when doing the plotting using the matplotlib library we will create the rectangle
+    # patches individually holding them in a list before adding them all to the plot at once. Previously we had
     # been generating the plot one sequence at a time. This can take a considerable amount of time when we get above
     # ~50-150 sequences depending on the number of samples.
 
@@ -132,20 +131,6 @@ def generate_stacked_bar_data_loading(
     sp_output_df = sp_output_df[ordered_list_of_seqs]
     sp_output_df = sp_output_df.reindex([int(a) for a in ordered_sample_list])
 
-    # At this stage we are ready to plot
-    # The three following links show how we should be able to construct a list of matplotlib
-    # patches (Rectangles in this case) and add these patches to a PatchCollection before finally
-    # adding this patch collection to the ax using ax.add_collection().
-    # https://matplotlib.org/api/_as_gen/matplotlib.patches.Rectangle.html
-    # https://matplotlib.org/examples/api/patch_collection.html
-    # https://matplotlib.org/users/artists.html
-    # I hope that this will be quicker than using the bar helper sequence by sequence as we normally do
-    # It turns out that the colour parameters are ignored from the individual patches when using
-
-    # let's start by just getting the bar plotting working without worrying about cases where we have more than 50
-    # samples
-    # maybe we can start with an arbitrary cutoff for the number of samples per plot which can be 50
-
     n_samples = len(sp_output_df.index.values.tolist())
     smp_per_plot = 50
     # number of subplots will be one per smp_per_plot
@@ -192,7 +177,7 @@ def generate_stacked_bar_data_loading(
                     bottom += rel_abund
             ind += 1
 
-        # We can try making a custom colour map
+        # Make a custom colour map
         # https://matplotlib.org/api/_as_gen/matplotlib.colors.ListedColormap.html
         this_cmap = ListedColormap(colour_list)
 
@@ -201,9 +186,7 @@ def generate_stacked_bar_data_loading(
         patches_collection = PatchCollection(patches_list, cmap=this_cmap)
         patches_collection.set_array(np.arange(len(patches_list)))
 
-        # if n_subplots is only 1 then we can refer directly to the axarr object
-        # else we will need ot reference the correct set of axes with i
-        # Add the pathces to the axes
+
         axarr[i].add_collection(patches_collection)
         axarr[i].autoscale_view()
         axarr[i].figure.canvas.draw()
