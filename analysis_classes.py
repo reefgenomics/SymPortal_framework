@@ -31,6 +31,7 @@ import shutil
 import itertools
 from scipy.spatial.distance import braycurtis
 
+
 class BlastnAnalysis:
     def __init__(
             self, input_file_path, output_file_path,
@@ -3708,9 +3709,53 @@ class UnifracMothurWorker:
         return out_fasta
 
 
+class GenericDistanceCreator:
+    def __init__(self, symportal_root_directory, call_type, date_time_string):
+        self.symportal_root_dir = symportal_root_directory
+        self.call_type = call_type
+        if date_time_string:
+            self.date_time_string = date_time_string
+        else:
+            self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.output_file_paths = []
+        self.clade_output_dir = None
+        # path to the .csv file that will hold the PCoA coordinates
+        self.clade_pcoa_coord_file_path = None
+        # path to the .dist file that holds the unifrac or braycurtis derived sample clade-separated paired distances
+        self.clade_dist_file_path = None
+
+    def _compute_pcoa_coords(self):
+        # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
+        # a twoD list and then convert to a numpy array
+        self.clade_pcoa_coord_file_path = os.path.join(
+            self.clade_output_dir, f'{self.date_time_string}.PCoA_coords.csv')
+        raw_dist_file = read_defined_file_to_list(self.clade_dist_file_path)
+
+        temp_two_d_list = []
+        sample_names_from_dist_matrix = []
+        for line in raw_dist_file[1:]:
+            temp_elements = line.split('\t')
+            sample_names_from_dist_matrix.append(temp_elements[0].replace(' ', ''))
+            temp_two_d_list.append([float(a) for a in temp_elements[1:]])
+
+        uni_frac_dist_as_np_array = np.array(temp_two_d_list)
+
+        sys.stdout.write('\rcalculating PCoA coordinates')
+
+        pcoa_output = pcoa(uni_frac_dist_as_np_array)
+
+        # rename the pcoa dataframe index as the sample names
+        pcoa_output.samples['sample'] = sample_names_from_dist_matrix
+        renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
+
+        # now add the variance explained as a final row to the renamed_dataframe
+        renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
+            pcoa_output.proportion_explained.rename('proportion_explained'))
+
+        renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
 
 
-class UnifracDistPCoACreator:
+class UnifracDistPCoACreator(GenericDistanceCreator):
     """
     This method will generate a distance matrix between samples using the UniFrac method.
     One for each clade.
@@ -3753,8 +3798,7 @@ class UnifracDistPCoACreator:
     in the outputs folder.
     """
     def __init__(self, symportal_root_directory, data_set_string, num_processors, method, call_type, date_time_string, bootstrap_value=100, output_dir=None):
-        self.symportal_root_dir = symportal_root_directory
-        self.call_type = call_type
+        super().__init__(symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string)
         self.data_sets_to_output = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
         self.num_proc = num_processors
         self.method = method
@@ -3763,14 +3807,13 @@ class UnifracDistPCoACreator:
         else:
             self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.bootstrap_value = bootstrap_value
-        self.output_file_paths = []
+
         self.clade_collections_from_data_sets = CladeCollection.objects.filter(
             data_set_sample_from__data_submission_from__in=self.data_sets_to_output)
         self.clades_of_clade_collections_list = list(set([a.clade for a in self.clade_collections_from_data_sets]))
         self.output_dir = self._setup_output_dir(call_type, data_set_string, output_dir)
-        self.output_path_list = []
+        self.output_file_paths = []
         # Clade based files
-        self.clade_output_dir = None
         # the paths output from the creation of the master fasta, names and group files
         # these will be updated with every clade_in_question
         self.clade_master_names_file_path = None
@@ -3784,9 +3827,7 @@ class UnifracDistPCoACreator:
         self.clade_fseqboot_base = None
         # the output list of trees from the mothur portion of this analysis
         self.clade_tree_path_list = None
-        # the unifrac distances
-        self.clade_unifrac_dist_file_path = None
-        self.clade_pcoa_coord_file_path = None
+
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clade_collections_from_data_sets:
@@ -3817,7 +3858,7 @@ class UnifracDistPCoACreator:
             self._append_output_files_to_output_list()
 
     def _append_output_files_to_output_list(self):
-        self.output_path_list.extend([self.clade_unifrac_dist_file_path, self.clade_pcoa_coord_file_path])
+        self.output_file_paths.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
 
     def _clean_up_temp_files(self):
         if os.path.exists(self.clade_fseqboot_root_dir):
@@ -3829,35 +3870,6 @@ class UnifracDistPCoACreator:
             if '.csv' not in item and '.dist' not in item:
                 os.remove(os.path.join(self.clade_output_dir, item))
 
-    def _compute_pcoa_coords(self):
-        # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
-        # a twoD list and then convert to a numpy array
-        self.clade_pcoa_coord_file_path = os.path.join(
-            self.clade_output_dir, f'{self.date_time_string}.PCoA_coords.csv')
-        raw_dist_file = read_defined_file_to_list(self.clade_unifrac_dist_file_path)
-
-        temp_two_d_list = []
-        sample_names_from_dist_matrix = []
-        for line in raw_dist_file[1:]:
-            temp_elements = line.split('\t')
-            sample_names_from_dist_matrix.append(temp_elements[0].replace(' ', ''))
-            temp_two_d_list.append([float(a) for a in temp_elements[1:]])
-
-        uni_frac_dist_as_np_array = np.array(temp_two_d_list)
-
-        sys.stdout.write('\rcalculating PCoA coordinates')
-
-        pcoa_output = pcoa(uni_frac_dist_as_np_array)
-
-        # rename the pcoa dataframe index as the sample names
-        pcoa_output.samples['sample'] = sample_names_from_dist_matrix
-        renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
-
-        # now add the variance explained as a final row to the renamed_dataframe
-        renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(pcoa_output.proportion_explained.rename('proportion_explained'))
-
-        renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
-
     def _compute_unifrac_distances(self, clade_in_question):
         unifrac_subclade_handler = UnifracSubcladeHandler(
             clade_in_question=clade_in_question,
@@ -3866,7 +3878,7 @@ class UnifracDistPCoACreator:
         unifrac_subclade_handler.execute_unifrac_mothur_worker()
         unifrac_subclade_handler.create_consensus_tree()
         unifrac_subclade_handler.perform_unifrac()
-        self.clade_unifrac_dist_file_path = unifrac_subclade_handler.unifrac_dist_file_path
+        self.clade_dist_file_path = unifrac_subclade_handler.unifrac_dist_file_path
         self._append_date_time_string_to_unifrac_dist_path()
 
     def _make_fseqboot_replicate_alignments(self, clade_in_question):
@@ -3879,10 +3891,10 @@ class UnifracDistPCoACreator:
 
     def _append_date_time_string_to_unifrac_dist_path(self):
         # here add a date_time_string element to it to make it unique
-        old_dist_path = self.clade_unifrac_dist_file_path
-        dist_path_extension = self.clade_unifrac_dist_file_path.split('.')[-1]
-        self.clade_unifrac_dist_file_path = self.clade_unifrac_dist_file_path.replace(f'.{dist_path_extension}', f'.{self.date_time_string}.{dist_path_extension}')
-        os.rename(old_dist_path, self.clade_unifrac_dist_file_path)
+        old_dist_path = self.clade_dist_file_path
+        dist_path_extension = self.clade_dist_file_path.split('.')[-1]
+        self.clade_dist_file_path = self.clade_dist_file_path.replace(f'.{dist_path_extension}', f'.{self.date_time_string}.{dist_path_extension}')
+        os.rename(old_dist_path, self.clade_dist_file_path)
 
     def _align_master_fasta(self):
         self.clade_master_fasta_file_aligned_path = self.clade_master_fasta_file_unaligned_path.replace('.fasta', '.aligned.fasta')
@@ -3917,10 +3929,8 @@ class UnifracDistPCoACreator:
                 output_dir = output_dir + '/between_sample_distances'
             return output_dir
 
-class GenericDistanceCreator:
-    def __init__(self):
 
-class BrayCurtisDisPCoACreator:
+class BrayCurtisDistPCoACreator(GenericDistanceCreator):
     """This will produce braycurtis based clade separated distance matrices and compute PCoAs from these
     matrices. It will allow input of data set ids or as sample uid lists that are comma separated.
     It may be that we can have a bas class here which will allow us to have a bray curtis that is specific
@@ -3934,22 +3944,20 @@ class BrayCurtisDisPCoACreator:
     cc = CladeCollection
     """
 
-    def __init__(self, date_time_string, symportal_root_dir, smpl_id_list_str=None, data_set_string=None, call_type=None, output_dir=None):
+    def __init__(self, symportal_root_directory, date_time_string, smpl_id_list_str=None, data_set_string=None, call_type=None, output_dir=None):
+        super().__init__(symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string)
         self.is_datasetsample_not_dataset_based = self._infer_is_dataset_of_datasetsample(
             smpl_id_list_str, data_set_string)
         if self.is_datasetsample_not_dataset_based:
-            self._init_datasetsample_based_attributes(date_time_string, smpl_id_list_str, symportal_root_dir)
+            self._init_datasetsample_based_attributes(smpl_id_list_str)
         else:
-            self._init_dataset_based_attributes(call_type, data_set_string, output_dir, symportal_root_dir)
-        self.output_paths_list = []
+            self._init_dataset_based_attributes(data_set_string, output_dir)
         # clade specific attributes. Will be updated for every clade processed
-        self.clade_output_dir = None
+
         self.ccs_of_clade = None
         self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict = {}
         self.clade_within_clade_distances_dict = {}
         self.clade_distance_file_as_list = None
-        self.clade_dist_file_output_path = None
-        self.date_time_string = date_time_string
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_of_ccs:
@@ -3964,8 +3972,14 @@ class BrayCurtisDisPCoACreator:
             self._add_sample_uids_to_dist_file()
             self._write_out_dist_file()
 
+            self._compute_pcoa_coords()
+            self._append_output_files_to_output_list()
+
+    def _append_output_files_to_output_list(self):
+        self.output_file_paths.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
+
     def _write_out_dist_file(self):
-        write_list_to_destination(self.clade_dist_file_output_path, self.clade_distance_file_as_list)
+        write_list_to_destination(self.clade_dist_file_path, self.clade_distance_file_as_list)
 
     def _add_sample_uids_to_dist_file(self):
         # for the output version lets also append the sample name to each line so that we can see which sample it is
@@ -3986,7 +4000,7 @@ class BrayCurtisDisPCoACreator:
 
     def _init_clade_dirs_and_paths(self, clade_in_question):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
-        self.clade_dist_file_output_path = os.path.join(
+        self.clade_dist_file_path = os.path.join(
             self.clade_output_dir, f'{self.date_time_string}.bray_curtis_within_clade_sample_distances.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
@@ -4054,23 +4068,23 @@ class BrayCurtisDisPCoACreator:
                 temp_dict[dsss.reference_sequence_of.sequence] = dsss.abundance / total_seqs_ind_clade_col
             self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict[clade_col.id] = temp_dict
 
-    def _init_datasetsample_based_attributes(self, date_time_string, smpl_id_list_str, symportal_root_dir):
+    def _init_datasetsample_based_attributes(self, smpl_id_list_str ):
         self.dss_list = DataSetSample.objects.filter(id__in=[int(str_id) for str_id in smpl_id_list_str.split(',')])
         self.cc_list_for_output = CladeCollection.objects.filter(
             data_set_sample_from__in=self.dss_list)
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
         self.output_dir = os.path.abspath(
             os.path.join(
-                symportal_root_dir, 'outputs', 'ordination',
-                'custom_sample_list', 'between_samples', date_time_string))
+                self.symportal_root_dir, 'outputs', 'ordination',
+                'custom_sample_list', 'between_samples', self.date_time_string))
 
-    def _init_dataset_based_attributes(self, call_type, data_set_string, output_dir, symportal_root_dir):
+    def _init_dataset_based_attributes(self, data_set_string, output_dir):
         self.ds_list = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
         self.cc_list_for_output = CladeCollection.objects.filter(
             data_set_sample_from__data_submission_from__in=self.ds_list)
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
-        if call_type == 'stand_alone':
-            self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'ordination',
+        if self.call_type == 'stand_alone':
+            self.output_dir = os.path.abspath(os.path.join(self.symportal_root_dir, 'outputs', 'ordination',
                                                            '_'.join(data_set_string.split(',')),
                                                            'between_samples'))
         else:

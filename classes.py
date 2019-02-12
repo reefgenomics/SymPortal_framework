@@ -10,7 +10,7 @@ import json
 from analysis_classes import (
     InitialMothurHandler, PotentialSymTaxScreeningHandler, BlastnAnalysis, SymNonSymTaxScreeningHandler,
     PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator, SeqStackedBarPlotter,
-    UnifracDistPCoACreator)
+    UnifracDistPCoACreator, BrayCurtisDistPCoACreator)
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 from datetime import datetime
 
@@ -32,7 +32,7 @@ class DataLoading:
         self.user_input_path = user_input_path
         self.output_directory = self._setup_output_directory()
         self.temp_working_directory = self._setup_temp_working_directory()
-        self.data_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         # this is the path of the file we will use to deposit a backup copy of the reference sequences
         self.seq_dump_file_path = self._setup_sequence_dump_file_path()
         self.dataset_object.working_directory = self.temp_working_directory
@@ -136,17 +136,19 @@ class DataLoading:
             pcoa_paths_list = None
             if self.distance_method == 'unifrac':
                 unifrac_dict_pcoa_creator = UnifracDistPCoACreator(
-                    call_type='submission', date_time_string=self.data_time_string, output_dir=self.output_directory,
+                    call_type='submission', date_time_string=self.date_time_string, output_dir=self.output_directory,
                     data_set_string=str(self.dataset_object.id), method='mothur', num_processors=self.num_proc,
                     symportal_root_directory=self.symportal_root_directory)
                 unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
-                self.output_path_list.extend(unifrac_dict_pcoa_creator.output_path_list)
-            elif distance_method == 'braycurtis':
-                pcoa_paths_list = generate_within_clade_braycurtis_distances_samples(
-                    data_set_string=data_set_uid,
-                    call_type='submission',
-                    date_time_str=date_time_str,
-                    output_dir=output_directory)
+                self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
+            elif self.distance_method == 'braycurtis':
+                bray_curtis_dist_pcoa_creator = BrayCurtisDistPCoACreator(
+                    date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
+                    data_set_string=str(self.dataset_object.id), call_type='submission',
+                    output_dir=self.output_directory)
+                bray_curtis_dist_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
+                self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
+
             # distance plotting
             output_path_list.extend(pcoa_paths_list)
             if not no_fig:
@@ -356,7 +358,7 @@ class DataLoading:
             call_type='submission',
             output_dir=self.output_directory,
             data_set_uids_to_output_as_comma_sep_string=set(self.dataset_object.id),
-            num_proc=self.num_proc, time_date_str=self.data_time_string)
+            num_proc=self.num_proc, time_date_str=self.date_time_string)
         sequence_count_table_creator.execute_output()
         # TODO don't for get to write out where the non-sym and size violation seqs were output
         self.output_directory.extend(sequence_count_table_creator.output_paths_list)
@@ -1002,7 +1004,7 @@ class DataLoading:
 
     def _setup_sequence_dump_file_path(self):
         seq_dump_file_path = os.path.join(
-            self.symportal_root_directory, f'/dbBackUp/seq_dumps/seq_dump_{self.data_time_string}')
+            self.symportal_root_directory, f'/dbBackUp/seq_dumps/seq_dump_{self.date_time_string}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 
@@ -1025,3 +1027,4 @@ class DataLoading:
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)
         os.makedirs(self.temp_working_directory)
+
