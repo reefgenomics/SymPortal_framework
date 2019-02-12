@@ -10,7 +10,6 @@ from general import (
     decode_utf8_binary_to_list, create_dict_from_fasta, create_seq_name_to_abundance_dict_from_name_file,
     combine_two_fasta_files, remove_primer_mismatch_annotations_from_fasta, write_list_to_destination,
     read_defined_file_to_list, mafft_align_fasta)
-from pickle import dump, load
 from multiprocessing import Queue, Manager, Process, current_process
 from django import db
 import json
@@ -50,17 +49,17 @@ class BlastnAnalysis:
 
     def execute(self, pipe_stdout_sterr=True):
         if pipe_stdout_sterr:
-            completedProcess = subprocess.run([
+            completed_process = subprocess.run([
                 self.blastn_exec_path, '-out', self.output_file_path, '-outfmt', self.output_format_string, '-query',
                 self.input_file_path, '-db', self.db_path,
                 '-max_target_seqs', f'{self.max_target_seqs}', '-num_threads', f'{self.num_threads}'],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         else:
-            completedProcess = subprocess.run([
+            completed_process = subprocess.run([
                 self.blastn_exec_path, '-out', self.output_file_path, '-outfmt', self.output_format_string, '-query',
                 self.input_file_path, '-db', self.db_path,
                 '-max_target_seqs', f'{self.max_target_seqs}', '-num_threads', f'{self.num_threads}'])
-        return completedProcess
+        return completed_process
 
     def return_blast_output_as_list(self):
         return read_defined_file_to_list(self.output_format_string)
@@ -78,7 +77,7 @@ class MothurAnalysis:
     def __init__(
             self, sequence_collection=None,  input_dir=None, output_dir=None, name=None,
             fastq_gz_fwd_path=None, fastq_gz_rev_path=None,
-             name_file_path=None, mothur_execution_path='mothur', auto_convert_fastq_to_fasta=True,
+            name_file_path=None, mothur_execution_path='mothur', auto_convert_fastq_to_fasta=True,
             pcr_fwd_primer=None, pcr_rev_primer=None, pcr_oligo_file_path=None,
             pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None, num_processors=10,
             stdout_and_sterr_to_pipe=True, tree_file_path=None, group_file_path=None, is_unifrac_analysis=False
@@ -86,27 +85,20 @@ class MothurAnalysis:
 
         self._setup_core_attributes(auto_convert_fastq_to_fasta, fastq_gz_fwd_path, fastq_gz_rev_path,
                                     input_dir, mothur_execution_path, name, name_file_path, output_dir,
-                                    sequence_collection, num_processors, stdout_and_sterr_to_pipe, is_unifrac_analysis)
-
+                                    sequence_collection, num_processors, stdout_and_sterr_to_pipe, is_unifrac_analysis,
+                                    tree_file_path, group_file_path)
 
         self._setup_pcr_analysis_attributes(pcr_analysis_name, pcr_fwd_primer, pcr_fwd_primer_mismatch,
                                             pcr_oligo_file_path, pcr_rev_primer, pcr_rev_primer_mismatch)
 
-
-
-
-    def perform_weighted_unifrac(self):
-        apples = 'asdf'
     def _setup_core_attributes(self, auto_convert_fastq_to_fasta, fastq_gz_fwd_path, fastq_gz_rev_path,
                                input_dir, mothur_execution_path, name, name_file_path, output_dir,
                                sequence_collection, num_processors, stdout_and_sterr_to_pipe, is_unifrac_analysis,
-                               tree_path, group_file_path):
-
-
+                               tree_file_path, group_file_path):
 
         if is_unifrac_analysis:
             self._setup_unifrac_attributes(
-                tree_path, group_file_path, name_file_path, input_dir, output_dir,
+                tree_file_path, group_file_path, name_file_path, input_dir, output_dir,
                 mothur_execution_path, num_processors, stdout_and_sterr_to_pipe)
         else:
             self._verify_that_is_either_sequence_collection_or_fastq_pair(fastq_gz_fwd_path, fastq_gz_rev_path,
@@ -115,11 +107,13 @@ class MothurAnalysis:
                 self._setup_sequence_collection_attribute(auto_convert_fastq_to_fasta, name, sequence_collection)
             elif sequence_collection is None:
                 self._setup_fastq_attributes(fastq_gz_fwd_path, fastq_gz_rev_path)
-            self._setup_remainder_of_core_attributes(input_dir, mothur_execution_path, name_file_path,
-                                                     output_dir, sequence_collection, num_processors, stdout_and_sterr_to_pipe)
+            self._setup_remainder_of_core_attributes(
+                input_dir, mothur_execution_path, name_file_path, output_dir, sequence_collection,
+                num_processors, stdout_and_sterr_to_pipe)
 
-    def _setup_unifrac_attributes(self, tree_path, group_file_path, name_file_path, input_dir, output_dir,
-                mothur_execution_path, num_processors, stdout_and_sterr_to_pipe):
+    def _setup_unifrac_attributes(
+            self, tree_path, group_file_path, name_file_path, input_dir, output_dir,
+            mothur_execution_path, num_processors, stdout_and_sterr_to_pipe):
         self.tree_file_path = tree_path
         self.group_file_path = group_file_path
         self.name_file_path = name_file_path
@@ -134,8 +128,7 @@ class MothurAnalysis:
         self.exec_path = mothur_execution_path
         self.processors = num_processors
         self.stdout_and_sterr_to_pipe = stdout_and_sterr_to_pipe
-
-
+        self.fasta_path = None
 
     def _setup_remainder_of_core_attributes(self, input_dir, mothur_execution_path, name_file_path,
                                             output_dir, sequence_collection, num_processors, stdout_and_sterr_to_pipe):
@@ -182,14 +175,16 @@ class MothurAnalysis:
         self.sequence_collection = sequence_collection
         self.fasta_path = self.sequence_collection.file_path
 
-    def _convert_to_fasta_or_raise_value_error(self, auto_convert_fastq_to_fasta, sequence_collection):
+    @staticmethod
+    def _convert_to_fasta_or_raise_value_error(auto_convert_fastq_to_fasta, sequence_collection):
         if auto_convert_fastq_to_fasta:
             print('SequenceCollection must be of type fasta\n. Running SeqeunceCollection.convert_to_fasta.\n')
             sequence_collection.convert_to_fasta()
         else:
             ValueError('SequenceCollection must be of type fasta. You can use the SequenceCollection')
 
-    def _verify_that_is_either_sequence_collection_or_fastq_pair(self, fastq_gz_fwd_path, fastq_gz_rev_path,
+    @staticmethod
+    def _verify_that_is_either_sequence_collection_or_fastq_pair(fastq_gz_fwd_path, fastq_gz_rev_path,
                                                                  sequence_collection):
         # if a group_file was given then
         if sequence_collection and (fastq_gz_fwd_path or fastq_gz_rev_path):
@@ -293,7 +288,6 @@ class MothurAnalysis:
         remove_primer_mismatch_annotations_from_fasta(fwd_output_scrapped_fasta_path)
         remove_primer_mismatch_annotations_from_fasta(fwd_output_good_fasta_path)
 
-
         # then we should clean up the output_bad_fasta
         # then reverse complement it
         # then do a pcr on it again using the same oligo set as the first run
@@ -308,8 +302,9 @@ class MothurAnalysis:
             rev_output_good_fasta_path = self._pcr_extract_good_and_scrap_output_paths()[1]
             remove_primer_mismatch_annotations_from_fasta(rev_output_good_fasta_path)
             self._make_new_fasta_path_for_fwd_rev_combined(rev_output_good_fasta_path)
-            # now create a fasta that is the good fasta from both of the pcrs. this will become the new mothuranalysis fasta.
 
+            # now create a fasta that is the good fasta from both of the pcrs.
+            # this will become the new mothuranalysis fasta.
             combine_two_fasta_files(
                 path_one=fwd_output_good_fasta_path,
                 path_two=rev_output_good_fasta_path,
@@ -326,7 +321,8 @@ class MothurAnalysis:
         """
         This will use the fastq_gz_fwd_path and fastq_gz_rev_paths to make a .file file that will be used
         as input to mothurs make.contigs command.
-        N.B. Although in theory we can use the fastq_gz_fwd_path and the rev path directly as arguments to the mothur.contigs
+        N.B. Although in theory we can use the fastq_gz_fwd_path and the
+        rev path directly as arguments to the mothur.contigs
         there appears to be a bug that doesn't allow this to work. Using a .file file is fine though. The .file file
         is in the format "path_to_file_1 path_to_file_2" i.e the paths only separated by a space.
         :return:
@@ -390,7 +386,6 @@ class MothurAnalysis:
             sys.stdout.write('\rERROR: {}'.format(self.latest_completed_process_command.sterr.decode('utf-8')))
         # TODO verify that this is the appropriate method to collect the output
         self.dist_file_path = self._extract_output_path_first_line()
-
 
     def __execute_summary(self):
         self._summarise_make_and_write_mothur_batch()
@@ -491,7 +486,6 @@ class MothurAnalysis:
         self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
         write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
-
     def _make_contig_make_and_write_mothur_batch(self, dot_file_file_path):
         mothur_batch_file = [
             f'set.dir(input={self.input_dir})',
@@ -506,7 +500,6 @@ class MothurAnalysis:
         dot_file_file_path = os.path.join(self.input_dir, 'fastq_pair.file')
         write_list_to_destination(dot_file_file_path, dot_file_file)
         return dot_file_file_path
-
 
     def _make_new_fasta_path_for_fwd_rev_combined(self, rev_output_good_fasta_path):
         self.fasta_path = rev_output_good_fasta_path.replace('.scrap.pcr.rc.pcr', '.pcr.combined')
@@ -590,7 +583,8 @@ class MothurAnalysis:
         self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
         write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
-    def _screen_seqs_create_additional_arguments_string(self, argument_dict):
+    @staticmethod
+    def _screen_seqs_create_additional_arguments_string(argument_dict):
         individual_argument_strings = []
         for k, v in argument_dict.items():
             if v is not None:
@@ -620,7 +614,8 @@ class MothurAnalysis:
                 f'set.dir(input={self.input_dir})',
                 f'set.dir(output={self.output_dir})',
                 f'pcr.seqs(fasta={self.fasta_path}, name={self.name_file_path}, oligos={self.pcr_oligo_file_path}, '
-                f'pdiffs={self.pcr_fwd_primer_mismatch}, rdiffs={self.pcr_rev_primer_mismatch}, processors={self.processors})'
+                f'pdiffs={self.pcr_fwd_primer_mismatch}, rdiffs={self.pcr_rev_primer_mismatch}, '
+                f'processors={self.processors})'
             ]
 
         else:
@@ -628,7 +623,8 @@ class MothurAnalysis:
                 f'set.dir(input={self.input_dir})',
                 f'set.dir(output={self.output_dir})',
                 f'pcr.seqs(fasta={self.fasta_path}, oligos={self.pcr_oligo_file_path}, '
-                f'pdiffs={self.pcr_fwd_primer_mismatch}, rdiffs={self.pcr_rev_primer_mismatch}, processors={self.processors})'
+                f'pdiffs={self.pcr_fwd_primer_mismatch}, rdiffs={self.pcr_rev_primer_mismatch}, '
+                f'processors={self.processors})'
             ]
         return mothur_batch_file
 
@@ -670,15 +666,14 @@ class SequenceCollection:
         if auto_convert_to_fasta:
             self.convert_to_fasta()
 
-
     def convert_to_fasta(self):
         self.file_path = self.write_out_as_fasta()
         self.file_type = 'fasta'
 
     def __len__(self):
-        return(len(self.list_of_nucleotide_sequences))
+        return len(self.list_of_nucleotide_sequences)
 
-    def write_out_as_fasta(self, path_for_fasta_file = None):
+    def write_out_as_fasta(self, path_for_fasta_file=None):
         if self.file_type == 'fasta':
             print(f'SequenceCollection is already of type fasta and a fasta file already exists: {self.file_path}')
             return
@@ -690,7 +685,6 @@ class SequenceCollection:
                 fasta_path = path_for_fasta_file
                 write_list_to_destination(destination=fasta_path, list_to_write=self.as_fasta())
             return fasta_path
-
 
     def infer_fasta_path_from_current_fastq_path(self):
         return self.file_path.replace('fastq', 'fasta')
@@ -734,18 +728,22 @@ class SequenceCollection:
         for i in range(len(fastq_file_as_list)):
             if i < len(fastq_file_as_list) - 2:
                 if self.is_fastq_defline(fastq_file_as_list, i):
-                    self.create_new_nuc_seq_object_and_add_to_list(fastq_file_as_list, i, list_of_nuleotide_sequence_objects)
+                    self.create_new_nuc_seq_object_and_add_to_list(
+                        fastq_file_as_list, i, list_of_nuleotide_sequence_objects)
         self.list_of_nucleotide_sequences = list_of_nuleotide_sequence_objects
 
-    def is_fastq_defline(self, fastsq_file, index_value):
+    @staticmethod
+    def is_fastq_defline(fastsq_file, index_value):
         if fastsq_file[index_value].startswith('@') and fastsq_file[index_value + 2][0] == '+':
             return True
 
-    def create_new_nuc_seq_object_and_add_to_list(self, fastq_file_as_list, index_val, list_of_nuleotide_sequence_objects):
+    def create_new_nuc_seq_object_and_add_to_list(
+            self, fastq_file_as_list, index_val, list_of_nuleotide_sequence_objects):
         name, sequence = self.get_single_fastq_info_from_fastq_file_by_index(fastq_file_as_list, index_val)
         list_of_nuleotide_sequence_objects.append(NucleotideSequence(sequence=sequence, name=name))
 
-    def get_single_fastq_info_from_fastq_file_by_index(self, fastq_file_as_list, index_val):
+    @staticmethod
+    def get_single_fastq_info_from_fastq_file_by_index(fastq_file_as_list, index_val):
         name = fastq_file_as_list[index_val][1:].split(' ')[0]
         sequence = fastq_file_as_list[index_val + 1]
         return name, sequence
@@ -882,7 +880,6 @@ class InitialMothurWorker:
 
         self._write_out_final_name_and_fasta_for_tax_screening()
 
-
     def _write_out_final_name_and_fasta_for_tax_screening(self):
         name_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
         taxonomic_screening_name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
@@ -989,7 +986,8 @@ class PotentialSymTaxScreeningHandler:
         for n in range(self.num_proc):
             self.input_queue.put('STOP')
 
-    def execute_potential_sym_tax_screening(self, data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug):
+    def execute_potential_sym_tax_screening(
+            self, data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug):
         all_processes = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
@@ -1007,18 +1005,18 @@ class PotentialSymTaxScreeningHandler:
     def _potential_sym_tax_screening_worker(
             self, data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug):
         """
-        :param input_q: The multiprocessing queue that holds a list of the sample names
-        :param e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
+        input_q: The multiprocessing queue that holds a list of the sample names
+        e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
         1 - provided a match in the blast analysis
         2 - is of suitable size
         3 - but has an evalue match below the cuttof
         the value of the dict is an int that represents how many samples this nucleotide sequence was found in
-        :param err_smpl_list: This is a managed list containing sample names of the samples that had errors during the
+        err_smpl_list: This is a managed list containing sample names of the samples that had errors during the
         initial mothur qc and therefore don't require taxonomic screening performed on them
-        :param checked_samples: This is a list of sample names for samples that were found to contain only
+        checked_samples: This is a list of sample names for samples that were found to contain only
         Symbiodinium sequences or have already had all potential Symbiodinium sequences screened and so don't
         require any further taxonomic screening
-        :return: Whilst this doesn't return anything a number of objects are picked out in each of the local
+        Whilst this doesn't return anything a number of objects are picked out in each of the local
         working directories for use in the workers that follow this one.
         """
         for sample_name in iter(self.input_queue.get, 'STOP'):
@@ -1094,7 +1092,8 @@ class PotentialSymTaxScreeningWorker:
         self._if_debug_warn_if_blast_out_empty_or_low_seqs()
 
         self.sequence_name_to_clade_dict = {
-            blast_out_line.split('\t')[0]: blast_out_line.split('\t')[1][-1] for blast_out_line in self.blast_output_as_list}
+            blast_out_line.split('\t')[0]: blast_out_line.split('\t')[1][-1] for
+            blast_out_line in self.blast_output_as_list}
 
         self._add_seqs_with_no_blast_match_to_non_sym_list()
 
@@ -1132,7 +1131,8 @@ class PotentialSymTaxScreeningWorker:
                     coverage, identity, name_of_current_sequence
                 )
 
-    def _if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(self, coverage, identity, name_of_current_sequence):
+    def _if_ident_cov_size_good_add_seq_to_non_sym_list_and_eval_dict(
+            self, coverage, identity, name_of_current_sequence):
         """This method will add nucleotide sequences that gave blast matches but that were below the evalue
         or indentity and coverage thresholds to the evalue collection dict and
         record how many samples that sequence was found in.
@@ -1158,7 +1158,8 @@ class PotentialSymTaxScreeningWorker:
                     ] = self.sequence_name_to_clade_dict[name_of_current_sequence]
 
     def _add_seqs_with_no_blast_match_to_non_sym_list(self):
-        sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - set(self.sequence_name_to_clade_dict.keys())
+        sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - \
+                                               set(self.sequence_name_to_clade_dict.keys())
         self.potential_non_symbiodinium_sequences_list.extend(list(sequences_with_no_blast_match_as_set))
         sys.stdout.write(
             f'{self.sample_name}: {len(sequences_with_no_blast_match_as_set)} sequences thrown out '
@@ -1194,21 +1195,29 @@ class SymNonSymTaxScreeningHandler:
         for n in range(self.num_proc):
             self.sample_name_mp_input_queue.put('STOP')
 
-    def execute_sym_non_sym_tax_screening(self, data_loading_temp_working_directory, data_loading_dataset_object, non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
+    def execute_sym_non_sym_tax_screening(
+            self, data_loading_temp_working_directory, data_loading_dataset_object,
+            non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path,
+            data_loading_debug):
         all_processes = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         sys.stdout.write('\nPerforming QC\n')
 
         for n in range(self.num_proc):
-            p = Process(target=self._sym_non_sym_tax_screening_worker, args=(data_loading_temp_working_directory, data_loading_dataset_object, non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug))
+            p = Process(target=self._sym_non_sym_tax_screening_worker, args=(
+                data_loading_temp_working_directory, data_loading_dataset_object,
+                non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path,
+                data_loading_debug))
             all_processes.append(p)
             p.start()
 
         for p in all_processes:
             p.join()
 
-    def _sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
+    def _sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object,
+                                          data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
+                                          data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
 
         for sample_name in iter(self.sample_name_mp_input_queue.get, 'STOP'):
             if sample_name in self.samples_that_caused_errors_in_qc_mp_list:
@@ -1315,7 +1324,8 @@ class SymNonSymTaxScreeningWorker:
         also to the output dir
         3 - and finally the symbiodiniaceae sequences that do not violate our size range thresholds (sequences that
         will be carried through into med decomposition). These are also written out both as clade seperated
-        (one redundant fasta for each clade) in the temp working directory (for med processing), and as a non clade separated .name
+        (one redundant fasta for each clade) in the temp working directory (for med processing),
+        and as a non clade separated .name
         .file set (pre-med-seqs) in the output directory.
         This method also populates all of the dataset qc metadata attributes accordingly.
         """
@@ -1491,7 +1501,8 @@ class SymNonSymTaxScreeningWorker:
         with open(self.non_symbiodiniaceae_seqs_names_path, 'w') as f:
             for sequence_name in list(self.non_symbiodinium_sequence_name_set_for_sample):
                 f.write(f'{self.name_dict[sequence_name]}\n')
-                self.absolute_number_of_non_sym_sequences += len(self.name_dict[sequence_name].split('\t')[1].split(','))
+                self.absolute_number_of_non_sym_sequences += len(
+                    self.name_dict[sequence_name].split('\t')[1].split(','))
 
     def _write_out_non_sym_fasta_for_sample(self):
         with open(self.non_symbiodiniaceae_seqs_fasta_path, 'w') as f:
@@ -1500,7 +1511,8 @@ class SymNonSymTaxScreeningWorker:
                 f.write(f'{self.fasta_dict[sequence_name]}\n')
 
     def _add_seqs_with_no_blast_match_to_non_sym_list(self):
-        sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - set(self.sequence_name_to_clade_dict.keys())
+        sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - \
+                                               set(self.sequence_name_to_clade_dict.keys())
         self.non_symbiodinium_sequence_name_set_for_sample.update(list(sequences_with_no_blast_match_as_set))
         sys.stdout.write(
             f'{self.sample_name}: {len(sequences_with_no_blast_match_as_set)} sequences thrown out '
@@ -1550,13 +1562,16 @@ class PerformMEDHandler:
             os.path.join(os.path.dirname(path_to_redundant_fasta), 'MEDOUT') for
             path_to_redundant_fasta in self.list_of_redundant_fasta_paths]
 
-    def execute_perform_med_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable):
+    def execute_perform_med_worker(
+            self, data_loading_debug, data_loading_path_to_med_padding_executable,
+            data_loading_path_to_med_decompoase_executable):
         all_processes = []
 
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         for n in range(self.num_proc):
             p = Process(target=self._deunique_worker, args=(
-                data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompoase_executable))
+                data_loading_debug, data_loading_path_to_med_padding_executable,
+                data_loading_path_to_med_decompoase_executable))
             all_processes.append(p)
             p.start()
 
@@ -1575,16 +1590,22 @@ class PerformMEDHandler:
         for n in range(self.num_proc):
             self.input_queue_of_redundant_fasta_paths.put('STOP')
 
-    def _deunique_worker(self, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompose_executable):
+    def _deunique_worker(
+            self, data_loading_debug, data_loading_path_to_med_padding_executable,
+            data_loading_path_to_med_decompose_executable):
         for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
 
-            perform_med_worker_instance = PerformMEDWorker(redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable, data_loading_path_to_med_decompose_executable)
+            perform_med_worker_instance = PerformMEDWorker(
+                redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable,
+                data_loading_path_to_med_decompose_executable)
 
             perform_med_worker_instance.execute()
 
 
 class PerformMEDWorker:
-    def __init__(self, redundant_fasta_path, data_loading_path_to_med_padding_executable, data_loading_debug, data_loading_path_to_med_decompose_executable):
+    def __init__(
+            self, redundant_fasta_path, data_loading_path_to_med_padding_executable, data_loading_debug,
+            data_loading_path_to_med_decompose_executable):
         self.redundant_fasta_path_unpadded = redundant_fasta_path
         self.redundant_fasta_path_padded = self.redundant_fasta_path_unpadded.replace('.fasta', '.padded.fasta')
         self.cwd = os.path.dirname(self.redundant_fasta_path_unpadded)
@@ -1667,7 +1688,7 @@ class DataSetSampleCreatorWorker:
         for i in range(0, len(node_file_as_list), 2):
             node_seq_name = node_file_as_list[i].split('|')[0][1:]
             node_seq_abundance = int(node_file_as_list[i].split('|')[1].split(':')[1])
-            node_seq_sequence = node_file_as_list[i+1].replace('-','')
+            node_seq_sequence = node_file_as_list[i+1].replace('-', '')
             self.nodes_list_of_nucleotide_sequences.append(
                 NucleotideSequence(name=node_seq_name, abundance=node_seq_abundance, sequence=node_seq_sequence))
 
@@ -1753,7 +1774,8 @@ class DataSetSampleCreatorWorker:
         """Multiple nodes may be assigned to the same reference sequence. We only want to create one
         data set sample sequence object per reference sequence. As such we need to consolidate abundances
         """
-        return len(set(self.node_sequence_name_to_ref_seq_id.values())) != len(self.node_sequence_name_to_ref_seq_id.keys())
+        return len(
+            set(self.node_sequence_name_to_ref_seq_id.values())) != len(self.node_sequence_name_to_ref_seq_id.keys())
 
     def _make_associations_and_abundances_in_node_abund_df_unique_again(self):
         list_of_non_unique_ref_seq_uids = [
@@ -1799,7 +1821,8 @@ class DataSetSampleCreatorWorker:
         """
         if self._node_sequence_exactly_matches_reference_sequence_sequence(node_nucleotide_sequence_object):
             return self._associate_node_seq_to_ref_seq_by_exact_match_and_return_true(node_nucleotide_sequence_object)
-        elif self._node_sequence_matches_reference_sequence_sequence_plus_adenine(node_nucleotide_sequence_object):  # This was a seq shorter than refseq but we can associate
+        elif self._node_sequence_matches_reference_sequence_sequence_plus_adenine(node_nucleotide_sequence_object):
+            # This was a seq shorter than refseq but we can associate
             return self._associate_node_seq_to_ref_seq_by_adenine_match_and_return_true(node_nucleotide_sequence_object)
         else:
             return self._search_for_super_set_match_and_associate_if_found_else_return_false(
@@ -1820,7 +1843,7 @@ class DataSetSampleCreatorWorker:
                     ref_seq_sequence in node_nucleotide_sequence_object.sequence:
                 # Then this is a match
                 self.node_sequence_name_to_ref_seq_id[node_nucleotide_sequence_object.name] = \
-                self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
                 name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
                     self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]]
                 self._print_succesful_association_details_to_stdout(node_nucleotide_sequence_object,
@@ -1846,7 +1869,8 @@ class DataSetSampleCreatorWorker:
         self._print_succesful_association_details_to_stdout(node_nucleotide_sequence_object, name_of_reference_sequence)
         return True
 
-    def _print_succesful_association_details_to_stdout(self, node_nucleotide_sequence_object, name_of_reference_sequence):
+    def _print_succesful_association_details_to_stdout(
+            self, node_nucleotide_sequence_object, name_of_reference_sequence):
         sys.stdout.write(f'\r{self.sample_name} clade {self.clade}:\n'
                          f'Assigning MED node {node_nucleotide_sequence_object.name} '
                          f'to existing reference sequence {name_of_reference_sequence}')
@@ -1875,8 +1899,8 @@ class DataSetSampleCreatorHandler:
         self.ref_seq_sequence_to_ref_seq_id_dict = {
             ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
 
-
-    def execute_data_set_sample_creation(self, data_loading_list_of_med_output_directories, data_loading_debug, data_loading_dataset_object):
+    def execute_data_set_sample_creation(
+            self, data_loading_list_of_med_output_directories, data_loading_debug, data_loading_dataset_object):
         for med_output_directory in data_loading_list_of_med_output_directories:
             try:
                 med_output_object = DataSetSampleCreatorWorker(
@@ -1891,7 +1915,9 @@ class DataSetSampleCreatorHandler:
                 continue
             if data_loading_debug:
                 if med_output_object.num_med_nodes < 10:
-                    print(f'{med_output_directory}: WARNING node file contains only {med_output_object.num_med_nodes} sequences.')
+                    print(
+                        f'{med_output_directory}: '
+                        f'WARNING node file contains only {med_output_object.num_med_nodes} sequences.')
             sys.stdout.write(
                 f'\n\nPopulating {med_output_object.sample_name} with clade {med_output_object.clade} sequences\n')
 
@@ -1902,7 +1928,9 @@ class SequenceCountTableCreator:
     information into a dataframe for both the absoulte and the relative abundance.
 
     """
-    def __init__(self, call_type, output_dir, data_set_uids_to_output_as_comma_sep_string, num_proc, sorted_sample_uid_list=None, analysis_obj_id=None, time_date_str=None, output_user=None):
+    def __init__(
+            self, call_type, output_dir, data_set_uids_to_output_as_comma_sep_string, num_proc,
+            sorted_sample_uid_list=None, analysis_obj_id=None, time_date_str=None, output_user=None):
         self._init_core_vars(
             analysis_obj_id, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc,
             output_dir, output_user, sorted_sample_uid_list, time_date_str)
@@ -1927,7 +1955,8 @@ class SequenceCountTableCreator:
         uids_of_data_sets_to_output = [int(a) for a in data_set_uids_to_output_as_comma_sep_string.split(',')]
         self.data_set_objects_to_output = DataSet.objects.filter(id__in=uids_of_data_sets_to_output)
         self.ref_seqs_in_datasets = ReferenceSequence.objects.filter(
-            datasetsamplesequence__data_set_sample_from__data_submission_from__in=self.data_set_objects_to_output).distinct()
+            datasetsamplesequence__data_set_sample_from__data_submission_from__in=
+            self.data_set_objects_to_output).distinct()
         set_of_clades_found = {ref_seq.clade for ref_seq in self.ref_seqs_in_datasets}
         self.ordered_list_of_clades_found = [clade for clade in self.clade_list if clade in set_of_clades_found]
         self.list_of_data_set_sample_objects = DataSetSample.objects.filter(
@@ -1960,8 +1989,8 @@ class SequenceCountTableCreator:
                 self.output_dir,
                 f'{self.analysis_obj_id}_{data_analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
 
-            self.output_fasta_path = os.path.join(self.output_dir,
-                                                  f'{self.analysis_obj_id}_{data_analysis_obj.name}_{self.time_date_str}.seqs.fasta')
+            self.output_fasta_path = os.path.join(
+                self.output_dir, f'{self.analysis_obj_id}_{data_analysis_obj.name}_{self.time_date_str}.seqs.fasta')
 
         else:
             self.path_to_seq_output_df_absolute = os.path.join(self.output_dir,
@@ -1992,7 +2021,7 @@ class SequenceCountTableCreator:
         write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
         self.output_paths_list.append(self.output_fasta_path)
         print('\nITS2 sequence output files:')
-        for path_item in self.output_path_list:
+        for path_item in self.output_paths_list:
             print(path_item)
 
     def _append_meta_info_to_df(self):
@@ -2150,7 +2179,8 @@ class SequenceCountTableCreator:
         return self._generate_ordered_sample_list_from_most_abund_seq_dicts(max_seq_ddict, no_maj_samps,
                                                                             seq_to_samp_ddict)
 
-    def _generate_ordered_sample_list_from_most_abund_seq_dicts(self, max_seq_ddict, no_maj_samps, seq_to_samp_ddict):
+    @staticmethod
+    def _generate_ordered_sample_list_from_most_abund_seq_dicts(max_seq_ddict, no_maj_samps, seq_to_samp_ddict):
         # then once we have compelted this for all sequences go clade by clade
         # and generate the sample order
         ordered_sample_list_by_uid = []
@@ -2204,13 +2234,16 @@ class SequenceCountTableCreator:
                 max_seq_ddict[max_abund_seq] += 1
         return max_seq_ddict, no_maj_samps, seq_to_samp_ddict
 
-    def _get_sample_seq_abund_info_as_pd_series_float_type(self, sample_to_sort_uid, sequence_only_df_relative):
+    @staticmethod
+    def _get_sample_seq_abund_info_as_pd_series_float_type(sample_to_sort_uid, sequence_only_df_relative):
         return sequence_only_df_relative.loc[sample_to_sort_uid].astype('float')
 
-    def _get_rel_abund_of_most_abund_seq(self, sample_series_as_float):
+    @staticmethod
+    def _get_rel_abund_of_most_abund_seq(sample_series_as_float):
         return sample_series_as_float.max()
 
-    def _get_name_of_most_abundant_seq(self, sample_series_as_float):
+    @staticmethod
+    def _get_name_of_most_abundant_seq(sample_series_as_float):
         max_abund_seq = sample_series_as_float.idxmax()
         return max_abund_seq
 
@@ -2234,14 +2267,15 @@ class SequenceCountTableCreator:
         self.output_df_relative = output_df_relative.reindex(self.sorted_sample_uid_list)
 
     def _check_sorted_sample_list_is_valid(self):
-        if len(self.sorted_sample_uid_list) != len(self.sample_list):
+        if len(self.sorted_sample_uid_list) != len(self.list_of_data_set_sample_objects):
             raise RuntimeError({'message': 'Number of items in sorted_sample_list do not match those to be outputted!'})
         if self._smpls_in_sorted_smpl_list_not_in_list_of_samples():
             raise RuntimeError(
                 {'message': 'Sample list passed in does not match sample list from db query'})
 
     def _smpls_in_sorted_smpl_list_not_in_list_of_samples(self):
-        return list(set(self.sorted_sample_uid_list).difference(set([dss.id for dss in self.list_of_data_set_sample_objects])))
+        return list(
+            set(self.sorted_sample_uid_list).difference(set([dss.id for dss in self.list_of_data_set_sample_objects])))
 
     def _generate_sample_output_series(self):
         """This generate a pandas series for each of the samples. It uses the ordered ReferenceSequence list created
@@ -2308,7 +2342,10 @@ class SequenceCountTableCollectAbundanceHandler:
     list of the ReferenceSequence objects of this output ordered first by clade and then by cumulative relative
     abundance across all samples in the output.
     """
-    def __init__(self, seq_count_table_creator_list_of_data_set_sample_objects, seq_count_table_creator_ref_seqs_in_datasets, seq_count_table_creator_num_procesors, seq_count_table_creator_ordered_list_of_clades_found):
+    def __init__(
+            self, seq_count_table_creator_list_of_data_set_sample_objects,
+            seq_count_table_creator_ref_seqs_in_datasets, seq_count_table_creator_num_procesors,
+            seq_count_table_creator_ordered_list_of_clades_found):
 
         self.list_of_data_set_sample_objects = seq_count_table_creator_list_of_data_set_sample_objects
         self.mp_manager = Manager()
@@ -2316,12 +2353,11 @@ class SequenceCountTableCollectAbundanceHandler:
         self._populate_input_dss_mp_queue()
 
         self.ref_seq_names_clade_annotated = [
-        ref_seq.name if ref_seq.has_name else
-        str(ref_seq.id) + '_{}'.format(ref_seq.clade) for
+        ref_seq.name if ref_seq.has_name else str(ref_seq.id) + '_{}'.format(ref_seq.clade) for
             ref_seq in seq_count_table_creator_ref_seqs_in_datasets]
         self.ordered_list_of_clades_found = seq_count_table_creator_ordered_list_of_clades_found
         self.num_proc = seq_count_table_creator_num_procesors
-        #TODO we were previously creating an MP dictionary for every proc used. We were then collecting them afterwards
+        # TODO we were previously creating an MP dictionary for every proc used. We were then collecting them afterwards
         # I'm not sure if there was a good reason for doing this, but I don't see any comments to the contrary.
         # it should not be necessary to have a dict for every proc. Instead we can just have on mp dict.
         # we should check that this is still working as expected.
@@ -2358,8 +2394,9 @@ class SequenceCountTableCollectAbundanceHandler:
         for i in range(len(self.ordered_list_of_clades_found)):
             temp_within_clade_list_for_sorting = []
             for seq_name, abund_val in self.annotated_dss_name_to_cummulative_rel_abund_mp_dict.items():
-                if seq_name.startswith(self.ordered_list_of_clades_found[i]) or seq_name[
-                                                                                -2:] == f'_{self.ordered_list_of_clades_found[i]}':
+                if seq_name.startswith(
+                        self.ordered_list_of_clades_found[i]) or seq_name[-2:] == \
+                        f'_{self.ordered_list_of_clades_found[i]}':
                     # then this is a seq of the clade in Q and we should add to the temp list
                     temp_within_clade_list_for_sorting.append((seq_name, abund_val))
             # now sort the temp_within_clade_list_for_sorting and add to the cladeAbundanceOrderedRefSeqList
@@ -2380,8 +2417,6 @@ class SequenceCountTableCollectAbundanceHandler:
                 self.ref_seq_names_clade_annotated, self.dss_id_to_list_of_dsss_objects_mp_dict)
             sequence_count_table_ordered_seqs_worker_instance.execute()
 
-
-
     def _populate_input_dss_mp_queue(self):
         for dss in self.list_of_data_set_sample_objects:
             self.input_dss_mp_queue.put(dss)
@@ -2397,18 +2432,21 @@ class SequenceCountTableCollectAbundanceHandler:
 
 
 class SequenceCountTableCollectAbundanceWorker:
-    def __init__(self, dss,
-                annotated_dss_name_to_cummulative_rel_abund_mp_dict,
-                dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts,
-                dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
-                ref_seq_names_clade_annotated,
-                 dss_id_to_list_of_dsss_objects_dict):
+    def __init__(
+            self, dss,
+            annotated_dss_name_to_cummulative_rel_abund_mp_dict,
+            dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts,
+            dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
+            ref_seq_names_clade_annotated,
+            dss_id_to_list_of_dsss_objects_dict):
 
         self.dss = dss
         self.total_sequence_abundance_for_sample = sum([int(a) for a in json.loads(dss.cladal_seq_totals)])
         self.annotated_dss_name_to_cummulative_rel_abund_mp_dict = annotated_dss_name_to_cummulative_rel_abund_mp_dict
-        self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts = dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts
-        self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict
+        self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts = \
+            dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts
+        self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = \
+            dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict
         self.ref_seq_names_clade_annotated = ref_seq_names_clade_annotated
         self.dss_id_to_list_of_dsss_objects_dict = dss_id_to_list_of_dsss_objects_dict
         cladal_abundances = [int(a) for a in json.loads(self.dss.cladal_seq_totals)]
@@ -2468,7 +2506,8 @@ class SequenceCountTableCollectAbundanceWorker:
         smple_seq_count_relative_dict = {seq_name: 0 for seq_name in self.ref_seq_names_clade_annotated}
         return smple_seq_count_aboslute_dict, smple_seq_count_relative_dict
 
-    def _generate_empty_noname_seq_abund_summary_by_clade_dicts(self):
+    @staticmethod
+    def _generate_empty_noname_seq_abund_summary_by_clade_dicts():
         clade_summary_absolute_dict = {clade: 0 for clade in list('ABCDEFGHI')}
         clade_summary_relative_dict = {clade: 0 for clade in list('ABCDEFGHI')}
         return clade_summary_absolute_dict, clade_summary_relative_dict
@@ -2485,7 +2524,6 @@ class SequenceCountTableOutputSeriesGeneratorHandler:
         self.dss_id_to_pandas_series_results_list_mp_dict = self.worker_manager.dict()
         self.dss_input_queue = Queue()
         self._populate_dss_input_queue()
-
 
     def execute_sequence_count_table_dataframe_contructor_handler(
             self,
@@ -2509,7 +2547,9 @@ class SequenceCountTableOutputSeriesGeneratorHandler:
         for p in all_processes:
             p.join()
 
-    def _output_df_contructor_worker(self, sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict):
+    def _output_df_contructor_worker(
+            self, sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
+            sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict):
 
         for dss in iter(self.dss_input_queue.get, 'STOP'):
             seq_count_table_df_contructor_worker_instance = SequenceCountTableOutputSeriesGeneratorWorker(
@@ -2521,7 +2561,6 @@ class SequenceCountTableOutputSeriesGeneratorHandler:
                 sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict)
 
             seq_count_table_df_contructor_worker_instance.execute()
-
 
     def _populate_dss_input_queue(self):
         for dss in self.dss_list:
@@ -2549,8 +2588,8 @@ class SequenceCountTableOutputSeriesGeneratorWorker:
     def __init__(
             self, dss,
             dss_id_to_pandas_series_results_list_mp_dict, output_df_header, clade_abundance_ordered_ref_seq_list,
-                sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
-                sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict
+            sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
+            sequence_count_table_creator_dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict
     ):
         self.dss = dss
         self.dss_id_to_pandas_series_results_list_mp_dict = dss_id_to_pandas_series_results_list_mp_dict
@@ -2586,7 +2625,8 @@ class SequenceCountTableOutputSeriesGeneratorWorker:
     def _output_the_successful_sample_pandas_series(self):
         sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.output_df_header, name=self.dss.id)
         sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.output_df_header, name=self.dss.id)
-        self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [sample_series_absolute, sample_series_relative]
+        self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [
+            sample_series_absolute, sample_series_relative]
 
     def _populate_quality_control_data_of_successful_sample(self):
         # Here we add in the post qc and post-taxa id counts
@@ -2797,7 +2837,6 @@ class SubPlotter:
         self.listed_colour_map = None
         self.patches_collection = None
 
-
     def plot_seq_subplot(self):
         self._create_rect_patches_and_populate_colour_list()
 
@@ -2808,8 +2847,6 @@ class SubPlotter:
         self._draw_patches_on_axes()
 
         self._format_axes()
-
-
 
     def _format_axes(self):
         # make it so that the x axes is constant length that will be the num of samples per subplot
@@ -2935,7 +2972,6 @@ class LegendPlotter:
             self.n_rows = self.parent_plotter.max_n_rows
             self.last_row_len = self.parent_plotter.max_n_cols
 
-
     def _this_is_last_row_of_legend(self, row_increment):
         return (row_increment + 1) != self.n_rows
 
@@ -2958,14 +2994,16 @@ class LegendPlotter:
     def _add_legend_rect(self, col_increment, row_increment):
         leg_box_x = col_increment * self.x_coord_increments
         leg_box_y = row_increment * self.y_coord_increments
-        self.ax_to_plot_on.add_patch(Rectangle((leg_box_x, leg_box_y),
-                                           width=self.leg_box_width, height=self.leg_box_depth,
-                                           color=self.parent_plotter.colour_dict[self.parent_plotter.ordered_list_of_seqs_names[self.sequence_count]]))
+        self.ax_to_plot_on.add_patch(Rectangle(
+            (leg_box_x, leg_box_y), width=self.leg_box_width, height=self.leg_box_depth,
+            color=self.parent_plotter.colour_dict[self.parent_plotter.ordered_list_of_seqs_names[self.sequence_count]]))
         return leg_box_x, leg_box_y
 
 
 class SeqStackedBarPlotter:
-    def __init__(self, seq_relative_abund_count_table_path, output_directory, time_date_str=None, ordered_sample_uid_list=None):
+    def __init__(
+            self, seq_relative_abund_count_table_path, output_directory,
+            time_date_str=None, ordered_sample_uid_list=None):
         self.seq_relative_abund_count_table_path = seq_relative_abund_count_table_path
         self.output_directory = output_directory
         if time_date_str:
@@ -2989,7 +3027,6 @@ class SeqStackedBarPlotter:
         # we add  1 to the n_subplots here for the legend at the bottom
         self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
         self.output_path_list = []
-
 
     def plot_stacked_bar_seqs(self):
         for sub_plot_index in range(self.number_of_subplots):
@@ -3053,18 +3090,18 @@ class SeqStackedBarPlotter:
         the abundance of these sequences within the samples.
         """
         if not ordered_sample_uid_list:
-
-
-            self.ordered_sample_list = self._generate_sample_order_de_novo()
+            self.ordered_sample_uid_list = self._generate_sample_order_de_novo()
         else:
-            self.ordered_sample_list = ordered_sample_uid_list
+            self.ordered_sample_uid_list = ordered_sample_uid_list
 
         self._reorder_df_by_new_sample_and_seq_order()
+
+        return self.ordered_sample_uid_list
 
     def _reorder_df_by_new_sample_and_seq_order(self):
         self.output_count_table_as_df = self.output_count_table_as_df[self.ordered_list_of_seqs_names]
         self.output_count_table_as_df = self.output_count_table_as_df.reindex(
-            [int(a) for a in self.ordered_sample_list])
+            [int(a) for a in self.ordered_sample_uid_list])
 
     def _generate_sample_order_de_novo(self):
         """At this stage we have the ordered list of seqs we now need to order the samples
@@ -3136,7 +3173,7 @@ class SeqStackedBarPlotter:
             abundance_dict[col] = sum(self.output_count_table_as_df[col])
 
         # get the names of the sequences sorted according to their totalled abundance
-        self.ordered_list_of_seqs_names = [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
+        return [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
 
     def _create_output_df_and_populate_smpl_id_to_smp_name_dict(self):
         """Drop the QC columns from the SP output df and also drop the clade summation columns
@@ -3145,7 +3182,8 @@ class SeqStackedBarPlotter:
         we will have the final row names in the index which are not convertable to int
         need to make the smp_id_to_smp_name_dict before dropping the sample_name col"""
 
-        sp_output_df = pd.read_csv(self.seq_relative_abund_count_table_path, sep='\t', lineterminator='\n', header=0, index_col=0)
+        sp_output_df = pd.read_csv(
+            self.seq_relative_abund_count_table_path, sep='\t', lineterminator='\n', header=0, index_col=0)
 
         meta_index_to_cut_from = self._get_df_index_to_drop_from(sp_output_df)
 
@@ -3155,7 +3193,10 @@ class SeqStackedBarPlotter:
 
         self._drop_non_seq_abund_cols_and_set_df_types(sp_output_df)
 
-    def _drop_non_seq_abund_cols_and_set_df_types(self, sp_output_df):
+        return sp_output_df
+
+    @staticmethod
+    def _drop_non_seq_abund_cols_and_set_df_types(sp_output_df):
         sp_output_df.drop(
             columns=['sample_name', 'noName Clade A', 'noName Clade B', 'noName Clade C', 'noName Clade D',
                      'noName Clade E', 'noName Clade F', 'noName Clade G', 'noName Clade H',
@@ -3174,10 +3215,12 @@ class SeqStackedBarPlotter:
             int(uid): smp_name for uid, smp_name in
             zip(sp_output_df.index.values.tolist(), sp_output_df['sample_name'].values.tolist())}
 
-    def _drop_meta_info_rows_from_df(self, meta_index_to_cut_from, sp_output_df):
+    @staticmethod
+    def _drop_meta_info_rows_from_df(meta_index_to_cut_from, sp_output_df):
         sp_output_df.drop(index=sp_output_df.index[range(meta_index_to_cut_from, 0, 1)], inplace=True)
 
-    def _get_df_index_to_drop_from(self, sp_output_df):
+    @staticmethod
+    def _get_df_index_to_drop_from(sp_output_df):
         # In order to be able to drop the DIV row at the end and the meta information rows, we should
         # drop all rows that are after the DIV column. We will pass in an index value to the .drop
         # that is called here. To do this we need to work out which index we are working with
@@ -3189,8 +3232,6 @@ class SeqStackedBarPlotter:
                 meta_index_to_cut_from = i
                 break
         return meta_index_to_cut_from
-
-
 
     @staticmethod
     def _get_colour_list():
@@ -3271,7 +3312,8 @@ class UnifracSeqAbundanceMPCollection:
             unique_seq_name_base = '{}_id{}'.format(ref_seq_id, self.clade_collection.id)
 
             smp_name = str(self.clade_collection.id)
-            self.fasta_dict['{}_{}'.format(unique_seq_name_base, 0)] = data_set_sample_seq.reference_sequence_of.sequence
+            self.fasta_dict[
+                '{}_{}'.format(unique_seq_name_base, 0)] = data_set_sample_seq.reference_sequence_of.sequence
             temp_name_list = []
 
             for i in range(data_set_sample_seq.abundance):
@@ -3281,7 +3323,8 @@ class UnifracSeqAbundanceMPCollection:
             self.name_dict['{}_{}'.format(unique_seq_name_base, 0)] = temp_name_list
 
 
-class SequenceCollectionComplete(Exception): pass
+class SequenceCollectionComplete(Exception):
+    pass
 
 
 class UnifracDistanceCreatorHandlerOne:
@@ -3335,7 +3378,8 @@ class UnifracDistanceCreatorHandlerOne:
         write_list_to_destination(self.master_names_file_path, self.master_names_file_as_list)
         write_list_to_destination(self.master_group_file_path, self.master_group_file_as_list)
 
-    def _once_complete_wait_for_processes_to_complete(self, all_processes):
+    @staticmethod
+    def _once_complete_wait_for_processes_to_complete(all_processes):
         # process the outputs of the sub processess before we pause to wait for them to complete.
         for p in all_processes:
             p.join()
@@ -3402,10 +3446,9 @@ class UnifracDistanceCreatorHandlerOne:
         for n in range(self.parent_unifrac_dist_creator.num_proc):
             self.output_unifrac_seq_abund_mp_collection_queue.put('STOP')
 
-
     def _raise_runtime_error_if_not_enough_clade_collections(self):
         if len(self.clade_collections_of_clade) < 2:
-            raise RuntimeWarning({'message' : 'insufficient clade collections'})
+            raise RuntimeWarning({'message':'insufficient clade collections'})
 
 
 class FseqbootAlignmentGenerator:
@@ -3452,7 +3495,7 @@ class FseqbootAlignmentGenerator:
                 self.rep_count += 1
             else:
                 self.fseqboot_individual_alignment_as_list.append(line)
-        write_list_to_destination(f'{fseqboot_base}{rep_count}', self.fseqboot_individual_alignment_as_list)
+        write_list_to_destination(f'{self.fseqboot_base}{self.rep_count}', self.fseqboot_individual_alignment_as_list)
 
     def _execute_fseqboot(self):
         sys.stdout.write('\rGenerating multiple fseqboot alignments')
@@ -3465,14 +3508,17 @@ class FseqbootAlignmentGenerator:
         if is_installed == 0:
             self.fseqboot_local = local["fseqboot"]
         else:
-            fseqboot_path = os.path.join(self.parent_unifrac_dist_creator.symportal_root_dir, 'lib', 'phylipnew', 'fseqboot')
+            fseqboot_path = os.path.join(
+                self.parent_unifrac_dist_creator.symportal_root_dir, 'lib', 'phylipnew', 'fseqboot')
             if os.path.isfile(fseqboot_path):
                 self.fseqboot_local = local[fseqboot_path]
             else:
                 raise RuntimeError('Cannot find fseqboot in PATH or in local installation at ./lib/phylipnew/fseqboot\n'
-                         'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                         'GitHub page: https://github.com/didillysquat/SymPortal_framework/'
-                         'wiki/SymPortal-setup#6-third-party-dependencies')
+                                   'For instructions on installing the phylipnew dependencies '
+                                   'please visit the SymPortal '
+                                   'GitHub page: https://github.com/didillysquat/SymPortal_framework/'
+                                   'wiki/SymPortal-setup#6-third-party-dependencies')
+
 
 class UnifracSubcladeHandler:
     """The output of this is a list that contains a list of paths to trees, one for each replicate fasta"""
@@ -3532,7 +3578,7 @@ class UnifracSubcladeHandler:
 
     def _mothur_unifrac_pipeline_mp_worker(self):
         for rep_num in iter(self.input_queue_of_rep_numbers.get, 'STOP'):
-            unifrac_mothur_worker = UnifracMothurWorker(rep_num=rep_num, fseqbootbase = self.fseqbootbase)
+            unifrac_mothur_worker = UnifracMothurWorker(rep_num=rep_num, fseqbootbase=self.fseqbootbase)
             unifrac_mothur_worker.make_trees()
             self.output_queue_of_paths_to_trees.put(unifrac_mothur_worker.output_tree_path)
         self.output_queue_of_paths_to_trees.put('kill')
@@ -3560,9 +3606,11 @@ class UnifracSubcladeHandler:
             examine = list(seq_re.findall(line))
 
             # N.B. the sumtrees.py program was causing some very strange behaviour. It was converting '_' to ' '
-            # when they were preceeded by a single digit but leaving them as '_' when there were multiple digits before it
+            # when they were preceeded by a single digit but leaving them as '_'
+            # when there were multiple digits before it
             # it took a long time to find what the problem was. It was causing issues in the mothur UniFrac.
-            # You will see that I have modified below by having the space function and replacing ' ' with '_' and modifying
+            # You will see that I have modified below by having the space function and replacing ' '
+            # with '_' and modifying
             # the regex.
             name_file_rep_match_list = []
             for match_str in examine:
@@ -3571,7 +3619,6 @@ class UnifracSubcladeHandler:
                     space = True
                 if space:
 
-                    found = False
                     match_str_replced_space = match_str.replace(' ', '_')
                     for name_file_rep in name_file_reps:
                         if name_file_rep.startswith(match_str_replced_space):
@@ -3580,14 +3627,12 @@ class UnifracSubcladeHandler:
                             found = True
                             break
                 else:
-                    found = False
                     for name_file_rep in name_file_reps:
                         if name_file_rep.startswith(match_str):
                             # then this is a match
                             # now replace the string in the tree file
                             new_str = re.sub('(?<!\d){}'.format(match_str), name_file_rep, new_str)
                             name_file_rep_match_list.append(name_file_rep)
-                            found = True
                             break
 
             # now also remove the metadata which is held between square brackets '[]'
@@ -3676,12 +3721,10 @@ class UnifracMothurWorker:
         mothur_analysis.execute_clearcut()
         self.output_tree_path = mothur_analysis.tree_file_path
 
-
     def _convert_interleaved_fasta_to_sequential_and_write_out(self):
         self.fasta_as_list = read_defined_file_to_list('{}{}'.format(self.fseqbootbase, self.rep_num))
         self.fasta_as_list = self._convert_interleaved_to_sequencial_fasta_first_line_removal()
         write_list_to_destination(self.sequential_fasta_path, self.fasta_as_list)
-
 
     def _convert_interleaved_to_sequencial_fasta_first_line_removal(self):
         list_seq_names = []
@@ -3797,8 +3840,11 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
     of the given clade found within the sample to calculate the distances. This will output the distance matrix
     in the outputs folder.
     """
-    def __init__(self, symportal_root_directory, data_set_string, num_processors, method, call_type, date_time_string, bootstrap_value=100, output_dir=None):
-        super().__init__(symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string)
+    def __init__(
+            self, symportal_root_directory, data_set_string, num_processors,
+            method, call_type, date_time_string, bootstrap_value=100, output_dir=None):
+        super().__init__(
+            symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string)
         self.data_sets_to_output = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
         self.num_proc = num_processors
         self.method = method
@@ -3827,7 +3873,6 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
         self.clade_fseqboot_base = None
         # the output list of trees from the mothur portion of this analysis
         self.clade_tree_path_list = None
-
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clade_collections_from_data_sets:
@@ -3893,11 +3938,13 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
         # here add a date_time_string element to it to make it unique
         old_dist_path = self.clade_dist_file_path
         dist_path_extension = self.clade_dist_file_path.split('.')[-1]
-        self.clade_dist_file_path = self.clade_dist_file_path.replace(f'.{dist_path_extension}', f'.{self.date_time_string}.{dist_path_extension}')
+        self.clade_dist_file_path = self.clade_dist_file_path.replace(
+            f'.{dist_path_extension}', f'.{self.date_time_string}.{dist_path_extension}')
         os.rename(old_dist_path, self.clade_dist_file_path)
 
     def _align_master_fasta(self):
-        self.clade_master_fasta_file_aligned_path = self.clade_master_fasta_file_unaligned_path.replace('.fasta', '.aligned.fasta')
+        self.clade_master_fasta_file_aligned_path = self.clade_master_fasta_file_unaligned_path.replace(
+            '.fasta', '.aligned.fasta')
         mafft_align_fasta(
             input_path=self.clade_master_fasta_file_unaligned_path,
             output_path=self.clade_master_fasta_file_aligned_path,
@@ -3944,8 +3991,11 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
     cc = CladeCollection
     """
 
-    def __init__(self, symportal_root_directory, date_time_string, smpl_id_list_str=None, data_set_string=None, call_type=None, output_dir=None):
-        super().__init__(symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string)
+    def __init__(
+            self, symportal_root_directory, date_time_string, smpl_id_list_str=None,
+            data_set_string=None, call_type=None, output_dir=None):
+        super().__init__(
+            symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string)
         self.is_datasetsample_not_dataset_based = self._infer_is_dataset_of_datasetsample(
             smpl_id_list_str, data_set_string)
         if self.is_datasetsample_not_dataset_based:
@@ -4068,7 +4118,7 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
                 temp_dict[dsss.reference_sequence_of.sequence] = dsss.abundance / total_seqs_ind_clade_col
             self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict[clade_col.id] = temp_dict
 
-    def _init_datasetsample_based_attributes(self, smpl_id_list_str ):
+    def _init_datasetsample_based_attributes(self, smpl_id_list_str):
         self.dss_list = DataSetSample.objects.filter(id__in=[int(str_id) for str_id in smpl_id_list_str.split(',')])
         self.cc_list_for_output = CladeCollection.objects.filter(
             data_set_sample_from__in=self.dss_list)
@@ -4091,7 +4141,8 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
             # call_type == 'submission':
             self.output_dir = os.path.join(output_dir + 'between_sample_distances')
 
-    def _infer_is_dataset_of_datasetsample(self, smpl_id_list_str, data_set_string):
+    @staticmethod
+    def _infer_is_dataset_of_datasetsample(smpl_id_list_str, data_set_string):
         if smpl_id_list_str is not None and data_set_string is not None:
             raise RuntimeError('Please input smpl_id_list_str OR data_set_string')
         elif smpl_id_list_str and data_set_string:
@@ -4103,8 +4154,83 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
                 return False
 
 
+class DistScatterPlotter:
+    def __init__(self, csv_path, date_time_str):
+        self.output_directory = os.path.dirname(csv_path)
+        self.clade = self.output_directory.split('/')[-1]
+        self.plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index_col=0)
+        self.f, self.ax = plt.subplots(1, 1, figsize=(9, 9))
+        self.x_values = self.plotting_df['PC1'].values.tolist()[:-1]
+        self.y_values = self.plotting_df['PC2'].values.tolist()[:-1]
+        self.fig_output_base = None
+        self.date_time_str = date_time_str
+        self.output_path_list = []
+
+    def create_base_scatter_plot(self):
+        self.ax.scatter(self.x_values, self.y_values, c='black', marker='o')
+
+    def _add_proportion_explained_labels(self):
+        self.ax.set_xlabel('PC1; explained = {}'.format('%.3f' % self.plotting_df['PC1'][-1]))
+        self.ax.set_ylabel('PC2; explained = {}'.format('%.3f' % self.plotting_df['PC2'][-1]))
+
+    def _add_title(self, title_prefix):
+        self.ax.set_title(f'{title_prefix} {self.clade}')
+
+    def _output_dist_scatter(self):
+        plt.tight_layout()
+        sys.stdout.write('\rsaving as .svg')
+        svg_path = '{}.svg'.format(self.fig_output_base)
+        plt.savefig(svg_path)
+        png_path = '{}.png'.format(self.fig_output_base)
+        sys.stdout.write('\rsaving as .png')
+        plt.savefig(png_path)
+        sys.stdout.write('\rDistance plots output to:')
+        sys.stdout.write('\n{}'.format(svg_path))
+        sys.stdout.write('\n{}\n'.format(png_path))
+        self.output_path_list.extend([svg_path, png_path])
 
 
+class DistScatterPlotterSamples(DistScatterPlotter):
+    def __init__(self, csv_path, date_time_str, labels=True):
+        super().__init__(csv_path=csv_path, date_time_str=date_time_str)
+        self.labels = labels
+
+    def make_sample_dist_scatter_plot(self):
+        self.create_base_scatter_plot()
+        self._annotate_plot_with_sample_names()
+        self._add_title(title_prefix='between sample distances clade')
+        self.fig_output_base = os.path.join(
+            self.output_directory,
+            f'{self.date_time_str}_between_sample_distances_clade_{self.clade}')
+
+    def _annotate_plot_with_sample_names(self):
+        if self.labels:
+            sample_names = self._get_sample_names()
+            for i, txt in enumerate(sample_names):
+                self.ax.annotate(txt, (self.x_values[i], self.y_values[i]))
+
+    def _get_sample_names(self):
+        return [
+            str(CladeCollection.objects.get(id=int(uid))) for
+            uid in self.plotting_df.index.values.tolist()[:-1]]
+
+
+class DistScatterPlotterTypes(DistScatterPlotter):
+    def __init__(self, csv_path, date_time_str):
+        super().__init__(csv_path=csv_path, date_time_str=date_time_str)
+
+    def make_type_dist_scatter_plot(self):
+        self.create_base_scatter_plot()
+        self._annotate_plot_with_type_uids()
+        self._add_title(title_prefix='between its2 type profile distances clade')
+        self.fig_output_base = os.path.join(
+            self.output_directory,
+            f'{self.date_time_str}_between_its2_type_prof_dist_clade_{self.clade}')
+        self._output_dist_scatter()
+
+    def _annotate_plot_with_type_uids(self):
+        for i, txt in enumerate(self.plotting_df.index.values.tolist()[:-1]):
+            self.ax.annotate(txt, (self.x_values[i], self.y_values[i]))
 
 
 

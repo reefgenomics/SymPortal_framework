@@ -10,7 +10,7 @@ import json
 from analysis_classes import (
     InitialMothurHandler, PotentialSymTaxScreeningHandler, BlastnAnalysis, SymNonSymTaxScreeningHandler,
     PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator, SeqStackedBarPlotter,
-    UnifracDistPCoACreator, BrayCurtisDistPCoACreator)
+    UnifracDistPCoACreator, BrayCurtisDistPCoACreator, DistScatterPlotterSamples, DistScatterPlotterTypes)
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 from datetime import datetime
 
@@ -133,39 +133,42 @@ class DataLoading:
 
         if not self.no_ord:
             print('Calculating between sample pairwise distances')
-            pcoa_paths_list = None
             if self.distance_method == 'unifrac':
-                unifrac_dict_pcoa_creator = UnifracDistPCoACreator(
-                    call_type='submission', date_time_string=self.date_time_string, output_dir=self.output_directory,
-                    data_set_string=str(self.dataset_object.id), method='mothur', num_processors=self.num_proc,
-                    symportal_root_directory=self.symportal_root_directory)
-                unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
-                self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
+                self._do_unifrac_dist_pcoa_creations()
             elif self.distance_method == 'braycurtis':
-                bray_curtis_dist_pcoa_creator = BrayCurtisDistPCoACreator(
-                    date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
-                    data_set_string=str(self.dataset_object.id), call_type='submission',
-                    output_dir=self.output_directory)
-                bray_curtis_dist_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
-                self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
+                self._do_braycurtis_dist_pcoa_creation()
 
             # distance plotting
-            output_path_list.extend(pcoa_paths_list)
-            if not no_fig:
-                if num_samples > 1000:
-                    print('Too many samples ({}) to generate plots'.format(num_samples))
+            if not self.no_fig:
+                if self.num_of_samples > 1000:
+                    print('Too many samples ({}) to generate plots'.format(self.num_of_samples))
                 else:
-                    for pcoa_path in pcoa_paths_list:
-                        if 'PCoA_coords' in pcoa_path:
-                            # then this is a full path to one of the .csv files that contains the
-                            # coordinates that we can plot we will get the output directory from the passed in pcoa_path
-                            sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
-                                os.path.dirname(pcoa_path).split('/')[-1]))
-                            ordination_figure_output_paths_list = plot_between_sample_distance_scatter(
-                                csv_path=pcoa_path,
-                                date_time_str=date_time_str
-                            )
-                            output_path_list.extend(ordination_figure_output_paths_list)
+                    for output_path in self.output_path_list:
+                        if self._this_is_pcoa_path(output_path):
+                            clade_of_output = os.path.dirname(output_path).split('/')[-1]
+                            sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
+                            dist_scatter_plotter_samples = DistScatterPlotterSamples(csv_path=output_path, date_time_str=self.date_time_string)
+                            dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
+                            self.output_path_list.extend(dist_scatter_plotter_samples.output_path_list)
+
+    def _this_is_pcoa_path(self, output_path):
+        return 'PCoA_coords' in output_path
+
+    def _do_braycurtis_dist_pcoa_creation(self):
+        bray_curtis_dist_pcoa_creator = BrayCurtisDistPCoACreator(
+            date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
+            data_set_string=str(self.dataset_object.id), call_type='submission',
+            output_dir=self.output_directory)
+        bray_curtis_dist_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
+        self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
+
+    def _do_unifrac_dist_pcoa_creations(self):
+        unifrac_dict_pcoa_creator = UnifracDistPCoACreator(
+            call_type='submission', date_time_string=self.date_time_string, output_dir=self.output_directory,
+            data_set_string=str(self.dataset_object.id), method='mothur', num_processors=self.num_proc,
+            symportal_root_directory=self.symportal_root_directory)
+        unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
+        self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
 
     def generate_within_clade_braycurtis_distances_samples(self, data_set_string, call_type, date_time_str, output_dir=None):
         # The call_type argument will be used to determine which setting this method is being called from.

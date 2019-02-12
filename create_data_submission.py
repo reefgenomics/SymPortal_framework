@@ -819,7 +819,7 @@ def main(input_path, data_set_uid, num_proc, screen_sub_evalue=False,
                         output_path_list.extend(ordination_figure_output_paths_list)
         ####################################
     #######################################
-
+    # TODO we are here with the refactoring and the class abstraction
     # write out whether there were below e value sequences outputted.
     if screen_sub_evalue:
         sys.stdout.write('{} sequences were added to the symClade.fa database as part of this data submission\n'.format(
