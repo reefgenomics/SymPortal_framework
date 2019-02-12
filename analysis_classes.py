@@ -28,6 +28,8 @@ from matplotlib.lines import Line2D
 import re
 from skbio.stats.ordination import pcoa
 import shutil
+import itertools
+from scipy.spatial.distance import braycurtis
 
 class BlastnAnalysis:
     def __init__(
@@ -3705,6 +3707,9 @@ class UnifracMothurWorker:
 
         return out_fasta
 
+
+
+
 class UnifracDistPCoACreator:
     """
     This method will generate a distance matrix between samples using the UniFrac method.
@@ -3805,7 +3810,7 @@ class UnifracDistPCoACreator:
 
             self._compute_unifrac_distances(clade_in_question)
 
-            self._compute_pcoa_coords(clade_in_question)
+            self._compute_pcoa_coords()
 
             self._clean_up_temp_files()
 
@@ -3824,11 +3829,11 @@ class UnifracDistPCoACreator:
             if '.csv' not in item and '.dist' not in item:
                 os.remove(os.path.join(self.clade_output_dir, item))
 
-    def _compute_pcoa_coords(self, clade_in_question):
+    def _compute_pcoa_coords(self):
         # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
         # a twoD list and then convert to a numpy array
         self.clade_pcoa_coord_file_path = os.path.join(
-            self.output_dir, clade_in_question, f'{self.date_time_string}.PCoA_coords.csv')
+            self.clade_output_dir, f'{self.date_time_string}.PCoA_coords.csv')
         raw_dist_file = read_defined_file_to_list(self.clade_unifrac_dist_file_path)
 
         temp_two_d_list = []
@@ -3912,10 +3917,176 @@ class UnifracDistPCoACreator:
                 output_dir = output_dir + '/between_sample_distances'
             return output_dir
 
+class GenericDistanceCreator:
+    def __init__(self):
 
+class BrayCurtisDisPCoACreator:
+    """This will produce braycurtis based clade separated distance matrices and compute PCoAs from these
+    matrices. It will allow input of data set ids or as sample uid lists that are comma separated.
+    It may be that we can have a bas class here which will allow us to have a bray curtis that is specific
+    to types and samples.
 
+    Abbreviations
+    -------------
+    ds = DataSet
+    dss = DataSetSample
+    dsss = DataSetSampleSequence
+    cc = CladeCollection
+    """
 
+    def __init__(self, date_time_string, symportal_root_dir, smpl_id_list_str=None, data_set_string=None, call_type=None, output_dir=None):
+        self.is_datasetsample_not_dataset_based = self._infer_is_dataset_of_datasetsample(
+            smpl_id_list_str, data_set_string)
+        if self.is_datasetsample_not_dataset_based:
+            self._init_datasetsample_based_attributes(date_time_string, smpl_id_list_str, symportal_root_dir)
+        else:
+            self._init_dataset_based_attributes(call_type, data_set_string, output_dir, symportal_root_dir)
+        self.output_paths_list = []
+        # clade specific attributes. Will be updated for every clade processed
+        self.clade_output_dir = None
+        self.ccs_of_clade = None
+        self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict = {}
+        self.clade_within_clade_distances_dict = {}
+        self.clade_distance_file_as_list = None
+        self.clade_dist_file_output_path = None
+        self.date_time_string = date_time_string
 
+    def compute_unifrac_dists_and_pcoa_coords(self):
+        for clade_in_question in self.clades_of_ccs:
+            self._init_clade_dirs_and_paths(clade_in_question)
+
+            self.ccs_of_clade = list(self.cc_list_for_output.filter(clade=clade_in_question))
+            if len(self.ccs_of_clade) < 2:
+                continue
+            self._create_dsss_sequence_to_rel_abund_dict_for_each_cc()
+            self._compute_braycurtis_btwn_cc_pairs()
+            self._generate_distance_file()
+            self._add_sample_uids_to_dist_file()
+            self._write_out_dist_file()
+
+    def _write_out_dist_file(self):
+        write_list_to_destination(self.clade_dist_file_output_path, self.clade_distance_file_as_list)
+
+    def _add_sample_uids_to_dist_file(self):
+        # for the output version lets also append the sample name to each line so that we can see which sample it is
+        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
+        dist_with_sample_name = [self.clade_distance_file_as_list[0]]
+        list_of_cc_ids = [int(line.split('\t')[0]) for line in self.clade_distance_file_as_list[1:]]
+        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
+        dict_of_cc_id_to_sample_name = {cc.id: cc.data_set_sample_from.name for cc in cc_of_outputs}
+        for line in self.clade_distance_file_as_list[1:]:
+            temp_list = []
+            cc_id = int(line.split('\t')[0])
+            sample_name = dict_of_cc_id_to_sample_name[cc_id]
+            temp_list.append(sample_name)
+            temp_list.extend(line.split('\t'))
+            new_line = '\t'.join(temp_list)
+            dist_with_sample_name.append(new_line)
+        self.clade_distance_file_as_list = dist_with_sample_name
+
+    def _init_clade_dirs_and_paths(self, clade_in_question):
+        self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
+        self.clade_dist_file_output_path = os.path.join(
+            self.clade_output_dir, f'{self.date_time_string}.bray_curtis_within_clade_sample_distances.dist')
+        os.makedirs(self.clade_output_dir, exist_ok=True)
+
+    def _generate_distance_file(self):
+        self.clade_distance_file_as_list = [len(self.ccs_of_clade)]
+        for clade_col_outer in self.ccs_of_clade:
+            temp_clade_col_string = [clade_col_outer.id]
+
+            for clade_col_inner in self.ccs_of_clade:
+                if clade_col_outer == clade_col_inner:
+                    temp_clade_col_string.append(0)
+                else:
+                    temp_clade_col_string.append(
+                        self.clade_within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
+            self.clade_distance_file_as_list.append(
+                '\t'.join([str(distance_item) for distance_item in temp_clade_col_string]))
+
+    def _compute_braycurtis_btwn_cc_pairs(self):
+        for clade_col_one, clade_col_two in itertools.combinations(list(self.ccs_of_clade), 2):
+            # let's work to a virtual subsample of 100 000
+            clade_col_one_seq_rel_abundance_dict = self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict[
+                clade_col_one.id]
+            clade_col_two_seq_rel_abundance_dict = self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict[
+                clade_col_two.id]
+
+            # for each comparison. Get a set of all of the sequence and convert this to a list.
+            set_of_sequences = set(list(clade_col_one_seq_rel_abundance_dict.keys()))
+            set_of_sequences.update(list(clade_col_two_seq_rel_abundance_dict.keys()))
+            list_of_sequences = list(set_of_sequences)
+
+            # then iter through the list to get the rel abundances for each of the samples, putting 0 if not found in
+            # the sample.
+            seq_abundance_list_one = []
+            seq_abundance_list_two = []
+            for seq in list_of_sequences:
+                # populate the abundance list cc one
+                if seq in clade_col_one_seq_rel_abundance_dict:
+                    seq_abundance_list_one.append(int(100000 * clade_col_one_seq_rel_abundance_dict[seq]))
+                else:
+                    seq_abundance_list_one.append(0)
+
+                # populate the abundance list cc two
+                if seq in clade_col_two_seq_rel_abundance_dict:
+                    seq_abundance_list_two.append(int(100000 * clade_col_two_seq_rel_abundance_dict[seq]))
+                else:
+                    seq_abundance_list_two.append(0)
+
+            # once you have this we should simply be able to crunch the bray-curtis.
+            distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
+
+            # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
+            self.clade_within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
+            self.clade_within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
+
+    def _create_dsss_sequence_to_rel_abund_dict_for_each_cc(self):
+        # Go through each of the clade collections and create a dict
+        # that has key as the actual sequence and relative abundance of that sequence
+        # we can then store these dict in a dict where the key is the sample ID.
+        for clade_col in self.ccs_of_clade:
+            temp_dict = {}
+            data_set_sample_sequences_of_clade_col = DataSetSampleSequence.objects.filter(
+                clade_collection_found_in=clade_col)
+            total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
+            for dsss in data_set_sample_sequences_of_clade_col:
+                temp_dict[dsss.reference_sequence_of.sequence] = dsss.abundance / total_seqs_ind_clade_col
+            self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict[clade_col.id] = temp_dict
+
+    def _init_datasetsample_based_attributes(self, date_time_string, smpl_id_list_str, symportal_root_dir):
+        self.dss_list = DataSetSample.objects.filter(id__in=[int(str_id) for str_id in smpl_id_list_str.split(',')])
+        self.cc_list_for_output = CladeCollection.objects.filter(
+            data_set_sample_from__in=self.dss_list)
+        self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
+        self.output_dir = os.path.abspath(
+            os.path.join(
+                symportal_root_dir, 'outputs', 'ordination',
+                'custom_sample_list', 'between_samples', date_time_string))
+
+    def _init_dataset_based_attributes(self, call_type, data_set_string, output_dir, symportal_root_dir):
+        self.ds_list = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
+        self.cc_list_for_output = CladeCollection.objects.filter(
+            data_set_sample_from__data_submission_from__in=self.ds_list)
+        self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
+        if call_type == 'stand_alone':
+            self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'ordination',
+                                                           '_'.join(data_set_string.split(',')),
+                                                           'between_samples'))
+        else:
+            # call_type == 'submission':
+            self.output_dir = os.path.join(output_dir + 'between_sample_distances')
+
+    def _infer_is_dataset_of_datasetsample(self, smpl_id_list_str, data_set_string):
+        if smpl_id_list_str is not None and data_set_string is not None:
+            raise RuntimeError('Please input smpl_id_list_str OR data_set_string')
+        elif smpl_id_list_str and data_set_string:
+            raise RuntimeError('Please input smpl_id_list_str OR data_set_string')
+        else:
+            if smpl_id_list_str:
+                return True
+            else:
+                return False
 
 
 

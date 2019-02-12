@@ -165,6 +165,174 @@ class DataLoading:
                             )
                             output_path_list.extend(ordination_figure_output_paths_list)
 
+    def generate_within_clade_braycurtis_distances_samples(self, data_set_string, call_type, date_time_str, output_dir=None):
+        # The call_type argument will be used to determine which setting this method is being called from.
+        # if it is being called as part of the initial submission call_type='submission',
+        # then we will always be working with a single
+        # data_set. In this case we should output to the same folder that the submission results were output
+        # to. In the case of being output in a standalone manner call_type='stand_alone' then we may be outputting
+        # comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
+        # into the initial submissions folder. In this case we will use the directory structure that is already
+        # in place which will put it in the ordination folder.
+        # TODO
+        # we can now also colour the ordination plots according to the meta data of the samples, if this is available.
+
+        """
+        This method will generate a distance matrix between samples
+        One for each clade.
+        I have been giving some thought as to which level we should be generating these distance matrices on.
+        If we do them on the all sequence level, i.e. mixture of clades then we are going to end up with the ordination
+        separations based primarily on the presence or absence of clades and this will mask the within clade differences
+        Biologically it is more important to be able to tell the difference between within clade different types
+        than be able to see if they contain different cladal proportions. After all, SP is about the increased resolution
+        So... what I propose is that the researcher do a clade level analysis seperately to look at the differnces between
+        clades and then they do ordinations clade by clade.
+
+        Now, with the within-clade analyses we have to chose between ITS2 type profile collection based ordinations
+        (i.e. only looking at the sequences contained in a clade_collection_type) or working with all of the sequnces that
+        are found within a sample of the given clade. With the former, this will require that the sample has gone through
+        an analysis, this is not possible for environmental samples. For coral samples this is of course possible, and we
+        would then need to choose about whether you would want to have one clade_collection_type / sample pairing per clade
+        collection type or whether you would plot a sample with all of its clade_collection_types plotted. I think the
+        latter would be better as this would really be telling the difference between the samples rather than the types
+        found within the samples. However, I'm now thinking about the cases where samples are missing one or two DIVs and
+        maybe SymPortal hasn't done the best job of resolving the true type they contain. In this case the distance
+        should still give a true representation of the similarity of this sample to another sample. Then you might start
+        to wonder what the point of the ITS2 type profiles are. Well, they would be to tell us WHAT the types are
+        whereas the distance matrix would not be able to do this but give us quantification of similarity. So they would
+        in fact be nicely complementary.
+
+        So for the time being, given the above logic, we will work on creating cladally separated distance matrices
+        for samples of a given data_set or collection of dataSubmissions. For each sample we will use all sequences
+        of the given clade found within the sample to calculate the distances. This will output the distance matrix
+        in the outputs folder.
+        """
+
+        output_file_paths = []
+        data_submissions = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
+
+        clade_collection_list_of_data_sets = CladeCollection.objects.filter(
+            data_set_sample_from__data_submission_from__in=data_submissions)
+
+        clades_of_clade_collections = list(set([a.clade for a in clade_collection_list_of_data_sets]))
+
+        if call_type == 'stand_alone':
+            wkd = os.path.abspath(
+                os.path.join(os.path.dirname(__file__), 'outputs', 'ordination', '_'.join(data_set_string.split(',')),
+                             'between_samples'))
+        else:
+            # call_type == 'submission':
+            wkd = output_dir + '/between_sample_distances'
+        # for each clade found in the dataSubmissions' samples
+        pcoa_path_lists = []
+        for clade_in_question in clades_of_clade_collections:
+
+            clade_wkd = wkd + '/{}'.format(clade_in_question)
+            # convert to list so that the order is set
+            clade_collections_of_clade = list(clade_collection_list_of_data_sets.filter(clade=clade_in_question))
+
+            if len(clade_collections_of_clade) < 2:
+                continue
+            # this is where we should start to work with the bray curtis method
+            # first thing to do will be to go through each of the clade collections and create a dict
+            # that has key as the actual sequence and relative abundance of that sequence
+            # we can then store these dict in a dict where the key is the sample ID.
+            data_set_samples_seq_rel_abund_of_clade_cols_dict = {}
+            for clade_col in clade_collections_of_clade:
+                temp_dict = {}
+                data_set_sample_sequences_of_clade_col = DataSetSampleSequence.objects.filter(
+                    clade_collection_found_in=clade_col)
+                total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
+                for dsss in data_set_sample_sequences_of_clade_col:
+                    temp_dict[dsss.reference_sequence_of.sequence] = dsss.abundance / total_seqs_ind_clade_col
+                data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col.id] = temp_dict
+
+            # then we can simply do a pairwise comparison of the clade collections and create distances
+            within_clade_distances_dict = {}
+            for clade_col_one, clade_col_two in itertools.combinations(list(clade_collections_of_clade), 2):
+                # let's work to a virtual subsample of 100 000
+                clade_col_one_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[clade_col_one.id]
+                clade_col_two_seq_rel_abundance_dict = data_set_samples_seq_rel_abund_of_clade_cols_dict[
+                    clade_col_two.id]
+
+                # for each comparison. Get a set of all of the sequence and convert this to a list.
+                set_of_sequences = set(list(clade_col_one_seq_rel_abundance_dict.keys()))
+                set_of_sequences.update(list(clade_col_two_seq_rel_abundance_dict.keys()))
+                list_of_sequences = list(set_of_sequences)
+
+                # then iter through the list to get the rel abundances for each of the samples, putting 0 if not found in
+                # the sample.
+                seq_abundance_list_one = []
+                seq_abundance_list_two = []
+                for seq in list_of_sequences:
+                    # populate the abundance list cc one
+                    if seq in clade_col_one_seq_rel_abundance_dict:
+                        seq_abundance_list_one.append(int(100000 * clade_col_one_seq_rel_abundance_dict[seq]))
+                    else:
+                        seq_abundance_list_one.append(0)
+
+                    # populate the abundance list cc two
+                    if seq in clade_col_two_seq_rel_abundance_dict:
+                        seq_abundance_list_two.append(int(100000 * clade_col_two_seq_rel_abundance_dict[seq]))
+                    else:
+                        seq_abundance_list_two.append(0)
+
+                distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
+                # once you have this we should simply be able to crunch the bray-curtis.
+                # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
+                within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
+                within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
+
+            # from this dict we can produce the distance file that can be passed into the generate_pcoa_coords method
+            distance_out_file = [len(clade_collections_of_clade)]
+            for clade_col_outer in clade_collections_of_clade:
+                temp_clade_col_string = [clade_col_outer.id]
+
+                for clade_col_inner in clade_collections_of_clade:
+                    if clade_col_outer == clade_col_inner:
+                        temp_clade_col_string.append(0)
+                    else:
+                        temp_clade_col_string.append(
+                            within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
+                distance_out_file.append('\t'.join([str(distance_item) for distance_item in temp_clade_col_string]))
+            # from here we can hopefully rely on the rest of the methods as they already are. The .dist file should be
+            # written out to the clade_wkd.
+            os.makedirs(clade_wkd, exist_ok=True)
+            dist_out_path = '{}/{}_bray_curtis_within_clade_sample_distances.dist'.format(clade_wkd, date_time_str)
+
+            # for the output version lets also append the sample name to each line so that we can see which sample it is
+            # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
+            dist_with_sample_name = [distance_out_file[0]]
+            list_of_cc_ids = [int(line.split('\t')[0]) for line in distance_out_file[1:]]
+            cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
+            dict_of_cc_id_to_sample_name = {cc.id: cc.data_set_sample_from.name for cc in cc_of_outputs}
+            for line in distance_out_file[1:]:
+                temp_list = []
+                cc_id = int(line.split('\t')[0])
+                sample_name = dict_of_cc_id_to_sample_name[cc_id]
+                temp_list.append(sample_name)
+                temp_list.extend(line.split('\t'))
+                new_line = '\t'.join(temp_list)
+                dist_with_sample_name.append(new_line)
+
+            with open(dist_out_path, 'w') as f:
+                for line in dist_with_sample_name:
+                    f.write('{}\n'.format(line))
+
+            pcoa_path = generate_pcoa_coords(clade_wkd, distance_out_file, date_time_string=date_time_str)
+            pcoa_path_lists.append(pcoa_path)
+            # Delete the tempDataFolder and contents
+
+            output_file_paths.append(pcoa_path)
+            output_file_paths.append(dist_out_path)
+
+        # Print output files
+        sys.stdout.write('\n\nBetween sample distances output files:\n')
+        for path_of_output_file in output_file_paths:
+            print(path_of_output_file)
+
+        return pcoa_path_lists
+
     def _output_seqs_stacked_bar_plot(self):
         if not self.no_fig:
             if self.num_of_samples > 1000:

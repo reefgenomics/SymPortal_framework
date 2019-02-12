@@ -560,8 +560,6 @@ def generate_within_clade_braycurtis_distances_samples_sample_list_input(smpl_id
     # comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
     # into the initial submissions folder. In this case we will use the directory structure that is already
     # in place which will put it in the ordination folder.
-    # TODO
-    # we can now also colour the ordination plots according to the meta data of the samples, if this is available.
 
     """
     This method will generate a distance matrix between samples
@@ -661,8 +659,9 @@ def generate_within_clade_braycurtis_distances_samples_sample_list_input(smpl_id
                 else:
                     seq_abundance_list_two.append(0)
 
-            distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
             # once you have this we should simply be able to crunch the bray-curtis.
+            distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
+
             # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
             within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
             within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
