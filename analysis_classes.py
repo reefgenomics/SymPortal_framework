@@ -26,6 +26,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
 import re
+from skbio.stats.ordination import pcoa
+import shutil
 
 class BlastnAnalysis:
     def __init__(
@@ -76,31 +78,61 @@ class MothurAnalysis:
              name_file_path=None, mothur_execution_path='mothur', auto_convert_fastq_to_fasta=True,
             pcr_fwd_primer=None, pcr_rev_primer=None, pcr_oligo_file_path=None,
             pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None, num_processors=10,
-            stdout_and_sterr_to_pipe=True
+            stdout_and_sterr_to_pipe=True, tree_file_path=None, group_file_path=None, is_unifrac_analysis=False
             ):
 
         self._setup_core_attributes(auto_convert_fastq_to_fasta, fastq_gz_fwd_path, fastq_gz_rev_path,
                                     input_dir, mothur_execution_path, name, name_file_path, output_dir,
-                                    sequence_collection, num_processors, stdout_and_sterr_to_pipe)
+                                    sequence_collection, num_processors, stdout_and_sterr_to_pipe, is_unifrac_analysis)
 
 
         self._setup_pcr_analysis_attributes(pcr_analysis_name, pcr_fwd_primer, pcr_fwd_primer_mismatch,
                                             pcr_oligo_file_path, pcr_rev_primer, pcr_rev_primer_mismatch)
 
+
+
+
+    def perform_weighted_unifrac(self):
+        apples = 'asdf'
     def _setup_core_attributes(self, auto_convert_fastq_to_fasta, fastq_gz_fwd_path, fastq_gz_rev_path,
                                input_dir, mothur_execution_path, name, name_file_path, output_dir,
-                               sequence_collection, num_processors, stdout_and_sterr_to_pipe):
+                               sequence_collection, num_processors, stdout_and_sterr_to_pipe, is_unifrac_analysis,
+                               tree_path, group_file_path):
 
-        self._verify_that_is_either_sequence_collection_or_fastq_pair(fastq_gz_fwd_path, fastq_gz_rev_path,
-                                                                      sequence_collection)
 
-        if sequence_collection is not None:
-            self._setup_sequence_collection_attribute(auto_convert_fastq_to_fasta, name, sequence_collection)
-        elif sequence_collection is None:
-            self._setup_fastq_attributes(fastq_gz_fwd_path, fastq_gz_rev_path)
 
-        self._setup_remainder_of_core_attributes(input_dir, mothur_execution_path, name_file_path,
-                                                 output_dir, sequence_collection, num_processors, stdout_and_sterr_to_pipe)
+        if is_unifrac_analysis:
+            self._setup_unifrac_attributes(
+                tree_path, group_file_path, name_file_path, input_dir, output_dir,
+                mothur_execution_path, num_processors, stdout_and_sterr_to_pipe)
+        else:
+            self._verify_that_is_either_sequence_collection_or_fastq_pair(fastq_gz_fwd_path, fastq_gz_rev_path,
+                                                                          sequence_collection)
+            if sequence_collection is not None:
+                self._setup_sequence_collection_attribute(auto_convert_fastq_to_fasta, name, sequence_collection)
+            elif sequence_collection is None:
+                self._setup_fastq_attributes(fastq_gz_fwd_path, fastq_gz_rev_path)
+            self._setup_remainder_of_core_attributes(input_dir, mothur_execution_path, name_file_path,
+                                                     output_dir, sequence_collection, num_processors, stdout_and_sterr_to_pipe)
+
+    def _setup_unifrac_attributes(self, tree_path, group_file_path, name_file_path, input_dir, output_dir,
+                mothur_execution_path, num_processors, stdout_and_sterr_to_pipe):
+        self.tree_file_path = tree_path
+        self.group_file_path = group_file_path
+        self.name_file_path = name_file_path
+        if input_dir is None:
+            self.input_dir = os.path.dirname(tree_path)
+        else:
+            self.input_dir = input_dir
+        if output_dir is None:
+            self.output_dir = os.path.dirname(tree_path)
+        else:
+            self.output_dir = output_dir
+        self.exec_path = mothur_execution_path
+        self.processors = num_processors
+        self.stdout_and_sterr_to_pipe = stdout_and_sterr_to_pipe
+
+
 
     def _setup_remainder_of_core_attributes(self, input_dir, mothur_execution_path, name_file_path,
                                             output_dir, sequence_collection, num_processors, stdout_and_sterr_to_pipe):
@@ -126,6 +158,8 @@ class MothurAnalysis:
         self.latest_summary_output_as_list = None
         self.latest_summary_path = None
         self.stdout_and_sterr_to_pipe = stdout_and_sterr_to_pipe
+        self.dist_file_path = None
+        self.tree_file_path = None
 
     def _setup_fastq_attributes(self, fastq_gz_fwd_path, fastq_gz_rev_path):
         self.fastq_gz_fwd_path = fastq_gz_fwd_path
@@ -154,6 +188,7 @@ class MothurAnalysis:
 
     def _verify_that_is_either_sequence_collection_or_fastq_pair(self, fastq_gz_fwd_path, fastq_gz_rev_path,
                                                                  sequence_collection):
+        # if a group_file was given then
         if sequence_collection and (fastq_gz_fwd_path or fastq_gz_rev_path):
             raise ValueError(
                 'Please create a MothurAnalysis from either a sequence_collection OR a pair of fastq_gz files.\n'
@@ -182,10 +217,10 @@ class MothurAnalysis:
 
     # init class methods for the MothurAnalysis
     @classmethod
-    def from_pair_of_fastq_gz_files(cls, name, fastq_gz_fwd_path, fastq_gz_rev_path,
-                                    output_dir=None, mothur_execution_string='mothur', num_processors=10,
-                                    stdout_and_sterr_to_pipe=True
-                                    ):
+    def init_from_pair_of_fastq_gz_files(cls, name, fastq_gz_fwd_path, fastq_gz_rev_path,
+                                         output_dir=None, mothur_execution_string='mothur', num_processors=10,
+                                         stdout_and_sterr_to_pipe=True
+                                         ):
         return cls(name=name, sequence_collection=None, mothur_execution_path=mothur_execution_string,
                    input_dir=os.path.dirname(os.path.abspath(fastq_gz_fwd_path)), output_dir=output_dir,
                    fastq_gz_fwd_path=fastq_gz_fwd_path, fastq_gz_rev_path=fastq_gz_rev_path,
@@ -193,11 +228,11 @@ class MothurAnalysis:
                    stdout_and_sterr_to_pipe=stdout_and_sterr_to_pipe)
 
     @classmethod
-    def from_sequence_collection(cls, sequence_collection, name=None, input_dir=None,
-                                 output_dir=None, mothur_execution_path='mothur',
-                                 pcr_fwd_primer=None, pcr_rev_primer=None, pcr_oligo_file_path=None,
-                                 pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None,
-                                 num_processors=10, stdout_and_sterr_to_pipe=True):
+    def init_from_sequence_collection(cls, sequence_collection, name=None, input_dir=None,
+                                      output_dir=None, mothur_execution_path='mothur',
+                                      pcr_fwd_primer=None, pcr_rev_primer=None, pcr_oligo_file_path=None,
+                                      pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None,
+                                      num_processors=10, stdout_and_sterr_to_pipe=True):
         return cls(
             name=name, sequence_collection=sequence_collection, input_dir=input_dir,
             output_dir=output_dir, mothur_execution_path=mothur_execution_path, pcr_fwd_primer=pcr_fwd_primer,
@@ -205,6 +240,19 @@ class MothurAnalysis:
             pcr_fwd_primer_mismatch=pcr_fwd_primer_mismatch, pcr_rev_primer_mismatch=pcr_rev_primer_mismatch,
             pcr_analysis_name=pcr_analysis_name, num_processors=num_processors,
             stdout_and_sterr_to_pipe=stdout_and_sterr_to_pipe
+        )
+
+    @classmethod
+    def init_for_weighted_unifrac(
+            cls, tree_path, group_file_path, name_file_path, input_dir=None,
+            output_dir=None, mothur_execution_string='mothur', num_processors=10,
+            stdout_and_sterr_to_pipe=True, is_unifrac_analysis=True):
+
+        return cls(
+            mothur_execution_path=mothur_execution_string, input_dir=input_dir, output_dir=output_dir,
+            name_file_path=name_file_path, num_processors=num_processors,
+            stdout_and_sterr_to_pipe=stdout_and_sterr_to_pipe,
+            tree_file_path=tree_path, group_file_path=group_file_path, is_unifrac_analysis=is_unifrac_analysis
         )
 
     # ########################################
@@ -305,7 +353,6 @@ class MothurAnalysis:
 
         self.__execute_summary()
 
-
     def execute_split_abund(self, abund_cutoff=2):
 
         self._split_abund_make_and_write_mothur_batch(abund_cutoff)
@@ -318,6 +365,30 @@ class MothurAnalysis:
 
         self.__execute_summary()
 
+    def execute_dist_seqs(self):
+        self._dist_seqs_make_and_write_mothur_batch()
+
+        self._run_mothur_batch_file_command()
+
+        self.dist_file_path = self._extract_output_path_first_line()
+
+    def execute_clearcut(self):
+        self._validate_dist_file()
+        self._clearcut_make_and_write_mothur_batch()
+        self._run_mothur_batch_file_command()
+        self.tree_file_path = self._extract_output_path_first_line()
+
+    def execute_weighted_unifrac(self):
+        self._weighted_unifrac_make_and_write_mothur_batch()
+        self._run_mothur_batch_file_command()
+        if self.latest_completed_process_command.returncode == 0:
+            sys.stdout.write('\rUnifrac successful')
+        else:
+            sys.stdout.write('\rERROR: {}'.format(self.latest_completed_process_command.sterr.decode('utf-8')))
+        # TODO verify that this is the appropriate method to collect the output
+        self.dist_file_path = self._extract_output_path_first_line()
+
+
     def __execute_summary(self):
         self._summarise_make_and_write_mothur_batch()
         self._run_mothur_batch_file_command()
@@ -325,6 +396,43 @@ class MothurAnalysis:
         self.latest_summary_output_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
 
     # #####################
+    def _weighted_unifrac_make_and_write_mothur_batch(self):
+        mothur_batch_file = [
+            f'set.dir(input={self.input_dir})',
+            f'set.dir(output={self.output_dir})',
+            f'unifrac.weighted(tree={self.tree_file_path}, group={self.group_file_path}, name={self.name_file_path},'
+            f' distance=square, processors={self.processors})'
+        ]
+
+        self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
+
+        write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
+
+    def _validate_dist_file(self):
+        if self.dist_file_path is None:
+            raise RuntimeError('A .dist file must exist to run the clearcut analysis')
+
+    def _clearcut_make_and_write_mothur_batch(self):
+        mothur_batch_file = [
+            f'set.dir(input={self.input_dir})',
+            f'set.dir(output={self.output_dir})',
+            f'clearcut(phylip={self.dist_file_path}, verbose=t)'
+        ]
+
+        self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
+
+        write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
+
+    def _dist_seqs_make_and_write_mothur_batch(self):
+        mothur_batch_file = [
+            f'set.dir(input={self.input_dir})',
+            f'set.dir(output={self.output_dir})',
+            f'dist.seqs(fasta={self.fasta_path}, countends=T, output=square)'
+        ]
+
+        self.mothur_batch_file_path = os.path.join(self.input_dir, 'mothur_batch_file')
+
+        write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
     def _split_abund_extract_output_path_name_and_fasta(self):
         stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
@@ -3139,6 +3247,7 @@ class SeqStackedBarPlotter:
             "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
         return colour_list
 
+
 class UnifracSeqAbundanceMPCollection:
     """The purpose of this class is to be used during the UnifracDistanceCreator as a tidy holder for the
      sequences information that is collected from each CladeCollection that is part of the output."""
@@ -3168,7 +3277,9 @@ class UnifracSeqAbundanceMPCollection:
 
             self.name_dict['{}_{}'.format(unique_seq_name_base, 0)] = temp_name_list
 
+
 class SequenceCollectionComplete(Exception): pass
+
 
 class UnifracDistanceCreatorHandlerOne:
     """The purpose of this handler will be to setup the sequence collection for a given clade"""
@@ -3296,7 +3407,7 @@ class UnifracDistanceCreatorHandlerOne:
 
 class FseqbootAlignmentGenerator:
     """This class is to be used in the UnifracDistanceCreator to handle the creation of the fseqboot alignments
-    for a given clade."""
+    for a given clade. It produces a directory (self.output_dir) that contains a number of alignment replicates."""
     def __init__(self, parent_unifrac_dist_creator, clade_in_question, num_reps):
         self.parent_unifrac_dist_creator = parent_unifrac_dist_creator
         self.clade = clade_in_question
@@ -3308,7 +3419,8 @@ class FseqbootAlignmentGenerator:
         self.output_dir = os.path.join(self.parent_unifrac_dist_creator.output_dir, self.clade)
         # this is the base of the path that will be used to build the path of each of the alignment replicates
         # to build the complete path a rep_count string (str(count)) will be appended to this base.
-        self.fseqboot_base = os.path.join(self.output_dir, 'out_seq_boot_reps', 'fseqboot_rep_')
+        self.fseqboot_clade_root_dir = os.path.join(self.output_dir, 'out_seq_boot_reps')
+        self.fseqboot_base = os.path.join(self.fseqboot_clade_root_dir, 'fseqboot_rep_')
         self.fseqboot_file_as_list = None
         self.rep_count = 0
         self.fseqboot_individual_alignment_as_list = None
@@ -3359,10 +3471,245 @@ class FseqbootAlignmentGenerator:
                          'GitHub page: https://github.com/didillysquat/SymPortal_framework/'
                          'wiki/SymPortal-setup#6-third-party-dependencies')
 
-class UnifracDistanceCreator:
+class UnifracSubcladeHandler:
+    """The output of this is a list that contains a list of paths to trees, one for each replicate fasta"""
+    def __init__(self, parent_unifrac_creator, clade_in_question, fseqbootbase):
+        self.clade = clade_in_question
+        self.parent_unifrac_creator = parent_unifrac_creator
+        self.fseqbootbase = fseqbootbase
+        self.input_queue_of_rep_numbers = Queue()
+        self.output_queue_of_paths_to_trees = Queue()
+        self.output_dir = os.path.join(self.parent_unifrac_creator.output_dir, self.clade)
+        self.list_of_output_tree_paths = None
+        self.concat_tree_file_path = os.path.join(self.output_dir, 'concatenated_tree_file')
+        self.consensus_tree_file_path = os.path.join(self.output_dir, 'consensus_tree_sumtrees.newick')
+        self.unifrac_dist_file_path = None
+
+    def perform_unifrac(self):
+        mothur_analysis = MothurAnalysis.init_for_weighted_unifrac(
+            tree_path=self.consensus_tree_file_path,
+            group_file_path=self.parent_unifrac_creator.clade_master_group_file_path,
+            name_file_path=self.parent_unifrac_creator.clade_master_name_file_path)
+        mothur_analysis.execute_weighted_unifrac()
+        self.unifrac_dist_file_path = mothur_analysis.dist_file_path
+
+    def _populate_input_queue(self):
+        # populate the input queue
+        for rep_number in range(self.parent_unifrac_creator.bootstrap_value):
+            self.input_queue_of_rep_numbers.put(rep_number)
+
+        # place the stop cues
+        for n in range(self.parent_unifrac_creator.num_proc):
+            self.input_queue_of_rep_numbers.put('STOP')
+
+    def execute_unifrac_mothur_worker(self):
+        """This worker simply runs two mothur analyses. The first makes a .dist phylip distance matrix. The second
+        makes a clear cut tree from this distance matrix."""
+        all_processes = []
+
+        for n in range(self.parent_unifrac_creator.num_proc):
+            p = Process(target=self._mothur_unifrac_pipeline_mp_worker,
+                        args=())
+            all_processes.append(p)
+            p.start()
+
+        # Get list of tree paths from the output queue
+        kill_num = 0
+        while 1:
+            passed_element = self.output_queue_of_paths_to_trees.get()
+            if passed_element == 'kill':
+                kill_num += 1
+                if kill_num == self.parent_unifrac_creator.num_proc:
+                    break
+            else:
+                self.list_of_output_tree_paths.append(passed_element)
+
+        for p in all_processes:
+            p.join()
+
+    def _mothur_unifrac_pipeline_mp_worker(self):
+        for rep_num in iter(self.input_queue_of_rep_numbers.get, 'STOP'):
+            unifrac_mothur_worker = UnifracMothurWorker(rep_num=rep_num, fseqbootbase = self.fseqbootbase)
+            unifrac_mothur_worker.make_trees()
+            self.output_queue_of_paths_to_trees.put(unifrac_mothur_worker.output_tree_path)
+        self.output_queue_of_paths_to_trees.put('kill')
+
+    def create_consensus_tree(self):
+        self._concatenate_trees()
+        self._create_consensus_tree_with_meta_data_to_be_removed()
+        self._rename_tree_nodes_and_remove_meta_data()
+
+    def _rename_tree_nodes_and_remove_meta_data(self):
+        """This will use the name file to rename the tree nodes and also remove metadata from the treefile.
+        """
+        name_file = read_defined_file_to_list(self.parent_unifrac_creator.master_names_file_path)
+        name_file_reps = []
+        for line in name_file:
+            name_file_reps.append(line.split('\t')[0])
+
+        seq_re = re.compile('\d+[_ ]id[\d_]+')
+        sys.stdout.write('\rrenaming tree nodes')
+        tree_file = read_defined_file_to_list(self.consensus_tree_file_path)
+
+        new_tree_file = []
+        for line in tree_file:
+            new_str = line
+            examine = list(seq_re.findall(line))
+
+            # N.B. the sumtrees.py program was causing some very strange behaviour. It was converting '_' to ' '
+            # when they were preceeded by a single digit but leaving them as '_' when there were multiple digits before it
+            # it took a long time to find what the problem was. It was causing issues in the mothur UniFrac.
+            # You will see that I have modified below by having the space function and replacing ' ' with '_' and modifying
+            # the regex.
+            name_file_rep_match_list = []
+            for match_str in examine:
+                space = False
+                if ' ' in match_str:
+                    space = True
+                if space:
+
+                    found = False
+                    match_str_replced_space = match_str.replace(' ', '_')
+                    for name_file_rep in name_file_reps:
+                        if name_file_rep.startswith(match_str_replced_space):
+                            new_str = re.sub("'{}'".format(match_str), name_file_rep, new_str)
+                            name_file_rep_match_list.append(name_file_rep)
+                            found = True
+                            break
+                else:
+                    found = False
+                    for name_file_rep in name_file_reps:
+                        if name_file_rep.startswith(match_str):
+                            # then this is a match
+                            # now replace the string in the tree file
+                            new_str = re.sub('(?<!\d){}'.format(match_str), name_file_rep, new_str)
+                            name_file_rep_match_list.append(name_file_rep)
+                            found = True
+                            break
+
+            # now also remove the metadata which is held between square brackets '[]'
+            new_str = re.sub('\[[^\]]*\]', '', new_str)
+            new_tree_file.append(new_str)
+
+        # here all of the tree_file names should have been replaced. Now write back out.
+        sys.stdout.write('\rwriting out tree')
+        write_list_to_destination(self.consensus_tree_file_path, new_tree_file)
+
+    def _create_consensus_tree_with_meta_data_to_be_removed(self):
+        """run sumtrees.py on the concatenated tree file to create a
+        consensus tree that will need annotating with the distances.
+        """
+        completed_consensus = subprocess.run([
+            'sumtrees.py', '-F', 'newick', '--replace', '-o',
+            self.consensus_tree_file_path, self.concat_tree_file_path],
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        if completed_consensus.returncode != 0:
+            try:
+                if 'recursion' in completed_consensus.stdout.decode('utf-8'):
+                    sys.exit('There has been a recursion depth error whilst trying to calculate a consensus tree\n'
+                             'This occured whilst calculating between sample distances.\n'
+                             'This problem occurs when trees are too big for sumtrees.py to process.\n'
+                             'This problem can often be solved by increasing the recursion '
+                             'limit used when running sumtrees.py\n'
+                             'The dafault value is 1000. This can be increased.\n'
+                             'To do this you need to edit the sumtrees.py file.\n'
+                             'To locate this file, try typing:\n'
+                             ' \'which sumtrees.py\'\n'
+                             'This should return the location of the sumtrees.py file\n'
+                             'After the line:\n'
+                             ' \'import json\'  '
+                             '\non a new line add: '
+                             '\n\'import sys\' '
+                             '\nand then on the next line:\n'
+                             'sys.setrecursionlimit(1500)\n'
+                             'Save changes and rerun.')
+
+            except:
+                sys.exit('There has likely been a recursion depth error whilst trying to calculate a consensus tree\n'
+                         'This occured whilst calculating between sample distances.\n'
+                         'This problem occurs when trees are too big for sumtrees.py to process.\n'
+                         'This problem can often be solved by increasing the recursion '
+                         'limit used when running sumtrees.py\n'
+                         'The dafault value is 1000. This can be increased.\n'
+                         'To do this you need to edit the sumtrees.py file.\n'
+                         'To locate this file, try typing:\n'
+                         ' \'which sumtrees.py\'\n'
+                         'This should return the location of the sumtrees.py file\n'
+                         'After the line:\n'
+                         ' \'import json\'  '
+                         '\non a new line add: '
+                         '\n\'import sys\' '
+                         '\nand then on the next line:\n'
+                         'sys.setrecursionlimit(1500)\n'
+                         'Save changes and rerun.')
+
+    def _concatenate_trees(self):
+        master_tree_file = []
+        for i in range(len(self.list_of_output_tree_paths)):
+            temp_tree_file = read_defined_file_to_list(self.list_of_output_tree_paths[i])
+            for line in temp_tree_file:
+                master_tree_file.append(line)
+        write_list_to_destination(self.concat_tree_file_path, master_tree_file)
+
+
+class UnifracMothurWorker:
+    def __init__(self, rep_num, fseqbootbase):
+        self.rep_num = rep_num
+        self.fseqbootbase = fseqbootbase
+        self.fasta_as_list = None
+        self.sequential_fasta_path = f'{self.fseqbootbase}{self.rep_num}.sequential.fasta'
+        self.output_tree_path = None
+
+    def make_trees(self):
+        sys.stdout.write(f'\rProcessing rep number {self.rep_num} with {current_process().name}')
+
+        # convert the interleaved fasta to sequential fasta
+        self._convert_interleaved_fasta_to_sequential_and_write_out()
+
+        rep_sequence_collection = SequenceCollection(path_to_file=self.sequential_fasta_path, name=self.rep_num)
+        mothur_analysis = MothurAnalysis.init_from_sequence_collection(sequence_collection=rep_sequence_collection)
+        # produce the distance file that can then be used in the clearcut analysis tree making
+        mothur_analysis.execute_dist_seqs()
+        mothur_analysis.execute_clearcut()
+        self.output_tree_path = mothur_analysis.tree_file_path
+
+
+    def _convert_interleaved_fasta_to_sequential_and_write_out(self):
+        self.fasta_as_list = read_defined_file_to_list('{}{}'.format(self.fseqbootbase, self.rep_num))
+        self.fasta_as_list = self._convert_interleaved_to_sequencial_fasta_first_line_removal()
+        write_list_to_destination(self.sequential_fasta_path, self.fasta_as_list)
+
+
+    def _convert_interleaved_to_sequencial_fasta_first_line_removal(self):
+        list_seq_names = []
+        list_seq_sequences = []
+        num_seqs = int(self.fasta_as_list[0].split()[0])
+        fasta_cropped = []
+        # Get rid of the first line and get rid of the blank lines
+        for line in self.fasta_as_list[1:]:
+            if line != '':
+                fasta_cropped.append(line)
+
+        for i in range(len(fasta_cropped)):
+            if i < num_seqs:
+                # Then we are on one of the inital lines
+                list_seq_names.append(fasta_cropped[i].split()[0])
+                list_seq_sequences.append(''.join(fasta_cropped[i].split()[1:]))
+            else:
+                index = i % num_seqs
+                list_seq_sequences[index] += ''.join(fasta_cropped[i].split()[1:])
+
+        out_fasta = []
+        for name, seq in zip(list_seq_names, list_seq_sequences):
+            out_fasta.extend(['>{}'.format(name), seq])
+
+        return out_fasta
+
+class UnifracDistPCoACreator:
     """
     This method will generate a distance matrix between samples using the UniFrac method.
     One for each clade.
+    It will also perform a PCoA for each distance matrix. a .dist file and a .csv with the pcoa coords will be output
 
     The call_type argument will be used to determine which setting this method is being called from.
     if it is being called as part of the initial submission call_type='submission',
@@ -3406,7 +3753,10 @@ class UnifracDistanceCreator:
         self.data_sets_to_output = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
         self.num_proc = num_processors
         self.method = method
-        self.date_time_string = date_time_string
+        if date_time_string:
+            self.date_time_string = date_time_string
+        else:
+            self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.bootstrap_value = bootstrap_value
         self.output_file_paths = []
         self.clade_collections_from_data_sets = CladeCollection.objects.filter(
@@ -3414,14 +3764,29 @@ class UnifracDistanceCreator:
         self.clades_of_clade_collections_list = list(set([a.clade for a in self.clade_collections_from_data_sets]))
         self.output_dir = self._setup_output_dir(call_type, data_set_string, output_dir)
         self.output_path_list = []
+        # Clade based files
+        self.clade_output_dir = None
         # the paths output from the creation of the master fasta, names and group files
-        self.master_names_file_path = None
-        self.master_fasta_file_unaligned_path = None
-        self.master_fasta_file_aligned_path = None
-        self.master_group_file_path = None
+        # these will be updated with every clade_in_question
+        self.clade_master_names_file_path = None
+        self.clade_master_fasta_file_unaligned_path = None
+        self.clade_master_fasta_file_aligned_path = None
+        self.clade_master_group_file_path = None
+        # this is the folder in which all of the replicate work was done. We will use this to delete this dir later
+        self.clade_fseqboot_root_dir = None
+        # this is the base of the path that will be used to build the path of each of the alignment replicates
+        # to build the complete path a rep_count string (str(count)) will be appended to this base.
+        self.clade_fseqboot_base = None
+        # the output list of trees from the mothur portion of this analysis
+        self.clade_tree_path_list = None
+        # the unifrac distances
+        self.clade_unifrac_dist_file_path = None
+        self.clade_pcoa_coord_file_path = None
 
-    def main(self):
+    def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clade_collections_from_data_sets:
+            self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
+
             try:
                 self._create_and_write_out_master_fasta_names_and_group_files(clade_in_question)
             except RuntimeWarning as w:
@@ -3430,54 +3795,96 @@ class UnifracDistanceCreator:
 
             self._align_master_fasta()
 
-            # ## I am really strugling to get the jmodeltest to run through python.
-            # I will therefore work with a fixed model that has been chosen by running jmodeltest on the command line
-            # phyml  -i /tmp/jmodeltest7232692498672152838.phy -d nt -n 1 -b 0
-            # --run_id TPM1uf+I -m 012210 -f m -v e -c 1 --no_memory_check -o tlr -s BEST
             # The production of an ML tree is going to be unrealistic with the larger number of sequences
             # it will simply take too long to compute.
-            # Instead I will create an NJ consnsus tree.
+            # Instead I will create an NJ consensus tree.
             # This will involve using the embassy version of the phylip executables
 
             # First I will have to create random data sets
-            fseqboot_alignment_generator = FseqbootAlignmentGenerator(clade_in_question=clade_in_question, parent_unifrac_dist_creator=self)
-            fseqboot_alignment_generator.do_fseqboot_alignment_generation()
-            
-            # TODO you got here with refactoring and class abstraction
+            self._make_fseqboot_replicate_alignments(clade_in_question)
 
-            unifrac_path = None
-            unifrac_dist = None
-            if method == 'mothur':
-                unifrac_dist, unifrac_path = mothur_unifrac_pipeline_mp(
-                    clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors,
-                    date_time_string=date_time_string)
-            elif method == 'phylip':
-                unifrac_dist, unifrac_path = phylip_unifrac_pipeline_mp(
-                    clade_wkd, fseqboot_base, name_file, bootstrap_value, num_processors)
+            self._compute_unifrac_distances(clade_in_question)
 
-            pcoa_path = generate_pcoa_coords(clade_wkd, unifrac_dist, date_time_string=date_time_string)
-            pcoa_path_lists.append(pcoa_path)
-            # Delete the tempDataFolder and contents
-            file_to_del = '{}/out_seq_boot_reps'.format(clade_wkd)
-            os.chdir(os.path.abspath(os.path.dirname(__file__)))
-            shutil.rmtree(path=file_to_del)
+            self._compute_pcoa_coords(clade_in_question)
 
-            output_file_paths.append(pcoa_path)
-            output_file_paths.append(unifrac_path)
+            self._clean_up_temp_files()
 
-            # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
-            list_of_dir = os.listdir(clade_wkd)
-            for item in list_of_dir:
-                if '.csv' not in item and '.dist' not in item:
-                    os.remove(os.path.join(clade_wkd, item))
+            self._append_output_files_to_output_list()
+
+    def _append_output_files_to_output_list(self):
+        self.output_path_list.extend([self.clade_unifrac_dist_file_path, self.clade_pcoa_coord_file_path])
+
+    def _clean_up_temp_files(self):
+        if os.path.exists(self.clade_fseqboot_root_dir):
+            shutil.rmtree(path=self.clade_fseqboot_root_dir)
+
+        # now delte all files except for the .csv that holds the coords and the .dist that holds the dists
+        list_of_dir = os.listdir(self.clade_output_dir)
+        for item in list_of_dir:
+            if '.csv' not in item and '.dist' not in item:
+                os.remove(os.path.join(self.clade_output_dir, item))
+
+    def _compute_pcoa_coords(self, clade_in_question):
+        # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
+        # a twoD list and then convert to a numpy array
+        self.clade_pcoa_coord_file_path = os.path.join(
+            self.output_dir, clade_in_question, f'{self.date_time_string}.PCoA_coords.csv')
+        raw_dist_file = read_defined_file_to_list(self.clade_unifrac_dist_file_path)
+
+        temp_two_d_list = []
+        sample_names_from_dist_matrix = []
+        for line in raw_dist_file[1:]:
+            temp_elements = line.split('\t')
+            sample_names_from_dist_matrix.append(temp_elements[0].replace(' ', ''))
+            temp_two_d_list.append([float(a) for a in temp_elements[1:]])
+
+        uni_frac_dist_as_np_array = np.array(temp_two_d_list)
+
+        sys.stdout.write('\rcalculating PCoA coordinates')
+
+        pcoa_output = pcoa(uni_frac_dist_as_np_array)
+
+        # rename the pcoa dataframe index as the sample names
+        pcoa_output.samples['sample'] = sample_names_from_dist_matrix
+        renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
+
+        # now add the variance explained as a final row to the renamed_dataframe
+        renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(pcoa_output.proportion_explained.rename('proportion_explained'))
+
+        renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
+
+    def _compute_unifrac_distances(self, clade_in_question):
+        unifrac_subclade_handler = UnifracSubcladeHandler(
+            clade_in_question=clade_in_question,
+            fseqbootbase=self.clade_fseqboot_base,
+            parent_unifrac_creator=self)
+        unifrac_subclade_handler.execute_unifrac_mothur_worker()
+        unifrac_subclade_handler.create_consensus_tree()
+        unifrac_subclade_handler.perform_unifrac()
+        self.clade_unifrac_dist_file_path = unifrac_subclade_handler.unifrac_dist_file_path
+        self._append_date_time_string_to_unifrac_dist_path()
+
+    def _make_fseqboot_replicate_alignments(self, clade_in_question):
+        fseqboot_alignment_generator = FseqbootAlignmentGenerator(clade_in_question=clade_in_question,
+                                                                  parent_unifrac_dist_creator=self,
+                                                                  num_reps=self.bootstrap_value)
+        fseqboot_alignment_generator.do_fseqboot_alignment_generation()
+        self.clade_fseqboot_base = fseqboot_alignment_generator.fseqboot_base
+        self.clade_fseqboot_root_dir = fseqboot_alignment_generator.fseqboot_clade_root_dir
+
+    def _append_date_time_string_to_unifrac_dist_path(self):
+        # here add a date_time_string element to it to make it unique
+        old_dist_path = self.clade_unifrac_dist_file_path
+        dist_path_extension = self.clade_unifrac_dist_file_path.split('.')[-1]
+        self.clade_unifrac_dist_file_path = self.clade_unifrac_dist_file_path.replace(f'.{dist_path_extension}', f'.{self.date_time_string}.{dist_path_extension}')
+        os.rename(old_dist_path, self.clade_unifrac_dist_file_path)
 
     def _align_master_fasta(self):
-        self.master_fasta_file_aligned_path = self.master_fasta_file_unaligned_path.replace('.fasta', '.aligned.fasta')
+        self.clade_master_fasta_file_aligned_path = self.clade_master_fasta_file_unaligned_path.replace('.fasta', '.aligned.fasta')
         mafft_align_fasta(
-            input_path=self.master_fasta_file_unaligned_path,
-            output_path=self.master_fasta_file_aligned_path,
+            input_path=self.clade_master_fasta_file_unaligned_path,
+            output_path=self.clade_master_fasta_file_aligned_path,
             num_proc=self.num_proc)
-
 
     def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
         sys.stdout.write('Creating master .name and .fasta files for UniFrac')
@@ -3491,19 +3898,19 @@ class UnifracDistanceCreator:
             else:
                 raise RuntimeError(f'Unknown error in {UnifracDistanceCreatorHandlerOne.__name__} init')
         unifrac_dist_creator_handler_one.execute_unifrac_distance_creator_worker_one()
-        self.master_names_file_path = unifrac_dist_creator_handler_one.master_names_file_path
-        self.master_fasta_file_unaligned_path = unifrac_dist_creator_handler_one.master_fasta_file_path
-        self.master_group_file_path = unifrac_dist_creator_handler_one.master_group_file_path
+        self.clade_master_names_file_path = unifrac_dist_creator_handler_one.master_names_file_path
+        self.clade_master_fasta_file_unaligned_path = unifrac_dist_creator_handler_one.master_fasta_file_path
+        self.clade_master_group_file_path = unifrac_dist_creator_handler_one.master_group_file_path
 
-def _setup_output_dir(self, call_type, data_set_string, output_dir):
-        if call_type == 'stand_alone':
-            output_dir = os.path.abspath(
-                os.path.join(self.symportal_root_dir, 'outputs', 'ordination', '_'.join(data_set_string.split(',')),
-                             'between_samples'))
-        else:
-            # call_type == 'submission':
-            output_dir = output_dir + '/between_sample_distances'
-        return output_dir
+    def _setup_output_dir(self, call_type, data_set_string, output_dir):
+            if call_type == 'stand_alone':
+                output_dir = os.path.abspath(
+                    os.path.join(self.symportal_root_dir, 'outputs', 'ordination', '_'.join(data_set_string.split(',')),
+                                 'between_samples'))
+            else:
+                # call_type == 'submission':
+                output_dir = output_dir + '/between_sample_distances'
+            return output_dir
 
 
 

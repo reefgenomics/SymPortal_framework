@@ -9,7 +9,8 @@ import general
 import json
 from analysis_classes import (
     InitialMothurHandler, PotentialSymTaxScreeningHandler, BlastnAnalysis, SymNonSymTaxScreeningHandler,
-    PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator, SeqStackedBarPlotter)
+    PerformMEDHandler, DataSetSampleCreatorHandler, SequenceCountTableCreator, SeqStackedBarPlotter,
+    UnifracDistPCoACreator)
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db
 from datetime import datetime
 
@@ -133,13 +134,13 @@ class DataLoading:
         if not self.no_ord:
             print('Calculating between sample pairwise distances')
             pcoa_paths_list = None
-            if distance_method == 'unifrac':
-                pcoa_paths_list = generate_within_clade_unifrac_distances_samples(
-                    data_set_string=data_set_uid,
-                    num_processors=num_proc,
-                    method='mothur', call_type='submission',
-                    date_time_string=date_time_str,
-                    output_dir=output_directory)
+            if self.distance_method == 'unifrac':
+                unifrac_dict_pcoa_creator = UnifracDistPCoACreator(
+                    call_type='submission', date_time_string=self.data_time_string, output_dir=self.output_directory,
+                    data_set_string=str(self.dataset_object.id), method='mothur', num_processors=self.num_proc,
+                    symportal_root_directory=self.symportal_root_directory)
+                unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
+                self.output_path_list.extend(unifrac_dict_pcoa_creator.output_path_list)
             elif distance_method == 'braycurtis':
                 pcoa_paths_list = generate_within_clade_braycurtis_distances_samples(
                     data_set_string=data_set_uid,

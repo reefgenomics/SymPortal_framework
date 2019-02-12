@@ -1099,12 +1099,6 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
     concatenate_trees(list_of_tree_paths, '{}/individual_trees'.format(clade_wkd))
     in_file_fconsense = '{}/individual_trees'.format(clade_wkd)
 
-    # # ### DEBUG ###
-    # for line in read_defined_file_to_list(in_file_fconsense):
-    #     if "1 Pro" in line:
-    #         bob = 'asdf'
-    # #############
-
     tree_out_file_fconsense_sumtrees = '{}/consensus_tree_sumtrees.newick'.format(clade_wkd)
 
     completed_consensus = subprocess.run(
@@ -1150,11 +1144,10 @@ def create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file):
                      'sys.setrecursionlimit(1500)\n'
                      'Save changes and rerun.')
 
-    # The consunsus tree output by sumtree is causing problems because it contains metadata.
+    # The consensus tree output by sumtree is causing problems because it contains metadata.
     # It is important that the tree we use for the unifrac has the branch lengths on it
     # The tree output by consense only has the boostrap values instead of lengths which is not ideal
-    # I am planning on removing the metadatafrom the sumtree consensus tree and seeing if that works in mothur's
-    # Unifrac. This can be part of the rename_tree code
+    # We will remove the metadatafrom the sumtree consensus tree. This can be part of the rename_tree code
     rename_tree_two(name_file, tree_out_file_fconsense_sumtrees)
     return tree_out_file_fconsense_sumtrees
 
@@ -1256,28 +1249,14 @@ def rename_tree_two(name_file, tree_out_file_fconsense):
     name_file_reps = []
     for line in name_file:
         name_file_reps.append(line.split('\t')[0])
+
     seq_re = re.compile('\d+[_ ]id[\d_]+')
     seq_re_meta = re.compile('\[[^\]]*\]')
     sys.stdout.write('\rrenaming tree nodes')
     tree_file = read_defined_file_to_list(tree_out_file_fconsense)
+
     new_tree_file = []
     for line in tree_file:
-        # # ### DEBUG ###
-        # ### Work out which process name is causing the issue
-        #
-        #
-        # print('processing line {}'.format(tree_file.index(line)))
-        # if "1 P" in line or "'4" in line:
-        #     buzz = 'asdf'
-        #
-        #     for i in range(len(line)):
-        #         if i < len(line) -1 :
-        #             if line[i] + line[i + 1] == "'4":
-        #                 if i < 500:
-        #                     bobby = line[:i + 500]
-        #                 else:
-        #                     bobby = line[i-500:i+500]
-        # #############
         new_str = line
         examine = list(seq_re.findall(line))
 
@@ -1410,68 +1389,6 @@ def mothur_unifrac_pipeline_mp(clade_wkd, fseqboot_base, name_file, num_reps, nu
 
     raw_dist_file = read_defined_file_to_list(dist_file_path_dts)
     return raw_dist_file, dist_file_path_dts
-
-
-def phylip_unifrac_pipeline(clade_wkd, fseqboot_base, name_file, num_reps):
-    # ## PHYLIP METHOD ###
-    # give the option to install the new phylip suite from their executables
-    # or simply download the executables form us and install into the ./lib/phylipnew folder
-    is_installed = subprocess.call(['which', 'fdnadist'])
-    if is_installed == 0:
-        fdnadist = local["fdnadist"]
-    else:
-        fdnadist_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fdnadist')
-        if os.path.isfile(fdnadist_path):
-            fdnadist = local[fdnadist_path]
-        else:
-            sys.exit('Cannot find fdnadist in PATH or in local installation at ./lib/phylipnew/fdnadist\n'
-                     'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                     'GitHub page: https://github.com/didillysquat/SymPortal_framework'
-                     '/wiki/SymPortal-setup#6-third-party-dependencies')
-
-    for p in range(num_reps):
-        # run dnadist
-        in_file_dnadist_rep = '{}{}'.format(fseqboot_base, p)
-        out_file_dnadist_rep = '{}out_{}'.format(fseqboot_base, p)
-        print('calculating distances rep {}'.format(p))
-        (fdnadist['-sequence', in_file_dnadist_rep, '-outfile', out_file_dnadist_rep, '-method', 'j'])()
-
-    # give the option to install the new phylip suite from their executables
-    # or simply download the executables form us and install into the ./lib/phylipnew folder
-    is_installed = subprocess.call(['which', 'fneighbor'])
-    if is_installed == 0:
-        fneighbor = local["fneighbor"]
-    else:
-        fneighbor_path = os.path.join(os.path.dirname(__file__), 'lib/phylipnew/fneighbor')
-        if os.path.isfile(fneighbor_path):
-            fneighbor = local[fneighbor_path]
-        else:
-            sys.exit('Cannot find fneighbor in PATH or in local installation at ./lib/phylipnew/fneighbor\n'
-                     'For instructions on installing the phylipnew dependencies please visit the SymPortal'
-                     'GitHub page: https://github.com/didillysquat/SymPortal_framework/wiki/'
-                     'SymPortal-setup#6-third-party-dependencies')
-
-    list_of_tree_paths = []
-    for p in range(num_reps):
-        print('generating trees rep {}'.format(p))
-        fneighbor_in_file_rep = '{}out_{}'.format(fseqboot_base, p)
-        fneighbor_out_file_rep = '{}.fneighbor_{}'.format(fneighbor_in_file_rep, p)
-        out_tree_file = '{}.nj_tree_{}'.format(fneighbor_in_file_rep, p)
-        (fneighbor[
-            '-datafile', fneighbor_in_file_rep, '-outfile', fneighbor_out_file_rep,
-            '-jumble', 'Y', '-outtreefile', out_tree_file])()
-        list_of_tree_paths.append(out_tree_file)
-
-    tree_out_file_fconsense_sumtrees = create_consesnus_tree(clade_wkd, list_of_tree_paths, name_file)
-
-    perform_unifrac(clade_wkd, tree_out_file_fconsense_sumtrees)
-
-    dist_file_path = '{}/{}'.format(clade_wkd,
-                                    tree_out_file_fconsense_sumtrees.split('/')[-1]) + '1.weighted.phylip.dist'
-
-    raw_dist_file = read_defined_file_to_list(dist_file_path)
-
-    return raw_dist_file
 
 
 def phylip_unifrac_pipeline_mp(clade_wkd, fseqboot_base, name_file, num_reps, num_proc):
