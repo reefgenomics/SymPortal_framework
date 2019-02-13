@@ -10,7 +10,7 @@ import json
 from collections import Counter
 from django import db
 from multiprocessing import Queue, Manager, Process
-from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list
+from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory
 from datetime import datetime
 from distance import BrayCurtisDistPCoACreator, UnifracDistPCoACreator
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
@@ -808,18 +808,19 @@ class DataLoading:
                            stderr=subprocess.PIPE)
 
     def _copy_fastq_files_from_input_dir_to_temp_wkd(self):
-        file = os.listdir(self.user_input_path)[0]
-        os.chdir('{}'.format(self.user_input_path))
-        # * asterix are only expanded in the shell and so don't work through subprocess
-        # need to use the glob library instead
-        # https://stackoverflow.com/questions/13875978/python-subprocess-popen-why-does-ls-txt-not-work
-        # files could be compressed (fastq.gz) or uncompressed (fastq). Either way, they should contain fastq.
-        if 'fastq' in file:
-            subprocess.run(['cp'] + glob.glob('*.fastq*') + [self.temp_working_directory], stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE)
-        elif 'fq' in file:
-            subprocess.run(['cp'] + glob.glob('*.fq*') + [self.temp_working_directory], stdout=subprocess.PIPE,
-                           stderr=subprocess.PIPE)
+        """Need to take into account that there may be other non fastq files in the dir. Also need to take into account
+        that they could be .fq files rather than fastq. also need to take into account that it could be fastq.gz and
+        fq.gz rather than fastq and fq."""
+        list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
+        for file_path_outer in list_of_files_in_user_input_dir:
+            if 'fastq' in file_path_outer:
+                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if 'fastq' in file_path]:
+                    # do the copy for each file if fastq is in the file
+                    shutil.copyfile(file_path_inner, self.temp_working_directory)
+            elif 'fq' in file_path_outer:
+                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if 'fq' in file_path]:
+                    # do the copy for each file if fastq is in the file
+                    shutil.copyfile(file_path_inner, self.temp_working_directory)
 
     def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):
