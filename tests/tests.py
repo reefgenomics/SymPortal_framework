@@ -8,6 +8,44 @@ from pathlib import Path
 import shutil
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from dbApp.models import DataAnalysis, DataSet
+import sp_config
+import argparse
+
+
+class SymPortalTester:
+    def __init__(self):
+        self.symportal_testing_root_dir = os.path.abspath(os.path.dirname(__file__))
+        self.system_type = sp_config.system_type
+        self.user_name = sp_config.user_name
+        self.user_email = sp_config.user_email
+        self.data_set_object = None
+        self.data_analysis_object = None
+        self.argument_parser = self._setup_argument_parser()
+        self.list_of_args_for_arg_parser = None
+        self.args = None
+        self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data')
+        self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input.csv')
+        self.completed_data_loading_objects = None
+
+    def _setup_argument_parser(self):
+        self.argument_parser = argparse.ArgumentParser(
+            description='Intragenomic analysis of the ITS2 region of the nrDNA',
+            epilog='For support email: symportal@gmail.com')
+
+        group = self.argument_parser.add_mutually_exclusive_group(required=True)
+
+        main.define_mutually_exclusive_args(group)
+        main.define_additional_args(group, self.argument_parser)
+        return self.argument_parser
+
+    def test_data_loading(self):
+        self.args = self.argument_parser.parse_args(
+            ['--load', self.test_data_dir_path, '--name', 'testing', '--num_proc', 6, '--data_sheet',
+             self.data_sheet_file_path])
+
+        self.completed_data_loading_objects = main.perform_data_loading(self.args)
+
+
 
 def test_data_loading_without_command_line(
         test_data_directory, data_sheet_path, num_proc, debug_bool, distance_method_arg,
@@ -284,4 +322,5 @@ def delete_data_analysis_output_object_directories(data_analysis_uid):
 
 
 if __name__ == "__main__":
-    initiate_test()
+    symportal_tester = SymPortalTester()
+    symportal_tester.test_data_loading()

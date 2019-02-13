@@ -303,9 +303,11 @@ def generate_csv_dataset_uid_string():
     return custom_data_set_ids
 
 
-def perform_data_loading(args):
+def perform_data_loading(args, sub_eval_override=None):
     verify_name_arg_given(args)
     new_data_set, screen_sub_eval_bool = make_new_dataset_object(args)
+    if sub_eval_override is not None:
+        screen_sub_eval_bool = sub_eval_override
     data_sheet_arg, debug_bool, distance_method_arg, \
     input_dir, no_fig_arg, no_ord_arg, num_proc = set_params_for_data_load(args)
     data_loading = DataLoading(
@@ -313,6 +315,7 @@ def perform_data_loading(args):
         screen_sub_evalue=screen_sub_eval_bool, num_proc=num_proc, no_fig=no_fig_arg, no_ord=no_ord_arg,
         distance_method=distance_method_arg)
     data_loading.load_data()
+    return data_loading
 
 
 def verify_name_arg_given(args):
