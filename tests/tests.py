@@ -40,7 +40,7 @@ class SymPortalTester:
 
     def test_data_loading(self):
         self.args = self.argument_parser.parse_args(
-            ['--load', self.test_data_dir_path, '--name', 'testing', '--num_proc', 6, '--data_sheet',
+            ['--load', self.test_data_dir_path, '--name', 'testing', '--num_proc', '6', '--data_sheet',
              self.data_sheet_file_path])
 
         self.completed_data_loading_objects = main.perform_data_loading(self.args)

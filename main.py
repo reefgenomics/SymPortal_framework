@@ -40,6 +40,7 @@ import sys
 import distance
 import argparse
 from data_loading import DataLoading
+import sp_config
 
 def main():
     args = define_args()
@@ -303,11 +304,9 @@ def generate_csv_dataset_uid_string():
     return custom_data_set_ids
 
 
-def perform_data_loading(args, sub_eval_override=None):
+def perform_data_loading(args):
     verify_name_arg_given(args)
     new_data_set, screen_sub_eval_bool = make_new_dataset_object(args)
-    if sub_eval_override is not None:
-        screen_sub_eval_bool = sub_eval_override
     data_sheet_arg, debug_bool, distance_method_arg, \
     input_dir, no_fig_arg, no_ord_arg, num_proc = set_params_for_data_load(args)
     data_loading = DataLoading(
@@ -324,10 +323,14 @@ def verify_name_arg_given(args):
 
 
 def make_new_dataset_object(args):
-    config_dict = get_config_dict()
-    submitting_user, user_email, screen_sub_eval_bool = set_params_for_new_dataset_creation(
-        config_dict)
     dataset_name = args.name
+    submitting_user = sp_config.user_name
+    user_email = sp_config.user_email
+    if sp_config.system_type == 'remote':
+        screen_sub_eval_bool = True
+    else:
+        screen_sub_eval_bool = False
+
     new_data_set = create_new_data_set_object_from_params(dataset_name, submitting_user,
                                                           user_email)
     return new_data_set, screen_sub_eval_bool
