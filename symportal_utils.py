@@ -37,7 +37,7 @@ class BlastnAnalysis:
         return completed_process
 
     def return_blast_output_as_list(self):
-        return read_defined_file_to_list(self.output_format_string)
+        return read_defined_file_to_list(self.output_file_path)
 
     def return_blast_results_dict(self):
         blast_output_file_as_list = self.return_blast_output_as_list()

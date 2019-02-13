@@ -47,7 +47,7 @@ class DataLoading:
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
         # .names and .fasta files of the non_symbiodinium_sequences that were thrown out for that sample
         self.non_symb_and_size_violation_base_dir_path = os.path.join(
-            self.output_directory, 'non_symbiodiniaceae_and_size_violation_sequences'
+            self.output_directory, 'non_sym_and_size_violation_sequences'
         )
         os.makedirs(self.non_symb_and_size_violation_base_dir_path, exist_ok=True)
         # data can be loaded either as paired fastq or fastq.gz files or as a single compressed file containing
@@ -472,17 +472,16 @@ class DataLoading:
     def _create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
         back_up_dir = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade_backup'))
         os.makedirs(back_up_dir, exist_ok=True)
-        src_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB')) + '/symClade.fa'
-        time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        dst_fasta_path = back_up_dir + '/symClade_{}.fa'.format(time_stamp)
-        dst_readme_path = back_up_dir + '/symClade_{}.readme'.format(time_stamp)
+        symclade_current_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade.fa'))
+
+        symclade_backup_path = os.path.join(back_up_dir + f'symClade_{self.date_time_string}.fa')
+        symclade_backup_readme_path = os.path.join(back_up_dir, f'symClade_{self.date_time_string}.readme')
         # then write a copy to it.
-        shutil.copy(src_path, dst_fasta_path)
+        shutil.copy(symclade_current_path, symclade_backup_path)
         # Then write out a very breif readme
         read_me = [
-            'This is a symClade.fa backup created during datasubmission of data_set ID: {}'.format(
-                self.dataset_object.id)]
-        write_list_to_destination(dst_readme_path, read_me)
+            f'This is a symClade.fa backup created during datasubmission of data_set ID: {self.dataset_object.id}']
+        write_list_to_destination(symclade_backup_readme_path, read_me)
 
     def _make_fasta_of_sequences_that_need_taxa_screening(self):
         self._init_potential_sym_tax_screen_handler()
@@ -1457,6 +1456,7 @@ class SymNonSymTaxScreeningWorker:
                 clade_of_sequences_to_write_out,
                 f'seqs_for_med_{self.sample_name}_clade_{clade_of_sequences_to_write_out}.redundant.fasta'
             )
+            os.makedirs(os.path.dirname(sample_clade_fasta_path), exist_ok=True)
             with open(sample_clade_fasta_path, 'w') as f:
                 for sequence_name in sequence_names_of_clade:
                     sequence_counter = 0
@@ -1487,7 +1487,7 @@ class SymNonSymTaxScreeningWorker:
     def _get_set_of_clades_represented_by_no_size_violation_seqs(self):
         clades_of_non_violation_seqs = set(
             [
-                clade_value for sequence_name, clade_value in self.blast_dict.items()
+                clade_value for sequence_name, clade_value in self.sequence_name_to_clade_dict.items()
                 if sequence_name in self.sym_no_size_violation_sequence_name_set_for_sample
             ]
         )
@@ -1666,9 +1666,8 @@ class PerformMEDHandler:
             data_loading_path_to_med_decompoase_executable):
         all_processes = []
 
-        # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         for n in range(self.num_proc):
-            p = Process(target=self._deunique_worker, args=(
+            p = Process(target=self._perform_med_worker, args=(
                 data_loading_debug, data_loading_path_to_med_padding_executable,
                 data_loading_path_to_med_decompoase_executable))
             all_processes.append(p)
@@ -1689,7 +1688,7 @@ class PerformMEDHandler:
         for n in range(self.num_proc):
             self.input_queue_of_redundant_fasta_paths.put('STOP')
 
-    def _deunique_worker(
+    def _perform_med_worker(
             self, data_loading_debug, data_loading_path_to_med_padding_executable,
             data_loading_path_to_med_decompose_executable):
         for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
@@ -1698,7 +1697,7 @@ class PerformMEDHandler:
                 redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable,
                 data_loading_path_to_med_decompose_executable)
 
-            perform_med_worker_instance.execute()
+            perform_med_worker_instance.do_decomposition()
 
 
 class PerformMEDWorker:
@@ -1716,7 +1715,7 @@ class PerformMEDWorker:
         os.makedirs(self.med_output_dir, exist_ok=True)
         self.med_m_value = self._get_med_m_value()
 
-    def execute(self):
+    def do_decomposition(self):
         # TODO check this business about how MED determines the sample name, i.e. whether the underscores matter.
         sys.stdout.write(f'{self.sample_name}: starting MED analysis\n')
         sys.stdout.write(f'{self.sample_name}: padding sequences\n')
@@ -1751,7 +1750,7 @@ class PerformMEDWorker:
         # calculated when working with a modelling project where I was subsampling to 1000 sequences. In this
         # scenario the M was set to 4.
         # We should also take care that M doesn't go below 4, so we should use a max choice for the M
-        num_of_seqs_to_decompose = len(read_defined_file_to_list(self.redundant_fasta_path_padded)) / 2
+        num_of_seqs_to_decompose = len(read_defined_file_to_list(self.redundant_fasta_path_unpadded)) / 2
         return max(4, int(0.004 * num_of_seqs_to_decompose))
 
 
