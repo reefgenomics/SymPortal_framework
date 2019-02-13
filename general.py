@@ -216,18 +216,6 @@ def combine_two_fasta_files(path_one, path_two, path_for_combined):
     one_file_one.extend(one_file_two)
     write_list_to_destination(path_for_combined, one_file_one)
 
-def remove_primer_mismatch_annotations_from_fasta(fasta_path):
-    temp_fasta = []
-    fasta_to_clean = read_defined_file_to_list(fasta_path)
-    for i in range(len(fasta_to_clean) - 1):
-        if fasta_to_clean[i]:
-            if fasta_to_clean[i][0] == '>' and fasta_to_clean[i + 1]:
-                if '|' in fasta_to_clean[i]:
-                    temp_fasta.extend([fasta_to_clean[i].split('|')[0], fasta_to_clean[i + 1]])
-                else:
-                    temp_fasta.extend([fasta_to_clean[i].split('\t')[0], fasta_to_clean[i + 1]])
-    write_list_to_destination(fasta_path, temp_fasta)
-
 def read_defined_file_to_generator(filename):
     with open(filename, mode='r') as reader:
         return (line.rstrip() for line in reader)
