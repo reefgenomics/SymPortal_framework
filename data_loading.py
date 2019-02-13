@@ -24,14 +24,14 @@ class DataLoading:
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
     def __init__(
-            self, data_set_uid, user_input_path, datasheet_path, screen_sub_evalue=False,
-            debug=False, num_proc=1, no_fig=False, no_ord=False, distance_method='braycurtis'):
+            self, data_set_object, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord,
+            distance_method, debug=False):
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
         self.distance_method = distance_method
-        self.dataset_object = DataSet.objects.get(id=data_set_uid)
+        self.dataset_object = data_set_object
         self.user_input_path = user_input_path
         self.output_directory = self._setup_output_directory()
         self.temp_working_directory = self._setup_temp_working_directory()

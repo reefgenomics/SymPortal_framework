@@ -39,6 +39,7 @@ import json
 import sys
 import distance
 import argparse
+from data_loading import DataLoading
 
 def main():
     args = define_args()
@@ -307,10 +308,11 @@ def perform_data_loading(args):
     new_data_set, screen_sub_eval_bool = make_new_dataset_object(args)
     data_sheet_arg, debug_bool, distance_method_arg, \
     input_dir, no_fig_arg, no_ord_arg, num_proc = set_params_for_data_load(args)
-    load_data(
-        data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg, no_ord_arg,
-        num_proc, screen_sub_eval_bool
-    )
+    data_loading = DataLoading(
+        data_set_object=new_data_set, datasheet_path=data_sheet_arg, user_input_path=input_dir,
+        screen_sub_evalue=screen_sub_eval_bool, num_proc=num_proc, no_fig=no_fig_arg, no_ord=no_ord_arg,
+        distance_method=distance_method_arg)
+    data_loading.load_data()
 
 
 def verify_name_arg_given(args):
@@ -326,6 +328,16 @@ def make_new_dataset_object(args):
     new_data_set = create_new_data_set_object_from_params(dataset_name, submitting_user,
                                                           user_email)
     return new_data_set, screen_sub_eval_bool
+
+
+def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user, new_data_set_user_email):
+
+    new_data_set = DataSet(name=name_for_data_set, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
+                           reference_fasta_database_used='symClade.fa',
+                           submitting_user=new_data_set_submitting_user,
+                           submitting_user_email=new_data_set_user_email)
+    new_data_set.save()
+    return new_data_set
 
 
 def set_params_for_data_load(args):
@@ -500,14 +512,7 @@ def load_data(data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_da
     return data_set_uid, output_path_list
 
 
-def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user, new_data_set_user_email):
 
-    new_data_set = DataSet(name=name_for_data_set, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-                           reference_fasta_database_used='symClade.fa',
-                           submitting_user=new_data_set_submitting_user,
-                           submitting_user_email=new_data_set_user_email)
-    new_data_set.save()
-    return new_data_set
 
 
 def vacuum_db():
