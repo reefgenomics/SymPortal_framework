@@ -19,9 +19,9 @@ from general import (
 )
 from distance import generate_within_clade_unifrac_distances_samples, generate_within_clade_braycurtis_distances_samples
 from plotting import generate_stacked_bar_data_loading, plot_between_sample_distance_scatter
-import analysis_classes
 import os
 import pickle
+from symportal_utils import BlastnAnalysis
 
 
 def log_qc_error_and_continue(datasetsampleinstanceinq, samplename, errorreason):
@@ -1143,7 +1143,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3, num_pro
     sub_e_value seq has at least the required_sybiodinium_matches (3 at the moment) before we call it Symbiodinium.
     """
 
-    blastn_analysis_object = analysis_classes.BlastnAnalysis(
+    blastn_analysis_object = BlastnAnalysis(
         input_file_path=f'{wkd}/below_e_cutoff_seqs_{data_set_id}.fasta',
         output_file_path=f'{wkd}/blast_eval.out',
         max_target_seqs=10,
