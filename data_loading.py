@@ -10,7 +10,7 @@ import json
 from collections import Counter
 from django import db
 from multiprocessing import Queue, Manager, Process
-from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory
+from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
 from datetime import datetime
 from distance import BrayCurtisDistPCoACreator, UnifracDistPCoACreator
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
@@ -477,7 +477,7 @@ class DataLoading:
         dst_fasta_path = back_up_dir + '/symClade_{}.fa'.format(time_stamp)
         dst_readme_path = back_up_dir + '/symClade_{}.readme'.format(time_stamp)
         # then write a copy to it.
-        shutil.copyfile(src_path, dst_fasta_path)
+        shutil.copy(src_path, dst_fasta_path)
         # Then write out a very breif readme
         read_me = [
             'This is a symClade.fa backup created during datasubmission of data_set ID: {}'.format(
@@ -576,8 +576,9 @@ class DataLoading:
         # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
         end_index = self._identify_sample_names_without_datasheet()
         new_stability_file = self._generate_new_stability_file_without_datasheet(end_index)
+        self.sample_fastq_pairs = new_stability_file
         # write out the new stability file
-        general.write_list_to_destination(f'{self.temp_working_directory}/stability.files', new_stability_file)
+        write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), self.sample_fastq_pairs)
 
     def _generate_new_stability_file_without_datasheet(self, end_index):
         new_stability_file = []
@@ -692,10 +693,9 @@ class DataLoading:
 
         new_stability_file = self._generate_new_stability_file_with_data_sheet()
 
-        general.write_list_to_destination(
-            r'{0}/stability.files'.format(self.temp_working_directory),
-            new_stability_file
-        )
+        self.sample_fastq_pairs = new_stability_file
+        # write out the new stability file
+        write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), self.sample_fastq_pairs)
 
     def _generate_new_stability_file_with_data_sheet(self):
         new_stability_file = []
@@ -714,7 +714,7 @@ class DataLoading:
         return new_stability_file
 
     def _read_in_mothur_dot_file_creation_output(self):
-        self.sample_fastq_pairs = general.read_defined_file_to_list(f'{self.temp_working_directory}/stability.files')
+        self.sample_fastq_pairs = read_defined_file_to_list(os.path.join(self.temp_working_directory, 'stability.files'))
 
     def _create_fastq_file_to_sample_name_dict(self):
         fastq_file_to_sample_name_dict = {}
@@ -728,8 +728,8 @@ class DataLoading:
     def _generate_and_write_mothur_batch_file_for_dotfile_creation(self):
         self._check_if_fastqs_are_gz_compressed()
         mothur_batch_file_as_list = self._generate_mothur_batch_file_for_dotfile_creation_as_list()
-        self.path_to_latest_mothur_batch_file = f'{self.temp_working_directory}/mothur_batch_file_makeFile'
-        general.write_list_to_destination(self.path_to_latest_mothur_batch_file, mothur_batch_file_as_list)
+        self.path_to_latest_mothur_batch_file = os.path.join(self.temp_working_directory, 'mothur_batch_file_makeFile')
+        write_list_to_destination(self.path_to_latest_mothur_batch_file, mothur_batch_file_as_list)
 
     def _generate_mothur_batch_file_for_dotfile_creation_as_list(self):
         if self.fastqs_are_gz_compressed:
@@ -747,9 +747,9 @@ class DataLoading:
         return mothur_batch_file
 
     def _check_if_fastqs_are_gz_compressed(self):
-        if self.list_of_fastq_files_in_wkd[0].endswith('fastq.gz'):
+        if self.list_of_fastq_files_in_wkd[0].endswith('fastq.gz') or self.list_of_fastq_files_in_wkd[0].endswith('fq.gz'):
             self.fastqs_are_gz_compressed = True
-        elif self.list_of_fastq_files_in_wkd[0].endswith('fastq'):
+        elif self.list_of_fastq_files_in_wkd[0].endswith('fastq') or self.list_of_fastq_files_in_wkd[0].endswith('fq'):
             self.fastqs_are_gz_compressed = False
         else:
             warning_str = f'Unrecognised format of sequecing file: {self.list_of_fastq_files_in_wkd[0]}'
@@ -770,10 +770,10 @@ class DataLoading:
         self.dataset_object.delete()
         sys.exit(warning_str)
 
-    def _get_list_of_fastq_file_names_that_should_be_in_directory(sample_meta_info_df):
+    def _get_list_of_fastq_file_names_that_should_be_in_directory(self):
         list_of_meta_gz_files = []
-        list_of_meta_gz_files.extend(sample_meta_info_df['fastq_fwd_file_name'].values.tolist())
-        list_of_meta_gz_files.extend(sample_meta_info_df['fastq_rev_file_name'].values.tolist())
+        list_of_meta_gz_files.extend(self.sample_meta_info_df['fastq_fwd_file_name'].values.tolist())
+        list_of_meta_gz_files.extend(self.sample_meta_info_df['fastq_rev_file_name'].values.tolist())
         return list_of_meta_gz_files
 
     def _create_sample_meta_info_dataframe_from_datasheet_path(self):
@@ -814,13 +814,15 @@ class DataLoading:
         list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
         for file_path_outer in list_of_files_in_user_input_dir:
             if 'fastq' in file_path_outer:
-                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if 'fastq' in file_path]:
+                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if
+                                        (file_path.endswith('fastq') or file_path.endswith('fastq.gz'))]:
                     # do the copy for each file if fastq is in the file
-                    shutil.copyfile(file_path_inner, self.temp_working_directory)
+                    shutil.copy(file_path_inner, self.temp_working_directory)
             elif 'fq' in file_path_outer:
-                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if 'fq' in file_path]:
+                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if
+                                        (file_path.endswith('fq') or file_path.endswith('fq.gz'))]:
                     # do the copy for each file if fastq is in the file
-                    shutil.copyfile(file_path_inner, self.temp_working_directory)
+                    shutil.copy(file_path_inner, self.temp_working_directory)
 
     def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):
@@ -843,7 +845,7 @@ class DataLoading:
 
     def _setup_sequence_dump_file_path(self):
         seq_dump_file_path = os.path.join(
-            self.symportal_root_directory, f'/dbBackUp/seq_dumps/seq_dump_{self.date_time_string}')
+            self.symportal_root_directory,'dbBackUp', 'seq_dumps' f'seq_dump_{self.date_time_string}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 
@@ -945,7 +947,7 @@ class InitialMothurWorker:
             output_dir=self.cwd,
             fastq_gz_fwd_path=contig_pair.split('\t')[1],
             fastq_gz_rev_path=contig_pair.split('\t')[2],
-            stdout_and_sterr_to_pipe=debug)
+            stdout_and_sterr_to_pipe=(not debug))
         self.debug = debug
 
     def execute(self):

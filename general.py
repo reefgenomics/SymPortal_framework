@@ -147,15 +147,15 @@ def create_seq_name_to_abundance_dict_from_name_file(name_file_list = None, name
         if name_file_list:
             temporary_dictionary = {}
             for i in range(len(name_file_list)):
-                temporary_dictionary[name_file_list.split('\t')[0]] = len(
-                    name_file_list.split('\t')[1].split(','))
+                temporary_dictionary[name_file_list[i].split('\t')[0]] = len(
+                    name_file_list[i].split('\t')[1].split(','))
             return temporary_dictionary
         if name_file_path:
             name_file_as_list = read_defined_file_to_list(name_file_path)
             temporary_dictionary = {}
             for i in range(len(name_file_as_list)):
-                temporary_dictionary[name_file_as_list.split('\t')[0]] = len(
-                    name_file_as_list.split('\t')[1].split(','))
+                temporary_dictionary[name_file_as_list[i].split('\t')[0]] = len(
+                    name_file_as_list[i].split('\t')[1].split(','))
             return temporary_dictionary
 
 def make_new_blast_db(
@@ -173,6 +173,7 @@ def make_new_blast_db(
     return completed_process
 
 def decode_utf8_binary_to_list(bin_to_decode):
+    # TODO check that when debug is on that we can still access the .stdout of the complted_process
     return bin_to_decode.decode('utf-8').split('\n')
 
 def mafft_align_fasta(input_path, output_path, method='auto', mafft_exec_string='mafft', num_proc=1, iterations=1000):
