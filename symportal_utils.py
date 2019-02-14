@@ -678,7 +678,7 @@ class SequenceCollection:
         As such no abundance data will be collected for each of the NucleotideSequence objects."""
         list_of_nucleotide_sequence_objects = []
         fasta_dict = create_dict_from_fasta(fasta_path=fasta_file_path)
-        seq_name_to_abundace_dict = create_seq_name_to_abundance_dict_from_name_file(name_file_path)
+        seq_name_to_abundace_dict = create_seq_name_to_abundance_dict_from_name_file(name_file_path=name_file_path)
         for seq_name, seq_sequence in fasta_dict.items():
             list_of_nucleotide_sequence_objects.append(
                 NucleotideSequence(sequence=seq_sequence, name=seq_name, abundance=seq_name_to_abundace_dict[seq_name])

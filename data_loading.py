@@ -755,7 +755,7 @@ class DataLoading:
             self._exit_and_del_data_set_sample(warning_str)
 
     def _check_all_fastqs_in_datasheet_exist(self):
-        self.list_of_fastq_files_in_wkd = [_ for _ in os.listdir(self.temp_working_directory) if 'fastq' in _]
+        self.list_of_fastq_files_in_wkd = return_list_of_file_names_in_directory(self.temp_working_directory)
         list_of_meta_gz_files = self._get_list_of_fastq_file_names_that_should_be_in_directory()
         self._if_fastq_files_missing_sys_exit(list_of_meta_gz_files)
 
@@ -1698,8 +1698,8 @@ class PerformMEDHandler:
         for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
 
             perform_med_worker_instance = PerformMEDWorker(
-                redundant_fata_path, data_loading_debug, data_loading_path_to_med_padding_executable,
-                data_loading_path_to_med_decompose_executable)
+                redundant_fasta_path=redundant_fata_path, data_loading_debug=data_loading_debug, data_loading_path_to_med_padding_executable=data_loading_path_to_med_padding_executable,
+                data_loading_path_to_med_decompose_executable=data_loading_path_to_med_decompose_executable)
 
             perform_med_worker_instance.do_decomposition()
 
@@ -1770,7 +1770,7 @@ class DataSetSampleSequenceCreatorWorker:
         self.nodes_list_of_nucleotide_sequences = []
         self._populate_nodes_list_of_nucleotide_sequences()
         self.num_med_nodes = len(self.nodes_list_of_nucleotide_sequences)
-        self.node_sequence_name_to_ref_seq_id = {}
+        self.node_sequence_name_to_ref_seq_id = {} # TODO pass in a self of the parent to get rid of these long names
         self.ref_seq_sequence_to_ref_seq_id_dict = data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict
         self.ref_seq_uid_to_ref_seq_name_dict = data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict
         self.node_abundance_df = pd.read_csv(
@@ -1891,7 +1891,7 @@ class DataSetSampleSequenceCreatorWorker:
                 node_names_to_be_consolidated)
 
             self._del_all_but_first_of_non_unique_nodes_from_df_and_node_to_ref_seq_dict(node_names_to_be_consolidated)
-            # TODO also need to update the self.nodes_list_of_nucleotide_sequences
+
             self._update_node_name_abund_in_df_and_nuc_seq_list(node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq)
 
     def _get_list_of_node_names_that_need_consolidating(self, non_unique_ref_seq_uid):
