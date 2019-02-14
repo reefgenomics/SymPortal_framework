@@ -926,7 +926,7 @@ class InitialMothurHandler:
             try:
                 initial_morthur_worker.execute()
             except RuntimeError as e:
-                self.samples_that_caused_errors_in_qc_mp_list.append(e.sample_name)
+                self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
         return
 
 
@@ -1037,7 +1037,7 @@ class InitialMothurWorker:
     def check_for_no_seqs_after_pcr_and_raise_runtime_error(self):
         if len(self.mothur_analysis_object.sequence_collection) == 0:
             self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
-            raise RuntimeError(sample_name=self.sample_name)
+            raise RuntimeError({'sample_name':self.sample_name})
 
     def check_for_error_and_raise_runtime_error(self):
         for stdout_line in decode_utf8_binary_to_list(
@@ -1045,10 +1045,10 @@ class InitialMothurWorker:
         ):
             if '[WARNING]: Blank fasta name, ignoring read.' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='Blank fasta name')
-                raise RuntimeError(sample_name=self.sample_name)
+                raise RuntimeError({'sample_name':self.sample_name})
             if 'ERROR' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='error in inital QC')
-                raise RuntimeError(sample_name=self.sample_name)
+                raise RuntimeError({'sample_name':self.sample_name})
 
     def log_qc_error_and_continue(self, errorreason):
         print('Error in processing sample: {}'.format(self.sample_name))
@@ -1331,9 +1331,9 @@ class SymNonSymTaxScreeningHandler:
             )
 
             try:
-                sym_non_sym_tax_screening_worker_object.execute()
+                sym_non_sym_tax_screening_worker_object.identify_sym_non_sym_seqs()
             except RuntimeError as e:
-                self.samples_that_caused_errors_in_qc_mp_list.append(e.sample_name)
+                self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
 
 
 class SymNonSymTaxScreeningWorker:
@@ -1413,7 +1413,7 @@ class SymNonSymTaxScreeningWorker:
         )
         self.debug = data_loading_debug
 
-    def execute(self):
+    def identify_sym_non_sym_seqs(self):
         """This method completes the pre-med quality control.
         Having gone through the initial mothur qc, and having screened for potential symbiodiniaceae sequences
         (if running on the remote system), this method now identifies
@@ -1458,10 +1458,14 @@ class SymNonSymTaxScreeningWorker:
             )
             os.makedirs(os.path.dirname(sample_clade_fasta_path), exist_ok=True)
             with open(sample_clade_fasta_path, 'w') as f:
+                sequence_counter = 0
                 for sequence_name in sequence_names_of_clade:
-                    sequence_counter = 0
+                    # NB that MED will use the last '_' character as the separator for infering what the sample
+                    # name is. As such we either need to make sure that '_' are not found after the '_' that
+                    # separates the sample name from the rest of the sequence name, or we need to use another character
+                    # for doing the sample name inference. This can be provided to med using the -t argument.
                     for i in range(len(self.name_dict[sequence_name].split('\t')[1].split(','))):
-                        f.write(f'>{self.sample_name}_{sequence_name}_{sequence_counter}\n')
+                        f.write(f'>{self.sample_name}_{sequence_counter}\n')
                         f.write(f'{self.fasta_dict[sequence_name]}\n')
                         sequence_counter += 1
 
@@ -1584,7 +1588,7 @@ class SymNonSymTaxScreeningWorker:
         self.dataset_object.error_in_processing = True
         self.dataset_object.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
         self.dataset_object.save()
-        raise RuntimeError(sample_name=self.sample_name)
+        raise RuntimeError({'sample_name':self.sample_name})
 
     def _identify_and_write_non_sym_seqs_in_sample(self):
         self._add_seqs_with_no_blast_match_to_non_sym_list()
@@ -1754,15 +1758,15 @@ class PerformMEDWorker:
         return max(4, int(0.004 * num_of_seqs_to_decompose))
 
 
-class DataSetSampleCreatorWorker:
+class DataSetSampleSequenceCreatorWorker:
     """This class will be responsible for handling a set of med outputs. Objects will be things like the directory,
     the count table, number of samples, number of nodes, these sorts of things."""
     def __init__(self, med_output_directory,
                  data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict,
                  data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict, data_loading_dataset_obj):
         self.output_directory = med_output_directory
-        self.sample_name = self.output_directory.split('/')[-4]
-        self.clade = self.output_directory.split('/')[-3]
+        self.sample_name = self.output_directory.split('/')[-3]
+        self.clade = self.output_directory.split('/')[-2]
         self.nodes_list_of_nucleotide_sequences = []
         self._populate_nodes_list_of_nucleotide_sequences()
         self.num_med_nodes = len(self.nodes_list_of_nucleotide_sequences)
@@ -1770,7 +1774,7 @@ class DataSetSampleCreatorWorker:
         self.ref_seq_sequence_to_ref_seq_id_dict = data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict
         self.ref_seq_uid_to_ref_seq_name_dict = data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict
         self.node_abundance_df = pd.read_csv(
-            os.path.join(self.output_directory, 'MATRIX-COUNT.txt'), delimiter='\t', header=0)
+            os.path.join(self.output_directory, 'MATRIX-COUNT.txt'), delimiter='\t', header=0, index_col=0)
         self.total_num_sequences = sum(self.node_abundance_df.iloc[0])
         self.dataset_sample_object = DataSetSample.objects.get(
             data_submission_from=data_loading_dataset_obj, name=self.sample_name)
@@ -1781,7 +1785,7 @@ class DataSetSampleCreatorWorker:
         try:
             node_file_as_list = read_defined_file_to_list(node_file_path)
         except FileNotFoundError:
-            raise RuntimeError(med_output_directory=self.output_directory)
+            raise RuntimeError({'med_output_directory':self.output_directory})
 
         for i in range(0, len(node_file_as_list), 2):
             node_seq_name = node_file_as_list[i].split('|')[0][1:]
@@ -1790,7 +1794,7 @@ class DataSetSampleCreatorWorker:
             self.nodes_list_of_nucleotide_sequences.append(
                 NucleotideSequence(name=node_seq_name, abundance=node_seq_abundance, sequence=node_seq_sequence))
 
-    def execute(self):
+    def make_data_set_sample_sequences(self):
         for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
             if not self._assign_node_sequence_to_existing_ref_seq(node_nucleotide_sequence_object):
                 self._assign_node_sequence_to_new_ref_seq(node_nucleotide_sequence_object)
@@ -1887,8 +1891,8 @@ class DataSetSampleCreatorWorker:
                 node_names_to_be_consolidated)
 
             self._del_all_but_first_of_non_unique_nodes_from_df_and_node_to_ref_seq_dict(node_names_to_be_consolidated)
-
-            self._update_node_name_abund_in_df(node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq)
+            # TODO also need to update the self.nodes_list_of_nucleotide_sequences
+            self._update_node_name_abund_in_df_and_nuc_seq_list(node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq)
 
     def _get_list_of_node_names_that_need_consolidating(self, non_unique_ref_seq_uid):
         node_names_to_be_consolidated = [
@@ -1896,9 +1900,20 @@ class DataSetSampleCreatorWorker:
             self.node_sequence_name_to_ref_seq_id[node_name] == non_unique_ref_seq_uid]
         return node_names_to_be_consolidated
 
-    def _update_node_name_abund_in_df(self, node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq):
+    def _update_node_name_abund_in_df_and_nuc_seq_list(self, node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq):
         df_index_name = self.node_abundance_df.index.values.tolist()[0]
         self.node_abundance_df.at[df_index_name, node_names_to_be_consolidated[0]] = summed_abund_of_nodes_of_ref_seq
+
+        # del consolidated seqs and update abundances from the self.nodes_list_of_nucleotide_sequences
+        new_list_of_node_nucleotide_sequences = []
+        for i in range(len(self.nodes_list_of_nucleotide_sequences)):
+            # update abundance of the representative sequences
+            if self.nodes_list_of_nucleotide_sequences[i].name == node_names_to_be_consolidated[0]:
+                self.nodes_list_of_nucleotide_sequences[i].abundance = summed_abund_of_nodes_of_ref_seq
+            # add nodes not being consolidated to new node nuc seq list
+            if self.nodes_list_of_nucleotide_sequences[i].name not in node_names_to_be_consolidated[1:]:
+                new_list_of_node_nucleotide_sequences.append(self.nodes_list_of_nucleotide_sequences[i])
+        self.nodes_list_of_nucleotide_sequences = new_list_of_node_nucleotide_sequences
 
     def _del_all_but_first_of_non_unique_nodes_from_df_and_node_to_ref_seq_dict(self, node_names_to_be_consolidated):
         # now delete columns for all but the first of the node_names_to_be_consolidated from df
@@ -1969,7 +1984,7 @@ class DataSetSampleCreatorWorker:
 
     def _print_succesful_association_details_to_stdout(
             self, node_nucleotide_sequence_object, name_of_reference_sequence):
-        sys.stdout.write(f'\r{self.sample_name} clade {self.clade}:\n'
+        sys.stdout.write(f'\r{self.sample_name} clade {self.clade}: '
                          f'Assigning MED node {node_nucleotide_sequence_object.name} '
                          f'to existing reference sequence {name_of_reference_sequence}')
 
@@ -1982,7 +1997,7 @@ class DataSetSampleCreatorWorker:
         self.node_sequence_name_to_ref_seq_id[node_nucleotide_sequence_object.name] = new_ref_seq.id
         self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
 
-        sys.stdout.write(f'\r{self.sample_name} clade {self.clade}:\n'
+        sys.stdout.write(f'\r{self.sample_name} clade {self.clade}: '
                          f'Assigning MED node {node_nucleotide_sequence_object.name} '
                          f'to new reference sequence {new_ref_seq.name}')
 
@@ -2001,7 +2016,7 @@ class DataSetSampleCreatorHandler:
             self, data_loading_list_of_med_output_directories, data_loading_debug, data_loading_dataset_object):
         for med_output_directory in data_loading_list_of_med_output_directories:
             try:
-                med_output_object = DataSetSampleCreatorWorker(
+                data_set_sample_sequence_creator_worker = DataSetSampleSequenceCreatorWorker(
                     med_output_directory=med_output_directory,
                     data_loading_dataset_obj=data_loading_dataset_object,
                     data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict=
@@ -2009,12 +2024,14 @@ class DataSetSampleCreatorHandler:
                     data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict=
                     self.ref_seq_uid_to_ref_seq_name_dict)
             except RuntimeError as e:
-                print(f'{e.med_output_directory}: File not found during DataSetSample creation.')
+                non_existant_med_output_dir = e.args[0]['med_output_directory']
+                print(f'{non_existant_med_output_dir}: File not found during DataSetSample creation.')
                 continue
             if data_loading_debug:
-                if med_output_object.num_med_nodes < 10:
+                if data_set_sample_sequence_creator_worker.num_med_nodes < 10:
                     print(
                         f'{med_output_directory}: '
-                        f'WARNING node file contains only {med_output_object.num_med_nodes} sequences.')
+                        f'WARNING node file contains only {data_set_sample_sequence_creator_worker.num_med_nodes} sequences.')
             sys.stdout.write(
-                f'\n\nPopulating {med_output_object.sample_name} with clade {med_output_object.clade} sequences\n')
+                f'\n\nPopulating {data_set_sample_sequence_creator_worker.sample_name} with clade {data_set_sample_sequence_creator_worker.clade} sequences\n')
+            data_set_sample_sequence_creator_worker.make_data_set_sample_sequences()
