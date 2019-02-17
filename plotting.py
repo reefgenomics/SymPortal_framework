@@ -999,8 +999,8 @@ class SubPlotter:
         self.subplot_axes.figure.canvas.draw()
 
     def _make_patches_collection(self):
-        patches_collection = PatchCollection(self.patches_list, cmap=self.listed_colour_map)
-        patches_collection.set_array(np.arange(len(self.patches_list)))
+        self.patches_collection = PatchCollection(self.patches_list, cmap=self.listed_colour_map)
+        self.patches_collection.set_array(np.arange(len(self.patches_list)))
 
     def _make_listed_colour_map(self):
         self.listed_colour_map = ListedColormap(self.colour_list)
@@ -1174,10 +1174,15 @@ class SeqStackedBarPlotter:
             ])
 
     def _write_out_plot(self):
-        sys.stdout.write('\nsaving as .svg\n')
-        plt.savefig('{}_seq_abundance_stacked_bar_plot.svg'.format(self.fig_output_base))
-        sys.stdout.write('\nsaving as .png\n')
-        plt.savefig('{}_seq_abundance_stacked_bar_plot.png'.format(self.fig_output_base))
+        print('Seq stacked bar plots:')
+
+        svg_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.svg'
+        sys.stdout.write(f'{svg_path}\n')
+        plt.savefig(svg_path)
+
+        png_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.png'
+        sys.stdout.write(f'{png_path}\n')
+        plt.savefig(png_path)
 
     def _plot_legend(self):
         legend_plotter = LegendPlotter(parent_plotter=self)
@@ -1319,7 +1324,7 @@ class SeqStackedBarPlotter:
 
         self._populate_smpl_id_to_smp_name_dict(sp_output_df)
 
-        self._drop_non_seq_abund_cols_and_set_df_types(sp_output_df)
+        sp_output_df = self._drop_non_seq_abund_cols_and_set_df_types(sp_output_df)
 
         return sp_output_df
 
@@ -1337,6 +1342,7 @@ class SeqStackedBarPlotter:
                      ], inplace=True)
         sp_output_df = sp_output_df.astype('float')
         sp_output_df.index = sp_output_df.index.astype('int')
+        return sp_output_df
 
     def _populate_smpl_id_to_smp_name_dict(self, sp_output_df):
         self.smpl_id_to_smp_name_dict = {

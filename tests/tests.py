@@ -10,7 +10,7 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from dbApp.models import DataAnalysis, DataSet
 import sp_config
 import argparse
-
+from output import SequenceCountTableCreator
 
 class SymPortalTester:
     def __init__(self):
@@ -26,6 +26,7 @@ class SymPortalTester:
         self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data')
         self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input.csv')
         self.completed_data_loading_objects = None
+        self.num_proc = 6
 
     def _setup_argument_parser(self):
         self.argument_parser = argparse.ArgumentParser(

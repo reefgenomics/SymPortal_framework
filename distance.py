@@ -12,11 +12,12 @@ import subprocess
 import re
 import numpy as np
 from skbio.stats.ordination import pcoa
+import general
 from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta_first_line_removal
 import itertools
 from scipy.spatial.distance import braycurtis
 from symportal_utils import MothurAnalysis, SequenceCollection
-import datetime
+from datetime import datetime
 
 
 # #### DISTANCE MATRICES #####
@@ -1569,7 +1570,25 @@ class UnifracDistanceCreatorHandlerOne:
 
         self._once_complete_wait_for_processes_to_complete(all_processes)
 
+        self._convert_fasta_and_name_dict_to_lists_for_writing()
+
         self._write_out_master_fasta_names_and_group_files()
+
+    def _convert_fasta_and_name_dict_to_lists_for_writing(self):
+        # convert names_dict to names file as list
+        self._name_dict_to_file_as_list()
+
+        # convert fasta dict to list
+        self._fasta_dict_to_file_as_list()
+
+    def _name_dict_to_file_as_list(self):
+        for k, v in self.master_name_dict.items():
+            name_list_string = ','.join(v)
+            self.master_names_file_as_list.append(f'{k}\t{name_list_string}')
+
+    def _fasta_dict_to_file_as_list(self):
+        for k, v in self.master_fasta_dict.items():
+            self.master_fasta_file_as_list.extend([f'>{k}', v])
 
     def _write_out_master_fasta_names_and_group_files(self):
         write_list_to_destination(self.master_fasta_file_path, self.master_fasta_file_as_list)
@@ -1587,10 +1606,11 @@ class UnifracDistanceCreatorHandlerOne:
         represnt the master names, fasta and group files that we are creating to calculate the UniFrac"""
         for seq_collection_object in iter(self.output_unifrac_seq_abund_mp_collection_queue.get, 'STOP'):
             try:
-                self._check_if_all_seq_collection_objects_have_been_processed(seq_collection_object)
-
+                should_continue = self._check_if_all_seq_collection_objects_have_been_processed(seq_collection_object)
+                if should_continue:
+                    continue
                 sys.stdout.write(
-                    f'\rAdding {seq_collection_object.clade_collection.name} to master fasta and name files')
+                    f'\rAdding {str(seq_collection_object.clade_collection)} to master fasta and name files')
 
                 self._update_master_group_list(seq_collection_object)
 
@@ -1626,6 +1646,8 @@ class UnifracDistanceCreatorHandlerOne:
             self.stop_count += 1
             if self.stop_count == self.parent_unifrac_dist_creator.num_proc:
                 raise SequenceCollectionComplete
+            return True
+        return False
 
     def _start_sequence_collection_running(self):
         all_processes = []
@@ -1639,10 +1661,10 @@ class UnifracDistanceCreatorHandlerOne:
 
     def _populate_input_queue(self):
         for cc in self.clade_collections_of_clade:
-            self.output_unifrac_seq_abund_mp_collection_queue.put(cc)
+            self.input_clade_collection_queue.put(cc)
 
         for n in range(self.parent_unifrac_dist_creator.num_proc):
-            self.output_unifrac_seq_abund_mp_collection_queue.put('STOP')
+            self.input_clade_collection_queue.put('STOP')
 
     def _raise_runtime_error_if_not_enough_clade_collections(self):
         if len(self.clade_collections_of_clade) < 2:
@@ -1725,6 +1747,7 @@ class UnifracSubcladeHandler:
         self.parent_unifrac_creator = parent_unifrac_creator
         self.fseqbootbase = fseqbootbase
         self.input_queue_of_rep_numbers = Queue()
+        self._populate_input_queue()
         self.output_queue_of_paths_to_trees = Queue()
         self.output_dir = os.path.join(self.parent_unifrac_creator.output_dir, self.clade)
         self.list_of_output_tree_paths = None
@@ -1736,7 +1759,7 @@ class UnifracSubcladeHandler:
         mothur_analysis = MothurAnalysis.init_for_weighted_unifrac(
             tree_path=self.consensus_tree_file_path,
             group_file_path=self.parent_unifrac_creator.clade_master_group_file_path,
-            name_file_path=self.parent_unifrac_creator.clade_master_name_file_path)
+            name_file_path=self.parent_unifrac_creator.clade_master_names_file_path, name=self.clade)
         mothur_analysis.execute_weighted_unifrac()
         self.unifrac_dist_file_path = mothur_analysis.dist_file_path
 
@@ -2046,10 +2069,6 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
         self.data_sets_to_output = DataSet.objects.filter(id__in=[int(a) for a in str(data_set_string).split(',')])
         self.num_proc = num_processors
         self.method = method
-        if date_time_string:
-            self.date_time_string = date_time_string
-        else:
-            self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.bootstrap_value = bootstrap_value
 
         self.clade_collections_from_data_sets = CladeCollection.objects.filter(
@@ -2073,13 +2092,14 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
         self.clade_tree_path_list = None
 
     def compute_unifrac_dists_and_pcoa_coords(self):
-        for clade_in_question in self.clade_collections_from_data_sets:
+        for clade_in_question in self.clades_of_clade_collections_list:
+
             self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
 
             try:
                 self._create_and_write_out_master_fasta_names_and_group_files(clade_in_question)
             except RuntimeWarning as w:
-                if w.message == 'insufficient clade collections':
+                if str(w) == 'insufficient clade collections':
                     continue
 
             self._align_master_fasta()
@@ -2099,6 +2119,13 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
             self._clean_up_temp_files()
 
             self._append_output_files_to_output_list()
+
+        self._write_output_paths_to_stdout()
+
+    def _write_output_paths_to_stdout(self):
+        print('UniFrac and PCoA computation complete. Ouput files:')
+        for output_path in self.output_file_paths:
+            print(output_path)
 
     def _append_output_files_to_output_list(self):
         self.output_file_paths.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
@@ -2143,7 +2170,7 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
     def _align_master_fasta(self):
         self.clade_master_fasta_file_aligned_path = self.clade_master_fasta_file_unaligned_path.replace(
             '.fasta', '.aligned.fasta')
-        mafft_align_fasta(
+        general.mafft_align_fasta(
             input_path=self.clade_master_fasta_file_unaligned_path,
             output_path=self.clade_master_fasta_file_aligned_path,
             num_proc=self.num_proc)
@@ -2155,8 +2182,8 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
                 clade_in_question=clade_in_question,
                 parent_unifrac_dist_creator=self)
         except RuntimeWarning as w:
-            if w.message == 'insufficient clade collections':
-                raise RuntimeWarning({'message': 'insufficient clade collections'})
+            if str(w) == 'insufficient clade collections':
+                raise RuntimeWarning('insufficient clade collections')
             else:
                 raise RuntimeError(f'Unknown error in {UnifracDistanceCreatorHandlerOne.__name__} init')
         unifrac_dist_creator_handler_one.execute_unifrac_distance_creator_worker_one()

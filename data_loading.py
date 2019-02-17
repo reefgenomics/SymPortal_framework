@@ -130,6 +130,8 @@ class DataLoading:
 
         self._delete_temp_working_directory_and_log_files()
 
+        self._output_data_set_info()
+
         self._output_seqs_count_table()
 
         self._output_seqs_stacked_bar_plot()
@@ -137,9 +139,9 @@ class DataLoading:
         if not self.no_ord:
             print('Calculating between sample pairwise distances')
             if self.distance_method == 'unifrac':
-                self._do_unifrac_dist_pcoa_creations()
+                self._do_unifrac_dist_pcoa()
             elif self.distance_method == 'braycurtis':
-                self._do_braycurtis_dist_pcoa_creation()
+                self._do_braycurtis_dist_pcoa()
 
             # distance plotting
             if not self.no_fig:
@@ -154,10 +156,13 @@ class DataLoading:
                             dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
                             self.output_path_list.extend(dist_scatter_plotter_samples.output_path_list)
 
+    def _output_data_set_info(self):
+        print(f'\n\nData loading complete. DataSet UID: {self.dataset_object.id}')
+
     def _this_is_pcoa_path(self, output_path):
         return 'PCoA_coords' in output_path
 
-    def _do_braycurtis_dist_pcoa_creation(self):
+    def _do_braycurtis_dist_pcoa(self):
         bray_curtis_dist_pcoa_creator = BrayCurtisDistPCoACreator(
             date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
             data_set_string=str(self.dataset_object.id), call_type='submission',
@@ -165,7 +170,7 @@ class DataLoading:
         bray_curtis_dist_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
 
-    def _do_unifrac_dist_pcoa_creations(self):
+    def _do_unifrac_dist_pcoa(self):
         unifrac_dict_pcoa_creator = UnifracDistPCoACreator(
             call_type='submission', date_time_string=self.date_time_string, output_dir=self.output_directory,
             data_set_string=str(self.dataset_object.id), method='mothur', num_processors=self.num_proc,
@@ -176,12 +181,12 @@ class DataLoading:
     def _output_seqs_stacked_bar_plot(self):
         if not self.no_fig:
             if self.num_of_samples > 1000:
-                print(f'Too many samples ({num_samples}) to generate plots')
+                print(f'Too many samples ({self.num_samples}) to generate plots')
             else:
                 sys.stdout.write('\nGenerating sequence count table figures\n')
 
                 seq_stacked_bar_plotter = SeqStackedBarPlotter(output_directory=self.output_directory,
-                                                               seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path)
+                                                               seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path, time_date_str=self.date_time_string)
                 seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(seq_stacked_bar_plotter.output_path_list)
                 # TODO don't for get to add the output path for the non-sym and size violation output
@@ -195,9 +200,9 @@ class DataLoading:
         sequence_count_table_creator = SequenceCountTableCreator(
             call_type='submission',
             output_dir=self.output_directory,
-            data_set_uids_to_output_as_comma_sep_string=set(self.dataset_object.id),
+            data_set_uids_to_output_as_comma_sep_string=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
-        sequence_count_table_creator.execute_output()
+        sequence_count_table_creator.make_output_tables()
         # TODO don't for get to write out where the non-sym and size violation seqs were output
         self.output_directory.extend(sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(sequence_count_table_creator)
@@ -844,7 +849,7 @@ class DataLoading:
 
     def _setup_sequence_dump_file_path(self):
         seq_dump_file_path = os.path.join(
-            self.symportal_root_directory,'dbBackUp', 'seq_dumps' f'seq_dump_{self.date_time_string}')
+            self.symportal_root_directory,'dbBackUp', 'seq_dumps', f'seq_dump_{self.date_time_string}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 
