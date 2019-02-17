@@ -18,6 +18,7 @@ from output import div_output_pre_analysis_new_meta_and_new_dss_structure
 from general import *
 from distance import generate_within_clade_unifrac_distances_samples, generate_within_clade_braycurtis_distances_samples
 from plotting import generate_stacked_bar_data_submission, plot_between_sample_distance_scatter
+import ntpath
 
 
 def log_qc_error_and_continue(datasetsampleinstanceinq, samplename, errorreason):
@@ -1953,8 +1954,10 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
     # else, we have to infer what the samples names are
     # we do this by taking off the part of the fastq name that samples have in common
     end_index, list_of_names, fastq_or_fastq_gz = identify_sample_names_inferred(wkd)
-    # Make a batch file for mothur, set input and output dir and create a .file file
-    sample_fastq_pairs = generate_mothur_dotfile_file(wkd, fastq_or_fastq_gz)
+
+    # NB the mothur make.file method was causing a problem and was not able to correctly infer the
+    # fastq file pairs in some instances. As such we are now making the .satability file by hand
+    sample_fastq_pairs = make_dot_stability_file_inferred(list_of_names, wkd)
 
     # if we have a data_sheet_path then we will use the sample names that the user has associated to each
     # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
@@ -1984,6 +1987,21 @@ def generate_stability_file_and_data_set_sample_objects_inferred(clade_list, dat
     return list_of_sample_objects
 
 
+def make_dot_stability_file_inferred(list_of_names, wkd):
+    # inferred
+    sample_fastq_pairs = []
+    for sample_name in list_of_names:
+        temp_list = []
+        temp_list.append(sample_name)
+        for file_path in return_list_of_file_paths_in_directory(wkd):
+            if sample_name in ntpath.basename(file_path):
+                temp_list.append(file_path)
+        assert (len(temp_list) == 3)
+        sample_fastq_pairs.append('\t'.join(temp_list))
+    write_list_to_destination(r'{0}/stability.files'.format(wkd), sample_fastq_pairs)
+    return sample_fastq_pairs
+
+
 def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, data_submission_in_q, data_sheet_path,
                                                                    wkd):
     # Create a pandas df from the data_sheet if it was provided
@@ -2001,8 +2019,11 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
     # if we are given a data_sheet then use these sample names given as the data_set_sample object names
     fastq_file_to_sample_name_dict, list_of_names, fastq_or_fastq_gz = identify_sample_names_data_sheet(
         sample_meta_df, wkd)
-    # Make a batch file for mothur, set input and output dir and create a .file file
-    sample_fastq_pairs = generate_mothur_dotfile_file(wkd, fastq_or_fastq_gz)
+
+    # NB the mothur make.file method was causing a problem and was not able to correctly infer the
+    # fastq file pairs in some instances. As such we are now making the .satability file by hand
+    sample_fastq_pairs = make_dot_stability_file_datasheet(fastq_file_to_sample_name_dict, list_of_names, wkd)
+
 
     # if we have a data_sheet_path then we will use the sample names that the user has associated to each
     # of the fastq pairs. We will use the fastq_file_to_sample_name_dict created above to do this
@@ -2042,6 +2063,21 @@ def generate_stability_file_and_data_set_sample_objects_data_sheet(clade_list, d
                             )
         list_of_sample_objects.append(dss)
     return list_of_sample_objects
+
+
+def make_dot_stability_file_datasheet(fastq_file_to_sample_name_dict, list_of_names, wkd):
+    # from data_sheet
+    sample_fastq_pairs = []
+    for sample_name in list_of_names:
+        temp_list = []
+        temp_list.append(sample_name)
+        for k, v in fastq_file_to_sample_name_dict.items():
+            if v == sample_name:
+                temp_list.append(v)
+        assert (len(temp_list) == 3)
+        sample_fastq_pairs.append('\t'.join(temp_list))
+    write_list_to_destination(r'{0}/stability.files'.format(wkd), sample_fastq_pairs)
+    return sample_fastq_pairs
 
 
 def generate_new_stability_file_inferred(end_index, sample_fastq_pairs):
