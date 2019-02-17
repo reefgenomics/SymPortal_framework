@@ -2073,7 +2073,7 @@ def make_dot_stability_file_datasheet(fastq_file_to_sample_name_dict, list_of_na
         temp_list.append(sample_name)
         for k, v in fastq_file_to_sample_name_dict.items():
             if v == sample_name:
-                temp_list.append(v)
+                temp_list.append(k)
         assert (len(temp_list) == 3)
         sample_fastq_pairs.append('\t'.join(temp_list))
     write_list_to_destination(r'{0}/stability.files'.format(wkd), sample_fastq_pairs)
