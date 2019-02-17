@@ -29,13 +29,8 @@ def write_list_to_destination(destination, list_to_write):
         pass
 
     with open(destination, mode='w') as writer:
-        i = 0
-        while i < len(list_to_write):
-            if i != len(list_to_write) - 1:
-                writer.write(list_to_write[i] + '\n')
-            elif i == len(list_to_write) - 1:
-                writer.write(list_to_write[i])
-            i += 1
+        for line in list_to_write:
+            writer.write(f'{line}\n')
 
 
 def read_defined_file_to_list(filename):

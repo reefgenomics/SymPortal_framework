@@ -1987,6 +1987,7 @@ class GenericDistanceCreator:
         self.clade_pcoa_coord_file_path = None
         # path to the .dist file that holds the unifrac or braycurtis derived sample clade-separated paired distances
         self.clade_dist_file_path = None
+        self.clade_distance_file_as_list = None
 
     def _compute_pcoa_coords(self):
         # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
@@ -1997,16 +1998,18 @@ class GenericDistanceCreator:
 
         temp_two_d_list = []
         sample_names_from_dist_matrix = []
+        sample_ids_from_dist_matrix = []
         for line in raw_dist_file[1:]:
             temp_elements = line.split('\t')
             sample_names_from_dist_matrix.append(temp_elements[0].replace(' ', ''))
-            temp_two_d_list.append([float(a) for a in temp_elements[1:]])
+            sample_ids_from_dist_matrix.append(int(temp_elements[1]))
+            temp_two_d_list.append([float(a) for a in temp_elements[2:]])
 
-        uni_frac_dist_as_np_array = np.array(temp_two_d_list)
+        dist_as_np_array = np.array(temp_two_d_list)
 
         sys.stdout.write('\rcalculating PCoA coordinates')
 
-        pcoa_output = pcoa(uni_frac_dist_as_np_array)
+        pcoa_output = pcoa(dist_as_np_array)
 
         # rename the pcoa dataframe index as the sample names
         pcoa_output.samples['sample'] = sample_names_from_dist_matrix
@@ -2016,7 +2019,29 @@ class GenericDistanceCreator:
         renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
             pcoa_output.proportion_explained.rename('proportion_explained'))
 
+        sample_ids_from_dist_matrix.append(0)
+        renamed_pcoa_dataframe.insert(loc=0, column='sample_uid', value=sample_ids_from_dist_matrix)
+        renamed_pcoa_dataframe['sample_uid'] = renamed_pcoa_dataframe['sample_uid'].astype('int')
+
         renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
+
+    def _add_sample_uids_to_dist_file_and_write(self):
+        # for the output version lets also append the sample name to each line so that we can see which sample it is
+        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
+        dist_with_sample_name = [self.clade_distance_file_as_list[0]]
+        list_of_cc_ids = [int(line.split('\t')[0]) for line in self.clade_distance_file_as_list[1:]]
+        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
+        dict_of_cc_id_to_sample_name = {cc.id: cc.data_set_sample_from.name for cc in cc_of_outputs}
+        for line in self.clade_distance_file_as_list[1:]:
+            temp_list = []
+            cc_id = int(line.split('\t')[0])
+            sample_name = dict_of_cc_id_to_sample_name[cc_id]
+            temp_list.append(sample_name)
+            temp_list.extend(line.split('\t'))
+            new_line = '\t'.join(temp_list)
+            dist_with_sample_name.append(new_line)
+        self.clade_distance_file_as_list = dist_with_sample_name
+        write_list_to_destination(self.clade_dist_file_path, self.clade_distance_file_as_list)
 
 
 class UnifracDistPCoACreator(GenericDistanceCreator):
@@ -2091,6 +2116,7 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
         # the output list of trees from the mothur portion of this analysis
         self.clade_tree_path_list = None
 
+
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_of_clade_collections_list:
 
@@ -2113,6 +2139,8 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
             self._make_fseqboot_replicate_alignments(clade_in_question)
 
             self._compute_unifrac_distances(clade_in_question)
+
+            self._add_sample_uids_to_dist_file_and_write()
 
             self._compute_pcoa_coords()
 
@@ -2150,6 +2178,8 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
         unifrac_subclade_handler.perform_unifrac()
         self.clade_dist_file_path = unifrac_subclade_handler.unifrac_dist_file_path
         self._append_date_time_string_to_unifrac_dist_path()
+        self.clade_dist_file_as_list = [line.replace(' ', '') for line in
+                                        read_defined_file_to_list(self.clade_dist_file_path)]
 
     def _make_fseqboot_replicate_alignments(self, clade_in_question):
         fseqboot_alignment_generator = FseqbootAlignmentGenerator(clade_in_question=clade_in_question,
@@ -2232,9 +2262,9 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
         self.ccs_of_clade = None
         self.clade_dsss_seq_to_rel_abund_for_ccs_of_clade_dict = {}
         self.clade_within_clade_distances_dict = {}
-        self.clade_distance_file_as_list = None
 
-    def compute_unifrac_dists_and_pcoa_coords(self):
+
+    def compute_braycurtis_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_of_ccs:
             self._init_clade_dirs_and_paths(clade_in_question)
 
@@ -2244,34 +2274,23 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
             self._create_dsss_sequence_to_rel_abund_dict_for_each_cc()
             self._compute_braycurtis_btwn_cc_pairs()
             self._generate_distance_file()
-            self._add_sample_uids_to_dist_file()
+            self._add_sample_uids_to_dist_file_and_write()
             self._write_out_dist_file()
 
             self._compute_pcoa_coords()
             self._append_output_files_to_output_list()
+        self._write_output_paths_to_stdout()
+
+    def _write_output_paths_to_stdout(self):
+        print('BrayCurtis distances and PCoA computation complete. Ouput files:')
+        for output_path in self.output_file_paths:
+            print(output_path)
 
     def _append_output_files_to_output_list(self):
         self.output_file_paths.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
 
     def _write_out_dist_file(self):
         write_list_to_destination(self.clade_dist_file_path, self.clade_distance_file_as_list)
-
-    def _add_sample_uids_to_dist_file(self):
-        # for the output version lets also append the sample name to each line so that we can see which sample it is
-        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
-        dist_with_sample_name = [self.clade_distance_file_as_list[0]]
-        list_of_cc_ids = [int(line.split('\t')[0]) for line in self.clade_distance_file_as_list[1:]]
-        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
-        dict_of_cc_id_to_sample_name = {cc.id: cc.data_set_sample_from.name for cc in cc_of_outputs}
-        for line in self.clade_distance_file_as_list[1:]:
-            temp_list = []
-            cc_id = int(line.split('\t')[0])
-            sample_name = dict_of_cc_id_to_sample_name[cc_id]
-            temp_list.append(sample_name)
-            temp_list.extend(line.split('\t'))
-            new_line = '\t'.join(temp_list)
-            dist_with_sample_name.append(new_line)
-        self.clade_distance_file_as_list = dist_with_sample_name
 
     def _init_clade_dirs_and_paths(self, clade_in_question):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
@@ -2289,7 +2308,7 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
                     temp_clade_col_string.append(0)
                 else:
                     temp_clade_col_string.append(
-                        self.clade_within_clade_distances_dict['{}_{}'.format(clade_col_outer.id, clade_col_inner.id)])
+                        self.clade_within_clade_distances_dict[f'{clade_col_outer.id}_{clade_col_inner.id}'])
             self.clade_distance_file_as_list.append(
                 '\t'.join([str(distance_item) for distance_item in temp_clade_col_string]))
 
@@ -2327,8 +2346,8 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
             distance = braycurtis(seq_abundance_list_one, seq_abundance_list_two)
 
             # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
-            self.clade_within_clade_distances_dict['{}_{}'.format(clade_col_one.id, clade_col_two.id)] = distance
-            self.clade_within_clade_distances_dict['{}_{}'.format(clade_col_two.id, clade_col_one.id)] = distance
+            self.clade_within_clade_distances_dict[f'{clade_col_one.id}_{clade_col_two.id}'] = distance
+            self.clade_within_clade_distances_dict[f'{clade_col_two.id}_{clade_col_one.id}'] = distance
 
     def _create_dsss_sequence_to_rel_abund_dict_for_each_cc(self):
         # Go through each of the clade collections and create a dict

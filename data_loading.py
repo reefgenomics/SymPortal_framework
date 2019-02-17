@@ -167,7 +167,7 @@ class DataLoading:
             date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
             data_set_string=str(self.dataset_object.id), call_type='submission',
             output_dir=self.output_directory)
-        bray_curtis_dist_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
+        bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
 
     def _do_unifrac_dist_pcoa(self):
