@@ -42,28 +42,165 @@ import argparse
 from data_loading import DataLoading
 import sp_config
 
+class SymPortalWorkFlowManager:
+    def __init__(self):
+        self.args = self._define_args()
+        # for data_loading
+        self.data_set_object = None
+        self.screen_sub_eval_bool = None
+
+    def _define_args(self):
+        parser = argparse.ArgumentParser(
+            description='Intragenomic analysis of the ITS2 region of the nrDNA',
+            epilog='For support email: symportal@gmail.com')
+        group = parser.add_mutually_exclusive_group(required=True)
+        self.define_mutually_exclusive_args(group)
+        self.define_additional_args(group, parser)
+        return parser.parse_args()
+
+    def define_additional_args(self, group, parser):
+        parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
+        parser.add_argument('--name', help='A name for your input or analysis', default='noName')
+        parser.add_argument('--description', help='An optional description', default='No description')
+        parser.add_argument('--data_analysis_id', type=int, help='The ID of the data_analysis you wish to output from')
+        group.add_argument(
+            '--vacuum_database', action='store_true',
+            help='Vacuuming the database will free up memory from objects that have been deleted recently')
+        parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
+        parser.add_argument(
+            '--data_sheet',
+            help='An absolute path to the .xlsx file containing the meta-data information for the data_set\'s samples')
+        parser.add_argument('--no_figures', action='store_true', help='Skip figure production')
+        parser.add_argument('--no_ordinations', action='store_true', help='Skip ordination analysis')
+        parser.add_argument('--debug', action='store_true', help='Present additional stdout output', default=False)
+
+        parser.add_argument(
+            '--no_output', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
+
+        parser.add_argument(
+            '--distance_method',
+            help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. The method to use when '
+                 'calculating distances between its2 type profiles or samples.', default='braycurtis')
+        # when run as remote
+        parser.add_argument(
+            '--submitting_user_name',
+            help='Only for use when running as remote\nallows the association of a different user_name to the '
+                 'data_set than the one listed in sp_config', default='not supplied')
+
+        parser.add_argument(
+            '--submitting_user_email',
+            help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
+                 'than the one listed in sp_config', default='not supplied')
+
+    def define_mutually_exclusive_args(self, group):
+        group.add_argument(
+            '--load', metavar='path_to_dir',
+            help='Run this to load data to the framework\'s database. The first argument to this command must be an '
+                 'absolute path to a directory containing  the paired sequencing reads in .fastq.gz format. Alternatively, '
+                 'this path can point directly to a single compressed file containing the same paired fastq.gz files. '
+                 '\nA name must be associated with the data_set using the --name flag. \nThe number of processes to use '
+                 'can also be specified using the --num_proc flag. \nA datasheet can also be uploaded using the '
+                 '--data_sheet flag and the full path to the .xlsx data_sheet file (RECOMMENDED). \n'
+                 'To skip the generation of figures pass the --no_figures flag.\n To skip the generation of '
+                 'ordination files (pairwise distances and PCoA coordinates) pass the --no_ordinations flag')
+        group.add_argument(
+            '--analyse', metavar='data_set uids',
+            help='Analyse one or more data_set objects together. Enter comma separated uids of the data_set uids you '
+                 'which to analyse. e.g.: 43,44,45. If you wish to use all available dataSubmissions, you may pass '
+                 '\'all\' as an argument. To display all data_sets currently submitted to the framework\'s database, '
+                 'including their ids, use the \'show_data_sets\' command\nTo skip the generation of figures pass the '
+                 '--no_figures flag.\nTo skip the generation of ordination files (pairwise distances and PCoA coordinates) '
+                 'pass the --no_ordinations flag')
+        group.add_argument(
+            '--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
+        group.add_argument(
+            '--display_analyses', action='store_true',
+            help=' Display data_analysis objects currently stored in the framework\'s database')
+        group.add_argument(
+            '--print_output_seqs', metavar='data_set uids',
+            help='Use this function to output ITS2 sequence count tables for given data_set instances')
+        group.add_argument(
+            '--print_output_types', metavar='data_set uids, analysis ID',
+            help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
+                 'data_sets that have been run in a given analysis. Give the data_set uids that you wish to make outputs '
+                 'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
+                 'comma separate the uids of the data_set objects, e.g. 44,45,46. Give the ID of the analysis you wish to '
+                 'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
+                 '--no_figures flag.')
+        group.add_argument(
+            '--between_type_distances', metavar='data_set uids, analysis ID',
+            help='Use this function to output UniFrac pairwise distances between ITS2 type profiles clade separated')
+        group.add_argument(
+            '--between_sample_distances', metavar='data_set uids',
+            help='Use this function to output UniFrac pairwise distances between samples clade separated from a '
+                 'given collection of data_set objects')
+        group.add_argument(
+            '--between_sample_distances_sample_set', metavar='data_set_sample uids',
+            help='Use this function to output UniFrac pairwise distances between samples clade '
+                 'separated from a given collection of data_set_sample objects')
+
+    def start_work_flow(self):
+        if self.args.load:
+            completed_data_loading_object = self.perform_data_loading()
+            # TODO add remainder of the work flow
+            # add outputting sequences
+            # add plotting sequences
+            # add distance and pcoa calcs
+            # add plotting of dist and pcoa
+        elif self.args.analyse:
+            perform_data_analysis(args)
+            print('return code: 0\nAnalysis complete')
+
+        elif self.args.print_output_seqs:
+            perform_sequences_count_table_output(args)
+        elif self.args.print_output_types:
+            perform_type_cout_table_output(args)
+        elif self.args.display_data_sets:
+            perform_display_data_sets()
+        elif self.args.display_analyses:
+            perform_display_analysis_types()
+        elif self.args.between_type_distances:
+            perform_within_clade_type_distance_generation(args)
+        elif self.args.between_sample_distances:
+            perform_within_clade_sample_distance_generation_data_set_input(args)
+        elif self.args.between_sample_distances_sample_set:
+            perform_within_clade_sample_distance_generation_sample_list_input(args)
+        elif self.args.vacuumDatabase:
+            perform_vacuum_database()
+
+    # data loading methods
+    def perform_data_loading(self):
+        self._verify_name_arg_given()
+        self.make_new_dataset_object()
+        data_loading = DataLoading(
+            data_set_object=self.data_set_object, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
+            screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
+            no_ord=self.args.no_ordinations, distance_method=self.args.distance_method)
+        data_loading.load_data()
+        return data_loading
+
+    def _verify_name_arg_given(self):
+        if self.args.name == 'noName':
+            sys.exit('Please provide a name using the --name flag. e.g. --name informative_name')
+
+    def make_new_dataset_object(self):
+        dataset_name = self.args.name
+        submitting_user = sp_config.user_name
+        user_email = sp_config.user_email
+        if sp_config.system_type == 'remote':
+            self.screen_sub_eval_bool = True
+        else:
+            self.screen_sub_eval_bool = False
+
+        self.data_set_object = create_new_data_set_object_from_params(dataset_name, submitting_user,
+                                                              user_email)
+
+    
+
+
 def main():
-    args = define_args()
-    if args.load:
-        perform_data_loading(args)
-    elif args.analyse:
-        perform_data_analysis(args)
-    elif args.print_output_seqs:
-        perform_sequences_count_table_output(args)
-    elif args.print_output_types:
-        perform_type_cout_table_output(args)
-    elif args.display_data_sets:
-        perform_display_data_sets()
-    elif args.display_analyses:
-        perform_display_analysis_types()
-    elif args.between_type_distances:
-        perform_within_clade_type_distance_generation(args)
-    elif args.between_sample_distances:
-        perform_within_clade_sample_distance_generation_data_set_input(args)
-    elif args.between_sample_distances_sample_set:
-        perform_within_clade_sample_distance_generation_sample_list_input(args)
-    elif args.vacuumDatabase:
-        perform_vacuum_database()
+
+
 
 def perform_within_clade_sample_distance_generation_sample_list_input(args):
     # this is a variation of the between_sample_distances where a set of sample uids are input rather
@@ -263,8 +400,8 @@ def perform_data_analysis(args):
         args)
     new_analysis_object = create_new_data_analysis_obj(args, custom_data_set_ids, submitting_user, user_email,
                                                        within_clade_cutoff)
-    start_data_analysis(args, new_analysis_object, num_proc)
-    print('return code: 0\nAnalysis complete')
+    return start_data_analysis(args, new_analysis_object, num_proc)
+
 
 
 def create_new_data_analysis_obj(args, custom_data_set_ids, submitting_user, user_email, within_clade_cutoff):
@@ -278,10 +415,11 @@ def create_new_data_analysis_obj(args, custom_data_set_ids, submitting_user, use
 
 
 def start_data_analysis(args, new_analysis_object, num_proc):
-    data_sub_collection_run.main(
+    analysis_object_id, list_of_output_file_paths = data_sub_collection_run.main(
         data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=args.no_figures,
         no_ordinations=args.no_ordinations, distance_method=args.distance_method, no_output=args.no_output,
         debug=args.debug)
+    return analysis_object_id, list_of_output_file_paths
 
 
 def set_new_data_analysis_params(args):
@@ -304,38 +442,6 @@ def generate_csv_dataset_uid_string():
     return custom_data_set_ids
 
 
-def perform_data_loading(args):
-    verify_name_arg_given(args)
-    new_data_set, screen_sub_eval_bool = make_new_dataset_object(args)
-    data_sheet_arg, debug_bool, distance_method_arg, \
-    input_dir, no_fig_arg, no_ord_arg, num_proc = set_params_for_data_load(args)
-    data_loading = DataLoading(
-        data_set_object=new_data_set, datasheet_path=data_sheet_arg, user_input_path=input_dir,
-        screen_sub_evalue=screen_sub_eval_bool, num_proc=num_proc, no_fig=no_fig_arg, no_ord=no_ord_arg,
-        distance_method=distance_method_arg)
-    data_loading.load_data()
-    return data_loading
-
-
-def verify_name_arg_given(args):
-    if args.name == 'noName':
-        sys.exit('Please provide a name using the --name flag. e.g. --name informative_name')
-
-
-def make_new_dataset_object(args):
-    dataset_name = args.name
-    submitting_user = sp_config.user_name
-    user_email = sp_config.user_email
-    if sp_config.system_type == 'remote':
-        screen_sub_eval_bool = True
-    else:
-        screen_sub_eval_bool = False
-
-    new_data_set = create_new_data_set_object_from_params(dataset_name, submitting_user,
-                                                          user_email)
-    return new_data_set, screen_sub_eval_bool
-
-
 def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submitting_user, new_data_set_user_email):
 
     new_data_set = DataSet(name=name_for_data_set, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
@@ -344,18 +450,6 @@ def create_new_data_set_object_from_params(name_for_data_set, new_data_set_submi
                            submitting_user_email=new_data_set_user_email)
     new_data_set.save()
     return new_data_set
-
-
-def set_params_for_data_load(args):
-    # input directory should contain either paired .fastq.gz files of a single .zip file
-    input_dir = args.load
-    num_proc = args.num_proc
-    data_sheet_arg = args.data_sheet
-    no_fig_arg = args.no_figures
-    no_ord_arg = args.no_ordinations
-    debug_bool = args.debug
-    distance_method_arg = args.distance_method
-    return data_sheet_arg, debug_bool, distance_method_arg, input_dir, no_fig_arg, no_ord_arg, num_proc
 
 
 def set_params_for_new_dataset_creation(config_dict):
@@ -390,97 +484,10 @@ def set_user_name_and_email(config_dict):
     return new_data_set_submitting_user, new_data_set_user_email
 
 
-def define_args():
-    parser = argparse.ArgumentParser(
-        description='Intragenomic analysis of the ITS2 region of the nrDNA',
-        epilog='For support email: symportal@gmail.com')
-    group = parser.add_mutually_exclusive_group(required=True)
-    define_mutually_exclusive_args(group)
-    define_additional_args(group, parser)
-    args = parser.parse_args()
-    return args
 
 
-def define_additional_args(group, parser):
-    parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
-    parser.add_argument('--name', help='A name for your input or analysis', default='noName')
-    parser.add_argument('--description', help='An optional description', default='No description')
-    parser.add_argument('--data_analysis_id', type=int, help='The ID of the data_analysis you wish to output from')
-    group.add_argument(
-        '--vacuum_database', action='store_true',
-        help='Vacuuming the database will free up memory from objects that have been deleted recently')
-    parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
-    parser.add_argument(
-        '--data_sheet',
-        help='An absolute path to the .xlsx file containing the meta-data information for the data_set\'s samples')
-    parser.add_argument('--no_figures', action='store_true', help='Skip figure production')
-    parser.add_argument('--no_ordinations', action='store_true', help='Skip ordination analysis')
-    parser.add_argument('--debug', action='store_true', help='Present additional stdout output', default=False)
-
-    parser.add_argument(
-        '--no_output', action='store_true', help='Do no output: count tables, figures, ordinations', default=False)
-
-    parser.add_argument(
-        '--distance_method', help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. The method to use when '
-                                  'calculating distances between its2 type profiles or samples.', default='braycurtis')
-    # when run as remote
-    parser.add_argument(
-        '--submitting_user_name',
-        help='Only for use when running as remote\nallows the association of a different user_name to the '
-             'data_set than the one listed in sp_config', default='not supplied')
-
-    parser.add_argument(
-        '--submitting_user_email',
-        help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
-             'than the one listed in sp_config', default='not supplied')
 
 
-def define_mutually_exclusive_args(group):
-    group.add_argument(
-        '--load', metavar='path_to_dir',
-        help='Run this to load data to the framework\'s database. The first argument to this command must be an '
-             'absolute path to a directory containing  the paired sequencing reads in .fastq.gz format. Alternatively, '
-             'this path can point directly to a single compressed file containing the same paired fastq.gz files. '
-             '\nA name must be associated with the data_set using the --name flag. \nThe number of processes to use '
-             'can also be specified using the --num_proc flag. \nA datasheet can also be uploaded using the '
-             '--data_sheet flag and the full path to the .xlsx data_sheet file (RECOMMENDED). \n'
-             'To skip the generation of figures pass the --no_figures flag.\n To skip the generation of '
-             'ordination files (pairwise distances and PCoA coordinates) pass the --no_ordinations flag')
-    group.add_argument(
-        '--analyse', metavar='data_set uids',
-        help='Analyse one or more data_set objects together. Enter comma separated uids of the data_set uids you '
-             'which to analyse. e.g.: 43,44,45. If you wish to use all available dataSubmissions, you may pass '
-             '\'all\' as an argument. To display all data_sets currently submitted to the framework\'s database, '
-             'including their ids, use the \'show_data_sets\' command\nTo skip the generation of figures pass the '
-             '--no_figures flag.\nTo skip the generation of ordination files (pairwise distances and PCoA coordinates) '
-             'pass the --no_ordinations flag')
-    group.add_argument(
-        '--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
-    group.add_argument(
-        '--display_analyses', action='store_true',
-        help=' Display data_analysis objects currently stored in the framework\'s database')
-    group.add_argument(
-        '--print_output_seqs', metavar='data_set uids',
-        help='Use this function to output ITS2 sequence count tables for given data_set instances')
-    group.add_argument(
-        '--print_output_types', metavar='data_set uids, analysis ID',
-        help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
-             'data_sets that have been run in a given analysis. Give the data_set uids that you wish to make outputs '
-             'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
-             'comma separate the uids of the data_set objects, e.g. 44,45,46. Give the ID of the analysis you wish to '
-             'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
-             '--no_figures flag.')
-    group.add_argument(
-        '--between_type_distances', metavar='data_set uids, analysis ID',
-        help='Use this function to output UniFrac pairwise distances between ITS2 type profiles clade separated')
-    group.add_argument(
-        '--between_sample_distances', metavar='data_set uids',
-        help='Use this function to output UniFrac pairwise distances between samples clade separated from a '
-             'given collection of data_set objects')
-    group.add_argument(
-        '--between_sample_distances_sample_set', metavar='data_set_sample uids',
-        help='Use this function to output UniFrac pairwise distances between samples clade '
-             'separated from a given collection of data_set_sample objects')
 
 
 def create_analysis_obj_and_run_analysis(

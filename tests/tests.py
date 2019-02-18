@@ -323,5 +323,4 @@ def delete_data_analysis_output_object_directories(data_analysis_uid):
 
 
 if __name__ == "__main__":
-    symportal_tester = SymPortalTester()
-    symportal_tester.test_data_loading()
+    initiate_test()

@@ -136,25 +136,34 @@ class DataLoading:
 
         self._output_seqs_stacked_bar_plot()
 
-        if not self.no_ord:
-            print('Calculating between sample pairwise distances')
-            if self.distance_method == 'unifrac':
-                self._do_unifrac_dist_pcoa()
-            elif self.distance_method == 'braycurtis':
-                self._do_braycurtis_dist_pcoa()
+        self._do_sample_ordination()
 
-            # distance plotting
-            if not self.no_fig:
-                if self.num_of_samples > 1000:
-                    print('Too many samples ({}) to generate plots'.format(self.num_of_samples))
-                else:
-                    for output_path in self.output_path_list:
-                        if self.this_is_pcoa_path(output_path):
-                            clade_of_output = os.path.dirname(output_path).split('/')[-1]
-                            sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
-                            dist_scatter_plotter_samples = DistScatterPlotterSamples(csv_path=output_path, date_time_str=self.date_time_string)
-                            dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
-                            self.output_path_list.extend(dist_scatter_plotter_samples.output_path_list)
+    def _do_sample_ordination(self):
+        if not self.no_ord:
+            self._do_sample_dist_and_pcoa()
+
+            self._plot_pcoa()
+
+    def _plot_pcoa(self):
+        if not self.no_fig:
+            if self.num_of_samples > 1000:
+                print('Too many samples ({}) to generate plots'.format(self.num_of_samples))
+            else:
+                for output_path in self.output_path_list:
+                    if self.this_is_pcoa_path(output_path):
+                        clade_of_output = os.path.dirname(output_path).split('/')[-1]
+                        sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
+                        dist_scatter_plotter_samples = DistScatterPlotterSamples(csv_path=output_path,
+                                                                                 date_time_str=self.date_time_string)
+                        dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
+                        self.output_path_list.extend(dist_scatter_plotter_samples.output_path_list)
+
+    def _do_sample_dist_and_pcoa(self):
+        print('Calculating between sample pairwise distances')
+        if self.distance_method == 'unifrac':
+            self._do_unifrac_dist_pcoa()
+        elif self.distance_method == 'braycurtis':
+            self._do_braycurtis_dist_pcoa()
 
     def _output_data_set_info(self):
         print(f'\n\nData loading complete. DataSet UID: {self.dataset_object.id}')
