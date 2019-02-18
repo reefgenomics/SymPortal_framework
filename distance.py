@@ -2095,7 +2095,6 @@ class UnifracDistPCoACreator(GenericDistanceCreator):
         self.num_proc = num_processors
         self.method = method
         self.bootstrap_value = bootstrap_value
-
         self.clade_collections_from_data_sets = CladeCollection.objects.filter(
             data_set_sample_from__data_submission_from__in=self.data_sets_to_output)
         self.clades_of_clade_collections_list = list(set([a.clade for a in self.clade_collections_from_data_sets]))

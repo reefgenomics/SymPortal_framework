@@ -911,9 +911,11 @@ class DistScatterPlotterSamples(DistScatterPlotter):
         self.create_base_scatter_plot()
         self._annotate_plot_with_sample_names()
         self._add_title(title_prefix='between sample distances clade')
+
         self.fig_output_base = os.path.join(
             self.output_directory,
             f'{self.date_time_str}_between_sample_distances_clade_{self.clade}')
+        self._output_dist_scatter()
 
     def _annotate_plot_with_sample_names(self):
         if self.labels:
@@ -922,9 +924,7 @@ class DistScatterPlotterSamples(DistScatterPlotter):
                 self.ax.annotate(txt, (self.x_values[i], self.y_values[i]))
 
     def _get_sample_names(self):
-        return [
-            str(CladeCollection.objects.get(id=int(uid))) for
-            uid in self.plotting_df.index.values.tolist()[:-1]]
+        return self.plotting_df.index.values.tolist()[:-1]
 
 
 class DistScatterPlotterTypes(DistScatterPlotter):

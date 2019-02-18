@@ -149,7 +149,7 @@ class DataLoading:
                     print('Too many samples ({}) to generate plots'.format(self.num_of_samples))
                 else:
                     for output_path in self.output_path_list:
-                        if self._this_is_pcoa_path(output_path):
+                        if self.this_is_pcoa_path(output_path):
                             clade_of_output = os.path.dirname(output_path).split('/')[-1]
                             sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
                             dist_scatter_plotter_samples = DistScatterPlotterSamples(csv_path=output_path, date_time_str=self.date_time_string)
@@ -159,7 +159,8 @@ class DataLoading:
     def _output_data_set_info(self):
         print(f'\n\nData loading complete. DataSet UID: {self.dataset_object.id}')
 
-    def _this_is_pcoa_path(self, output_path):
+    @staticmethod
+    def this_is_pcoa_path(output_path):
         return 'PCoA_coords' in output_path
 
     def _do_braycurtis_dist_pcoa(self):
