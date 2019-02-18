@@ -296,7 +296,7 @@ class DataLoading:
             data_loading_temp_working_directory=self.temp_working_directory,
             data_loading_debug=self.debug
         )
-
+        # TODO got here with the full debug
         self.samples_that_caused_errors_in_qc_list = list(
             self.initial_mothur_handler.samples_that_caused_errors_in_qc_mp_list)
 
@@ -954,13 +954,9 @@ class InitialMothurWorker:
         os.makedirs(self.cwd, exist_ok=True)
         self.pre_med_seq_dump_dir = self.cwd.replace('tempData', 'pre_MED_seqs')
         os.makedirs(self.pre_med_seq_dump_dir, exist_ok=True)
-        self.mothur_analysis_object = MothurAnalysis(
-            pcr_analysis_name='symvar',
-            input_dir=self.cwd,
-            output_dir=self.cwd,
-            fastq_gz_fwd_path=contig_pair.split('\t')[1],
-            fastq_gz_rev_path=contig_pair.split('\t')[2],
-            stdout_and_sterr_to_pipe=(not debug))
+        self.mothur_analysis_object = MothurAnalysis.init_from_pair_of_fastq_gz_files(
+            pcr_analysis_name='symvar', output_dir=self.cwd, fastq_gz_fwd_path=contig_pair.split('\t')[1],
+            fastq_gz_rev_path=contig_pair.split('\t')[2], stdout_and_sterr_to_pipe=(not debug), name=self.sample_name)
         self.debug = debug
 
     def execute(self):

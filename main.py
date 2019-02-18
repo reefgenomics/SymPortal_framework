@@ -56,7 +56,7 @@ class SymPortalWorkFlowManager:
             self.screen_sub_eval_bool = True
         else:
             self.screen_sub_eval_bool = False
-            self.reference_db = 'symClade.fa'
+        self.reference_db = 'symClade.fa'
 
         # for data analysis
         self.within_clade_cutoff = 0.03

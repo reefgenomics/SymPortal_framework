@@ -81,7 +81,7 @@ class MothurAnalysis:
             if sequence_collection is not None:
                 self._setup_sequence_collection_attribute(auto_convert_fastq_to_fasta, name, sequence_collection)
             elif sequence_collection is None:
-                self._setup_fastq_attributes(fastq_gz_fwd_path, fastq_gz_rev_path)
+                self._setup_fastq_attributes(fastq_gz_fwd_path, fastq_gz_rev_path, name)
             self._setup_remainder_of_core_attributes(
                 input_dir, mothur_execution_path, name_file_path, output_dir, sequence_collection,
                 num_processors, stdout_and_sterr_to_pipe)
@@ -133,11 +133,12 @@ class MothurAnalysis:
         self.dist_file_path = None
         self.tree_file_path = None
 
-    def _setup_fastq_attributes(self, fastq_gz_fwd_path, fastq_gz_rev_path):
+    def _setup_fastq_attributes(self, fastq_gz_fwd_path, fastq_gz_rev_path, name):
         self.fastq_gz_fwd_path = fastq_gz_fwd_path
         self.fastq_gz_rev_path = fastq_gz_rev_path
         self.sequence_collection = None
         self.fasta_path = None
+        self.name = name
 
     def _setup_sequence_collection_attribute(self, auto_convert_fastq_to_fasta, name, sequence_collection):
         self.fastq_gz_fwd_path = None
@@ -194,15 +195,19 @@ class MothurAnalysis:
 
     # init class methods for the MothurAnalysis
     @classmethod
-    def init_from_pair_of_fastq_gz_files(cls, name, fastq_gz_fwd_path, fastq_gz_rev_path,
-                                         output_dir=None, mothur_execution_string='mothur', num_processors=10,
-                                         stdout_and_sterr_to_pipe=True
-                                         ):
+    def init_from_pair_of_fastq_gz_files(
+            cls, name, fastq_gz_fwd_path, fastq_gz_rev_path, output_dir=None, mothur_execution_string='mothur',
+            num_processors=10, stdout_and_sterr_to_pipe=True, pcr_fwd_primer=None, pcr_rev_primer=None,
+            pcr_oligo_file_path=None, pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None):
+
         return cls(name=name, sequence_collection=None, mothur_execution_path=mothur_execution_string,
                    input_dir=os.path.dirname(os.path.abspath(fastq_gz_fwd_path)), output_dir=output_dir,
                    fastq_gz_fwd_path=fastq_gz_fwd_path, fastq_gz_rev_path=fastq_gz_rev_path,
                    name_file_path=None, num_processors=num_processors,
-                   stdout_and_sterr_to_pipe=stdout_and_sterr_to_pipe)
+                   stdout_and_sterr_to_pipe=stdout_and_sterr_to_pipe, pcr_fwd_primer=pcr_fwd_primer,
+                   pcr_rev_primer=pcr_rev_primer, pcr_oligo_file_path=pcr_oligo_file_path,
+                   pcr_fwd_primer_mismatch=pcr_fwd_primer_mismatch, pcr_rev_primer_mismatch=pcr_rev_primer_mismatch,
+                   pcr_analysis_name=pcr_analysis_name)
 
     @classmethod
     def init_from_sequence_collection(cls, sequence_collection, name=None, input_dir=None,
@@ -479,7 +484,7 @@ class MothurAnalysis:
 
     def _make_contig_make_and_write_out_dot_file(self):
         dot_file_file = [f'{self.fastq_gz_fwd_path} {self.fastq_gz_rev_path}']
-        dot_file_file_path = os.path.join(self.input_dir, 'fastq_pair.file')
+        dot_file_file_path = os.path.join(self.input_dir, f'{self.name}_fastq_pair.file')
         write_list_to_destination(dot_file_file_path, dot_file_file)
         return dot_file_file_path
 
