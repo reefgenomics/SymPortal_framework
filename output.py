@@ -16,7 +16,7 @@ import numpy as np
 
 
 def output_type_count_tables(
-        analysisobj, datasubstooutput, call_type, num_samples,
+        analysisobj, datasubstooutput, call_type,
         num_processors=1, no_figures=False, output_user=None, time_date_str=None):
     analysis_object = analysisobj
     # This is one of the last things to do before we can use our first dataset
@@ -489,8 +489,8 @@ def output_type_count_tables(
     # as with the data_submission let's pass in the path to the outputfiles that we can use to make the plot with
     output_dir = os.path.dirname(output_to_plot)
     if not no_figures:
-        if num_samples > 1000:
-            print('Too many samples ({}) to generate plots'.format(num_samples))
+        if number_of_samples > 1000:
+            print('Too many samples ({}) to generate plots'.format(number_of_samples))
         else:
             svg_path, png_path, sorted_sample_id_list = generate_stacked_bar_data_analysis_type_profiles(
                 path_to_tab_delim_count=output_to_plot, output_directory=output_dir,
@@ -1457,20 +1457,19 @@ class SequenceCountTableCreator:
 
     """
     def __init__(
-            self, call_type, output_dir, data_set_uids_to_output_as_comma_sep_string, num_proc,
+            self, symportal_root_dir, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc, output_dir=None,
             sorted_sample_uid_list=None, analysis_obj_id=None, time_date_str=None, output_user=None):
         self._init_core_vars(
-            analysis_obj_id, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc,
+            symportal_root_dir, analysis_obj_id, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc,
             output_dir, output_user, sorted_sample_uid_list, time_date_str)
         self._init_seq_abundance_collection_objects()
         self._init_vars_for_putting_together_the_dfs()
         self._init_output_paths()
 
-    def _init_core_vars(self, analysis_obj_id, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc,
+    def _init_core_vars(self, symportal_root_dir, analysis_obj_id, call_type, data_set_uids_to_output_as_comma_sep_string, num_proc,
                         output_dir, output_user, sorted_sample_uid_list, time_date_str):
         self.num_proc = num_proc
-        self.output_dir = output_dir
-        os.makedirs(self.output_dir, exist_ok=True)
+        self._set_output_dir(call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir)
         self.sorted_sample_uid_list = sorted_sample_uid_list
         self.analysis_obj_id = analysis_obj_id
         if time_date_str:
@@ -1489,6 +1488,16 @@ class SequenceCountTableCreator:
         self.ordered_list_of_clades_found = [clade for clade in self.clade_list if clade in set_of_clades_found]
         self.list_of_data_set_sample_objects = DataSetSample.objects.filter(
             data_submission_from__in=self.data_set_objects_to_output)
+
+    def _set_output_dir(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir):
+        if call_type == 'submission':
+            self.output_dir = os.path.abspath(os.path.join(
+                symportal_root_dir, 'outputs', 'data_set_submissions', data_set_uids_to_output_as_comma_sep_string))
+        elif call_type == 'stand_alone':
+            self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'non_analysis'))
+        else:  # call_type == 'analysis
+            self.output_dir = output_dir
+        os.makedirs(self.output_dir, exist_ok=True)
 
     def _init_seq_abundance_collection_objects(self):
         """Output objects from first worker to be used by second worker"""

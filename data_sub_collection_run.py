@@ -4092,6 +4092,9 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
 
+    print('DATA SUBMISSION COMPLETE')
+    print('Begin Output')
+
     # It doesn't make sense to automatically make an output from an analysis as we don't know which
     # data_sets we want to output for.
     # actually yes it does because we will simply output all data_sets as a default.
@@ -4103,7 +4106,7 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
     if not no_output:
         output_dir, date_time_string, list_of_output_file_paths = output_type_count_tables(analysisobj=analysis_object,
                                                                                            datasubstooutput=analysis_object.list_of_data_set_uids,
-                                                                                           call_type='analysis', num_samples=num_samples,
+                                                                                           call_type='analysis',
                                                                                            num_processors=num_processors, no_figures=no_figures)
 
         # Between type ordination analysis
@@ -4138,5 +4141,6 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
         ####################################################
 
     print('data_analysis ID is: {}'.format(analysis_object.id))
+    print('return code: 0\nAnalysis complete')
     return analysis_object.id, list_of_output_file_paths
 #################################################
