@@ -28,24 +28,27 @@ from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 # Your application specific imports
-from dbApp.models import DataSet, DataSetSample, DataAnalysis
+from dbApp.models import DataSet, DataAnalysis
 ############################################
 
 import data_sub_collection_run
-import create_data_submission
 import output
 import plotting
-import json
 import sys
 import distance
 import argparse
-from data_loading import DataLoading
+import data_loading
 import sp_config
 
 class SymPortalWorkFlowManager:
-    def __init__(self):
-        self.args = self._define_args()
+    def __init__(self, custom_args_list=None):
+        self.args = self._define_args(custom_args_list)
+        # general attributes
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
+        self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.submitting_user = sp_config.user_name
+        self.submitting_user_email = sp_config.user_email
+
         # for data_loading
         self.data_set_object = None
         self.screen_sub_eval_bool = None
@@ -54,26 +57,25 @@ class SymPortalWorkFlowManager:
         else:
             self.screen_sub_eval_bool = False
             self.reference_db = 'symClade.fa'
+
         # for data analysis
         self.within_clade_cutoff = 0.03
-        self.time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.submitting_user = sp_config.user_name
-        self.submitting_user_email = sp_config.user_email
         self.data_analysis_object = None
-        # for seq output
-        self.output_dir = None
+
         # for dist and pcoa outputs
         self.pcoa_output_path_list = []
 
-
-    def _define_args(self):
+    def _define_args(self, custom_args_list=None):
         parser = argparse.ArgumentParser(
             description='Intragenomic analysis of the ITS2 region of the nrDNA',
             epilog='For support email: symportal@gmail.com')
         group = parser.add_mutually_exclusive_group(required=True)
         self.define_mutually_exclusive_args(group)
         self.define_additional_args(group, parser)
-        return parser.parse_args()
+        if custom_args_list is not None:
+            return parser.parse_args(custom_args_list)
+        else:
+            return parser.parse_args()
 
     def define_additional_args(self, group, parser):
         parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
@@ -137,12 +139,26 @@ class SymPortalWorkFlowManager:
             '--print_output_seqs', metavar='data_set uids',
             help='Use this function to output ITS2 sequence count tables for given data_set instances')
         group.add_argument(
+            '--print_output_seqs_sample_set', metavar='DataSetSample UIDs',
+            help='Use this function to output ITS2 sequence count tables for a collection of DataSetSample instances. '
+                 'The input to this function should be a comma separated string of the UIDs of the DataSetSample instances '
+                 'in question. e.g. 345,346,347,348')
+        group.add_argument(
             '--print_output_types', metavar='data_set uids, analysis ID',
             help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
                  'data_sets that have been run in a given analysis. Give the data_set uids that you wish to make outputs '
                  'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
                  'comma separate the uids of the data_set objects, e.g. 44,45,46. Give the ID of the analysis you wish to '
                  'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
+                 '--no_figures flag.')
+        group.add_argument(
+            '--print_output_types_sample_set', metavar='DataSet UIDs, analysis UID',
+            help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
+                 'DataSetSample objects that have been run in a given DataAnalysis. Give the DataSetSample '
+                 'UIDs that you wish to make outputs from as arguments to the --print_output_types flag. To output for '
+                 'multiple DataSetSample objects, comma separate the UIDs of the DataSetSample objects, '
+                 'e.g. 5644,5645,5646. Give the UID of the DataAnalysis you wish to output these from using the '
+                 '--data_analysis_id flag.\nTo skip the generation of figures pass the '
                  '--no_figures flag.')
         group.add_argument(
             '--between_type_distances', metavar='data_set uids, analysis ID',
@@ -158,25 +174,41 @@ class SymPortalWorkFlowManager:
 
     def start_work_flow(self):
         if self.args.load:
-            self.perform_data_loading()
+            return self.perform_data_loading()
         elif self.args.analyse:
             self.perform_data_analysis()
         elif self.args.print_output_seqs:
             self.perform_sequences_count_table_output()
+        elif self.args.print_output_seqs_sample_set:
+            self.perform_sequences_count_table_output()
         elif self.args.print_output_types:
+            # TODO class abstract and integrate type output by types
             self.perform_type_count_table_output()
+        elif self.args.print_output_types_sample_set:
+            # TODO class abstract and integrate type output by sample uid
+            self.perform_type_count_table_output_sample_uid()
         elif self.args.display_data_sets:
             self.perform_display_data_sets()
         elif self.args.display_analyses:
             self.perform_display_analysis_types()
         elif self.args.between_type_distances:
+            #TODO type distances sample uid input
             self.perform_within_clade_type_distance_generation()
         elif self.args.between_sample_distances:
-            perform_within_clade_sample_distance_generation_data_set_input(args)
+            self.perform_within_clade_sample_distance_generation()
         elif self.args.between_sample_distances_sample_set:
-            perform_within_clade_sample_distance_generation_sample_list_input(args)
+            self.perform_within_clade_sample_distance_generation()
         elif self.args.vacuumDatabase:
-            perform_vacuum_database()
+            self.perform_vacuum_database()
+
+    def perform_type_count_table_output_sample_uid(self):
+        self.verify_data_analysis_uid_provided()
+        analysis_object = self.get_data_analysis_by_uid()
+        output.output_type_count_tables_data_set_sample_id_input(
+            analysisobj=analysis_object, num_processors=self.args.num_proc,
+            data_set_sample_ids_to_output_string=self.args.print_output_types_sample_set,
+            no_figures=self.args.no_figures,
+            output_user=self.submitting_user)
 
     # data analysis methods
     def perform_data_analysis(self):
@@ -184,24 +216,13 @@ class SymPortalWorkFlowManager:
         self.create_new_data_analysis_obj()
         self.start_data_analysis()
 
-    def set_new_data_analysis_params(args):
-        within_clade_cutoff = 0.03
-        num_proc = args.num_proc
-        custom_data_set_ids = args.analyse
-        if args.analyse == 'all':
-            custom_data_set_ids = generate_csv_dataset_uid_string()
-        config_dict = get_config_dict()
-        submitting_user, user_email = set_user_name_and_email(config_dict)
-        return custom_data_set_ids, num_proc, submitting_user, user_email, within_clade_cutoff
-
     def create_new_data_analysis_obj(self):
         self.data_analysis_object = DataAnalysis(
             list_of_data_set_uids=self.args.analyse, within_clade_cutoff=self.within_clade_cutoff,
-            name=self.args.name, time_stamp=self.time_stamp,
+            name=self.args.name, time_stamp=self.date_time_str,
             submitting_user=self.submitting_user, submitting_user_email=self.submitting_user_email)
         self.data_analysis_object.description = self.args.description
         self.data_analysis_object.save()
-
 
     def start_data_analysis(self):
         data_sub_collection_run.main(
@@ -214,14 +235,15 @@ class SymPortalWorkFlowManager:
     def perform_data_loading(self):
         self._verify_name_arg_given()
         self.make_new_dataset_object()
-        self._execute_data_loading()
+        return self._execute_data_loading()
 
     def _execute_data_loading(self):
-        data_loading = DataLoading(
+        data_loading_object = data_loading.DataLoading(
             data_set_object=self.data_set_object, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, distance_method=self.args.distance_method)
-        data_loading.load_data()
+        data_loading_object.load_data()
+        return data_loading_object
 
     def _verify_name_arg_given(self):
         if self.args.name == 'noName':
@@ -229,7 +251,7 @@ class SymPortalWorkFlowManager:
 
     def make_new_dataset_object(self):
         self.data_set_object = DataSet(
-            name=self.args.name, time_stamp=self.time_stamp, reference_fasta_database_used=self.reference_db,
+            name=self.args.name, time_stamp=self.date_time_str, reference_fasta_database_used=self.reference_db,
             submitting_user=self.submitting_user, submitting_user_email=self.submitting_user_email)
         self.data_set_object.save()
 
@@ -240,7 +262,7 @@ class SymPortalWorkFlowManager:
         self._plot_seq_output(sequence_count_table_creator)
 
     def _plot_seq_output(self, sequence_count_table_creator):
-        if len(sequence_count_table_creator.list_of_data_set_sample_objects) < 1000:
+        if len(sequence_count_table_creator.list_of_dss_objects) < 1000:
             seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(
                 output_directory=sequence_count_table_creator.output_dir,
                 seq_relative_abund_count_table_path=sequence_count_table_creator.path_to_seq_output_df_relative,
@@ -249,10 +271,16 @@ class SymPortalWorkFlowManager:
             seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
     def _execute_seq_output_standalone(self):
-        sequence_count_table_creator = output.SequenceCountTableCreator(
-            symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
-            data_set_uids_to_output_as_comma_sep_string=self.args.print_output_seqs,
-            num_proc=self.args.num_proc, time_date_str=self.time_stamp)
+        if self.args.print_output_seqs:
+            sequence_count_table_creator = output.SequenceCountTableCreator(
+                symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
+                ds_uids_output_str=self.args.print_output_seqs,
+                num_proc=self.args.num_proc, time_date_str=self.date_time_str)
+        else:  # self.args.print_output_seqs_sample_set:
+            sequence_count_table_creator = output.SequenceCountTableCreator(
+                symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
+                ds_uids_output_str=self.args.print_output_seqs_sample_set,
+                num_proc=self.args.num_proc, time_date_str=self.date_time_str)
         sequence_count_table_creator.make_output_tables()
         return sequence_count_table_creator
 
@@ -260,12 +288,15 @@ class SymPortalWorkFlowManager:
     def perform_type_count_table_output(self):
         self.verify_data_analysis_uid_provided()
 
-        analysis_object = get_data_analysis_by_uid(self.args.data_analysis_id)
+        analysis_object = self.get_data_analysis_by_uid()
 
         data_sub_collection_run.output_type_count_tables(
             analysisobj=analysis_object, num_processors=self.args.num_proc, call_type='stand_alone',
             datasubstooutput=self.args.print_output_types, no_figures=self.args.no_figures,
             output_user=self.submitting_user)
+
+    def get_data_analysis_by_uid(self):
+        return DataAnalysis.objects.get(id=self.data_analysis_object.id)
 
     def verify_data_analysis_uid_provided(self):
         if not self.args.data_analysis_id:
@@ -293,7 +324,6 @@ class SymPortalWorkFlowManager:
 
     # type distances stand_alone
     def perform_within_clade_type_distance_generation(self):
-
         self.verify_data_analysis_uid_provided()
         self.run_within_clade_type_distances_dependent_on_methods()
         self._perform_type_distance_plotting()
@@ -309,13 +339,13 @@ class SymPortalWorkFlowManager:
         self.pcoa_output_path_list = distance.generate_within_clade_braycurtis_distances_its2_type_profiles(
             data_submission_id_str=self.args.between_type_distances,
             data_analysis_id=self.args.data_analysis_id, call_type='stand_alone',
-            date_time_string=self.time_stamp)
+            date_time_string=self.date_time_str)
 
     def _execute_unifrac_type_dist_pcoa_calc(self):
         self.pcoa_output_path_list = data_sub_collection_run.generate_within_clade_unifrac_distances_its2_type_profiles(
             data_submission_id_str=self.args.between_type_distances, num_processors=self.args.num_proc,
             data_analysis_id=self.args.data_analysis_id, method='mothur', call_type='stand_alone',
-            date_time_string=self.time_stamp, bootstrap_value=self.args.bootstrap)
+            date_time_string=self.date_time_str, bootstrap_value=self.args.bootstrap)
 
     def _perform_type_distance_plotting(self):
         for pcoa_path in self.pcoa_output_path_list:
@@ -323,254 +353,71 @@ class SymPortalWorkFlowManager:
                 sys.stdout.write('\nPlotting between its2 type profile distances clade {}\n'.format(
                     os.path.dirname(pcoa_path).split('/')[-1]))
                 # then this is a pcoa csv that we should plot
-                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=self.time_stamp)
+                plotting.plot_between_its2_type_prof_dist_scatter(pcoa_path, date_time_str=self.date_time_str)
 
     # sample distance stand alone
-    def perform_within_clade_sample_distance_generation_data_set_input(self):
-        self.run_within_clade_sample_distances_dependent_on_methods_data_set_input()
-        self.perform_sample_distance_plotting()
+    def perform_within_clade_sample_distance_generation(self):
+        if self.args.distance_method =='unifrac':
+            if self.args.between_sample_distances_sample_set:
+                raise RuntimeError('DataSetSample distance calculation for custom DataSetSample lists has not yet been '
+                                   'implemented using the UniFrac method.\n'
+                                   'To output distances between custom DataSetSample lists, please use the braycurtis '
+                                   'method.\n'
+                                   'e.g: --between_sample_distances_sample_set 1,2,3,4,5,6 --distance_method braycurtis')
+            else:
+                unifrac_dict_pcoa_creator = self._execute_unifrac_sample_dist_pcoa_calc_ds_uid()
+            self._pcoa_samples_plotting(unifrac_dict_pcoa_creator)
 
-    def run_within_clade_sample_distances_dependent_on_methods_data_set_input(self):
-
-        if self.args.distance_method == 'unifrac':
-            pcoa_paths_list = distance.generate_within_clade_unifrac_distances_samples(
-                data_set_string=self.args.between_sample_distances, num_processors=self.args.num_proc,
-                method='mothur', call_type='stand_alone', date_time_string=self.time_stamp,
-                bootstrap_value=self.args.bootstrap)
-
-        elif self.args.distance_method == 'braycurtis':
-            pcoa_paths_list = distance.generate_within_clade_braycurtis_distances_samples(
-                data_set_string=self.args.between_sample_distances, call_type='stand_alone', date_time_str=self.time_stamp)
-        return pcoa_paths_list
-
-def main():
-
-
-
-def perform_within_clade_sample_distance_generation_sample_list_input(args):
-    # this is a variation of the between_sample_distances where a set of sample uids are input rather
-    # than data_set uids.
-    # todo Currently it is only written into unifrac. Once we have this running
-    # we can then apply it to BrayCurtis
-    date_time_string = generate_date_time_string()
-    pcoa_paths_list = run_within_clade_sample_distances_dependent_on_methods_sample_list_input(args, date_time_string)
-    perform_sample_distance_plotting(date_time_string, pcoa_paths_list)
-
-
-
-
-
-def run_within_clade_sample_distances_dependent_on_methods_data_set_input(args, date_time_string):
-    pcoa_paths_list = None
-    if args.distance_method == 'unifrac':
-        pcoa_paths_list = distance.generate_within_clade_unifrac_distances_samples(
-            data_set_string=args.between_sample_distances, num_processors=args.num_proc,
-            method='mothur', call_type='stand_alone', date_time_string=date_time_string, bootstrap_value=args.bootstrap)
-    elif args.distance_method == 'braycurtis':
-        pcoa_paths_list = distance.generate_within_clade_braycurtis_distances_samples(
-            data_set_string=args.between_sample_distances, call_type='stand_alone', date_time_str=date_time_string)
-    return pcoa_paths_list
-
-
-def run_within_clade_sample_distances_dependent_on_methods_sample_list_input(args, date_time_string):
-    pcoa_paths_list = None
-    if args.distance_method == 'unifrac':
-        pcoa_paths_list = distance.generate_within_clade_unifrac_distances_samples_sample_list_input(
-            smpl_id_list_str=args.between_sample_distances_sample_set, num_processors=args.num_proc,
-            method='mothur', bootstrap_value=args.bootstrap,
-            date_time_string=date_time_string)
-    elif args.distance_method == 'braycurtis':
-        pcoa_paths_list = distance.generate_within_clade_braycurtis_distances_samples_sample_list_input(
-            smpl_id_list_str=args.between_sample_distances_sample_set, date_time_string=date_time_string)
-    return pcoa_paths_list
-
-
-def perform_sample_distance_plotting(date_time_string, pcoa_paths_list):
-    for pcoa_path in pcoa_paths_list:
-        if 'PCoA_coords' in pcoa_path:
-            # then this is a full path to one of the .csv files that contains the coordinates that we can plot
-            # we will get the output directory from the passed in pcoa_path
-            sys.stdout.write('\n\nGenerating between sample distance plot clade {}\n'.format(
-                os.path.dirname(pcoa_path).split('/')[-1]))
-            plotting.plot_between_sample_distance_scatter(pcoa_path, date_time_string)
-
-
-def perform_within_clade_type_distance_generation(args):
-    date_time_string = generate_date_time_string()
-    pcoa_path_list = None
-    verify_data_analysis_uid_provided(args)
-    pcoa_path_list = run_within_clade_type_distances_dependent_on_methods(args, date_time_string, pcoa_path_list)
-    perform_type_distance_plotting(date_time_string, pcoa_path_list)
-
-
-
-
-
-
-
-
-def generate_date_time_string():
-    date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
-    return date_time_string
-
-
-
-
-
-
-
-
-def perform_vacuum_database():
-    print('Vacuuming database')
-    vacuum_db()
-    print('Vacuuming complete')
-
-
-def set_seq_output_params():
-
-    self.output_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), 'outputs/non_analysis'))
-
-
-
-def make_stacked_bar_figures_from_seq_count_tables(date_time_str, output_directory, output_file_path_list):
-    for item in output_file_path_list:
-        if 'relative' in item:
-            svg_path, png_path = plotting.generate_stacked_bar_data_loading(
-                path_to_tab_delim_count=item, output_directory=output_directory, time_date_str=date_time_str)
-            print_figure_output_paths(png_path, svg_path)
-            break
-
-
-def print_figure_output_paths(png_path, svg_path):
-    print('Output figs:')
-    print(svg_path)
-    print(png_path)
-
-
-
-
-
-def get_number_samples_in_data_set_query(query_set_of_data_sets):
-    return len(DataSetSample.objects.filter(data_submission_from__in=query_set_of_data_sets))
-
-
-def get_data_sets_objects_for_analysis(args):
-    data_sets_to_output = [int(a) for a in args.print_output_types.split(',')]
-    query_set_of_data_sets = DataSet.objects.filter(id__in=data_sets_to_output)
-    return query_set_of_data_sets
-
-
-def get_data_analysis_by_uid(uid):
-    return DataAnalysis.objects.get(id=uid)
-
-
-
-
-
-
-
-
-
-
-
-
-def generate_csv_dataset_uid_string():
-    temp_list = []
-    for ds in DataSet.objects.all():
-        temp_list.append(str(ds.id))
-    string_list = ','.join(temp_list)
-    custom_data_set_ids = string_list
-    return custom_data_set_ids
-
-
-
-
-
-def set_params_for_new_dataset_creation(config_dict):
-    local_or_remote = set_system_type(config_dict)
-    new_data_set_submitting_user, new_data_set_user_email = set_user_name_and_email(config_dict)
-    screen_sub_evalue_bool = set_screen_sub_evalue(local_or_remote)
-    return new_data_set_submitting_user, new_data_set_user_email, screen_sub_evalue_bool
-
-
-def set_system_type(config_dict):
-    local_or_remote = config_dict['system_type']
-    return local_or_remote
-
-
-def get_config_dict():
-    with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-        config_dict = json.load(f)
-    return config_dict
-
-
-def set_screen_sub_evalue(local_or_remote):
-    if local_or_remote == 'remote':
-        screen_sub_evalue_bool = True
-    else:
-        screen_sub_evalue_bool = False
-    return screen_sub_evalue_bool
-
-
-def set_user_name_and_email(config_dict):
-    new_data_set_submitting_user = config_dict['user_name']
-    new_data_set_user_email = config_dict['user_email']
-    return new_data_set_submitting_user, new_data_set_user_email
-
-
-
-
-
-
-
-
-def create_analysis_obj_and_run_analysis(
-        analysis_name, description_arg, custom_data_set_ids, debug_bool, distance_method_arg, submitting_user,
-        user_email, no_fig_arg, no_ord_arg, no_output_arg, num_proc, within_clade_cutoff):
-
-    new_analysis_object = DataAnalysis(
-        list_of_data_set_uids=str(custom_data_set_ids), within_clade_cutoff=float(within_clade_cutoff),
-        name=analysis_name, time_stamp=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-        submitting_user=submitting_user, submitting_user_email=user_email)
-
-    new_analysis_object.description = description_arg
-    new_analysis_object.save()
-    analysis_uid, output_path_list = data_sub_collection_run.main(
-        data_analysis_object=new_analysis_object, num_processors=num_proc, no_figures=no_fig_arg,
-        no_ordinations=no_ord_arg, distance_method=distance_method_arg, no_output=no_output_arg, debug=debug_bool)
-    return analysis_uid, output_path_list
-
-
-def load_data(data_sheet_arg, debug_bool, distance_method_arg, input_dir, new_data_set, no_fig_arg,
-              no_ord_arg, num_proc, screen_sub_evalue_bool):
-    if data_sheet_arg:
-        if os.path.isfile(data_sheet_arg):
-            data_set_uid, output_path_list = create_data_submission.main(
-                input_dir, new_data_set.id, num_proc, screen_sub_evalue=screen_sub_evalue_bool,
-                data_sheet_path=data_sheet_arg, no_fig=no_fig_arg, no_ord=no_ord_arg,
-                distance_method=distance_method_arg, debug=debug_bool)
         else:
-            sys.exit('{} not found'.format(data_sheet_arg))
-    else:
-        data_set_uid, output_path_list = create_data_submission.main(
-            input_dir, new_data_set.id, num_proc, screen_sub_evalue=screen_sub_evalue_bool, no_fig=no_fig_arg,
-            no_ord=no_ord_arg, distance_method=distance_method_arg, debug=debug_bool)
+            # braycurtis
+            braycurtis_dist_pcoa_creator = self._execute_braycurtis_sample_dist_pcoa_calc()
+            self._pcoa_samples_plotting(braycurtis_dist_pcoa_creator)
 
-    return data_set_uid, output_path_list
+    def _execute_unifrac_sample_dist_pcoa_calc_ds_uid(self):
+        unifrac_dict_pcoa_creator = distance.UnifracDistPCoACreator(
+            call_type='stand_alone', date_time_string=self.date_time_str,
+            data_set_string=self.args.between_sample_distances, method='mothur', num_processors=self.args.num_proc,
+            symportal_root_directory=self.symportal_root_directory)
+        unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
+        return unifrac_dict_pcoa_creator
 
+    def _execute_braycurtis_sample_dist_pcoa_calc(self):
+        if self.args.between_sample_distances_sample_set:
+            braycurtis_dist_pcoa_creator = distance.BrayCurtisDistPCoACreator(
+                symportal_root_directory=self.symportal_root_directory, date_time_string=self.date_time_str,
+                data_set_string=self.args.between_sample_distances_sample_set,
+                call_type='stand_alone')
+        else:  # self.args.between_sample_distances
+            braycurtis_dist_pcoa_creator = distance.BrayCurtisDistPCoACreator(
+                symportal_root_directory=self.symportal_root_directory, date_time_string=self.date_time_str,
+                data_set_string=self.args.between_sample_distances,
+                call_type='stand_alone')
 
+        braycurtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
+        return braycurtis_dist_pcoa_creator
 
+    def _pcoa_samples_plotting(self, dist_pcoa_creator):
+        for output_path in dist_pcoa_creator.output_file_paths:
+            if data_loading.DataLoading.this_is_pcoa_path(output_path):
+                clade_of_output = os.path.dirname(output_path).split('/')[-1]
+                sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
+                dist_scatter_plotter_samples = plotting.DistScatterPlotterSamples(
+                    csv_path=output_path, date_time_str=dist_pcoa_creator.date_time_string)
+                dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
 
+    def perform_vacuum_database(self):
+        print('Vacuuming database')
+        self.vacuum_db()
+        print('Vacuuming complete')
 
-def vacuum_db():
-    from django.db import connection
-    cursor = connection.cursor()
-    cursor.execute("VACUUM")
-    connection.close()
+    @staticmethod
+    def vacuum_db():
+        from django.db import connection
+        cursor = connection.cursor()
+        cursor.execute("VACUUM")
+        connection.close()
 
 
 if __name__ == "__main__":
-    fn = os.path.join(os.path.dirname(__file__), 'my_file')
-
-    main()
-
+    spwfm = SymPortalWorkFlowManager()
+    spwfm.start_work_flow()

@@ -2382,7 +2382,7 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
                                                            'between_samples'))
         else:
             # call_type == 'submission':
-            self.output_dir = os.path.join(output_dir + 'between_sample_distances')
+            self.output_dir = os.path.join(output_dir, 'between_sample_distances')
 
     @staticmethod
     def _infer_is_dataset_of_datasetsample(smpl_id_list_str, data_set_string):

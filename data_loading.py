@@ -209,7 +209,7 @@ class DataLoading:
         sys.stdout.write('\nGenerating count tables\n')
         sequence_count_table_creator = SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='submission',
-            data_set_uids_to_output_as_comma_sep_string=str(self.dataset_object.id),
+            ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
         sequence_count_table_creator.make_output_tables()
         # TODO don't for get to write out where the non-sym and size violation seqs were output
