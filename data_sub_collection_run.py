@@ -4102,7 +4102,7 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
     if not no_output:
         output_dir, date_time_string, list_of_output_file_paths = output_type_count_tables(analysisobj=analysis_object,
                                                                                            datasubstooutput=analysis_object.list_of_data_set_uids,
-                                                                                           call_type='analysis', num_samples=num_samples,
+                                                                                           call_type='analysis',
                                                                                            num_processors=num_processors, no_figures=no_figures)
 
         # Between type ordination analysis

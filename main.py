@@ -262,7 +262,7 @@ def main():
         if args.data_analysis_id:
             analysis_object = DataAnalysis.objects.get(id=args.data_analysis_id)
 
-            output.output_type_count_tables_data_set_id_input(
+            output.output_type_count_tables_data_set_sample_id_input(
                 analysisobj=analysis_object, num_processors=args.num_proc,
                 data_set_sample_ids_to_output_string=args.print_output_types_sample_set, no_figures=args.no_figures,
                 output_user=new_data_set_submitting_user)

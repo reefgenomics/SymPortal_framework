@@ -514,7 +514,7 @@ def output_type_count_tables(
 
     return output_dir, date_time_string, output_files_list
 
-def output_type_count_tables_data_set_id_input(
+def output_type_count_tables_data_set_sample_id_input(
         analysisobj, data_set_sample_ids_to_output_string,
         num_processors=1, no_figures=False, output_user=None, time_date_str=None):
     analysis_object = analysisobj
