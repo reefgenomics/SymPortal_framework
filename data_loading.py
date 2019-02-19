@@ -16,6 +16,7 @@ from distance import BrayCurtisDistPCoACreator, UnifracDistPCoACreator
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
 from output import SequenceCountTableCreator
+import ntpath
 
 
 class DataLoading:
@@ -561,14 +562,27 @@ class DataLoading:
 
     def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self):
 
-        self.list_of_fastq_file_names_in_wkd = [a for a in os.listdir(self.temp_working_directory) if 'fastq' in a]
+        self.list_of_fastq_files_in_wkd = [a for a in os.listdir(self.temp_working_directory) if 'fastq' in a]
 
-        self._generate_and_write_mothur_batch_file_for_dotfile_creation()
-        general.execute_mothur_batch_file_with_piped_stoud_sterr(self.path_to_latest_mothur_batch_file)
+        self._identify_sample_names_without_datasheet()
 
-        self._generate_and_write_new_stability_file_without_datasheet()
+        self.make_dot_stability_file_inferred()
 
         self._create_data_set_sample_objects_in_bulk_without_datasheet()
+
+    def make_dot_stability_file_inferred(self):
+        # inferred
+        sample_fastq_pairs = []
+        for sample_name in self.list_of_samples_names:
+            temp_list = []
+            temp_list.append(sample_name.replace('-', '[dS]'))
+            for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
+                if sample_name in ntpath.basename(file_path):
+                    temp_list.append(file_path)
+            assert (len(temp_list) == 3)
+            sample_fastq_pairs.append('\t'.join(temp_list))
+        write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
+        self.sample_fastq_pairs = sample_fastq_pairs
 
     def _create_data_set_sample_objects_in_bulk_without_datasheet(self):
         list_of_sample_objects = []
@@ -661,10 +675,6 @@ class DataLoading:
         # are indeed found in the directory that we've been given
         self._check_all_fastqs_in_datasheet_exist()
 
-        self._generate_and_write_mothur_batch_file_for_dotfile_creation()
-
-        # noinspection PyPep8
-        general.execute_mothur_batch_file_with_piped_stoud_sterr(self.path_to_latest_mothur_batch_file)
 
         # we will also need to know how to relate the sample names to the fastq files
         # for this we will make a dict of fastq file name to sample
@@ -672,7 +682,23 @@ class DataLoading:
         # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
         self._generate_and_write_new_stability_file_with_data_sheet()
 
+        self.make_dot_stability_file_datasheet()
+
         self._create_data_set_sample_objects_in_bulk_with_datasheet()
+
+    def make_dot_stability_file_datasheet(self):
+        # from data_sheet
+        sample_fastq_pairs = []
+        for sample_name in self.list_of_samples_names:
+            temp_list = []
+            temp_list.append(sample_name.replace('-', '[dS]'))
+            for k, v in self.fastq_file_to_sample_name_dict.items():
+                if v == sample_name:
+                    temp_list.append(os.path.join(self.temp_working_directory, k))
+            assert (len(temp_list) == 3)
+            sample_fastq_pairs.append('\t'.join(temp_list))
+        write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
+        self.sample_fastq_pairs = sample_fastq_pairs
 
     def _create_data_set_sample_objects_in_bulk_with_datasheet(self):
         list_of_data_set_sample_objects = []
@@ -829,17 +855,9 @@ class DataLoading:
         that they could be .fq files rather than fastq. also need to take into account that it could be fastq.gz and
         fq.gz rather than fastq and fq."""
         list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
-        for file_path_outer in list_of_files_in_user_input_dir:
-            if 'fastq' in file_path_outer:
-                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if
-                                        (file_path.endswith('fastq') or file_path.endswith('fastq.gz'))]:
-                    # do the copy for each file if fastq is in the file
-                    shutil.copy(file_path_inner, self.temp_working_directory)
-            elif 'fq' in file_path_outer:
-                for file_path_inner in [file_path for file_path in list_of_files_in_user_input_dir if
-                                        (file_path.endswith('fq') or file_path.endswith('fq.gz'))]:
-                    # do the copy for each file if fastq is in the file
-                    shutil.copy(file_path_inner, self.temp_working_directory)
+        for file_path in list_of_files_in_user_input_dir:
+            if 'fastq' in file_path or 'fq' in file_path:
+                    shutil.copy(file_path, self.temp_working_directory)
 
     def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):
