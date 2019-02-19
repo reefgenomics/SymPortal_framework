@@ -241,7 +241,7 @@ class SymPortalWorkFlowManager:
         data_loading_object = data_loading.DataLoading(
             data_set_object=self.data_set_object, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
-            no_ord=self.args.no_ordinations, distance_method=self.args.distance_method)
+            no_ord=self.args.no_ordinations, distance_method=self.args.distance_method, debug=self.args.debug)
         data_loading_object.load_data()
         return data_loading_object
 

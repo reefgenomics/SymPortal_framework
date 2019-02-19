@@ -218,7 +218,7 @@ class DataLoading:
             num_proc=self.num_proc, time_date_str=self.date_time_string)
         sequence_count_table_creator.make_output_tables()
         # TODO don't for get to write out where the non-sym and size violation seqs were output
-        self.output_directory.extend(sequence_count_table_creator.output_paths_list)
+        self.output_path_list.extend(sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(sequence_count_table_creator)
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
@@ -301,7 +301,6 @@ class DataLoading:
             data_loading_temp_working_directory=self.temp_working_directory,
             data_loading_debug=self.debug
         )
-        # TODO got here with the full debug
         self.samples_that_caused_errors_in_qc_list = list(
             self.initial_mothur_handler.samples_that_caused_errors_in_qc_mp_list)
 
@@ -826,6 +825,7 @@ class DataLoading:
         else:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
+        self.sample_meta_info_df.index = self.sample_meta_info_df.index.map(str)
 
     def _copy_and_decompress_input_files_to_temp_wkd(self):
         if not self.is_single_file_or_paired_input:
@@ -974,7 +974,7 @@ class InitialMothurWorker:
         self.pre_med_seq_dump_dir = self.cwd.replace('tempData', 'pre_MED_seqs')
         os.makedirs(self.pre_med_seq_dump_dir, exist_ok=True)
         self.mothur_analysis_object = MothurAnalysis.init_from_pair_of_fastq_gz_files(
-            pcr_analysis_name='symvar', output_dir=self.cwd, fastq_gz_fwd_path=contig_pair.split('\t')[1],
+            pcr_analysis_name='symvar', output_dir=self.cwd, input_dir=self.cwd, fastq_gz_fwd_path=contig_pair.split('\t')[1],
             fastq_gz_rev_path=contig_pair.split('\t')[2], stdout_and_sterr_to_pipe=(not debug), name=self.sample_name)
         self.debug = debug
 
