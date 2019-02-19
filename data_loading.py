@@ -65,7 +65,6 @@ class DataLoading:
         self.fastqs_are_gz_compressed = None
         self.path_to_latest_mothur_batch_file = None
         self.fastq_file_to_sample_name_dict = None
-        self.num_of_samples = None
         self.sample_fastq_pairs = None
         self.samples_that_caused_errors_in_qc_list = []
         self.initial_mothur_handler = None
@@ -134,9 +133,17 @@ class DataLoading:
 
         self._output_seqs_count_table()
 
+        self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
+
         self._output_seqs_stacked_bar_plot()
 
         self._do_sample_ordination()
+
+    def _write_sym_non_sym_and_size_violation_dirs_to_stdout(self):
+        print(f'\nPre-MED Symbiodiniaceae sequences written out to:\n'
+              f'{self.pre_med_sequence_output_directory_path}')
+        print(f'\nNon-Symbiodiniaceae and size violation sequences written out to:\n'
+              f'{self.non_symb_and_size_violation_base_dir_path}')
 
     def _do_sample_ordination(self):
         if not self.no_ord:
@@ -146,8 +153,8 @@ class DataLoading:
 
     def _plot_pcoa(self):
         if not self.no_fig:
-            if self.num_of_samples > 1000:
-                print('Too many samples ({}) to generate plots'.format(self.num_of_samples))
+            if len(self.list_of_samples_names) > 1000:
+                print(f'Too many samples ({len(self.list_of_samples_names)}) to generate plots')
             else:
                 for output_path in self.output_path_list:
                     if self.this_is_pcoa_path(output_path):
@@ -159,7 +166,7 @@ class DataLoading:
                         self.output_path_list.extend(dist_scatter_plotter_samples.output_path_list)
 
     def _do_sample_dist_and_pcoa(self):
-        print('Calculating between sample pairwise distances')
+        print('\nCalculating between sample pairwise distances')
         if self.distance_method == 'unifrac':
             self._do_unifrac_dist_pcoa()
         elif self.distance_method == 'braycurtis':
@@ -190,8 +197,8 @@ class DataLoading:
 
     def _output_seqs_stacked_bar_plot(self):
         if not self.no_fig:
-            if self.num_of_samples > 1000:
-                print(f'Too many samples ({self.num_samples}) to generate plots')
+            if len(self.list_of_samples_names) > 1000:
+                print(f'Too many samples ({len(self.list_of_samples_names)}) to generate plots')
             else:
                 sys.stdout.write('\nGenerating sequence count table figures\n')
 
@@ -200,10 +207,7 @@ class DataLoading:
                 seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(seq_stacked_bar_plotter.output_path_list)
                 # TODO don't for get to add the output path for the non-sym and size violation output
-                sys.stdout.write('\nFigure generation complete')
-                sys.stdout.write('\nFigures output to:')
-                for path in seq_stacked_bar_plotter.output_path_list:
-                    sys.stdout.write(f'\n{path}')
+
 
     def _output_seqs_count_table(self):
         sys.stdout.write('\nGenerating count tables\n')

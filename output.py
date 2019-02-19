@@ -284,10 +284,7 @@ def output_type_count_tables(
     output_directory = os.path.abspath(
         os.path.join(os.path.dirname(__file__), 'outputs/analyses/{}'.format(analysis_object.id)))
     os.makedirs(output_directory, exist_ok=True)
-    with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-        config_dict = json.load(f)
-    local_or_remote = config_dict['system_type']
-    if local_or_remote == 'remote':
+    if sp_config.system_type == 'remote':
         pickle.dump(samples_by_uid_that_have_been_sorted,
                     open("{}/samples_that_have_been_sorted.pickle".format(output_directory), "wb"))
 
@@ -2449,7 +2446,7 @@ class SequenceCountTableCreator:
         # we created the fasta above.
         write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
         self.output_paths_list.append(self.output_fasta_path)
-        print('\nITS2 sequence output files:')
+        print('\n\nITS2 sequence output files:')
         for path_item in self.output_paths_list:
             print(path_item)
 
@@ -2827,14 +2824,14 @@ class SequenceCountTableCollectAbundanceHandler:
             sequence_count_table_ordered_seqs_worker_instance.start_seq_abund_collection()
 
     def _populate_input_dss_mp_queue(self):
-        for dss in self.parent.list_of_data_set_sample_objects:
+        for dss in self.parent.list_of_dss_objects:
             self.input_dss_mp_queue.put(dss)
 
         for N in range(self.parent.num_proc):
             self.input_dss_mp_queue.put('STOP')
 
     def _populate_dss_id_to_list_of_dsss_objects(self):
-        for dss in self.parent.list_of_data_set_sample_objects:
+        for dss in self.parent.list_of_dss_objects:
             sys.stdout.write(f'\r{dss.name}')
             self.dss_id_to_list_of_dsss_objects_mp_dict[dss.id] = list(
                 DataSetSampleSequence.objects.filter(data_set_sample_from=dss))
@@ -2925,10 +2922,7 @@ class SeqOutputSeriesGeneratorHandler:
 
         sys.stdout.write('\n\nOutputting seq data\n')
         for N in range(self.parent.num_proc):
-            p = Process(target=self._output_df_contructor_worker, args=(
-                self.parent.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
-                self.parent.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict
-            ))
+            p = Process(target=self._output_df_contructor_worker, args=())
             all_processes.append(p)
             p.start()
 
@@ -2941,7 +2935,7 @@ class SeqOutputSeriesGeneratorHandler:
             seq_output_series_generator_worker.make_series()
 
     def _populate_dss_input_queue(self):
-        for dss in self.parent.list_of_data_set_sample_objects:
+        for dss in self.parent.list_of_dss_objects:
             self.dss_input_queue.put(dss)
 
         for N in range(self.parent.num_proc):

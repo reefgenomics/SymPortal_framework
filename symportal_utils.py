@@ -635,7 +635,7 @@ class MothurAnalysis:
                 f'forward\t{self.pcr_fwd_primer}',
                 f'reverse\t{self.pcr_rev_primer}'
             ]
-            self.pcr_oligo_file_path = os.path.join(self.input_dir, 'oligo_file.oligo')
+            self.pcr_oligo_file_path = os.path.join(self.input_dir, f'{self.name}_oligo_file.oligo')
             write_list_to_destination(self.pcr_oligo_file_path, oligo_file)
 
     def _pcr_validate_attributes_are_set(self):

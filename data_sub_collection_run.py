@@ -13,7 +13,7 @@ import sys
 import timeit
 from collections import defaultdict
 from multiprocessing import Queue, Process, Manager, current_process
-
+import sp_config
 import numpy as np
 from django import db
 from scipy.stats import gaussian_kde
@@ -4067,9 +4067,7 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
 
     # SEQUENCE NAMING
     # Name generation of sequence will only occur for the local instance of SP
-    with open('{}/sp_config'.format(os.path.dirname(__file__))) as f:
-        config_dict = json.load(f)
-    if config_dict['system_type'] == 'remote':
+    if sp_config.system_type == 'remote':
         print('Naming defining reference Sequences')
         if not analysis_object.reference_sequences_named:
             naming_reference_sequences_used_in_definitions()

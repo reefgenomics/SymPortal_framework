@@ -1174,7 +1174,8 @@ class SeqStackedBarPlotter:
             ])
 
     def _write_out_plot(self):
-        print('Seq stacked bar plots:')
+        sys.stdout.write('\nFigure generation complete')
+        sys.stdout.write('\nFigures output to:')
 
         svg_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.svg'
         sys.stdout.write(f'{svg_path}\n')

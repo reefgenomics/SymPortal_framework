@@ -8,7 +8,7 @@ from django.conf import settings
 # Ensure settings are read
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
-
+from django.core.exceptions import ObjectDoesNotExist
 # Your application specific imports
 from dbApp.models import ReferenceSequence
 # ###########################################
@@ -42,13 +42,14 @@ def populate_db_with_ref_seqs():
     for i in range(len(fasta_to_populate_from)):
         if fasta_to_populate_from[i][0] == '>':
             try:
-                print('Sequence {} already in db'.format(fasta_to_populate_from[i][1:]))
-            except:
+                existing_seq = ReferenceSequence.objects.get(name=fasta_to_populate_from[i][1:])
+                print(f'Sequence {existing_seq.name} already in db')
+            except ObjectDoesNotExist:
                 new_seq = ReferenceSequence(
                     name=fasta_to_populate_from[i][1:], clade=fasta_to_populate_from[i][1],
                     sequence=fasta_to_populate_from[i+1], has_name=True)
                 new_seq.save()
-                print('Sequence {} added to db'.format(fasta_to_populate_from[i][1:]))
+                print(f'Sequence {new_seq.name} added to db')
     return
 
 
