@@ -675,12 +675,9 @@ class DataLoading:
         # are indeed found in the directory that we've been given
         self._check_all_fastqs_in_datasheet_exist()
 
-
         # we will also need to know how to relate the sample names to the fastq files
         # for this we will make a dict of fastq file name to sample
         self._create_fastq_file_to_sample_name_dict()
-        # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
-        self._generate_and_write_new_stability_file_with_data_sheet()
 
         self.make_dot_stability_file_datasheet()
 
