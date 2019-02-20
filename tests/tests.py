@@ -2,6 +2,7 @@
 import os
 import main
 import general
+import django_general
 from pathlib import Path
 import shutil
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
@@ -45,7 +46,7 @@ class SymPortalTester:
         for ds_uid in uids_of_testing_data_set_objects:
             print(f'Cleaning up after previous data loading test: {ds_uid}')
             self.delete_data_load_output_object_directories(ds_uid)
-            general.delete_data_set(ds_uid)
+            django_general.delete_data_set(ds_uid)
 
     @staticmethod
     def delete_data_load_output_object_directories(data_set_uid):
@@ -59,7 +60,7 @@ class SymPortalTester:
         for da_uid in uids_of_testing_data_analysis_objects:
             print(f'Cleaning up after previous data analysis test: {da_uid}')
             self.delete_data_analysis_output_object_directories(da_uid)
-            general.delete_data_analysis(da_uid)
+            django_general.delete_data_analysis(da_uid)
 
     @staticmethod
     def delete_data_analysis_output_object_directories(data_analysis_uid):
