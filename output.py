@@ -2054,11 +2054,12 @@ def get_sample_order_from_rel_seq_abund_df(sequence_only_df_relative):
     for sample_to_sort_ID in sequence_only_df_relative.index.values.tolist():
         sys.stdout.write('\rGetting maj seq for sample {}'.format(sample_to_sort_ID))
         series_as_float = sequence_only_df_relative.loc[sample_to_sort_ID].astype('float')
-        max_abund_seq = series_as_float.idxmax()
         max_rel_abund = series_as_float.max()
+
         if not max_rel_abund > 0:
             no_maj_samps.append(sample_to_sort_ID)
         else:
+            max_abund_seq = series_as_float.idxmax()
             # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
             seq_to_samp_dict[max_abund_seq].append((sample_to_sort_ID, max_rel_abund))
             # add this to the ddict count
@@ -2649,11 +2650,11 @@ class SequenceCountTableCreator:
             sys.stdout.write(f'\r{sample_to_sort_uid}: Getting maj seq for sample')
             sample_series_as_float = self._get_sample_seq_abund_info_as_pd_series_float_type(
                 sample_to_sort_uid, sequence_only_df_relative)
-            max_abund_seq = self._get_name_of_most_abundant_seq(sample_series_as_float)
             max_rel_abund = self._get_rel_abund_of_most_abund_seq(sample_series_as_float)
             if not max_rel_abund > 0:
                 no_maj_samps.append(sample_to_sort_uid)
             else:
+                max_abund_seq = self._get_name_of_most_abundant_seq(sample_series_as_float)
                 # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
                 seq_to_samp_ddict[max_abund_seq].append((sample_to_sort_uid, max_rel_abund))
                 # add this to the ddict count

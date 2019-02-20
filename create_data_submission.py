@@ -1149,7 +1149,7 @@ def screen_sub_e_seqs(wkd, data_set_id, required_symbiodinium_matches=3, num_pro
         max_target_seqs=10,
         num_threads=str(num_proc)
     )
-    blastn_analysis_object.execute()
+    blastn_analysis_object.execute_blastn_analysis()
 
     blast_output_dict = blastn_analysis_object.return_blast_results_dict()
 

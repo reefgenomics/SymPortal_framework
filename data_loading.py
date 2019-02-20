@@ -130,7 +130,7 @@ class DataLoading:
 
         self._delete_temp_working_directory_and_log_files()
 
-        self._output_data_set_info()
+        self._write_data_set_info_to_stdout()
 
         self._output_seqs_count_table()
 
@@ -173,7 +173,7 @@ class DataLoading:
         elif self.distance_method == 'braycurtis':
             self._do_braycurtis_dist_pcoa()
 
-    def _output_data_set_info(self):
+    def _write_data_set_info_to_stdout(self):
         print(f'\n\nData loading complete. DataSet UID: {self.dataset_object.id}')
 
     @staticmethod
@@ -333,8 +333,8 @@ class DataLoading:
         """
 
         if self.screen_sub_evalue:
-
-            self._create_symclade_backup_incase_of_accidental_deletion_of_corruption()
+            if not len(self.samples_that_caused_errors_in_qc_list) == self.list_of_samples_names:
+                self._create_symclade_backup_incase_of_accidental_deletion_of_corruption()
 
             while 1:
                 self.new_seqs_added_in_iteration = 0
@@ -395,10 +395,10 @@ class DataLoading:
             input_file_path=self.sequences_to_screen_fasta_path,
             output_file_path=os.path.join(self.temp_working_directory, 'blast.out'),
             max_target_seqs=10,
-            num_threads=str(self.num_proc)
+            num_threads=str(self.num_proc), pipe_stdout_sterr=(not self.debug)
         )
 
-        blastn_analysis_object.execute()
+        blastn_analysis_object.execute_blastn_analysis()
 
         blast_output_dict = blastn_analysis_object.return_blast_results_dict()
 
@@ -492,7 +492,7 @@ class DataLoading:
         os.makedirs(back_up_dir, exist_ok=True)
         symclade_current_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade.fa'))
 
-        symclade_backup_path = os.path.join(back_up_dir + f'symClade_{self.date_time_string}.fa')
+        symclade_backup_path = os.path.join(back_up_dir, f'symClade_{self.date_time_string}.fa')
         symclade_backup_readme_path = os.path.join(back_up_dir, f'symClade_{self.date_time_string}.readme')
         # then write a copy to it.
         shutil.copy(symclade_current_path, symclade_backup_path)
@@ -1208,9 +1208,9 @@ class PotentialSymTaxScreeningWorker:
             output_format_string="6 qseqid sseqid staxids evalue pident qcovs")
 
         if self.debug:
-            blastn_analysis.execute(pipe_stdout_sterr=False)
+            blastn_analysis.execute_blastn_analysis(pipe_stdout_sterr=False)
         else:
-            blastn_analysis.execute(pipe_stdout_sterr=True)
+            blastn_analysis.execute_blastn_analysis(pipe_stdout_sterr=True)
 
         sys.stdout.write(f'{self.sample_name}: BLAST complete\n')
 

@@ -1250,11 +1250,12 @@ class SeqStackedBarPlotter:
         no_maj_seq = []
         for sample_id_to_sort in self.output_count_table_as_df.index.values.tolist():
             smp_series = self.output_count_table_as_df.loc[sample_id_to_sort].astype('float')
-            max_abund_seq_name = smp_series.idxmax()
+
             rel_abund_of_max_abund_seq_name = smp_series.max()
             if not rel_abund_of_max_abund_seq_name > 0:
                 no_maj_seq.append(sample_id_to_sort)
             else:
+                max_abund_seq_name = smp_series.idxmax()
                 # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
                 seq_to_samp_ddict[max_abund_seq_name].append((sample_id_to_sort, rel_abund_of_max_abund_seq_name))
                 # add this to the ddict count

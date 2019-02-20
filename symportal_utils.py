@@ -11,7 +11,7 @@ class BlastnAnalysis:
             self, input_file_path, output_file_path,
             db_path='/home/humebc/phylogeneticSoftware/ncbi-blast-2.6.0+/ntdbdownload/nt', max_target_seqs=1,
             num_threads=1, output_format_string="6 qseqid sseqid staxids evalue pident qcovs staxid stitle ssciname",
-            blastn_exec_path='blastn'
+            blastn_exec_path='blastn', pipe_stdout_sterr=True
     ):
 
         self.input_file_path = input_file_path
@@ -21,19 +21,26 @@ class BlastnAnalysis:
         self.max_target_seqs = max_target_seqs
         self.num_threads = num_threads
         self.blastn_exec_path = blastn_exec_path
+        self.pipe_stdout_sterr = pipe_stdout_sterr
 
-    def execute(self, pipe_stdout_sterr=True):
-        if pipe_stdout_sterr:
+    def execute_blastn_analysis(self, pipe_stdout_sterr=True):
+        if not pipe_stdout_sterr:
+            completed_process = subprocess.run([
+                self.blastn_exec_path, '-out', self.output_file_path, '-outfmt', self.output_format_string, '-query',
+                self.input_file_path, '-db', self.db_path,
+                '-max_target_seqs', f'{self.max_target_seqs}', '-num_threads', f'{self.num_threads}'])
+
+        elif not self.pipe_stdout_sterr:
+            completed_process = subprocess.run([
+                self.blastn_exec_path, '-out', self.output_file_path, '-outfmt', self.output_format_string, '-query',
+                self.input_file_path, '-db', self.db_path,
+                '-max_target_seqs', f'{self.max_target_seqs}', '-num_threads', f'{self.num_threads}'])
+        else:
             completed_process = subprocess.run([
                 self.blastn_exec_path, '-out', self.output_file_path, '-outfmt', self.output_format_string, '-query',
                 self.input_file_path, '-db', self.db_path,
                 '-max_target_seqs', f'{self.max_target_seqs}', '-num_threads', f'{self.num_threads}'],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        else:
-            completed_process = subprocess.run([
-                self.blastn_exec_path, '-out', self.output_file_path, '-outfmt', self.output_format_string, '-query',
-                self.input_file_path, '-db', self.db_path,
-                '-max_target_seqs', f'{self.max_target_seqs}', '-num_threads', f'{self.num_threads}'])
         return completed_process
 
     def return_blast_output_as_list(self):
