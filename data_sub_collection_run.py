@@ -14,7 +14,6 @@ import timeit
 from collections import defaultdict
 from multiprocessing import Queue, Process, Manager, current_process
 import sp_config
-
 import numpy as np
 from django import db
 from scipy.stats import gaussian_kde
@@ -4091,6 +4090,9 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
 
+    print('DATA SUBMISSION COMPLETE')
+    print('Begin Output')
+
     # It doesn't make sense to automatically make an output from an analysis as we don't know which
     # data_sets we want to output for.
     # actually yes it does because we will simply output all data_sets as a default.
@@ -4137,5 +4139,6 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
         ####################################################
 
     print('data_analysis ID is: {}'.format(analysis_object.id))
+    print('return code: 0\nAnalysis complete')
     return analysis_object.id, list_of_output_file_paths
 #################################################

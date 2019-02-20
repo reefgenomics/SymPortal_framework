@@ -70,9 +70,9 @@ class DataSetSample(models.Model):
     # This is the absolute number of sequences after make.contigs
     num_contigs = models.IntegerField(default=0)
 
-    # store the aboslute number of sequences after sequencing QC at this stage
+    # store the aboslute number of sequences after inital mothur QC i.e. before tax and size screening
     post_qc_absolute_num_seqs = models.IntegerField(default=0)
-    # This is the unique number of sequences after the sequencing QC
+    # This is the unique number of sequences after inital mothur QC i.e. before tax and size screening
     post_qc_unique_num_seqs = models.IntegerField(default=0)
 
     # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)

@@ -1,5 +1,6 @@
 tests/.DS_Store
 settings.py
+tests/.DS_Store
 db.sqlite3
 /__pycache__
 /.idea
