@@ -293,14 +293,9 @@ class DataLoading:
         if not self.sample_fastq_pairs:
             self._exit_and_del_data_set_sample('Sample fastq pairs list empty')
 
-        self.initial_mothur_handler = InitialMothurHandler(
-            num_proc=self.num_proc, sample_fastq_pairs=self.sample_fastq_pairs)
+        self.initial_mothur_handler = InitialMothurHandler(data_loading_parent=self)
 
-        self.initial_mothur_handler.execute_worker_initial_mothur(
-            data_loading_dataset_object=self.dataset_object,
-            data_loading_temp_working_directory=self.temp_working_directory,
-            data_loading_debug=self.debug
-        )
+        self.initial_mothur_handler.execute_worker_initial_mothur()
         self.samples_that_caused_errors_in_qc_list = list(
             self.initial_mothur_handler.samples_that_caused_errors_in_qc_mp_list)
 
@@ -903,31 +898,29 @@ class DataLoading:
 
 
 class InitialMothurHandler:
-    def __init__(self, sample_fastq_pairs, num_proc):
+    def __init__(self, data_loading_parent):
+        self.parent = data_loading_parent
         self.input_queue_containing_pairs_of_fastq_file_paths = Queue()
         self.worker_manager = Manager()
         self.samples_that_caused_errors_in_qc_mp_list = self.worker_manager.list()
-        self.num_proc = num_proc
-        self._populate_input_queue(sample_fastq_pairs)
+        self._populate_input_queue()
 
-    def _populate_input_queue(self, sample_fastq_pairs):
-        for fastq_path_pair in sample_fastq_pairs:
+    def _populate_input_queue(self):
+        for fastq_path_pair in self.parent.sample_fastq_pairs:
             self.input_queue_containing_pairs_of_fastq_file_paths.put(fastq_path_pair)
 
-        for n in range(self.num_proc):
+        for n in range(self.parent.num_proc):
             self.input_queue_containing_pairs_of_fastq_file_paths.put('STOP')
 
-    def execute_worker_initial_mothur(
-            self, data_loading_dataset_object, data_loading_temp_working_directory, data_loading_debug
-    ):
+    def execute_worker_initial_mothur(self):
         all_processes = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
 
         sys.stdout.write('\nPerforming QC\n')
-        for n in range(self.num_proc):
+        for n in range(self.parent.num_proc):
             p = Process(target=self._worker_initial_mothur,
-                        args=(data_loading_dataset_object, data_loading_temp_working_directory, data_loading_debug)
+                        args=()
                         )
 
             all_processes.append(p)
@@ -936,9 +929,7 @@ class InitialMothurHandler:
         for p in all_processes:
             p.join()
 
-    def _worker_initial_mothur(
-            self, data_loading_dataset_object, data_loading_temp_working_directory, data_loading_debug
-    ):
+    def _worker_initial_mothur(self):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
         This QC includes making contigs, screening for ambigous calls (0 allowed) and homopolymer (maxhomop=5)
@@ -949,36 +940,31 @@ class InitialMothurHandler:
 
         for contigpair in iter(self.input_queue_containing_pairs_of_fastq_file_paths.get, 'STOP'):
 
-            initial_morthur_worker = InitialMothurWorker(
-                contig_pair=contigpair,
-                data_set_object=data_loading_dataset_object,
-                temp_wkd=data_loading_temp_working_directory,
-                debug=data_loading_debug
-            )
+            initial_morthur_worker = InitialMothurWorker(init_mothur_handler_parent_obj = self, contig_pair=contigpair)
 
             try:
-                initial_morthur_worker.execute()
+                initial_morthur_worker.start_initial_mothur_worker()
             except RuntimeError as e:
                 self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
         return
 
 
 class InitialMothurWorker:
-    def __init__(self, contig_pair, data_set_object, temp_wkd, debug):
+    def __init__(self, init_mothur_handler_parent_obj, contig_pair):
+        self.parent=init_mothur_handler_parent_obj
         self.sample_name = contig_pair.split('\t')[0].replace('[dS]', '-')
         self.data_set_sample = DataSetSample.objects.get(
-                name=self.sample_name, data_submission_from=data_set_object
+                name=self.sample_name, data_submission_from=self.parent.parent.dataset_object
             )
-        self.cwd = os.path.join(temp_wkd, self.sample_name)
+        self.cwd = os.path.join(self.parent.parent.temp_working_directory, self.sample_name)
         os.makedirs(self.cwd, exist_ok=True)
         self.pre_med_seq_dump_dir = self.cwd.replace('tempData', 'pre_MED_seqs')
         os.makedirs(self.pre_med_seq_dump_dir, exist_ok=True)
         self.mothur_analysis_object = MothurAnalysis.init_from_pair_of_fastq_gz_files(
             pcr_analysis_name='symvar', output_dir=self.cwd, input_dir=self.cwd, fastq_gz_fwd_path=contig_pair.split('\t')[1],
-            fastq_gz_rev_path=contig_pair.split('\t')[2], stdout_and_sterr_to_pipe=(not debug), name=self.sample_name)
-        self.debug = debug
+            fastq_gz_rev_path=contig_pair.split('\t')[2], stdout_and_sterr_to_pipe=(not self.parent.parent.debug), name=self.sample_name)
 
-    def execute(self):
+    def start_initial_mothur_worker(self):
         sys.stdout.write(f'{self.sample_name}: QC started\n')
 
         self._do_make_contigs()
