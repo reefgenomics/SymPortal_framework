@@ -2,6 +2,8 @@ import os
 import pickle
 # ####### Setup Django DB and Models ########
 # Ensure settings are read
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
+from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 import subprocess

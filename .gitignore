@@ -1,3 +1,4 @@
+tests/__pycache__/
 settings.py
 tests/.DS_Store
 db.sqlite3
