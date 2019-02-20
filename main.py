@@ -15,7 +15,7 @@
 
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see
-    https://github.com/SymPortal/SymPortal_framework/tree/master/LICENSE.txt.
+    https://github.com/didillysquat/SymPortal_framework/tree/master/LICENSE.txt.
     """
 
 # Django specific settings
@@ -68,7 +68,7 @@ class SymPortalWorkFlowManager:
     def _define_args(self, custom_args_list=None):
         parser = argparse.ArgumentParser(
             description='Intragenomic analysis of the ITS2 region of the nrDNA',
-            epilog='For support email: symportal@gmail.com')
+            epilog='For support email: benjamin.hume@kaust.edu.sa')
         group = parser.add_mutually_exclusive_group(required=True)
         self.define_mutually_exclusive_args(group)
         self.define_additional_args(group, parser)
