@@ -104,9 +104,7 @@ def profile_discovery(num_procs):
                 # todo possibility for class.
 
                 if passed_element[0] not in master_cladal_list_of_footprint_dicts[passed_element[1]]:
-                    master_cladal_list_of_footprint_dicts[passed_element[1]][passed_element[0]] = [[passed_element[2]],
-                                                                                                   [[passed_element[
-                                                                                                         3]]]]
+                    master_cladal_list_of_footprint_dicts[passed_element[1]][passed_element[0]] = [ [passed_element[2]], [[passed_element[3]] ]]
                 else:
                     master_cladal_list_of_footprint_dicts[passed_element[1]][passed_element[0]][0].append(
                         passed_element[2])
