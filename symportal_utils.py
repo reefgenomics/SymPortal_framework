@@ -205,7 +205,7 @@ class MothurAnalysis:
     @classmethod
     def init_from_pair_of_fastq_gz_files(
             cls, name, fastq_gz_fwd_path, fastq_gz_rev_path, output_dir=None, mothur_execution_string='mothur',
-            num_processors=10, stdout_and_sterr_to_pipe=True, pcr_fwd_primer=None, pcr_rev_primer=None,
+            num_processors=1, stdout_and_sterr_to_pipe=True, pcr_fwd_primer=None, pcr_rev_primer=None,
             pcr_oligo_file_path=None, pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None, input_dir=None):
 
         return cls(name=name, sequence_collection=None, mothur_execution_path=mothur_execution_string,
@@ -222,7 +222,7 @@ class MothurAnalysis:
                                       output_dir=None, mothur_execution_path='mothur',
                                       pcr_fwd_primer=None, pcr_rev_primer=None, pcr_oligo_file_path=None,
                                       pcr_fwd_primer_mismatch=2, pcr_rev_primer_mismatch=2, pcr_analysis_name=None,
-                                      num_processors=10, stdout_and_sterr_to_pipe=True):
+                                      num_processors=1, stdout_and_sterr_to_pipe=True):
         return cls(
             name=name, sequence_collection=sequence_collection, input_dir=input_dir,
             output_dir=output_dir, mothur_execution_path=mothur_execution_path, pcr_fwd_primer=pcr_fwd_primer,
@@ -235,7 +235,7 @@ class MothurAnalysis:
     @classmethod
     def init_for_weighted_unifrac(
             cls, tree_path, group_file_path, name_file_path, name, input_dir=None,
-            output_dir=None, mothur_execution_string='mothur', num_processors=10,
+            output_dir=None, mothur_execution_string='mothur', num_processors=1,
             stdout_and_sterr_to_pipe=True, is_unifrac_analysis=True):
 
         return cls(
