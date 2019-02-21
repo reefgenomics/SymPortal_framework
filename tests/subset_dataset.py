@@ -35,7 +35,9 @@ class DataSetSubSampler:
     def sub_sample_data(self):
         for file_path in return_list_of_file_paths_in_directory(self.input_dir):
             extension = self._determine_extension_of_file_name(file_path)
-            out_name = os.path.basename(file_path).replace(extension, f'{self.args.suffix}{extension}')
+            # nb seqtk outputs non-compressed only.
+            out_extension = extension.replace('.gz', '')
+            out_name = os.path.basename(file_path).replace(extension, f'{self.args.suffix}{out_extension}')
             out_path = os.path.join(self.output_dir, out_name)
             if not self.args.force_overwrite and os.path.exists(out_path):
                 print(f'Output file {out_path} already exists. File will not be overwritten. '
