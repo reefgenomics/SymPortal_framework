@@ -1147,7 +1147,7 @@ class PotentialSymTaxScreeningHandler:
                 e_val_collection_mp_dict=self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict,
                 sub_evalue_nucleotide_sequence_to_clade_mp_dict=self.sub_evalue_nucleotide_sequence_to_clade_mp_dict)
 
-            taxonomic_screening_worker.execute()
+            taxonomic_screening_worker.execute_tax_screening()
 
 
 class PotentialSymTaxScreeningWorker:
@@ -1182,7 +1182,7 @@ class PotentialSymTaxScreeningWorker:
         # it will be used in downstream processes.
         self.checked_samples_mp_list = checked_samples_mp_list
 
-    def execute(self):
+    def execute_tax_screening(self):
         sys.stdout.write(f'{self.sample_name}: verifying seqs are Symbiodinium and determining clade\n')
 
         blastn_analysis = BlastnAnalysis(
