@@ -48,10 +48,9 @@ class SymPortalTester:
             self.delete_data_load_output_object_directories(ds_uid)
             django_general.delete_data_set(ds_uid)
 
-    @staticmethod
-    def delete_data_load_output_object_directories(data_set_uid):
+    def delete_data_load_output_object_directories(self, data_set_uid):
         directory_to_delete = os.path.abspath(os.path.join(
-            Path(__file__).parents[1], 'outputs', 'data_set_submissions', str(data_set_uid)))
+            self.symportal_root_dir, 'outputs', 'data_set_submissions', str(data_set_uid)))
         if os.path.exists(directory_to_delete):
             shutil.rmtree(directory_to_delete)
 
@@ -62,10 +61,9 @@ class SymPortalTester:
             self.delete_data_analysis_output_object_directories(da_uid)
             django_general.delete_data_analysis(da_uid)
 
-    @staticmethod
-    def delete_data_analysis_output_object_directories(data_analysis_uid):
+    def delete_data_analysis_output_object_directories(self, data_analysis_uid):
         directory_to_delete = os.path.abspath(os.path.join(
-            Path(__file__).parents[1], 'outputs', 'analyses', str(data_analysis_uid)))
+            self.symportal_root_dir, 'outputs', 'analyses', str(data_analysis_uid)))
         if os.path.exists(directory_to_delete):
             shutil.rmtree(directory_to_delete)
 
