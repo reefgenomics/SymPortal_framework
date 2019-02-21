@@ -387,12 +387,30 @@ class MothurAnalysis:
         self.latest_summary_output_as_list = decode_utf8_binary_to_list(self.latest_completed_process_summary.stdout)
 
     # #####################
-    @staticmethod
-    def _if_scrap_fasta_exists(fwd_output_scrapped_fasta_path):
+    def _if_scrap_fasta_exists_clean_and_write_out(self, fwd_output_scrapped_fasta_path):
+        # NB Mothur will not output a scrap fasta file if there are no scrap fasta. Also NB that mothur will output
+        # sequence names with no sequence for sequences that have multiple matches for a given primer.
+        # we should screen for these and remove them.
         if fwd_output_scrapped_fasta_path == '':
             return False
         else:
-            return True
+            scrapped_fasta_as_list = read_defined_file_to_list(fwd_output_scrapped_fasta_path)
+            if scrapped_fasta_as_list:
+                new_scrapped_fasta = self._make_new_fasta_no_multi_match_lines(scrapped_fasta_as_list)
+                if new_scrapped_fasta:
+                    write_list_to_destination(fwd_output_scrapped_fasta_path, new_scrapped_fasta)
+                    return True
+                else:
+                    return False
+            else:
+                return False
+
+    def _make_new_fasta_no_multi_match_lines(self, scrapped_fasta_as_list):
+        new_scrapped_fasta = []
+        for i in range(0, len(scrapped_fasta_as_list), 2):
+            if not 'multipleMatches' in scrapped_fasta_as_list[i]:
+                new_scrapped_fasta.extend([scrapped_fasta_as_list[i], scrapped_fasta_as_list[i + 1]])
+        return new_scrapped_fasta
 
     def _weighted_unifrac_make_and_write_mothur_batch(self):
         mothur_batch_file = [
