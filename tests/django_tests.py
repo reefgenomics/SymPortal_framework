@@ -5,7 +5,7 @@ import main
 import shutil
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
-from dbApp.models import DataSet
+from dbApp.models import DataSet, DataAnalysis
 
 
 class SPIntegrativeTesting(TransactionTestCase):
@@ -15,11 +15,11 @@ class SPIntegrativeTesting(TransactionTestCase):
 
     The DataSet IDs are:
     1: Smith et al
-    2: Anon
-    3: Tullia
+    7: Anon
+    27: Tullia
 
     The DataAnalysis ID is:
-    1: contains DataSets 1, 2 and 3
+    1: contains DataSets 1, 7 and 27
 
     NB I was originally running this as a class of TestCase rather than TransactionTestCase, however, when running as
     TestCase the database was being created in memory and so new connections could not be closed and reopened. With
@@ -58,5 +58,28 @@ class SPIntegrativeTesting(TransactionTestCase):
     def _delete_data_load_output_object_directories(self, data_set_uid):
         directory_to_delete = os.path.abspath(os.path.join(
             self.symportal_root_dir, 'outputs', 'data_set_submissions', str(data_set_uid)))
+        if os.path.exists(directory_to_delete):
+            shutil.rmtree(directory_to_delete)
+
+    # def test_data_analysis(self):
+    #     self._cleanup_after_previously_run_data_analysis_tests()
+    #     self._start_data_analysis_work_flow()
+    #     self._cleanup_after_previously_run_data_analysis_tests()
+
+    def _start_data_analysis_work_flow(self):
+        custom_args_list = ['--analyse', '1,7,27', '--name', self.name,
+                            '--num_proc', str(self.num_proc)]
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
+    def _cleanup_after_previously_run_data_analysis_tests(self):
+        uids_of_testing_data_analysis_objects = (da.id for da in DataAnalysis.objects.filter(name='testing'))
+        for da_uid in uids_of_testing_data_analysis_objects:
+            print(f'Cleaning up after previous data analysis test: {da_uid}')
+            self._delete_data_analysis_output_object_directories(da_uid)
+
+    def _delete_data_analysis_output_object_directories(self, data_analysis_uid):
+        directory_to_delete = os.path.abspath(os.path.join(
+            self.symportal_root_dir, 'outputs', 'analyses', str(data_analysis_uid)))
         if os.path.exists(directory_to_delete):
             shutil.rmtree(directory_to_delete)
