@@ -13,7 +13,7 @@ class SymPortalTester:
     def __init__(self):
         self.symportal_testing_root_dir = os.path.abspath(os.path.dirname(__file__))
         self.symportal_root_dir = os.path.abspath(os.path.join(self.symportal_testing_root_dir, '..'))
-        self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data')
+        self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data', 'smith_subsampled_data')
         self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input.csv')
         self.completed_data_loading_object = None
         self.num_proc=6
