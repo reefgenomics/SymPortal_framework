@@ -277,14 +277,15 @@ class MothurAnalysis:
 
         fwd_output_scrapped_fasta_path, fwd_output_good_fasta_path = self._pcr_extract_good_and_scrap_output_paths()
 
-        remove_primer_mismatch_annotations_from_fasta(fwd_output_scrapped_fasta_path)
         remove_primer_mismatch_annotations_from_fasta(fwd_output_good_fasta_path)
 
+        # In some uncommon cases, all amplicons gave a PCR match and there is no scrapped fastsa to do a rev PCR on
         # then we should clean up the output_bad_fasta
         # then reverse complement it
         # then do a pcr on it again using the same oligo set as the first run
         # we should then get the output from that pcr and add it to the previous run
-        if do_reverse_pcr_as_well:
+        if do_reverse_pcr_as_well and self._if_scrap_fasta_exists(fwd_output_scrapped_fasta_path):
+            remove_primer_mismatch_annotations_from_fasta(fwd_output_scrapped_fasta_path)
             self.fasta_path = fwd_output_scrapped_fasta_path
             self._rev_comp_make_and_write_mothur_batch_file()
             self._run_mothur_batch_file_command()
@@ -386,6 +387,13 @@ class MothurAnalysis:
         self.latest_summary_output_as_list = decode_utf8_binary_to_list(self.latest_completed_process_summary.stdout)
 
     # #####################
+    @staticmethod
+    def _if_scrap_fasta_exists(fwd_output_scrapped_fasta_path):
+        if fwd_output_scrapped_fasta_path == '':
+            return False
+        else:
+            return True
+
     def _weighted_unifrac_make_and_write_mothur_batch(self):
         mothur_batch_file = [
             f'set.dir(input={self.input_dir})',
