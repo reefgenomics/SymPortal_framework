@@ -579,7 +579,7 @@ class MothurAnalysis:
                 [self.exec_path, self.mothur_batch_file_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
-            for line in decode_utf8_binary_to_list(self.latest_completed_process_command.stdout):
+            for line in decode_utf8_binary_to_list(self.latest_completed_process_summary.stdout):
                 print(line)
 
     def _pcr_make_and_write_mothur_batch_file(self):
