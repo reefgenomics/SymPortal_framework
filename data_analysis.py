@@ -1,8 +1,9 @@
 import os
 import shutil
-from multiprocessing import Queue, Manager, Process
+from multiprocessing import Queue, Manager, Process, current_process
 import sys
 from dbApp.models import AnalysisType
+import itertools
 
 from django import db
 class SPDataAnalysis:
@@ -454,16 +455,11 @@ class SPDataAnalysis:
 
                         # Now go through each of the (n-1)mer footprints and see if they
                         # fit into a footprint in the unsuported list
-                        # This dict value = the synthetic footprint of length n-1,
+                        # This dict key = the synthetic footprint of length n-1,
                         # value, a list of unsupported types that are mastersets of the synthetic footprint
 
                         print('\rGenerated {} Synthetic footprints'.format(len(collapse_n_mer_dictionary)), end='')
-                        # We create a dict that is key, type and value is the set of the majrefseqs found in the type
-                        # this was being calculated once for every synthetic type.
-                        # But the number of synthetic types are getting very large
-                        # so by having this dict we should speed things up considerably
-                        # This info is used to make sure that when collapsing types the maj sequences are shared between the
-                        # larger and smaller types
+
 
                         # Items for printing out our progress
                         total = len(collapse_n_mer_dictionary) * len(unsupported_list)
@@ -476,6 +472,7 @@ class SPDataAnalysis:
                             # If it does then we can't collapse into it.
                             if does_set_of_ref_seqs_contain_multiple_basal_types(frTupKey):
                                 continue
+
                             for nLengthType in unsupported_list:  # for each of the unsupported init_types
                                 # Items for printing out progress
                                 count += 1
@@ -485,10 +482,10 @@ class SPDataAnalysis:
                                     print_value = max([print_value + 0.01, percent_complete + 0.01])
 
                                 # For each of the N-1mers see if they fit within the unsupported types
-                                # if so then add the footprint into the n-1mers list
-                                # we should check for the maj rule again. I.e. we should want all of the Majs of the
-                                # footprint in Q to be in the kmer footprint
-                                # maybe recycle code for this
+                                # if so then add the footprint into the n-1mers list associated with that footprint
+                                # in the collapse_n_mer_dictionary.
+                                # All of the Majs of the footprint in Q need to be in the kmer footprint
+
                                 if frTupKey.issubset(nLengthType.profile):
                                     # Now check to see that at least one of the set_of_maj_ref_seqs seqs is found in the
                                     # frTupKey.
@@ -891,6 +888,7 @@ class SupportedFootPrintIdentifier:
         self._init_initial_types_list()
         # number of clade collections a footprint must be found in to be supported
         self.required_support = 4
+
         # arguments that are used in the _populate_collapse_dict_for_next_n_mehod
         # nb these arguments are regularly updated
         # Bool that represents whether we should conitnue to iterate through the larger types trying to find
@@ -909,6 +907,10 @@ class SupportedFootPrintIdentifier:
         self.current_n = None
         self.large_fp_to_collapse_list = None
 
+        # Attributes used in the synthetic footprint generation
+        self.list_of_initial_types_of_len_n = None
+        self.synthetic_fp_dict = None
+
     def _init_initial_types_list(self):
         for footprint_key, footprint_representative in self.clade_fp_dict.items():
             self.initial_types_list.append(
@@ -923,12 +925,70 @@ class SupportedFootPrintIdentifier:
             self._update_supported_unsupported_lists_for_n()
 
             self._collapse_n_len_initial_types_into_minus_one_initial_types()
+
             if self.current_n >2:
                 # generate insilico intial types and try to collapse to these
-                apples = 'asdf'
+                # We only need to attempt the further collapsing if there are unsupported types to collapse
+                if len(self.unsupported_list) > 1:
+                    # For every initial type (supported and unsupported) of length n,
+                    # generate all the permutations of the reference sequnces that are n-1 in length
+                    # Then try to collapse into these.
+                    self.list_of_initial_types_of_len_n = [
+                        initial_t for initial_t in self.initial_types_list if initial_t.profile_length == self.current_n]
+                    # Only carry on if we have lengthN footprints to get sequences from
+                    if self.list_of_initial_types_of_len_n:
+                        self._generate_synth_footprints()
+                        self._associate_un_sup_init_types_to_synth_footprints()
+                        # TODO we are here.
+
+
             else:
                 # assign still unsupported types to maj seqs
 
+    def _generate_synth_footprints(self):
+        sfp = SyntheticFootprintPermutator(parent_supported_footprint_identifier=self)
+        sfp.permute_synthetic_footprints()
+        # NB its necessary to convert the mp dict to standard dict for lists that are the values
+        # to behave as expected with the .append() function.
+        self.synthetic_fp_dict = dict(sfp.collapse_n_mer_mp_dict)
+
+    def _associate_un_sup_init_types_to_synth_footprints(self):
+        # Now go through each of the (n-1) footprints and see if they
+        # fit into a footprint in the unsuported list
+        print('Checking new set of synthetic types')
+        for synth_fp in self.synthetic_fp_dict.keys():
+
+            if self._does_synth_fp_have_multi_basal_seqs(synth_fp):
+                continue
+
+            for un_sup_initial_type in self.unsupported_list:
+                # For each of the synth footprints see if they fit within the unsupported types.
+                # If so then add the initial type into the list associated with that synth footprint
+                # in the synthetic_fp_dict.
+                # For a match, at least one maj ref seqs need to be in common between the two footprints
+                if synth_fp.issubset(un_sup_initial_type.profile):
+                    if len(un_sup_initial_type.set_of_maj_ref_seqs & synth_fp) >= 1:
+                        # Then associate un_sup_initial_type to the synth fp
+                        self.synthetic_fp_dict[synth_fp].append(un_sup_initial_type)
+
+    def _does_synth_fp_have_multi_basal_seqs(self, frozen_set_of_ref_seqs):
+        basal_count = 0
+        c15_found = False
+        for ref_seq in frozen_set_of_ref_seqs:
+            if 'C15' in ref_seq.name and not c15_found:
+                basal_count += 1
+                c15_found = True
+                continue
+            elif ref_seq.name == 'C3':
+                basal_count += 1
+                continue
+            elif ref_seq.name == 'C1':
+                basal_count += 1
+                continue
+        if basal_count > 1:
+            return True
+        else:
+            return False
 
     def _collapse_n_len_initial_types_into_minus_one_initial_types(self):
         # Try to collapse length n footprints into size n-1 footprints
@@ -1106,6 +1166,41 @@ class CollapseAssessor:
 
         multi_basal = self.shorter_initial_type.contains_multiple_basal_sequences
         return self.shorter_initial_type.profile.issubset(self.longer_intial_type.profile) and not multi_basal
+
+class SyntheticFootprintPermutator:
+    def __init__(self, parent_supported_footprint_identifier):
+        self.parent = parent_supported_footprint_identifier
+        self.len_n_profile_input_mp_list = Queue()
+        self.mp_manager = Manager()
+        self.collapse_n_mer_mp_dict = self.mp_manager.dict()
+        self._populate_mp_input_queue()
+
+    def _populate_mp_input_queue(self):
+        for len_n_initial_type in self.parent.list_of_initial_types_of_len_n:
+            self.len_n_profile_input_mp_list.put(len_n_initial_type.profile)
+        for n in range(self.parent.parent.args.num_proc):
+            self.len_n_profile_input_mp_list.put('STOP')
+
+    def permute_synthetic_footprints(self):
+        all_processes = []
+
+        for N in range(self.parent.parent.args.num_proc):
+            p = Process(target=self.permute_synthetic_footprints_worker, args=())
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+        sys.stdout.write(f'\rGenerated {len(self.collapse_n_mer_mp_dict)} synthetic footprints')
+
+    def permute_synthetic_footprints_worker(self):
+        for footprint_set in iter(self.len_n_profile_input_mp_list.get, 'STOP'):
+            temp_dict = {
+                frozenset(tup): [] for tup in itertools.combinations(footprint_set, self.parent.current_n - 1)}
+            self.collapse_n_mer_mp_dict.update(temp_dict)
+            sys.stdout.write(f'\rGenerated iterCombos using {current_process().name}')
+
 
 class FootprintCollapser:
     """Responsible for collapsing the long initial type into a short initial type."""
