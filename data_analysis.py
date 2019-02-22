@@ -264,20 +264,19 @@ class SPDataAnalysis:
                                             repeat = True
                                             collapse_dict[bigFootprint] = smallerFootprint
 
-                # Once here we have tried to collapse all of the large seq into all of the smaller footprinst
-                # now if there is a collapse do the collapse and then remove it from the unsupported list
+                # If there is a collapse, do the collapse and then remove it from the unsupported list
                 # (we will see if the smaller footprint we added it to is supported next round of n)
-                # Or each key of the collapse_dict add it to the value.
-                # then remove the key from the unsupported_list
+                # I.E. each key of the collapse_dict add it to the value.
+
                 # 08/12/17 here is where we will need to start to implement extraction
-                # rather than just deletion for the potentially multiple
+                # rather than just deletion for the potentially multiple basal seqs profiles
                 # We will need to be careful that we don't start extracting profiles for non basal mixes, e.g. if we have
                 # C3, C3a, C3b, C3d in the big and the small is C3, C3a, C3b we don't want to extract this, we want to use
-                # the preivous method of deletion. I guess the best way to tell whether we want to do extraction vs deletion
-                # is if there is another basal maj type in the large footprint
-                # I'm starting to think that it might be worth having an initial type object where we can store useful
-                # information like list of cc, list of dsss and list of basal maj
-                # Yep, we now have this and I am doing the initial write now.
+                # the preivous method of deletion (simply adding support of the big to the small and
+                # removing the uncommon ref seq).
+                # To tell whether we want to do extraction vs deletion
+                # see if there is another basal maj type in the large footprint
+
 
                 collapse_dict_keys_list = list(collapse_dict.keys())
                 # 070218 - Go through to make sure that all of the keys are found in the unsupported typelist-they should be
@@ -932,6 +931,20 @@ class SupportedFootPrintIdentifier:
         self._init_initial_types_list()
         # number of clade collections a footprint must be found in to be supported
         self.required_support = 4
+        # arguments that are used in the _populate_collapse_dict_for_next_n_mehod
+        # nb these arguments are regularly updated
+        # Bool that represents whether we should conitnue to iterate through the larger types trying to find
+        # shorter types to collapse into
+        self.repeat = None
+        # list holding the initial types that are length n-1
+        self.n_minu_one_list = []
+        # key = big initial type, value = small initial type that it should be collapsed into
+        self.collapse_dict = {}
+        # the number of support that a potetially collapsed type, i.e. support of the large initial type
+        # plus the cc support of the small inital type it will be collapsed into
+        # this is used to assesss which collapse will happen in the case that there are several viable collapse
+        # options. The bigest score will be collapsed.
+        self.top_score = 0
 
     def _init_initial_types_list(self):
         for footprint_key, footprint_representative in self.clade_fp_dict.items():
@@ -951,139 +964,41 @@ class SupportedFootPrintIdentifier:
             # type.
             repeat = True
             while repeat:
-                collapse_dict, repeat = self._populate_collapse_dict_for_next_n(n, repeat)
-                # TODO you got here
-                collapse_dict_keys_list = list(collapse_dict.keys())
+                self._populate_collapse_dict_for_next_n(n)
+                # TODO make from this point forwards a method and put the below comments in as a doc string
+                # If there is a collapse, do the collapse and then remove it from the unsupported list
+                # (we will see if the smaller footprint we added it to is supported next round of n)
+                # I.E. each key of the collapse_dict add it to the value.
 
-    def _populate_collapse_dict_for_next_n(self, n, repeat):
-        collapse_dict = {}
-        repeat = False
-        n_minus_one_list = self._get_n_minus_one_list(n)
-        if n_minus_one_list:
+                # 08/12/17 here is where we will need to start to implement extraction
+                # rather than just deletion for the potentially multiple basal seqs profiles
+                # We will need to be careful that we don't start extracting profiles for non basal mixes, e.g. if we have
+                # C3, C3a, C3b, C3d in the big and the small is C3, C3a, C3b we don't want to extract this, we want to use
+                # the preivous method of deletion (simply adding support of the big to the small and
+                # removing the uncommon ref seq).
+                # To tell whether we want to do extraction vs deletion
+                # see if there is another basal maj type in the large footprint
+                collapse_dict_keys_list = list(self.collapse_dict.keys())
+
+
+    def _populate_collapse_dict_for_next_n(self, n):
+        self._set_attributes_for_collapse_dict_population(n)
+        if self.n_minus_one_list:
             for longer_initial_type in self.unsupported_list:
                 sys.stdout.write(f'Assessing footprint {longer_initial_type} for supported type\r')
-                top_score = 0
-                for shorter_initial_type in n_minus_one_list:
-                    # If the small foot print is a subset of the big footprint consider for collapse
-                    # Only collapse into the small footprint if it doesn't contain multiple basal types.
-                    # Only collapse if this is the best option i.e. if it give the largest number of support
-                    multi_basal = shorter_initial_type.contains_multiple_basal_sequences
-                    if shorter_initial_type.profile.issubset(longer_initial_type.profile) and not multi_basal:
-                        # Consider this for collapse only if the majsequences of the
-                        # smaller are a subset of the maj sequences of the larger
-                        # e.g. we don't want A B C D being collapsed into B C D when
-                        # A is the maj of the first and B is a maj of the second
+                self.top_score = 0
+                for shorter_initial_type in self.n_minus_one_list:
+                    collapse_assessor = CollapseAssessor(
+                        parent_supported_footprint_identifier=self,
+                        longer_intial_type=longer_initial_type,
+                        shorter_initial_type=shorter_initial_type)
+                    collapse_assessor.assess_collapse()
 
-                        # simplest way to check this is to take the setOfMajRefSeqsLarge
-                        # which is a set of all of the
-                        # ref seqs that are majs in the cc that the footprint is found in
-                        # and make sure that it is a subset of the smaller footprint in question
 
-                        # 10/01/18 what we actually need is quite complicated. If the big type is not multi basal,
-                        # then we have no problem and we need to find all of the set of
-                        # maj ref seqs in the small profile
-                        # but if the large type is multi basal then it gets a little more complicated
-                        # if the large type is multi basal then which of its set of maj ref
-                        # seqs we need to find in the small profile
-                        # is dependent on what the basal seq of the smallfootprint is.
-                        # if the small has no basal seqs in it, then we need to find every
-                        # sequence in the large's set of maj ref seqs
-                        # that is NOT a C15x, or the C3 or C1 sequences.
-                        # if small basal = C15x then we need to find every one of the
-                        # large's seqs that isn't C1 or C3
-                        # if small basal = C1 then we need to find every on of the
-                        # large's seqs that isn't C3 or C15x
-                        # if small basal = C3 then we need to find every on of the
-                        # large's seqs that isn't C1 or C15x
-                        # we should put this decision into a new function
-
-                        if longer_initial_type.contains_multiple_basal_sequences:
-                            if self.does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(
-                                    longer_initial_type, shorter_initial_type):
-                                # score = number of samples big was found in plus num samples small was found in
-                                score = longer_initial_type.support + shorter_initial_type.support
-                                if score > top_score:
-                                    top_score = score
-                                    repeat = True
-                                    collapse_dict[longer_initial_type] = shorter_initial_type
-
-                        else:
-                            if longer_initial_type.set_of_maj_ref_seqs.issubset(shorter_initial_type.profile):
-                                # score = number of samples big was found in plus num samples small was found in
-                                score = longer_initial_type.support + shorter_initial_type.support
-                                if score > top_score:
-                                    top_score = score
-                                    repeat = True
-                                    collapse_dict[longer_initial_type] = shorter_initial_type
-        return collapse_dict, repeat
-
-    def does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(self, longer_initial_type, shorter_initial_type):
-        if shorter_initial_type.basalSequence_list:
-            if 'C15' in shorter_initial_type.basalSequence_list[0]:
-                # then this is a C15x basal type and we will need to find all sequences that are not C1 or C3
-                set_of_seqs_to_find = set()
-                ref_seqs_in_big_init_type = list(longer_initial_type.set_of_maj_ref_seqs)
-
-                for ref_seq in ref_seqs_in_big_init_type:
-                    if ref_seq.name in ['C1', 'C3']:
-                        # then this is a squence we don't need to find
-                        pass
-                    else:
-                        set_of_seqs_to_find.add(ref_seq)
-                # Here we have the list of the ref_seqs that we need to find in the small_init_type.profile
-                if set_of_seqs_to_find.issubset(shorter_initial_type.profile):
-                    return True
-                else:
-                    return False
-            elif shorter_initial_type.basalSequence_list[0] == 'C1':
-                # then this is a C1 basal type and we need to find all sequence that are not C15x or C3
-                set_of_seqs_to_find = set()
-                ref_seqs_in_big_init_type = list(longer_initial_type.set_of_maj_ref_seqs)
-
-                for ref_seq in ref_seqs_in_big_init_type:
-                    if 'C15' in ref_seq.name or ref_seq.name == 'C3':
-                        # then this is a squence we don't need to find
-                        pass
-                    else:
-                        set_of_seqs_to_find.add(ref_seq)
-                # Here we have the list of the ref_seqs that we need to find in the small_init_type.profile
-                if set_of_seqs_to_find.issubset(shorter_initial_type.profile):
-                    return True
-                else:
-                    return False
-            elif shorter_initial_type.basalSequence_list[0] == 'C3':
-                # then this is a C3 basal type and we need to find all sequence that are not C15x or C1
-                set_of_seqs_to_find = set()
-                ref_seqs_in_big_init_type = list(longer_initial_type.set_of_maj_ref_seqs)
-
-                for ref_seq in ref_seqs_in_big_init_type:
-                    if 'C15' in ref_seq.name or ref_seq.name == 'C1':
-                        # then this is a squence we don't need to find
-                        pass
-                    else:
-                        set_of_seqs_to_find.add(ref_seq)
-                # Here we have the list of the ref_seqs that we need to find in the small_init_type.profile
-                if set_of_seqs_to_find.issubset(shorter_initial_type.profile):
-                    return True
-                else:
-                    return False
-        else:
-            # if the small_init_type doesn't contain a basal sequence sequence, then we need to find all of the seqs
-            # in the big_intit_type.set_of_maj_ref_seqs that are not C15x, C1 or C3
-            set_of_seqs_to_find = set()
-            ref_seqs_in_big_init_type = list(longer_initial_type.set_of_maj_ref_seqs)
-
-            for ref_seq in ref_seqs_in_big_init_type:
-                if 'C15' in ref_seq.name or ref_seq.name in ['C1', 'C3']:
-                    # then this is a squence we don't need to find
-                    pass
-                else:
-                    set_of_seqs_to_find.add(ref_seq)
-            # Here we have the list of the ref_seqs that we need to find in the small_init_type.profile
-            if set_of_seqs_to_find.issubset(shorter_initial_type.profile):
-                return True
-            else:
-                return False
+    def _set_attributes_for_collapse_dict_population(self, n):
+        self.collapse_dict = {}
+        self.repeat = False
+        self.n_minus_one_list = self._get_n_minus_one_list(n)
 
     def _get_n_minus_one_list(self, n):
         n_minus_one_list = [initial_type for initial_type in self.initial_types_list if
@@ -1103,6 +1018,112 @@ class SupportedFootPrintIdentifier:
                 self.supported_list.append(initial_type)
             else:
                 self.unsupported_list.append(initial_type)
+
+class CollapseAssessor:
+    """Responsible for assessing whether an unsupported large initial type can be collapsed into a given
+    small initial type.
+    """
+    def __init__(self, parent_supported_footprint_identifier, longer_intial_type, shorter_initial_type):
+        self.parent = parent_supported_footprint_identifier
+        self.longer_intial_type = longer_intial_type
+        self.shorter_initial_type = shorter_initial_type
+
+    def assess_collapse(self):
+        # see docstring of method for more info
+        if self._if_short_initial_type_suitable_for_collapse():
+            if self.longer_intial_type.contains_multiple_basal_sequences:
+                if self.does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint():
+                    # score = number of samples big was found in plus num samples small was found in
+                    self._if_highest_score_so_far_assign_big_fp_to_smll_fp_for_collapse()
+
+            else:
+                if self.longer_intial_type.set_of_maj_ref_seqs.issubset(self.shorter_initial_type.profile):
+                    self._if_highest_score_so_far_assign_big_fp_to_smll_fp_for_collapse()
+
+    def _if_highest_score_so_far_assign_big_fp_to_smll_fp_for_collapse(self):
+        score = self.longer_intial_type.support + self.shorter_initial_type.support
+        if score > self.parent.top_score:
+            self.parent.top_score = score
+            self.parent.repeat = True
+            self.parent.collapse_dict[self.longer_intial_type] = self.shorter_initial_type
+
+    def does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(self):
+        set_of_seqs_to_find = set()
+        ref_seqs_in_big_init_type = list(self.longer_intial_type.set_of_maj_ref_seqs)
+        if self.shorter_initial_type.basalSequence_list:
+            if 'C15' in self.shorter_initial_type.basalSequence_list[0]:
+                # then this is a C15x basal type and we will need to find all sequences that are not C1 or C3
+                for ref_seq in ref_seqs_in_big_init_type:
+                    if ref_seq.name in ['C1', 'C3']:
+                        # then this is a squence we don't need to find
+                        pass
+                    else:
+                        set_of_seqs_to_find.add(ref_seq)
+
+            elif self.shorter_initial_type.basalSequence_list[0] == 'C1':
+                # then this is a C1 basal type and we need to find all sequence that are not C15x or C3
+                for ref_seq in ref_seqs_in_big_init_type:
+                    if 'C15' in ref_seq.name or ref_seq.name == 'C3':
+                        # then this is a squence we don't need to find
+                        pass
+                    else:
+                        set_of_seqs_to_find.add(ref_seq)
+
+            elif self.shorter_initial_type.basalSequence_list[0] == 'C3':
+                # then this is a C3 basal type and we need to find all sequence that are not C15x or C1
+                for ref_seq in ref_seqs_in_big_init_type:
+                    if 'C15' in ref_seq.name or ref_seq.name == 'C1':
+                        # then this is a squence we don't need to find
+                        pass
+                    else:
+                        set_of_seqs_to_find.add(ref_seq)
+
+            # Here we have the list of the ref_seqs that we need to find in the small_init_type.profile
+            if set_of_seqs_to_find.issubset(self.shorter_initial_type.profile):
+                return True
+            else:
+                return False
+        else:
+            # if the small_init_type doesn't contain a basal sequence sequence, then we need to find all of the seqs
+            # in the big_intit_type.set_of_maj_ref_seqs that are not C15x, C1 or C3
+            for ref_seq in ref_seqs_in_big_init_type:
+                if 'C15' in ref_seq.name or ref_seq.name in ['C1', 'C3']:
+                    # then this is a squence we don't need to find
+                    pass
+                else:
+                    set_of_seqs_to_find.add(ref_seq)
+            # Here we have the list of the ref_seqs that we need to find in the small_init_type.profile
+            if set_of_seqs_to_find.issubset(self.shorter_initial_type.profile):
+                return True
+            else:
+                return False
+
+
+    def _if_short_initial_type_suitable_for_collapse(self):
+        """Consider this for collapse only if the majsequences of the smaller are a subset of the maj sequences of
+        the larger e.g. we don't want A B C D being collapsed into B C D when A is the maj of the first and B is a
+        maj of the second simplest way to check this is to take the setOfMajRefSeqsLarge which is a set of all of the
+        ref seqs that are majs in the cc that the footprint is found in and make sure that it is a subset of the
+        smaller footprint in question.
+
+        10/01/18 what we actually need is quite complicated. If the big type is not multi basal, then we have no
+        problem and we need to find all of the set of maj ref seqs in the small profile but if the large type is
+        multi basal then it gets a little more complicated if the large type is multi basal then which of its set of
+        maj ref seqs we need to find in the small profile is dependent on what the basal seq of the smallfootprint is.
+
+        If the small has no basal seqs in it, then we need to find every sequence in the large's set of maj ref seqs
+        that is NOT a C15x, or the C3 or C1 sequences.
+
+        If small basal = C15x then we need to find every one of the large's seqs that isn't C1 or C3
+
+        If small basal = C1 then we need to find every on of the large's seqs that isn't C3 or C15x
+
+        If small basal = C3 then we need to find every on of the large's seqs that isn't C1 or C15x we should
+        put this decision into a new function.
+        """
+
+        multi_basal = self.shorter_initial_type.contains_multiple_basal_sequences
+        return self.shorter_initial_type.profile.issubset(self.longer_intial_type.profile) and not multi_basal
 
 class InitialType:
     def __init__(self, reference_sequence_set, clade_collection_list, maj_dsss_list=False):
