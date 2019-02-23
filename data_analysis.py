@@ -521,9 +521,11 @@ class SPDataAnalysis:
                                             collapse_n_mer_dictionary[kmer][
                                                 k].profile):  # Then this footprint hasn't been collapsed anywhere yet.
                                         # Here we also check to make sure that the profile hasn't been changed
-                                        # if an init_type already exists with the profile (kmer)
-                                        # in question then add the big init_type to it
-                                        # 231217 we will have to check whether the big init_type is a multiple basal seqs
+
+                                        # If an non-synthetic init_type already exists with the same footprint
+                                        # as the synthetic footprint in question then add the init_type to be collapsed
+                                        # to it rather than creating a new initial type from the synthetic footprint.
+                                        # We will have to check whether the big init_type is a multiple basal seqs
                                         # and therefore whether this is an extraction or a absorption
                                         exists = False
                                         for i in range(len(initial_types_list)):
@@ -537,7 +539,7 @@ class SPDataAnalysis:
                                                 # extracting into is a multi basal. We will wory about that in the next
                                                 # iteration
                                                 if collapse_n_mer_dictionary[kmer][k].contains_multiple_basal_sequences:
-                                                    # 231317 this still needs writing
+
                                                     # Then we need to extract
                                                     initial_types_list[i].extract_support_from_large_initial_type(
                                                         collapse_n_mer_dictionary[kmer][k])
@@ -548,7 +550,7 @@ class SPDataAnalysis:
                                                         # 10/01/18 we first need to check if the new profile already
                                                         # exists and if it does we need to do as we do above
                                                         # and add it to the similar one
-                                                        # if the big init type still exists with maj containing profiles
+                                                        # If the big init type still exists with maj containing profiles
                                                         # then remove from unsupported list
                                                         for j in range(len(initial_types_list)):
                                                             # for initT_two in initial_types_list:
@@ -571,10 +573,7 @@ class SPDataAnalysis:
                                                                 # get rid of the initT that we have
                                                                 # absorbed into the footprintToCollapse
 
-                                                                # Should this just be the same as when a small initT
-                                                                #  absorbs a large initT?
-                                                                # I think so but lets check
-                                                                # check to see that this is appropriate
+
                                                                 collapse_n_mer_dictionary[kmer][
                                                                     k].absorb_large_init_type(
                                                                     initial_types_list[j])
@@ -941,9 +940,85 @@ class SupportedFootPrintIdentifier:
                         self._associate_un_sup_init_types_to_synth_footprints()
                         # TODO we are here.
 
+                        # Here we have a populated dict.
+                        # We are only interseted in n-1 len footprints that were found in the unsupported types
+                        # Because each of the synth footprints will be found in the
+                        # initial_types they originated from we only need concern ourselves with synthetic
+                        # footprints associated with more than 1 cladecollection
+                        sig_synth_fps = [
+                            kmer for kmer in self.synthetic_fp_dict.keys() if len(self.synthetic_fp_dict[kmer]) > 1]
+                        if sig_synth_fps:
+                            # parse through the synth fps in order of the number of initial types they associated with
+                            ordered_sig_synth_fps = sorted(
+                                sig_synth_fps, key=lambda x: len(self.synthetic_fp_dict[x]), reverse=True)
+                            for synth_fp in ordered_sig_synth_fps:  # for each synth_fp
+                                for k in range(len(self.synthetic_fp_dict[synth_fp])):  # for each assoc. initial type
+                                    # TODO the below logic can all be handeled by a class
+                                    if self._validate_init_type_is_unsup_and_synth_fp_is_subset(k, synth_fp):
+                                        # If an non-synthetic init_type already exists with the same footprint
+                                        # as the synthetic footprint in question then add the init_type to be collapsed
+                                        # to it rather than creating a new initial type from the synthetic footprint.
+
+                                        exists = False
+                                        for i in range(len(self.initial_types_list)):
+                                            # for initT_one in initial_types_list:
+                                            if self.initial_types_list[i].profile == synth_fp:
+                                                exists = True
+                                                # We have to check whether the init_type to collapse is a multiple
+                                                # basal seqs and therefore whether this is an extraction or a absorption
+                                                #  bear in mind that it doesn't matter if the matching
+                                                # smaller n-1 initial type we are absorbing or extracting into
+                                                # is a multi basal. We will worry about that in the next iteration
+                                                if self.synthetic_fp_dict[
+                                                    synth_fp][k].contains_multiple_basal_sequences:
+
+                                                    # Then we need to extract
+                                                    self.initial_types_list[i].extract_support_from_large_initial_type(
+                                                        self.synthetic_fp_dict[synth_fp][k])
+
+                                                    # Check to see if the initial type to collapse still contains
+                                                    # set_of_maj_ref_seqs
+                                                    if self.synthetic_fp_dict[synth_fp][k].set_of_maj_ref_seqs:
+                                                        # If the initial type to collapse still contains maj
+                                                        # ref sequences, then it is still a profile that we needs to be
+                                                        #  assessed for collapse.
+                                                        # Now need to check if it's new profile (i.e. after extraction)
+                                                        # matches that of any of the other initial types.
+                                                        for j in range(len(self.initial_types_list)):
+                                                            if self.initial_types_list[j].profile == \
+                                                                    self.synthetic_fp_dict[synth_fp][
+                                                                        k].profile and self.initial_types_list[j] != \
+                                                                    self.synthetic_fp_dict[synth_fp][k]:
+                                                                # here we have found an intial type that exactly matches the initial type to collapse
+                                                                # Now absorb the found match initial type in to the initial type to be collapsed
+                                                                # we do it this way around the initial type to collapse stays in the corect place
+                                                                # i.e. in the unsupported list of not
+                                                                # After absorption, remove the matched initial type from the initial types list and unsupported list
+                                                                self.synthetic_fp_dict[synth_fp][
+                                                                    k].absorb_large_init_type(
+                                                                    self.initial_types_list[j])
+
+                                                                # the initT will need removing from the inital_types_list
+                                                                # and the unsupported_list as it no longer exists.
+                                                                if self.initial_types_list[j] in self.unsupported_list:
+                                                                    self.unsupported_list.remove(self.initial_types_list[j])
+                                                                self.initial_types_list.remove(self.initial_types_list[j])
+                                                                # break out of the search for an initial type that matches the initial type to be collapses new profile.
+                                                                break
+                                                                # TODO you got here
 
             else:
                 # assign still unsupported types to maj seqs
+
+    def _validate_init_type_is_unsup_and_synth_fp_is_subset(self, k, synth_fp):
+        """Then this footprint hasn't been collapsed anywhere yet.
+        We also check to make sure that the initial type's profile hasn't been modified (i.e. by extraction) and check
+        that the synthetic fp is still a sub set of the initial type's profile.
+        """
+        if self.synthetic_fp_dict[synth_fp][k] in self.unsupported_list:
+            if synth_fp.issubset(self.synthetic_fp_dict[synth_fp][k].profile):
+                return True
+        return False
 
     def _generate_synth_footprints(self):
         sfp = SyntheticFootprintPermutator(parent_supported_footprint_identifier=self)
