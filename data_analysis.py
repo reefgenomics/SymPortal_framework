@@ -2,7 +2,7 @@ import os
 import shutil
 from multiprocessing import Queue, Manager, Process, current_process
 import sys
-from dbApp.models import AnalysisType
+from dbApp.models import AnalysisType, DataSetSampleSequence
 import itertools
 
 from django import db
@@ -25,23 +25,142 @@ class SPDataAnalysis:
         self.collapsed_footprint_dict = None
         self.current_clade = None
 
-
-
     def analyse_data(self):
         print('Beginning profile discovery')
         self._populate_clade_fp_dicts_list()
 
+        self._make_analysis_types()
 
+        self._check_for_additional_artefact_types()
+
+    def _check_for_additional_artefact_types(self):
+        # Generate a dict that simply holds the total number of seqs per clade_collection_object
+        # This will be used when working out relative proportions of seqs in the clade_collection_object
+
+        cc_to_total_seqs_dict = create_total_seqs_dict_for_all_ccs(num_processors)
+
+        # Generate dict per cc for listof reference sequences and their abundances in the clade_collection_object
+        cc_to_ref_seq_list_and_abundances = create_ref_seq_rel_abunds_for_all_ccs_dict(
+            cc_to_total_seqs_dict, num_processors)
+
+        # Get list of all types
+        all_types_from_data_analysis = AnalysisType.objects.filter(data_analysis_from=analysis_object)
+
+        # Get list of clades that are represented by the types
+        clade_list = set()
+        for at in all_types_from_data_analysis:
+            clade_list.add(at.clade)
+
+        # Create dict for each type of refSeqs, artefact and non-artefact DIVs, and footprint
+        type_footprint_dict = create_type_artefact_div_info_dict(all_types_from_data_analysis)
+
+        # 08/12/17 this is going to need to be looked at as each clade_collection_object can now have multiple initial types
+        # Create a dict that is clade_collection_object: inital type found in
+        cc_to_initial_type_dict = create_clade_collection_to_initial_type_dictionary(all_types_from_data_analysis)
+
+        # Do pairwise comparison of types within clades
+        # 08/12/17
+        # I have gone through all of the remaining code in this function and fixed the cc to initial type dict
+        # so that it is compatible with ccts having multiple types.
+        # we still need to do the other artefact checking
+        for clade in clade_list:
+            all_types_from_data_analysis = AnalysisType.objects.filter(data_analysis_from=analysis_object, clade=clade)
+
+            static_list_of_types = list(AnalysisType.objects.filter(data_analysis_from=analysis_object, clade=clade))
+            done_list = []
+            while 1:
+                restart = False
+
+                # Pairwise comparison of types within clade
+
+                # For implementing multiprocessing in this part of the code
+                # We may be able to create a list of all of the pairwise comparisons and then add this to a queue
+                # In essence this would mean that all of the code below the a,b iter would go into the worker.
+                # However, it might be that the time limiting part of all of this is going to be
+                # the check_type_pairing_for_artefact_type
+                # So, perhaps we should look to see whether this component can be multiprocessed.
+                # BUT because we may be deleting in and adding types this might be a problem
+                # so it might be best if we can try to speed up the internals of the checkTypePa...
+                for a, b, in itertools.combinations(
+                        [at for at in all_types_from_data_analysis if at in static_list_of_types], 2):
+                    # Check to see if the pairs have already been done as we will be running through this process several
+                    # times in all likelihood
+
+                    if (a.id, b.id) not in done_list:
+                        list_of_non_artefact_intras_a = type_footprint_dict[a.id][0]
+                        list_of_non_artefact_intras_b = type_footprint_dict[b.id][0]
+
+                        # 08/12/17 here we can simply check to see if the pair of types contain incompatible types
+                        # if they do then we don't compare them and simply add to the done list
+                        # returns False if it is OK to compare, i.e. non incompatabiites
+                        # returns True if there are incompatabilities and they cannot be compared
+                        if not check_if_type_pairs_contain_incompatible_basal_seqs(a, b):
+
+                            # If all of the nonArtefact intras of A are found in the footprint of B
+                            # and if all of the nonArtefact intras of B are found in footprint of A.
+                            # i.e. if only artefact intras differentiate the types
+                            if set(list_of_non_artefact_intras_a).issubset(type_footprint_dict[b.id][1]) and set(
+                                    list_of_non_artefact_intras_b).issubset(type_footprint_dict[a.id][1]):
+                                # Check to see whether either a or b are subsets of each other
+                                a_subset_b = type_footprint_dict[a.id][1].issubset(type_footprint_dict[b.id][1])
+                                b_subset_a = type_footprint_dict[b.id][1].issubset(type_footprint_dict[a.id][1])
+
+                                if not a_subset_b and not b_subset_a:
+                                    list_of_artefact_intras_in_both_types = list(a.artefact_intras.split(','))
+                                    list_of_artefact_intras_in_both_types.extend(b.artefact_intras.split(','))
+                                    if list_of_artefact_intras_in_both_types:
+                                        # Here we have finally found a type pairing that needs to be checked
+                                        print('\nChecking {} and {} for additional artefactual profiles'.format(a, b))
+                                        if check_type_pairing_for_artefact_type(
+                                                a, b, type_footprint_dict, clade, cc_to_initial_type_dict,
+                                                cc_to_ref_seq_list_and_abundances, num_processors):
+                                            # If we did find a new type then we need to start the a,b comparison again
+                                            # It should be quick though due to the done_list
+                                            restart = True
+                                            # We need to recalculate this as we may have delted and created types
+                                            # DONE this may be stuck infinitely looping by searching the new types created.
+                                            # Maybe only work with the types we started with.
+                                            # We could make a list of original types and then just look through the types
+                                            # that are found in common between the original types list and an
+                                            # updated types list. This way no newly added types will be analysed.
+                                            # and we should avoid a run away situation
+                                            all_types_from_data_analysis = AnalysisType.objects.filter(
+                                                data_analysis_from=analysis_object, clade=clade)
+                                            break
+                                        else:
+                                            done_list.extend([(a.id, b.id), (b.id, a.id)])
+
+                                    else:
+                                        done_list.extend([(a.id, b.id), (b.id, a.id)])
+                                else:
+                                    done_list.extend([(a.id, b.id), (b.id, a.id)])
+                            else:
+                                # Whenever we fall out of the series of conditionals
+                                # we should add both possible combinations
+                                # of type a and type b to the done list so that we don't waste time going through them again
+                                done_list.extend([(a.id, b.id), (b.id, a.id)])
+                        else:
+                            # then they have incompatable basal seqs and must not be compared
+                            done_list.extend([(a.id, b.id), (b.id, a.id)])
+                # If we make it to here we did a full run through the types without making a new type
+                # Time to do the same for the next type
+                if not restart:
+                    break
+
+
+        return cc_to_total_seqs_dict, cc_to_ref_seq_list_and_abundances, type_footprint_dict, cc_to_initial_type_dict
+
+    def _make_analysis_types(self):
         for clade_fp_dict in self.clade_footp_dicts_list:
             self.current_clade = self.parent.clade_list[self.clade_footp_dicts_list.index(clade_fp_dict)]
-            if self._there_are_footprints_of_this_clade(clade_fp_dict):  # If there are some clade collections for the given clade
+            if self._there_are_footprints_of_this_clade(
+                    clade_fp_dict):  # If there are some clade collections for the given clade
 
                 sfi = SupportedFootPrintIdentifier(clade_footprint_dict=clade_fp_dict, parent_sp_data_analysis=self)
                 self.collapsed_footprint_dict = sfi.identify_supported_footprints()
 
                 analysis_type_creator = AnalysisTypeCreator(parent_sp_data_analysis=self)
                 analysis_type_creator.create_analysis_types()
-
 
     def _there_are_footprints_of_this_clade(self, clade_fp_dict):
         return clade_fp_dict
@@ -54,6 +173,90 @@ class SPDataAnalysis:
         if os.path.exists(self.temp_wkd):
             shutil.rmtree(self.temp_wkd)
         os.makedirs(self.temp_wkd, exist_ok=True)
+
+class ArtefactAssessor:
+    def __init__(self, parent_sp_data_analysis):
+        self.parent = parent_sp_data_analysis
+        # key:cc.id, value:int(total_sequences_in_clade_collection)
+        self.cc_to_total_seqs_dict = self._create_total_seqs_dict_for_all_ccs()
+        # key:cc.id, value:dict(key:ref_seq_obj_of_cc, value:int(abundance_of_the_ref_seq))
+        self.cc_to_ref_seq_abunds_dict = self._create_ref_seq_rel_abunds_for_all_ccs_dict()
+        
+    def _create_ref_seq_rel_abunds_for_all_ccs_dict(self):
+        cc_input_mp_queue = Queue()
+        mp_manager = Manager()
+        cc_to_ref_seq_abunds_mp_dict = mp_manager.dict()
+
+        for cc in self.parent.ccs_of_analysis:
+            cc_input_mp_queue.put(cc)
+
+        for n in range(self.parent.parent.args.num_proc):
+            cc_input_mp_queue.put('STOP')
+
+        all_processes = []
+        for n in range(self.parent.parent.args.num_proc):
+            p = Process(target=self._cc_to_ref_seq_list_and_abund_worker, args=(cc_input_mp_queue, cc_to_ref_seq_abunds_mp_dict))
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+        return dict(cc_to_ref_seq_abunds_mp_dict)
+
+    def _cc_to_ref_seq_list_and_abund_worker(self, cc_input_mp_queue, cc_to_ref_seq_abunds_mp_dict):
+        for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
+
+            sys.stdout.write(f'\r{clade_collection_object} {current_process().name}')
+
+            list_of_dataset_sample_sequences_in_clade_collection = [
+                dsss for dsss in DataSetSampleSequence.objects.filter(
+                    clade_collection_found_in=clade_collection_object)]
+
+            list_of_ref_seqs_in_cladecollection = [
+                dsss.reference_sequence_of for dsss in list_of_dataset_sample_sequences_in_clade_collection]
+
+            list_of_abundances = [dsss.abundance / self.cc_to_total_seqs_dict[clade_collection_object.id] for dsss in
+                                  list_of_dataset_sample_sequences_in_clade_collection]
+            inner_dict = {}
+            for i in range(len(list_of_dataset_sample_sequences_in_clade_collection)):
+                inner_dict[list_of_ref_seqs_in_cladecollection[i]] = list_of_abundances[i]
+            cc_to_ref_seq_abunds_mp_dict[clade_collection_object.id] = inner_dict
+
+    def _create_total_seqs_dict_for_all_ccs(self):
+        """Generate a dict that simply holds the total number of seqs per clade_collection_object.
+        This will be used when working out relative proportions of seqs in the clade_collection_object
+        """
+        print('Generating CladeCollection to total sequence dictionary')
+        cc_input_mp_queue = Queue()
+        mp_manager = Manager()
+        cc_to_total_seqs_mp_dict = mp_manager.dict()
+
+        for cc in self.parent.ccs_of_analysis:
+            cc_input_mp_queue.put(cc)
+
+        for n in range(self.parent.parent.args.num_proc):
+            cc_input_mp_queue.put('STOP')
+
+        all_processes = []
+        for n in range(self.parent.parent.args.num_proc):
+            p = Process(target=self._cc_to_total_seqs_dict_worker, args=(cc_input_mp_queue, cc_to_total_seqs_mp_dict))
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+        return dict(cc_to_total_seqs_mp_dict)
+
+    def _cc_to_total_seqs_dict_worker(self, cc_input_mp_queue, cc_to_total_seqs_mp_dict):
+        for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
+            sys.stdout.write(f'\r{clade_collection_object} {current_process().name}')
+            total_sequences_in_cladecollection = sum(
+                [dsss.abundance for dsss in
+                 DataSetSampleSequence.objects.filter(clade_collection_found_in=clade_collection_object)])
+            cc_to_total_seqs_mp_dict[clade_collection_object.id] = total_sequences_in_cladecollection
+
 
 
 class AnalysisTypeCreator:
@@ -267,11 +470,8 @@ class SupportedFootPrintIdentifier:
                             sfc = SyntheticFootprintCollapser(parent_supported_footprint_identifier=self)
                             sfc.collapse_to_synthetic_footprints()
 
-
             else:
-                #TODO we are here.
-                # assign still unsupported types to maj seqs
-                uffc = UnsupportedFootprintFinalCollapser()
+                uffc = UnsupportedFootprintFinalCollapser(parent_supported_footprint_identifier=self)
                 uffc.collapse_unsup_footprints_to_maj_refs()
         return self.initial_types_list
 
