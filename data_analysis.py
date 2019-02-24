@@ -22,6 +22,8 @@ class SPDataAnalysis:
         # value = [[] []] where []0 = list of cladeCollections containing given footprint
         # and []1 = list of majority sequence for given sample
         self.clade_footp_dicts_list = [{} for _ in self.clade_list]
+        self.collapsed_footprint_dict = None
+        self.current_clade = None
 
 
 
@@ -29,744 +31,17 @@ class SPDataAnalysis:
         print('Beginning profile discovery')
         self._populate_clade_fp_dicts_list()
 
+
         for clade_fp_dict in self.clade_footp_dicts_list:
+            self.current_clade = self.parent.clade_list[self.clade_footp_dicts_list.index(clade_fp_dict)]
             if self._there_are_footprints_of_this_clade(clade_fp_dict):  # If there are some clade collections for the given clade
 
+                sfi = SupportedFootPrintIdentifier(clade_footprint_dict=clade_fp_dict, parent_sp_data_analysis=self)
+                self.collapsed_footprint_dict = sfi.identify_supported_footprints()
 
-                # FIND WHICH FOOTPRINTS ARE SUPPORTED AND WHICH CCs SUPPORT THEM #######
+                analysis_type_creator = AnalysisTypeCreator(parent_sp_data_analysis=self)
+                analysis_type_creator.create_analysis_types()
 
-                collapsed_footprint_dict = self.collapse_potential_profiles_initial_type_objects(
-                    footprint_list=clade_fp_dict,
-                    reqsupport=4,
-                    nprocessors=self.parent.args.num_proc)
-
-                # CREATE ANALYSIS TYPES BASED ON DISCOVRED FOOTPRINTS
-                # 08/12/17 we need to be careful here when we initiate the types as the types we were previously
-                ''' generating would represent essentially the majoirty of the ccts sequences. but now some of the types
-                will be smaller proportions of the ccts so we should check to see how the initial abundnace of the types
-                are calculated. e.g. are they calculated as the proportion of the total seqs in the cct or are we 
-                already working on as proportions of the seqs of the type in question. Hopefully it is the latter
-                and we were just going with the types that represented the largest number of sequences for the cct.
-                '''
-                # 08/12/17 I have carefully looked through the type initTypeAtributes method
-                ''' Firsly it always works in the context of the sequences found in the type. It produces absoulte
-                 counts per sequence in the type for each cladeCollection that the type was supported by.
-                 It also produces a count that is relative proportions of each sequence of the type for 
-                 each clade_collection_object.
-                  Hopefully this is what we are using when we do the second artefact check. I.e. we are looking
-                  for the types in the CCs again.
-                  For each type, the abslute counts per type sequence per clade_collection_object are stored in 
-                  type.footprint_sequence_abundances
-                  in the order of initalCCs and orderedfootprint list. THere is also the relative version wihich is 
-                  stored as type.footprint_sequence_ratios'''
-                # for every footprint that will become an analysis_type
-
-
-                print(f'\n\nCreating analysis types clade {self.parent.clade_list[self.clade_footp_dicts_list.index(clade_fp_dict)]}')
-                for initialType in collapsed_footprint_dict:
-
-                    # Work out the corresponding reference_sequence for each Maj
-                    # of the samples with that corresponding type
-                    # Then do len(set()) and see if it is a co_dominant, i.e. different Maj seqs within the type
-
-
-                    if len(initialType.set_of_maj_ref_seqs) > 1:  # Then this is a co_dominant
-
-                        # the Counter class (from collections import Counter) may be useful
-                        # http://stackoverflow.com/questions/2600191/how-can-i-count-the-occurrences-of-a-list-item-in-python
-                        new_analysis_type = AnalysisType(
-                            co_dominant=True,
-                            data_analysis_from=analysis_object,
-                            clade=clade_list[master_cladal_list_of_footprint_dicts.index(clade_fp_dict)])
-
-                        new_analysis_type.set_maj_ref_seq_set(initialType.set_of_maj_ref_seqs)
-                        new_analysis_type.init_type_attributes(initialType.clade_collection_list, initialType.profile)
-
-                        new_analysis_type.save()
-                        print('\rCreating analysis type: {}'.format(new_analysis_type.name), end='')
-                    else:
-
-                        new_analysis_type = AnalysisType(co_dominant=False, data_analysis_from=analysis_object,
-                                                         clade=clade_list[
-                                                              master_cladal_list_of_footprint_dicts.index(
-                                                                  clade_fp_dict)])
-                        new_analysis_type.set_maj_ref_seq_set(initialType.set_of_maj_ref_seqs)
-                        new_analysis_type.init_type_attributes(initialType.clade_collection_list, initialType.profile)
-                        new_analysis_type.save()
-                        sys.stdout.write(f'\rCreating analysis type: {new_analysis_type.name}')
-
-
-
-
-    def collapse_potential_profiles_initial_type_objects(self, footprint_list, reqsupport, nprocessors):
-        # 10/12/17 I have just thought of something else we will have to consider. When you have a profile that
-        # has a genuine codom type so there are e.g. MAJs of C3 and C3a, what will happen in this cricumstances.
-        # For the time being we will not think too much about this and in the initialType profile classes that we are
-        # creating, if we find a multiple basal type situation we will be sure to add the maj type to each of the
-        # dsss lists.
-        # 10/12/17, I also think we can take the opportunity to move away from working with dataSetSampleSequences
-        # and move towards working with referenceSequences, as it seems that we are always converting them to
-        # reference sequences any way. Maybe for the time being we will work with dsss and get things up and running
-        # before converting to working with referenceSequences.
-        # 09/12/17 I want to make sure that the subsets collapsing is still working and taking into account the
-        # basal types compatabilites. Actually the subset collapsing is not taking into account basal sequences
-        # but this is not a problem. We are essentially just consolidating the larger types into the smaller ones
-        # the smaller ones still then have to found as supported using the basal sequences information.
-
-        # 09/12/17 This has become unbarably slow. We have an awful lot of redundancy in here that I would like to fix
-        # especially when it comes to checking for basal types. So I am going to create some clases which will only be
-        # held in RAM. ie. not in the database.
-        # class will be initialType. will contain, profile, profile length, contains_multiple_basal_sequences,
-        # basal_sequence_list, clade_collection_list, maj_seq_list, maj_seq_set
-        """This will be our latest battle field 07/12/17. We have a problem where we are getting multiple types
-        So the object that we're playing around with here is a dictionary with key that is the set of referencesequences
-        objects with a value of a 2d list with containing two lists. the first list is the clade collection object that
-        this profile was found in. THe second list is the majority sequence of this set in this clade collection
-        so if we want to be able to split up these objects to extract e.g. c15 and c3 sets then we'll need to create another
-        dictionary entry. So we were probably relying on their only ever being one cladecollection to every set of sequences
-        but if we start to do the extractions then were going to end up with multiple clade collections in the dict
-        we will also need to be able to calcualate a new maj sequence for each for each of the extracted set of sequences
-        we'll then have to see how this might reek havoc further down stream.
-        so we end up creating the analysis types from the information that we have created here so
-        I don't think that its going to be a problem that we ahve serveral types for a cgiven clade collection as it simply
-        means that one clade collection is going to be found listed in multiple types. So lets give it a go!"""
-
-        # We were having problems with the original.
-        # The problem was when you have lots of long footprints that have intras in common i.e. D1 and D1a,
-        # these long footprints are collapsed all the way down to D1 or D1a, depending on the maj becuase
-        # there aren't any footprints that are JUST D1/D1a. So I have a better approach hopefully that will solve this
-        # This approach builds on the original collapseFootprints
-        # It starts with an n of the longest type and it tries to collapse each of the types into the n-1 types.
-        # However, unlike the original, if it fails to collapse into the n-1 it does not then try to collapse into
-        # n-2 types etc. Once we have tested all of the n length types and collapsed those that can be we move those that
-        # couldn't into a list of unsupported types.
-        # We then get all of the sequences found in the footprints of length n
-        # and we do itertools to get all n-1 combinations
-        # we then try to fit each of these into the unsupported types. We create
-        # new footprints in order of the most supported
-        # footprints and assign the associted CCs and Maj seqs. Any n length seqs that still don't have a collapse are
-        # kept in the unsupported list. This is iterated dropping through the ns. I think this will be great!
-        # 1 - check which supported which not, move supported to supportedlist, move unsupported to unsupported lit
-        # 2 - for all unsupported check to see if can be collapsed into fooprints of n-1
-        #   if can then collapse into and remove type from not supported list
-        # 3 - get all n-1 combos of all seqs found in the n-1 unsupported sequences
-        # All the seqs found in a clade_collection_object can now be accessed from the [2] list (third list) of
-        # the foorprintList dict value
-        # actually I don't think we'll need to caryy around the [2] list as we can simply use the footprint value
-        # to get the list of refseqs - duh!
-        # see how many footprints have these types, sort by order
-        # create new footprints fot these footprints
-        # if supported move to supportedlist
-        # if not supported move to the non-supporetd list
-        # next n...
-
-        # Lists that will hold the footprints that have and do not have support throughout the collapse
-        supported_list = []
-        unsupported_list = []
-
-        # convert the footprint_list to initalTypes
-        initial_types_list = []
-        for fpkey, fpvalue in footprint_list.items():
-            initial_types_list.append(InitialType(fpkey, fpvalue[0], fpvalue[1]))
-
-        # start with n at the largest footprint in the footprintlist
-        # the lowest n that we will work with is 2
-        # when we get to the footprints that are two in length we will do the first type of collapsing
-        # i.e. we will collapse into existant 1s if feasible but we will not do the combinations
-        # section as this will be moot as each will only be one intra big anyway.
-        # once we have done the inital collapse of the 2s then we will sort the 1s into
-        # supported or unsupported.
-        # At this point all of the footprints that were in the footprint_list to begin with will be either in
-        # the supported or unsupported list
-        # we will then convert these types to the maj types
-
-        # for each length starting at max and dropping by 1 with each increment
-        for n in range(max([initT.profile_length for initT in initial_types_list]), 0, -1):
-            # This dict will hold the top collapses where bigfootprint = key and smallFootprint = value
-
-            # populate supported and unsupported list for the next n
-            n_list = [initT for initT in initial_types_list if initT.profile_length == n]
-
-            for initT in n_list:
-
-                if initT.support >= reqsupport and not initT.contains_multiple_basal_sequences:  # supported
-                    supported_list.append(initT)
-                else:  # above support threshold
-                    unsupported_list.append(initT)
-
-            # TRY TO COLLAPSE SIZE n FOOTPRINTS INTO SIZE n-1 FOOTPRINTS
-            # we will try iterating this as now that we have the potential to find two types in one profile, e.g.
-            # a C15 and C3, we may only extract the C3 on the first one but there may still be a C15 in there.
-            # whichever had the highest score will have been extracted. Eitherway, along the way, the unsupported_list
-            # will have been updated
-            repeat = True
-            while repeat:
-                collapse_dict = {}
-                repeat = False
-                n_minus_one_list = [initT for initT in initial_types_list if initT.profile_length == n - 1]
-                if n_minus_one_list:
-
-                    for bigFootprint in unsupported_list:  # For each big check if small will fit in
-
-                        print('Assessing discovered footprint {} for supported type'.format(
-                            '-'.join(str(refseq) for refseq in bigFootprint.profile)), end='\r')
-
-                        top_score = 0
-                        for smallerFootprint in n_minus_one_list:
-                            # If the small foot print is a subset of the big footprint consider for collapse
-                            # Only collapse into the small footprint if it doesn't contain multiple basal types.
-                            # Only collapse if this is the best option i.e. if it give the largest number of support
-                            multi_basal = smallerFootprint.contains_multiple_basal_sequences
-                            if smallerFootprint.profile.issubset(bigFootprint.profile) and not multi_basal:
-                                # Consider this for collapse only if the majsequences of the
-                                # smaller are a subset of the maj sequences of the larger
-                                # e.g. we don't want A B C D being collapsed into B C D when
-                                # A is the maj of the first and B is a maj of the second
-
-                                # simplest way to check this is to take the setOfMajRefSeqsLarge
-                                # which is a set of all of the
-                                # ref seqs that are majs in the cc that the footprint is found in
-                                # and make sure that it is a subset of the smaller footprint in question
-
-                                # 10/01/18 what we actually need is quite complicated. If the big type is not multi basal,
-                                # then we have no problem and we need to find all of the set of
-                                # maj ref seqs in the small profile
-                                # but if the large type is multi basal then it gets a little more complicated
-                                # if the large type is multi basal then which of its set of maj ref
-                                # seqs we need to find in the small profile
-                                # is dependent on what the basal seq of the smallfootprint is.
-                                # if the small has no basal seqs in it, then we need to find every
-                                # sequence in the large's set of maj ref seqs
-                                # that is NOT a C15x, or the C3 or C1 sequences.
-                                # if small basal = C15x then we need to find every one of the
-                                # large's seqs that isn't C1 or C3
-                                # if small basal = C1 then we need to find every on of the
-                                # large's seqs that isn't C3 or C15x
-                                # if small basal = C3 then we need to find every on of the
-                                # large's seqs that isn't C1 or C15x
-                                # we should put this decision into a new function
-
-                                if bigFootprint.contains_multiple_basal_sequences:
-                                    if does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint(
-                                            bigFootprint, smallerFootprint):
-                                        # score = number of samples big was found in plus num samples small was found in
-                                        score = bigFootprint.support + smallerFootprint.support
-                                        if score > top_score:
-                                            top_score = score
-                                            repeat = True
-                                            collapse_dict[bigFootprint] = smallerFootprint
-
-                                else:
-                                    if bigFootprint.set_of_maj_ref_seqs.issubset(smallerFootprint.profile):
-                                        # score = number of samples big was found in plus num samples small was found in
-                                        score = bigFootprint.support + smallerFootprint.support
-                                        if score > top_score:
-                                            top_score = score
-                                            repeat = True
-                                            collapse_dict[bigFootprint] = smallerFootprint
-
-                # If there is a collapse, do the collapse and then remove it from the unsupported list
-                # (we will see if the smaller footprint we added it to is supported next round of n)
-                # I.E. each key of the collapse_dict add it to the value.
-
-                # 08/12/17 here is where we will need to start to implement extraction
-                # rather than just deletion for the potentially multiple basal seqs profiles
-                # We will need to be careful that we don't start extracting profiles for non basal mixes, e.g. if we have
-                # C3, C3a, C3b, C3d in the big and the small is C3, C3a, C3b we don't want to extract this, we want to use
-                # the preivous method of deletion (simply adding support of the big to the small and
-                # removing the uncommon ref seq).
-                # To tell whether we want to do extraction vs deletion
-                # see if there is another basal maj type in the large footprint
-
-
-                large_fp_to_collapse_list = list(collapse_dict.keys())
-
-
-                # The collapse_dict footprint is now key=large initial type and value = small initial type
-
-                for q in range(len(large_fp_to_collapse_list)):
-                    large_fp_to_collapse = large_fp_to_collapse_list[q]
-                    # returns bool representing whether to extract. If false, delete rather than extract
-                    if large_fp_to_collapse.support >= \
-                            reqsupport and not large_fp_to_collapse.contains_multiple_basal_sequences:
-                        # Then this type has already had some other leftovers put into it so that it now has the required
-                        # support. In this case we can remove the type from the unsupported list and continue to the next
-                        unsupported_list.remove(large_fp_to_collapse_list[q])
-                        continue
-                    # TODO you got here and are setting up the FootprintCollapser class to handle this.
-                    extraction_deletion = large_fp_to_collapse_list[q].contains_multiple_basal_sequences
-                    if not extraction_deletion:
-                        # If large type does not contain multiple basal sequences then we do not need to extract and we
-                        # can collapse the large into the small.
-                        # we need to simply extend the clade collection list of the small type with that of the large
-                        # we also need to add the dss lists of the large to the small as well
-
-                        small_init_type = collapse_dict[large_fp_to_collapse_list[q]]
-                        small_init_type.absorb_large_init_type(large_fp_to_collapse_list[q])
-
-                        # remove the large_init_type from the init_type_list and from the unsupported_list
-                        initial_types_list.remove(large_fp_to_collapse_list[q])
-                        unsupported_list.remove(large_fp_to_collapse_list[q])
-                    else:
-                        # Send over the Majs that the small
-                        # and big have in commmon. We need to
-                        # remember that we are simply listing ccts for support and the Majs
-                        # found in those CCts. We can remove
-                        # the subsetted sequences from the footprint of the big and put it back in the dict
-
-                        # 1 - Collapse big to small
-                        # This will all be done within the extract_support_from_large_initial_type method
-                        small_init_type = collapse_dict[large_fp_to_collapse_list[q]]
-                        small_init_type.extract_support_from_large_initial_type(large_fp_to_collapse_list[q])
-
-                        # the large init type should remain in the init_type_list
-
-                        # Check if the new profile created from the original footprintToCollapse
-                        # that has now had the small)init_type extracted from it is already shared with another init_type
-                        # If so then we need to combine the init_types.
-                        # else then we don't need to do anything
-                        # If the similar type is also in the collapse dict then we will collapse to that type
-                        # else if the type is not in the collapse dict then we will absorb that type.
-                        # There should only be a maximum of one initT that has the same
-                        match = False
-                        for p in range(len(initial_types_list)):
-                            if initial_types_list[p].profile == \
-                                    large_fp_to_collapse_list[q].profile and initial_types_list[p] != \
-                                    large_fp_to_collapse_list[q]:
-
-                                # Then we have found an initT that has an exact match for the large initT in Q
-                                # In this case we need to create a single initType that is a combination of the two
-                                # 070218 we are going to change this and we are going to extract
-                                # Let's add the existing initT to the footPinrtToCollapse
-                                # This way we can make sure that the footprintToCoolapse is still in the correct place
-                                # i.e. in the unsupported list or not.
-
-                                # If we do find a match then we need to make sure to get rid of the initT that we have
-                                # absorbed into the footprintToCollapse
-
-                                # Should this just be the same as when a small initT absorbs a large initT?
-                                # I think so but lets check
-                                # check to see that this is appropriate
-                                # we need to check specifically if the initial_types[p] is found in the types that
-                                # still need to be collapsed. so we need to slice here.
-                                match = True
-                                if initial_types_list[p] in large_fp_to_collapse_list[q + 1:]:
-                                    # then we need to collapse the long initial type into the matching initial type
-                                    # because this collapsing can cause the matching type that is also in the collapse
-                                    # dict to gain support we will also check to if each of the types in the collapse dict
-                                    # have gained sufficient support to no longer need collapsing. We will do this earlier
-                                    # in the process, not here.
-                                    initial_types_list[p].absorb_large_init_type(large_fp_to_collapse_list[q])
-                                    unsupported_list.remove(large_fp_to_collapse_list[q])
-                                    initial_types_list.remove(large_fp_to_collapse_list[q])
-                                    break
-                                else:
-                                    large_fp_to_collapse_list[q].absorb_large_init_type(initial_types_list[p])
-
-
-                                    if initial_types_list[p] in unsupported_list:
-                                        unsupported_list.remove(initial_types_list[p])
-
-
-                                    initial_types_list.remove(initial_types_list[p])
-                                    # If the left over type is less than n then we need to now remove it from the un
-                                    # supported list as it will be collapsed on another iteration than this one.
-                                    if large_fp_to_collapse_list[q].profile_length < n:
-
-                                        unsupported_list.remove(large_fp_to_collapse_list[q])
-
-                                    else:
-                                        # now we need to check to see if the
-                                        # collapse_dict_keys_list[q] type has support bigger then
-                                        # the required. If it does, then it should also be removed from the unsupported list
-
-                                        if large_fp_to_collapse_list[q].support >= \
-                                                reqsupport \
-                                                and not large_fp_to_collapse_list[q].contains_multiple_basal_sequences:
-                                            unsupported_list.remove(large_fp_to_collapse_list[q])
-                                        else:
-                                            # if it doesn't have support then we simply leave it in the unsupportedlist
-                                            # and it will go on to be seen if it can be collapsed into one of the insilico
-                                            # types that are genearted.
-                                            pass
-                                    break
-                        if not match:
-                            if large_fp_to_collapse_list[q].profile_length < n:
-                                unsupported_list.remove(large_fp_to_collapse_list[q])
-
-                        # the large init_type does not need removing from the initial type list.
-                        # but we still need to do the check to see if the profile length is SMALLER than n. If it is smaller
-                        # then n then we should remove it from the unsupported list else we should leave it in the
-                        # unsupported list.
-
-            if n > 2:
-
-                # We only need to attempt the further collapsing if there are unsupported types to collapse
-                # else move onto the next n
-                if len(unsupported_list) > 1:
-                    # Now we are left with the footprints that are still in the unsupported list
-
-                    # we are going to change this.
-                    # Currently we are generating an enormous generator in the itertools.combinations
-                    # This is because we are using all of the sequences found in all of the length n types
-                    # However, I see non reason why we should be using
-                    # combinatations of sequences found in different profiles.
-                    # This is not in keeping with the biology.
-                    # Instead the synthetic types should be made from
-                    # combinattions of sequences found in each profile
-                    # This will better represent the biology and also greatly cutdown on computational cost
-                    # And it will mean that we can multiprocess this
-
-                    list_of_types_of_length_n = [initT for initT in initial_types_list if initT.profile_length == n]
-                    # Only carry on if we have lengthN footprints to get sequences from
-                    if list_of_types_of_length_n:
-
-                        # here is where we should start the new approach.
-                        # add the nLength Types into a MP list
-                        # then add the stops
-                        # then in the worker create a dict that is same as the one below,
-                        # only the using the nLengthtype instead
-                        # Create the queues that will hold the sample information
-                        print('\rstarting to generate Synthetic footprints for collapse', end='')
-
-                        task_queue = Queue()
-                        collapse_n_mer_dictionary_manager = Manager()
-                        collapse_n_mer_dictionary = collapse_n_mer_dictionary_manager.dict()
-                        # output_queue = Queue()
-
-                        for nLengthType in list_of_types_of_length_n:
-                            task_queue.put(nLengthType.profile)
-
-                        for N in range(nprocessors):
-                            task_queue.put('STOP')
-
-                        all_processes = []
-
-                        for N in range(nprocessors):
-                            p = Process(target=worker_discovery_one, args=(task_queue, collapse_n_mer_dictionary, n))
-                            all_processes.append(p)
-                            p.start()
-
-                        for p in all_processes:
-                            p.join()
-                        # The manager(dict) object was not behaving correctly when I was trying to append items to the list
-                        # values. However, when converting to a dict, it does.
-                        collapse_n_mer_dictionary = dict(collapse_n_mer_dictionary)
-
-                        # Now go through each of the (n-1)mer footprints and see if they
-                        # fit into a footprint in the unsuported list
-                        # This dict key = the synthetic footprint of length n-1,
-                        # value, a list of unsupported types that are mastersets of the synthetic footprint
-
-                        print('\rGenerated {} Synthetic footprints'.format(len(collapse_n_mer_dictionary)), end='')
-
-
-                        # Items for printing out our progress
-                        total = len(collapse_n_mer_dictionary) * len(unsupported_list)
-                        count = 0
-                        print_value = 0.01
-                        print('\rChecking new set of synthetic types', end='')
-
-                        for frTupKey in collapse_n_mer_dictionary.keys():  # for each of the synthetic footprints
-                            # 10/01/18 we need to check that each of the frTupKeys contains multiple basal seqs
-                            # If it does then we can't collapse into it.
-                            if does_set_of_ref_seqs_contain_multiple_basal_types(frTupKey):
-                                continue
-
-                            for nLengthType in unsupported_list:  # for each of the unsupported init_types
-                                # Items for printing out progress
-                                count += 1
-                                percent_complete = count / total
-                                if percent_complete > print_value:
-                                    print("\r%.2f" % percent_complete, end='')
-                                    print_value = max([print_value + 0.01, percent_complete + 0.01])
-
-                                # For each of the N-1mers see if they fit within the unsupported types
-                                # if so then add the footprint into the n-1mers list associated with that footprint
-                                # in the collapse_n_mer_dictionary.
-                                # All of the Majs of the footprint in Q need to be in the kmer footprint
-
-                                if frTupKey.issubset(nLengthType.profile):
-                                    # Now check to see that at least one of the set_of_maj_ref_seqs seqs is found in the
-                                    # frTupKey.
-                                    if len(nLengthType.set_of_maj_ref_seqs & frTupKey) > 0:
-                                        # Then this nLengthType init_type can be collapsed into the frTupKey
-                                        collapse_n_mer_dictionary[frTupKey].append(nLengthType)
-                        # Here we have a populated dict.
-                        # Order dict
-                        # We are only interseted in kmers that were found in the unsupported types
-                        # Because alot of the kmers will be found in the sequences they originated from
-                        # require the kmer to be associated with more than 1 cladecollection
-                        # I am not able to express my logic here perfectly but I am sure that this makes sense
-
-                        list_of_n_kmers_with_collapsable_footprints = [kmer for kmer in collapse_n_mer_dictionary.keys()
-                                                                       if
-                                                                       len(collapse_n_mer_dictionary[kmer]) > 1]
-                        # No need to continue if there are no footprints that match the nKmers
-                        if list_of_n_kmers_with_collapsable_footprints:
-                            # We now go through the kmers according to the number of footprints they were found in
-                            ordered_list_of_populated_kmers = sorted(list_of_n_kmers_with_collapsable_footprints,
-                                                                     key=lambda x: len(collapse_n_mer_dictionary[x]),
-                                                                     reverse=True)
-
-                            for kmer in ordered_list_of_populated_kmers:
-                                # for each initType in the kmer lists
-
-                                for k in range(len(collapse_n_mer_dictionary[kmer])):
-                                    # chek to see if the footprint is still in the unsupportedlist
-                                    # !! 11/01/18 also need to check that the bigFootprint hasn't already been collapsed
-                                    # if it isn't then it has already been associated to a new footprint
-                                    #   pass it over
-                                    if collapse_n_mer_dictionary[kmer][k] in unsupported_list and kmer.issubset(
-                                            collapse_n_mer_dictionary[kmer][
-                                                k].profile):  # Then this footprint hasn't been collapsed anywhere yet.
-                                        # Here we also check to make sure that the profile hasn't been changed
-
-                                        # If an non-synthetic init_type already exists with the same footprint
-                                        # as the synthetic footprint in question then add the init_type to be collapsed
-                                        # to it rather than creating a new initial type from the synthetic footprint.
-                                        # We will have to check whether the big init_type is a multiple basal seqs
-                                        # and therefore whether this is an extraction or a absorption
-                                        exists = False
-                                        for i in range(len(initial_types_list)):
-                                            # for initT_one in initial_types_list:
-                                            if initial_types_list[i].profile == kmer:
-                                                exists = True
-                                                # 231217 we will have to check whether the big
-                                                # init_type is a multiple basal seqs
-                                                # and therefore whether this is an extraction or a absorption
-                                                # bear in mind that it doesn't matter if the initT we are absorbing or
-                                                # extracting into is a multi basal. We will wory about that in the next
-                                                # iteration
-                                                if collapse_n_mer_dictionary[kmer][k].contains_multiple_basal_sequences:
-
-                                                    # Then we need to extract
-                                                    initial_types_list[i].extract_support_from_large_initial_type(
-                                                        collapse_n_mer_dictionary[kmer][k])
-
-                                                    # Once we have extracted into the smaller type
-                                                    # check to see if the big init Type still contains set_of_maj_ref_seqs
-                                                    if collapse_n_mer_dictionary[kmer][k].set_of_maj_ref_seqs:
-                                                        # 10/01/18 we first need to check if the new profile already
-                                                        # exists and if it does we need to do as we do above
-                                                        # and add it to the similar one
-                                                        # If the big init type still exists with maj containing profiles
-                                                        # then remove from unsupported list
-                                                        for j in range(len(initial_types_list)):
-                                                            # for initT_two in initial_types_list:
-
-                                                            if initial_types_list[j].profile == \
-                                                                    collapse_n_mer_dictionary[kmer][
-                                                                        k].profile and initial_types_list[j] != \
-                                                                    collapse_n_mer_dictionary[kmer][k]:
-
-                                                                # Then we have found an initT that has an exact match for
-                                                                # the large initT in Q
-                                                                # In this case we need to create a single initType that
-                                                                # is a combination of the two
-                                                                # Let's add the existing initT to the footPinrtToCollapse
-                                                                # This way we can make sure that the footprintToCoolapse
-                                                                # is still in the correct place
-                                                                # i.e. in the unsupported list or not.
-
-                                                                # If we do find a match then we need to make sure to
-                                                                # get rid of the initT that we have
-                                                                # absorbed into the footprintToCollapse
-
-
-                                                                collapse_n_mer_dictionary[kmer][
-                                                                    k].absorb_large_init_type(
-                                                                    initial_types_list[j])
-
-                                                                # the initT will need removing from the inital_types_list
-                                                                # and the unsupported_list as it no longer exists.
-                                                                if initial_types_list[j] in unsupported_list:
-                                                                    unsupported_list.remove(initial_types_list[j])
-                                                                initial_types_list.remove(initial_types_list[j])
-                                                                break
-
-                                                        # We now need to decide if the footprint to collapse should be
-                                                        # removed from the unsupported_list.
-                                                        # This will depend on if it is longer then n or not.
-                                                        if collapse_n_mer_dictionary[kmer][k].profile_length < n:
-                                                            unsupported_list.remove(collapse_n_mer_dictionary[kmer][k])
-
-                                                    else:
-                                                        # then the big init_type no longer contains any
-                                                        # of its original maj ref seqs and
-                                                        # so should be delted.
-                                                        initial_types_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                                        unsupported_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                                else:
-                                                    # 231217 then we need can absorb
-                                                    initial_types_list[i].absorb_large_init_type(
-                                                        collapse_n_mer_dictionary[kmer][k])
-                                                    # make sure that we then get rid of the bigFootprintToCollapse
-                                                    initial_types_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                                    unsupported_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                                break
-                                        if not exists:
-                                            # then the kmer was not already represented by an existing initT
-                                            # 270118 We need to check to see if the big type is contains mutiple
-                                            # basal if it does then we should extract as above. This should be exactly the
-                                            # same code as above but extracting into a new type rather than an existing one
-                                            # Try to create a blank type
-                                            # NEW
-                                            if collapse_n_mer_dictionary[kmer][k].contains_multiple_basal_sequences:
-                                                new_blank_initial_type = InitialType(reference_sequence_set=kmer,
-                                                                                     clade_collection_list=list(
-                                                                                         collapse_n_mer_dictionary[
-                                                                                             kmer][
-                                                                                             k].clade_collection_list))
-                                                initial_types_list.append(new_blank_initial_type)
-
-                                                # now remove the above new type's worth of info
-                                                # from the current big footprint
-                                                collapse_n_mer_dictionary[kmer][
-                                                    k].substract_init_type_from_other_init_type(
-                                                    new_blank_initial_type)
-
-                                                if collapse_n_mer_dictionary[kmer][k].set_of_maj_ref_seqs:
-                                                    # we first need to check if the new profile already exists and if
-                                                    # it does we need to do as we do above and add it to the similar one
-                                                    # if the big init type is still exists with maj containing profiles
-                                                    # then remove from unsupported list
-                                                    for initT in initial_types_list:
-                                                        if initT.profile == collapse_n_mer_dictionary[kmer][
-                                                            k].profile and initT != \
-                                                                collapse_n_mer_dictionary[kmer][k]:
-                                                            # Then we have found an initT that has an exact
-                                                            # match for the large initT in Q
-                                                            # In this case we need to create a single initType
-                                                            # that is a combination of the two
-                                                            # Let's add the existing initT to the footPinrtToCollapse
-                                                            # This way we can make sure that the footprintToCoolapse
-                                                            # is still in the correct place
-                                                            # i.e. in the unsupported list or not.
-
-                                                            # If we do find a match then we need to make sure to get
-                                                            # rid of the initT that we have
-                                                            # absorbed into the footprintToCollapse
-
-                                                            # Should this just be the same as when a small initT
-                                                            # absorbs a large initT?
-                                                            # I think so but lets check
-                                                            # check to see that this is appropriate
-                                                            collapse_n_mer_dictionary[kmer][k].absorb_large_init_type(
-                                                                initT)
-
-                                                            # the initT will need removing from the inital_types_list and
-                                                            # the unsupported_list as it no longer exists.
-                                                            initial_types_list.remove(initT)
-                                                            if initT in unsupported_list:
-                                                                unsupported_list.remove(initT)
-                                                            break
-
-                                                    # We now need to decide if the footprint to collapse should be
-                                                    # removed from the unsupported_list.
-                                                    # This will depend on if it is longer then n or not.
-                                                    if collapse_n_mer_dictionary[kmer][k].profile_length < n:
-                                                        unsupported_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                                        # unsupported_list.remove(bigFootprintToCollapse)
-
-                                                else:
-                                                    # then the big init_type no longer contains any of
-                                                    # its original maj ref seqs and
-                                                    # so should be delted.
-                                                    initial_types_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                                    unsupported_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                            # Create a new inital_type
-                                            # The profile will be the synth footprint.
-                                            # The cladeCollectionList will be the same as the large init type.
-                                            # The basalSequence_list can come from the
-                                            # self.check_if_initial_type_contains_basal_sequences()
-
-                                            # NB I have made it so that if InitialType() doesn't get a
-                                            # majdsss list then it will create one from scratch
-                                            # ALSO CHANGED
-                                            # TODO we got here.
-                                            else:
-                                                new_initial_type = InitialType(
-                                                    reference_sequence_set=kmer,
-                                                    clade_collection_list=collapse_n_mer_dictionary[kmer]
-                                                    [k].clade_collection_list)
-                                                initial_types_list.append(new_initial_type)
-
-                                                # now delete the big init_type from the intial
-                                                # types list and from the unsupported_list
-                                                initial_types_list.remove(collapse_n_mer_dictionary[kmer][k])
-                                                if collapse_n_mer_dictionary[kmer][k] in unsupported_list:
-                                                    unsupported_list.remove(collapse_n_mer_dictionary[kmer][k])
-
-                                # each unsupportedfootprint in the nmer has been collapsed
-                            # each of the kmers have been gone through and all unsupportedfootprints
-                            # that could fit into the kmers have been collapsed
-                            # Time for the next n here!
-                            # Check to see what is happening once we get to the smaller ns
-                            # It may be that we can use the code from below to simply put the maj as
-                            # the type for footprints that are still
-                            # unassigned
-            else:
-                # At this point we may have some 2s or larger in the unsupported list still
-                # we will collapse these to their maj ref seq type
-                # Once we have pushed these into the 1s or made new 1s if the maj ref seq type did not already exist
-                # then we should collect all of the 1 length footprints and put them in the supported list
-                # Or actually in theory so long as we have deleted collapsed footprints from the footprint_list we should
-                # be able to return the footprint list
-                while unsupported_list:
-                    unsupported_footprint = unsupported_list[0]
-
-                    # For each clade collection
-                    # 241217 we need to do each cladeCollection individually here bear in mind.
-                    for i in range(len(unsupported_footprint.clade_collection_list)):
-                        # check each maj dsss
-                        for maj_dss in unsupported_footprint.majority_sequence_list[i]:
-                            # Check to see if an initial type with profile of that maj_dss refseq already exists
-                            # 241217 it may be worth having a dictionary of the profiles and init types to speed this up.
-                            # Let's see how slow it is.
-                            found = False
-                            for initT in [init for init in initial_types_list if init.profile_length == 1]:
-                                if maj_dss.reference_sequence_of in initT.profile:
-                                    # Then we have found a profile that has the refseq as a profile
-                                    # If the big init type is multi basal then we need to extract
-                                    # if the clade maj dss contains multiple sequences
-                                    # if unsupported_footprint.contains_multiple_basal_sequences:
-                                    #     #241217 check that the large type has had the basal seqs readjusted
-                                    #     # so that when we do the next maj_dss it may be non multiple basal
-                                    #     initT.extract_support_from_large_initial_type(unsupported_footprint)
-                                    # # else we need to absorb
-                                    # else:
-                                    #     initT.absorb_large_init_type(unsupported_footprint)
-
-                                    # If found then we simply need to add a clade collection to the initT support
-                                    # and the appropriate maj dsss
-                                    initT.clade_collection_list.append(unsupported_footprint.clade_collection_list[i])
-                                    initT.majority_sequence_list.append([maj_dss])
-
-                                    found = True
-                                    break
-                            if not found:
-                                # If the type init_type doesn't already exist we must create one.
-                                new_initial_type = InitialType(
-                                    reference_sequence_set=frozenset([maj_dss.reference_sequence_of]),
-                                    clade_collection_list=[unsupported_footprint.clade_collection_list[i]])
-                                initial_types_list.append(new_initial_type)
-                                # We must then alter the big_init_type
-                                # Actually I don't think we do need to alter the big type
-                                # We just put it into the small for each of the cladeCcols and maj dsss
-                                # once this is done then we delte the big type
-
-                                # unsupported_footprint.remove_small_init_type_from_large(new_initial_type)
-
-                                # If the large init type no longer contains any maj ref seqs then we can delete it
-                    # Here we have completed collapsing one big_init_type and we can now get rid of the type
-                    unsupported_list.remove(unsupported_footprint)
-                    initial_types_list.remove(unsupported_footprint)
-
-                # All unsupported footprints have been associated to their maj and deleted from the footprint_list
-                return initial_types_list
-
-        return False
 
     def _there_are_footprints_of_this_clade(self, clade_fp_dict):
         return clade_fp_dict
@@ -779,6 +54,42 @@ class SPDataAnalysis:
         if os.path.exists(self.temp_wkd):
             shutil.rmtree(self.temp_wkd)
         os.makedirs(self.temp_wkd, exist_ok=True)
+
+
+class AnalysisTypeCreator:
+    """Create AnalysisType objects from the supported initial type profiles that have been generated in the
+    SupportedFootprintIdentifier"""
+    def __init__(self, parent_sp_data_analysis):
+        self.parent = parent_sp_data_analysis
+
+    def create_analysis_types(self):
+        print(f'\n\nCreating analysis types clade {self.parent.current_clade}')
+        for initial_type in self.parent.collapsed_footprint_dict:
+            if self._initial_type_is_codom(initial_type):
+                self._create_new_analysis_type_co_dom(initial_type)
+            else:
+                self._create_new_analysis_type_non_co_dom(initial_type)
+
+    def _create_new_analysis_type_non_co_dom(self, initial_type):
+        new_analysis_type = AnalysisType(co_dominant=False, data_analysis_from=self.parent.data_analysis_obj,
+                                         clade=self.parent.current_clade)
+        new_analysis_type.set_maj_ref_seq_set(initial_type.set_of_maj_ref_seqs)
+        new_analysis_type.init_type_attributes(initial_type.clade_collection_list, initial_type.profile)
+        new_analysis_type.save()
+        sys.stdout.write(f'\rCreating analysis type: {new_analysis_type.name}')
+
+    def _create_new_analysis_type_co_dom(self, initial_type):
+        new_analysis_type = AnalysisType(
+            co_dominant=True,
+            data_analysis_from=self.parent.data_analysis_obj,
+            clade=self.parent.current_clade)
+        new_analysis_type.set_maj_ref_seq_set(initial_type.set_of_maj_ref_seqs)
+        new_analysis_type.init_type_attributes(initial_type.clade_collection_list, initial_type.profile)
+        new_analysis_type.save()
+        print('\rCreating analysis type: {}'.format(new_analysis_type.name), end='')
+
+    def _initial_type_is_codom(self, initial_type):
+        return len(initial_type.set_of_maj_ref_seqs) > 1
 
 class FootprintDictPopHandler:
     """Will handle the execusion of the FootprintDictWorker. This worker will populate the
@@ -877,7 +188,8 @@ class SupportedFootPrintIdentifier:
     sequences. In this way, a single clade collection can go towards the support of two different
     footprints, one for with C3 and one with C15.
     as """
-    def __init__(self, clade_footprint_dict):
+    def __init__(self, clade_footprint_dict, parent_sp_data_analysis):
+        self.parent = parent_sp_data_analysis
         self.clade_fp_dict = clade_footprint_dict
         self.supported_list = []
         self.unsupported_list = []
@@ -959,6 +271,9 @@ class SupportedFootPrintIdentifier:
             else:
                 #TODO we are here.
                 # assign still unsupported types to maj seqs
+                uffc = UnsupportedFootprintFinalCollapser()
+                uffc.collapse_unsup_footprints_to_maj_refs()
+        return self.initial_types_list
 
     def _collapse_type_to_matching_init_type_if_exists(self, k, synth_fp):
         if self._extracted_initial_type_fp_now_matches_existing_initial_type(
@@ -1143,6 +458,50 @@ class SupportedFootPrintIdentifier:
                 self.supported_list.append(initial_type)
             else:
                 self.unsupported_list.append(initial_type)
+
+class UnsupportedFootprintFinalCollapser:
+    def __init__(self, parent_supported_footprint_identifier):
+        self.parent = parent_supported_footprint_identifier
+        self.fp_to_collapse = None
+        self.matching_initial_type = None
+
+    def collapse_unsup_footprints_to_maj_refs(self):
+        while self.parent.unsupported_list:
+            self.fp_to_collapse = self.parent.unsupported_list[0]
+            for i in range(len(self.fp_to_collapse.clade_collection_list)):  # for each cc
+                for maj_dss in self.fp_to_collapse.majority_sequence_list[i]:  # for each maj_ref_seq
+                    if self._inital_type_exists_with_maj_ref_seq_as_profile(maj_dss):
+                        self._add_unsup_type_info_to_smll_match_type(i, maj_dss)
+                    else:
+                        self._create_new_maj_seq_init_type(i, maj_dss)
+
+            self._del_type_to_collapse()
+
+    def _create_new_maj_seq_init_type(self, i, maj_dss):
+        new_initial_type = InitialType(
+            reference_sequence_set=frozenset([maj_dss.reference_sequence_of]),
+            clade_collection_list=[self.fp_to_collapse.clade_collection_list[i]])
+        self.parent.initial_types_list.append(new_initial_type)
+
+    def _add_unsup_type_info_to_smll_match_type(self, i, maj_dss):
+        self.matching_initial_type.clade_collection_list.append(self.fp_to_collapse.clade_collection_list[i])
+        self.matching_initial_type.majority_sequence_list.append([maj_dss])
+
+    def _inital_type_exists_with_maj_ref_seq_as_profile(self, maj_dss):
+        """Check to see if an initial type with profile of that maj_dss refseq already exists"""
+        for initT in [init for init in self.parent.initial_types_list if init.profile_length == 1]:
+            if maj_dss.reference_sequence_of in initT.profile:
+                self.matching_initial_type = initT
+                return True
+        return False
+
+    def _del_type_to_collapse(self):
+        """Once we have associated each of the cc of an initial type to collapse to existing or new initial types,
+        delete.
+        """
+        self.parent.initial_types_list.remove(self.fp_to_collapse)
+        if self.fp_to_collapse in self.parent.unsupported_list:
+            self.parent.unsupported_list.remove(self.fp_to_collapse)
 
 class CollapseAssessor:
     """Responsible for assessing whether an unsupported large initial type can be collapsed into a given
@@ -1386,6 +745,8 @@ class SyntheticFootprintCollapser:
             if self.current_synth_fp.issubset(self.current_fp_to_collapse.profile):
                 return True
         return False
+
+
 class SyntheticFootprintPermutator:
     def __init__(self, parent_supported_footprint_identifier):
         self.parent = parent_supported_footprint_identifier
@@ -1397,13 +758,13 @@ class SyntheticFootprintPermutator:
     def _populate_mp_input_queue(self):
         for len_n_initial_type in self.parent.list_of_initial_types_of_len_n:
             self.len_n_profile_input_mp_list.put(len_n_initial_type.profile)
-        for n in range(self.parent.parent.args.num_proc):
+        for n in range(self.parent.parent.parent.args.num_proc):
             self.len_n_profile_input_mp_list.put('STOP')
 
     def permute_synthetic_footprints(self):
         all_processes = []
 
-        for N in range(self.parent.parent.args.num_proc):
+        for N in range(self.parent.parent.parent.args.num_proc):
             p = Process(target=self.permute_synthetic_footprints_worker, args=())
             all_processes.append(p)
             p.start()
