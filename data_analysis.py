@@ -424,7 +424,7 @@ class PotentialNewType:
 
 
 class CheckTypePairingHandler:
-    def __int__(self, parent_artefact_assessor, artefact_info_a, artefact_info_b):
+    def __init__(self, parent_artefact_assessor, artefact_info_a, artefact_info_b):
         self.parent = parent_artefact_assessor
         # AnalysisTypeAretefactInfoHolder for types a and b
         self.info_a = artefact_info_a
