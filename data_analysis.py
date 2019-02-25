@@ -4,6 +4,7 @@ from multiprocessing import Queue, Manager, Process, current_process
 import sys
 from dbApp.models import AnalysisType, DataSetSampleSequence
 import itertools
+from collections import defaultdict
 
 from django import db
 class SPDataAnalysis:
@@ -174,14 +175,236 @@ class SPDataAnalysis:
             shutil.rmtree(self.temp_wkd)
         os.makedirs(self.temp_wkd, exist_ok=True)
 
+class CladeCollectionInfoHoder:
+    def __init__(
+            self, total_seq_abundance, footprint_as_frozen_set_of_ref_seq_uids, ref_seq_rel_abund_dict, clade):
+        self.total_seq_abundance = total_seq_abundance
+        self.footprint_as_frozen_set_of_ref_seq_uids = footprint_as_frozen_set_of_ref_seq_uids
+        self.ref_seq_rel_abund_dict = ref_seq_rel_abund_dict
+        self.analysis_type_uid = []
+        self.clade = clade
+
 class ArtefactAssessor:
     def __init__(self, parent_sp_data_analysis):
         self.parent = parent_sp_data_analysis
+        # TODO we already have three cc.id dicts and we are about to add a fourth for the footprint as frozen set
+        # it seems to me that we should have these in a single dictionary
+        # this will make it easier to keep track of too.
         # key:cc.id, value:int(total_sequences_in_clade_collection)
+        self.cc_info_dict = self._create_cc_info_dict()
         self.cc_to_total_seqs_dict = self._create_total_seqs_dict_for_all_ccs()
         # key:cc.id, value:dict(key:ref_seq_obj_of_cc, value:int(abundance_of_the_ref_seq))
         self.cc_to_ref_seq_abunds_dict = self._create_ref_seq_rel_abunds_for_all_ccs_dict()
-        
+        self.analysis_types_of_analysis = AnalysisType.objects.filter(data_analysis_from=self.parent.data_analysis_obj)
+        self.set_of_clades_from_analysis = self._set_set_of_clades_from_analysis()
+        # key:AnalysisType.id, value:AnalysisTypeAretfactInfoHolder
+        self.analysis_type_artefact_info_dict = self._create_analysis_type_aretefact_info_dict()
+        # set(frozenset(AnalysisTypeArtefactInfoHolder.ref_seq_uids_set) for AnalysisTypeArtefactInfoHolder in
+        # self.analysis_teyp_artefact_info_dict
+        self.analysis_type_footprint_set = self._init_analysis_type_footprint_set()
+        # key:CladeCollection.id, value:list(associated AnalysisType uids)
+        self.cc_id_to_analysis_type_id_dict = self._create_clade_collection_to_starting_analysis_type_dictionary()
+
+        # attributes updated on an iterative basis
+        self.current_clade = None
+        # NB we have the two lists below as we only want to check combinations of the original AnalysiTypes and
+        # not the new AnalysisTypes that will be created as part of this process. This is to prevent any infinite
+        # loops occuring.
+        # A query that will be coninually updated
+        self.types_of_clade_dynamic = None
+        # A fixed list of the original types that we stated with
+        self.types_of_clade_static = None
+        # A list that holds a tuple of ids that have already been compared.
+        self.already_compared_analysis_type_uid_set = set()
+        # Bool whether the pair comparisons need to be restarted.
+        # This will be true when we have modified a type in anyway
+        self.restart_pair_comparisons = None
+
+    def _create_cc_info_dict(self):
+        print('Generating CladeCollection info objects')
+        cc_input_mp_queue = Queue()
+        mp_manager = Manager()
+        cc_to_info_items_mp_dict = mp_manager.dict()
+
+        for cc in self.parent.ccs_of_analysis:
+            cc_input_mp_queue.put(cc)
+
+        for n in range(self.parent.parent.args.num_proc):
+            cc_input_mp_queue.put('STOP')
+
+        all_processes = []
+        for n in range(self.parent.parent.args.num_proc):
+            p = Process(target=self._cc_id_to_cc_info_obj_worker, args=(cc_input_mp_queue, cc_to_info_items_mp_dict))
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+        return dict(cc_to_info_items_mp_dict)
+
+    def _cc_id_to_cc_info_obj_worker(self, cc_input_mp_queue, cc_to_info_items_mp_dict):
+        for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
+            sys.stdout.write(f'\r{clade_collection_object} {current_process().name}')
+
+            dss_objects_of_cc_list = list(DataSetSampleSequence.objects.filter(
+                clade_collection_found_in=clade_collection_object))
+
+            list_of_ref_seqs_in_cc = [
+                dsss.reference_sequence_of for dsss in dss_objects_of_cc_list]
+
+            total_sequences_in_cladecollection = sum([dsss.abundance for dsss in dss_objects_of_cc_list])
+
+            list_of_rel_abundances = [dsss.abundance / total_sequences_in_cladecollection for dsss in
+                                  dss_objects_of_cc_list]
+
+            ref_seq_frozen_set = frozenset(dsss.reference_sequence_of.id for dsss in dss_objects_of_cc_list)
+
+            ref_seq_rel_abund_dict = {}
+            for i in range(len(dss_objects_of_cc_list)):
+                ref_seq_rel_abund_dict[list_of_ref_seqs_in_cc[i]] = list_of_rel_abundances[i]
+
+            cc_to_info_items_mp_dict[clade_collection_object.id] = CladeCollectionInfoHoder(
+                clade=clade_collection_object.clade,
+                footprint_as_frozen_set_of_ref_seq_uids=ref_seq_frozen_set,
+                ref_seq_rel_abund_dict=ref_seq_rel_abund_dict,
+                total_seq_abundance=total_sequences_in_cladecollection)
+
+
+    def _init_analysis_type_footprint_set(self):
+        return set(
+            [frozenset(anal_info_obj.ref_seq_uids_set) for anal_info_obj in self.analysis_type_artefact_info_dict])
+
+    def _types_should_be_checked(self, artefact_info_a, artefact_info_b):
+        """Check
+        1 - the non-artefact_ref_seqs match
+        2 - neither of the types is a subset of the other
+        3 - there are artefact ref seqs in at least one of the types"""
+        if artefact_info_a.non_artefact_ref_seq_uids_set == artefact_info_b.non_artefact_ref_seq_uids_set:
+            if not set(artefact_info_a.ref_seq_uids_set).issubset(artefact_info_b.ref_seq_uids_set):
+                if not set(artefact_info_b.ref_seq_uids_set).issubset(artefact_info_a.ref_seq_uids_set):
+                    if artefact_info_a.artefact_ref_seq_uids_set.union(artefact_info_b.artefact_ref_seq_uids_set):
+                        return True
+        return False
+
+    def assess_within_clade_cutoff_artefacts(self):
+        for clade in self.set_of_clades_from_analysis:
+            self.current_clade = clade
+            self.types_of_clade_dynamic = AnalysisType.objects.filter(
+                data_analysis_from=self.parent.data_analysis_obj,
+                clade=self.current_clade)
+            self.types_of_clade_static = list(AnalysisType.objects.filter(
+                data_analysis_from=self.parent.data_analysis_obj,
+                clade=self.current_clade))
+            while 1:
+                self.restart_pair_comparisons = False
+                for analysis_type_a, analysis_type_b in itertools.combinations(
+                    [at for at in self.types_of_clade_dynamic if at in self.types_of_clade_static], 2):
+                    if {analysis_type_a.id, analysis_type_b.id} not in self.already_compared_analysis_type_uid_set:
+                        artefact_info_a = self.analysis_type_artefact_info_dict[analysis_type_a.id]
+                        artefact_info_b = self.analysis_type_artefact_info_dict[analysis_type_b.id]
+                        if self._types_should_be_checked(artefact_info_a, artefact_info_b):
+
+                            print('\nChecking {} and {} for additional artefactual profiles'.format(analysis_type_a, analysis_type_b))
+                            ctph = CheckTypePairingHandler(parent_artefact_assessor=self)
+                            ctph.check_type_pairing()
+                            if check_type_pairing_for_artefact_type(
+                                    analysis_type_a, analysis_type_b, type_footprint_dict, clade, cc_to_initial_type_dict,
+                                    cc_to_ref_seq_list_and_abundances, num_processors):
+
+                                self.restart_pair_comparisons = True
+
+                                self.types_of_clade_dynamic = AnalysisType.objects.filter(
+                                    data_analysis_from=self.parent.data_analysis_obj, clade=clade)
+                                break
+                            else:
+                                self.already_compared_analysis_type_uid_set.add(
+                                    frozenset({analysis_type_a.id, analysis_type_b.id}))
+                        else:
+                            self.already_compared_analysis_type_uid_set.add(
+                                frozenset({analysis_type_a.id, analysis_type_b.id}))
+
+
+
+                    # If we make it to here we did a full run through the types without making a new type
+                    # Time to do the same for the next type
+                if not self.restart_pair_comparisons:
+                    break
+
+
+    def _type_non_artefacts_are_subsets_of_each_other(self, analysis_type_a, analysis_type_b):
+        if set(self.analysis_type_artefact_info_dict[
+                            analysis_type_a.id].ref_seq_uids_set).issubset(
+            self.analysis_type_artefact_info_dict[analysis_type_b.id].ref_seq_uids_set):
+            if set(self.analysis_type_artefact_info_dict[
+                            analysis_type_b.id].ref_seq_uids_set).issubset(
+                    self.analysis_type_artefact_info_dict[analysis_type_a.id].ref_seq_uids_set):
+                return True
+        return False
+
+    def _create_clade_collection_to_starting_analysis_type_dictionary(self):
+        """Create a dictionary that links CladeCollection to the AnalysisTypes that they associated with.
+        NB it used to be that only one AnalysisType could be associated to one CladeCollection, but since
+        the introduction of the basal type theory a single CladeCollection can now associate with more than one
+        AnalysisType. As such, we use a defaultdict(list) as the default rather than a direct key to value association
+        between CladeCollection and AnlaysisType."""
+        cc_to_initial_type_dict = defaultdict(list)
+
+        clade_collection_to_type_tuple_list = []
+        for at in self.analysis_types_of_analysis:
+            type_uid = at.id
+            initial_clade_collections = [int(x) for x in at.list_of_clade_collections_found_in_initially.split(',')]
+            for CCID in initial_clade_collections:
+                clade_collection_to_type_tuple_list.append((CCID, type_uid))
+
+        for ccid, atid in clade_collection_to_type_tuple_list:
+            cc_to_initial_type_dict[ccid].append(atid)
+
+        return dict(cc_to_initial_type_dict)
+
+    def _create_analysis_type_aretefact_info_dict(self):
+        """Create a dict for each of the AnalysisTypes that will be kept updated throughout the artefact checking.
+        The dict will be key AnalysisType.id, value will be an AnalysisTypeAretefactInfoHolder."""
+        analysis_type_artefact_info_dict = {}
+        for at in self.analysis_types_of_analysis:
+
+            ref_seqs_uids_of_analysis_type_set = set([ref_seq.id for ref_seq in at.get_ordered_footprint_list()])
+            artefact_ref_seq_uids_set = set([int(x) for x in at.artefact_intras.split(',') if x != ''])
+            non_artefact_ref_seq_uids_set = set([uid for uid in ref_seqs_uids_of_analysis_type_set if uid not in artefact_ref_seq_uids_set])
+            footprint_as_ref_seq_objects = at.get_ordered_footprint_list()
+            analysis_type_artefact_info_dict[at.id] = AnalysisTypeArtefactInfoHolder(
+                artefact_ref_seq_uids_set=artefact_ref_seq_uids_set,
+                non_artefact_ref_seq_uids_set=non_artefact_ref_seq_uids_set,
+                ref_seq_uids_set=ref_seqs_uids_of_analysis_type_set,
+                footprint_as_ref_seq_objects=footprint_as_ref_seq_objects,
+                basal_seqs_set=self._generate_basal_seqs_set(footprint=footprint_as_ref_seq_objects),
+                clade=at.clade)
+
+        return analysis_type_artefact_info_dict
+
+    def _generate_basal_seqs_set(self, footprint):
+        basal_set = set()
+        found_c15_a = False
+        for rs in footprint:
+            if rs.name == 'C3':
+                basal_set.add('C3')
+            elif rs.name == 'C1':
+                basal_set.add('C1')
+            elif 'C15' in rs.name and not found_c15_a:
+                basal_set.add('C15')
+                found_c15_a = True
+
+        if basal_set:
+            return basal_set
+        else:
+            return None
+
+    def _set_set_of_clades_from_analysis(self):
+        self.set_of_clades_from_analysis = set()
+        for at in self.analysis_types_of_analysis:
+            self.set_of_clades_from_analysis.add(at.clade)
+        return self.set_of_clades_from_analysis
+
     def _create_ref_seq_rel_abunds_for_all_ccs_dict(self):
         cc_input_mp_queue = Queue()
         mp_manager = Manager()
@@ -257,7 +480,62 @@ class ArtefactAssessor:
                  DataSetSampleSequence.objects.filter(clade_collection_found_in=clade_collection_object)])
             cc_to_total_seqs_mp_dict[clade_collection_object.id] = total_sequences_in_cladecollection
 
+class PotentialNewType:
+    def __init__(self, artefact_ref_seq_set, non_artefact_ref_seq_set, ref_seq_uids_set, name):
+        self.artefact_ref_seq_set = artefact_ref_seq_set
+        self.non_artefact_ref_seq_set = non_artefact_ref_seq_set
+        self.ref_seq_uids_set = ref_seq_uids_set
+        self.name = name
 
+class CheckTypePairingHandler:
+    def __int__(self, parent_artefact_assessor, artefact_info_a, artefact_info_b):
+        self.parent = parent_artefact_assessor
+        # AnalysisTypeAretefactInfoHolder for types a and b
+        self.info_a = artefact_info_a
+        self.info_b = artefact_info_b
+        # NB that the non_artefact ref seqs being the same is a prerequisite of doing a comparison
+        # as such we can set the below pnt non artefact ref seqs to match just one of the types being compared
+        self.pnt = self._init_pnt(self.info_a, self.info_b)
+        self.list_of_ccs_to_check = None
+
+    def _init_pnt(self, artefact_info_a, artefact_info_b):
+        return PotentialNewType(
+            ref_seq_uids_set=self.info_a.ref_seq_uids_set.union(self.info_b.artefact_ref_seq_uids_set),
+            artefact_ref_seq_set=self.info_a.artefact_ref_seq_uids_set.union(self.info_b.artefact_ref_seq_uids_set),
+            non_artefact_ref_seq_set=self.info_a.non_artefact_ref_seq_uids_set,
+            name=','.join(
+                [ref_seq.name for ref_seq in
+                 set(list(
+                     artefact_info_a.footprint_as_ref_seq_objects +
+                     artefact_info_b.footprint_as_ref_seq_objects
+                 ))]))
+
+    def check_type_pairing(self):
+        if self._pnt_profile_already_an_existing_analysis_type_profile():
+            print(f'Assessing new type:{pnt.name}')
+            print('Potential new type already exists')
+            return False
+
+        # TODO This is perhpas stupid but I'm going to remove the second conditional from this
+        # as we were supposed to be checking all of the ccs
+        self.list_of_ccs_to_check = [cc for cc in self.parent.parent.ccs_of_analysis if
+                                     cc.clade == self.info_a.clade if
+                                     cc.id in self.parent.cc_id_to_analysis_type_id_dict]
+
+        print(f'Assessing support for potential new type:{self.pnt.name}')
+
+    def _pnt_profile_already_an_existing_analysis_type_profile(self):
+        return self.pnt.ref_seq_uids_set in self.parent.analysis_type_footprint_set
+
+class AnalysisTypeArtefactInfoHolder:
+    """An object to aid in fast access of the following information for each analysis type"""
+    def __init__(self, artefact_ref_seq_uids_set, non_artefact_ref_seq_uids_set, ref_seq_uids_set, footprint_as_ref_seq_objects, basal_seqs_set, clade):
+        self.artefact_ref_seq_uids_set = artefact_ref_seq_uids_set
+        self.non_artefact_ref_seq_uids_set = non_artefact_ref_seq_uids_set
+        self.ref_seq_uids_set = ref_seq_uids_set
+        self.footprint_as_ref_seq_objects = footprint_as_ref_seq_objects
+        self.basal_seqs_set = basal_seqs_set
+        self.clade = clade
 
 class AnalysisTypeCreator:
     """Create AnalysisType objects from the supported initial type profiles that have been generated in the

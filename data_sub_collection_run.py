@@ -1566,6 +1566,7 @@ def check_if_type_pairs_contain_incompatible_basal_seqs(typea, typeb):
     them to be considered together"""
     # TODO 11/01/18 we can potentially speed this up by keeping the initalT information on basal seqs
     # and having this info be held in the type object.
+    # TODO this info can be got from the type dictionary as we have the footprint stored
     reference_sequence_a = typea.get_ordered_footprint_list()
     reference_sequence_b = typeb.get_ordered_footprint_list()
 
