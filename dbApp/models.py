@@ -258,6 +258,8 @@ class AnalysisType(models.Model):
     # This will only be set to true when running an analysis against a database version.
     is_locked_type = models.BooleanField(default=False)
 
+    basal_seq = models.CharField(max_length=10, default=None)
+
     # This method will populate the following attributes
     #  self.list_of_clade_collections_found_in_initially
     # self.ordered_footprint_list
@@ -275,6 +277,25 @@ class AnalysisType(models.Model):
     # of defining intras.
     # These will simply be the relative proportion of any given intra (including the maj) with respect to the
     # total number of sequences the intras of the type make up.
+
+    def _set_basal_seq(self):
+        basal_set = set()
+        found_c15_a = False
+        for rs in self.get_ordered_footprint_list():
+            if rs.name == 'C3':
+                basal_set.add('C3')
+            elif rs.name == 'C1':
+                basal_set.add('C1')
+            elif 'C15' in rs.name and not found_c15_a:
+                basal_set.add('C15')
+                found_c15_a = True
+
+        if len(basal_set) == 1:
+            self.basal_seq = list(basal_set)[0]
+        elif len(basal_set) > 1:
+            raise RuntimeError(f'basal seq set {basal_set} contains more than one ref seq')
+        else:
+            self.basal_seq = None
 
     def init_type_attributes(self, list_of_clade_collections, footprintlistofrefseqs):
         # Becuase this can be run twice on a type due to the checking for within clade cutoff methods
@@ -383,6 +404,7 @@ class AnalysisType(models.Model):
 
         self.generate_max_min_ratios(count_list_ordered, ordered_footprint_list)
         self.generate_ratio_list()
+        self._set_basal_seq()
         self.save()
 
     # This is similar to initTypeAttributes but it works on the list_of_clade_collections
@@ -446,7 +468,7 @@ class AnalysisType(models.Model):
         # Then the order of the footprint has changed and the name needs to be redone
         # Else it doesn't need to be redone
         self.ordered_footprint_list = ','.join([str(refseq.id) for refseq in ordered_footprint_list])
-
+        self._set_basal_seq()
         if not self.is_locked_type:
             self.name = self.generate_name(ordered_footprint_list)
         # If the order of the footprint hasn't changed then the count list is
