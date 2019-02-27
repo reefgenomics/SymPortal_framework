@@ -76,6 +76,19 @@ class CladeCollectionInfoHolder:
         self.clade = clade
         self.cc_object = cc_object
         self.above_cutoff_ref_seqs_obj_set = above_cutoff_ref_seqs_obj_set
+        self.above_cutoff_ref_seqs_id_set = [rs.id for rs in self.above_cutoff_ref_seqs_obj_set]
+
+class AnalysisTypeInfoHolder:
+    """An object to aid in fast access of the following information for each analysis type"""
+    def __init__(self, artefact_ref_seq_uids_set, non_artefact_ref_seq_uids_set, ref_seq_uids_set,
+                 footprint_as_ref_seq_objs_set, basal_seqs_set, clade, associated_cc_obj_list):
+        self.artefact_ref_seq_uids_set = artefact_ref_seq_uids_set
+        self.non_artefact_ref_seq_uids_set = non_artefact_ref_seq_uids_set
+        self.ref_seq_uids_set = ref_seq_uids_set
+        self.footprint_as_ref_seq_objs_set = footprint_as_ref_seq_objs_set
+        self.basal_seqs_set = basal_seqs_set
+        self.clade = clade
+        self.associated_cc_obj_list = associated_cc_obj_list
 
 class ArtefactAssessor:
     def __init__(self, parent_sp_data_analysis):
@@ -459,7 +472,7 @@ class CheckTypePairingHandler:
 
     def _init_pnt(self, artefact_info_a, artefact_info_b):
         name_of_ref_seqs_in_pnt = [ref_seq.name for ref_seq in
-                 artefact_info_a.footprint_as_ref_seq_objs_set.union(artefact_info_b.footprint_as_ref_seq_objs_set]
+                 artefact_info_a.footprint_as_ref_seq_objs_set.union(artefact_info_b.footprint_as_ref_seq_objs_set)]
 
         return PotentialNewType(
             ref_seq_uids_set=self.info_a.ref_seq_uids_set.union(self.info_b.artefact_ref_seq_uids_set),
@@ -482,7 +495,7 @@ class CheckTypePairingHandler:
 
             self._make_analysis_type_from_pnt()
             self._update_at_artefact_info_dict_from_pnt()
-            self._update_fp_to_at_dict()
+            self._update_fp_to_at_dict_from_pnt()
 
             self._update_cc_info_for_ccs_that_support_new_type()
 
@@ -493,6 +506,8 @@ class CheckTypePairingHandler:
             # TODO in the cc info have the refseqs that are above the cutoff and the ref seqs that are below the cutoff
             # this will only ever have to be done at the initiation of the CC info dict, but will make looking
             # for the ccs in common much faster
+            # TODO we are not updating the associated_cc_obj_list in the analysistypeinfo holder I don't think.
+            # we need to make sure that we do this.
             if self._sufficient_stranded_ccs_for_new_analysis_type():
                 # Get ref_seqs in common
                 list_of_sets_of_ref_seqs_above_cutoff = [
@@ -516,13 +531,18 @@ class CheckTypePairingHandler:
                             self._create_new_at_info_obj_and_add_to_at_info_dict()
 
                             self._add_exisiting_type_to_stranded_cc_info_objects(self.new_analysis_type_from_stranded_ccs)
+
+                            self._update_fp_to_at_dict(self.new_analysis_type_from_stranded_ccs)
                         else:
+                            sccrh = StrandedCCRehomer(parent_check_type_pairing_handler=self)
+                            sccrh.rehome_stranded_ccs()
                             # reassociated_ccs
                 else:
                     #reassociated_ccs
 
             else:
-                #reassociate_ccs
+                if self.stranded_ccs:
+                    #reassociate_ccs
         else:
             print('\nInsufficient support for potential new type')
             return False
@@ -727,7 +747,12 @@ class CheckTypePairingHandler:
     def _afftected_type_still_has_sufficient_support(self, new_list_of_ccs_to_associate_to):
         return len(new_list_of_ccs_to_associate_to) >= 4
 
-    def _update_fp_to_at_dict(self):
+    def _update_fp_to_at_dict(self, analysis_type_obj):
+            self.parent.ref_seq_fp_set_to_analysis_type_obj_dict[
+                self.parent.analysis_type_info_dict[
+                    analysis_type_obj.id].footprint_as_ref_seq_objs_set] = analysis_type_obj
+
+    def _update_fp_to_at_dict_from_pnt(self):
         self.parent.ref_seq_fp_set_to_analysis_type_obj_dict[self.pnt.ref_seq_objects_set] = self.new_analysis_type_from_pnt
 
     def _update_at_artefact_info_dict_from_pnt(self):
@@ -792,7 +817,193 @@ class CheckTypePairingHandler:
                 clade_collection_object=clade_collection_object, parent_check_type_pairing=self)
             cpntsw.check_pnt_support()
 
-class LossOfSupportInfoHolder:
+class StrandedCladeCollectionAnalysisTypeSearcher:
+    """For a given stranded CladeCollection it will search the AnalysisTypes to identify the the AnalysisType that
+    representes the greatest proportion of the CladeCollections sequences."""
+    def __init__(self, parent_stranded_cc_rehomer, clade_collection_object):
+        self.parent = parent_stranded_cc_rehomer
+        self.cc = clade_collection_object
+        self.best_rel_abund_of_at_in_cc = 0
+        self.best_match_at_id = None
+        self.cc_info = self.parent.cc_info_dict[self.cc.id]
+
+    def search_analysis_types(self):
+        self._find_at_found_in_cc_with_highest_rel_abund()
+        self._if_match_put_in_output_else_put_none()
+
+    def _if_match_put_in_output_else_put_none(self):
+        if self.best_match_at_id is not None:
+            self.parent.cc_to_at_match_info_holder_mp_list.put(
+                CCToATMatchInfoHolder(
+                    at=AnalysisType.objects.get(id=self.best_match_at_id),
+                    cc=self.cc,
+                    rel_abund_of_at_in_cc=self.best_rel_abund_of_at_in_cc))
+        else:
+            self.parent.cc_to_at_match_info_holder_mp_list.put(None)
+
+    def _find_at_found_in_cc_with_highest_rel_abund(self):
+        for at_id, at_info in self.parent.parent.analysis_type_info_dict.items():
+            atficc = AnalysisTypeFoundInCladeCollection(analysis_type_info=at_info, clade_collection_info=self.cc_info)
+            if atficc.search_for_at_in_cc():
+                self.best_match_at_id = at_id
+                self.best_rel_abund_of_at_in_cc = atficc.rel_abund_of_at_in_cc
+
+
+class StrandedCCRehomer:
+    """Responsible for find new AnalysisTypes for the stranded CladeCollections to be associated with.
+    Not having CCs reasigned to a type causes problems. Due to the fact that strict limits are being used to
+    assign CladeCollections to the discovered AnalysisTypes it means that these stranded CCs are getting
+    bad associations. A such, we need to reassociate them to the best possible types.
+
+    For each CladeCollection object we are going to do a sort of mini type assignment
+    Because a lot of the single DIV AnalysisTypes will have been gotten rid of at this point
+    there is a possibility that there will not be an AnalysisType for the CCs to fit into.
+
+    Also it may be that the CCs now fit into a lesser intra single intra type.
+    e.g. B5c if original type was B5-B5s-B5c.
+    In this case we would obviously rather have the type B5 associated with the clade_collection_object.
+    So we should check to see if the abundance of the type that the clade_collection_object has been found
+    in is larger than the abundance of the CCs Maj intra.
+
+    If it is not then we should simply create a new type of the maj intra and associate the
+    CladeCollection object to that.
+
+    We also we need to be mindful of the fact that a CladeCollection object may not find a
+    match at all, e.g. the best_type_uid will = 'None'.
+
+    In this case we will also need to make the Maj intra the type.
+    """
+    def __init__(self, parent_check_type_pairing_handler):
+        self.parent = parent_check_type_pairing_handler
+        self.cc_input_mp_list = Queue()
+        self.cc_to_at_match_info_holder_mp_list = Queue()
+        self.analysis_types_just_created = []
+        self.cc_to_match_object_dict = {}
+
+    def rehome_stranded_ccs(self):
+        """For each CladeCollection search through all of the AnalysisTypes and find the analysis type that
+        represents the highest proportion of the CladeCollections sequences."""
+        all_processes = []
+
+        for n in range(self.parent.parent.parent.parent.args.num_proc):
+            p = Process(target=self._rehome_stranded_ccs_worker, args=())
+            all_processes.append(p)
+            p.start()
+
+        for p in all_processes:
+            p.join()
+
+        # at this point we have the cc_to_at_match_info_holder_mp_list populated and we should
+        # For each cc check to see if the rel_abundance covered by the matching at is larger than the ref
+        for support_obj in iter(self.cc_to_at_match_info_holder_mp_list.get, 'STOP'):
+            self.cc_to_match_object_dict[support_obj.cc] = support_obj
+
+        #TODO Need to iterate independently of the cc_to_match_object_dict as we may want to modify the value
+        # in the key value pairing
+        for cc_obj in list(self.cc_to_match_object_dict.keys()):
+        # for cc_obj, support_obj in self.cc_to_match_object_dict.items():
+            support_obj = self.cc_to_match_object_dict[cc_obj]
+            self._check_analysis_types_just_added_arent_better_match(support_obj, cc_obj)
+
+            #TODO you are here
+            if support_obj.rel_abund_of_at_in_cc > self.best_rel_abund_of_at_in_cc:
+                self.best_rel_abund_of_at_in_cc = rel_abund
+                self.best_match_at = at_id
+            if self._rel_abund_of_match_is_higher_than_abund_of_maj_seq_of_cc():
+                
+
+    def _rehome_stranded_ccs_worker(self):
+        for cc in iter(self.cc_input_mp_list.get, 'STOP'):
+            sccats = StrandedCladeCollectionAnalysisTypeSearcher(
+                parent_stranded_cc_rehomer=self, clade_collection_object=cc)
+            sccats.search_analysis_types()
+
+    def _check_analysis_types_just_added_arent_better_match(self, support_obj, cc_obj):
+        """Checks to see whether the analysis types that may have been created """
+        clade_collection_info = self.parent.cc_info_dict[cc_obj.id]
+        new_best_rel_abund = 0
+        new_best_at_match = None
+        for at in self.analysis_types_just_created:
+            analysis_info = self.parent.analysis_type_info_dict[at.id]
+            atficc = AnalysisTypeFoundInCladeCollection(
+                analysis_type_info=analysis_info, clade_collection_info=clade_collection_info)
+            if atficc.search_for_at_in_cc():  # then a match was found
+                if support_obj is not None:
+                    if atficc.rel_abund_of_at_in_cc > support_obj.rel_abund_of_at_in_cc:
+                        new_best_at_match = at
+                        new_best_rel_abund = atficc.rel_abund_of_at_in_cc
+                else: # no need to check if higher as there was no match originally
+                    new_best_at_match = at
+                    new_best_rel_abund = atficc.rel_abund_of_at_in_cc
+
+        if new_best_at_match is not None:  # Then we must have found a better match/a match
+            # if support object already existed then modify it
+            if support_obj is not None:
+                support_obj.at = new_best_at_match
+                support_obj.rel_abund_of_at_in_cc = new_best_rel_abund
+            else:
+                # create a new support object and add it to the dict instead of the None value
+                self.cc_to_match_object_dict[cc_obj] = CCToATMatchInfoHolder(
+                    at=new_best_at_match,
+                    cc=cc_obj,
+                    rel_abund_of_at_in_cc=new_best_rel_abund)
+
+
+    def _get_rel_abund_of_at_in_cc_and_see_if_higher_than_current_best(self, at_id, at_info):
+        abund_of_at_in_cc = sum(
+            [self.cc_info.ref_seq_id_to_rel_abund_dict[rs.id] for rs in at_info.footprint_as_ref_seq_objs_set])
+        rel_abund = abund_of_at_in_cc / self.cc_info.total_seq_abundance
+        if rel_abund > self.best_rel_abund_of_at_in_cc:
+            self.best_rel_abund_of_at_in_cc = rel_abund
+            self.best_match_at = at_id
+
+    def _at_artefact_seqs_found_in_cc(self, at_info):
+        """Here we check to see if the artefact seqs are found in the CC. Perhaps strictly, strictly, strictly speaking
+        we should be looking to see if each of these abundances is above the unlocked relative abundance, but given
+        that the unlocked rel abund is no 0.0001 this is so low that I think we can just be happy if the seqs
+        exist in the CladeCollection."""
+        return at_info.artefact_ref_seq_uids_set.issubset(
+            self.cc_info.footprint_as_frozen_set_of_ref_seq_uids)
+
+    @staticmethod
+    def _at_non_artefact_seqs_found_in_cc_above_cutoff_seqs(at_info, cc_info):
+        return at_info.non_artefact_ref_seq_uids_set.issubset(cc_info.above_cutoff_ref_seqs_id_set)
+
+class AnalysisTypeFoundInCladeCollection:
+    """Class sees whether a given AnalysisType is found within a CladeCollection
+    and if so calculates the relative abundance of sequences that the AnalysisType represents."""
+    def __init__(self, analysis_type_info, clade_collection_info):
+        self.at_info = analysis_type_info
+        self.cc_info = clade_collection_info
+        self.rel_abund_of_at_in_cc = None
+
+    def search_for_at_in_cc(self):
+        if self._at_non_artefact_seqs_found_in_cc_above_cutoff_seqs():
+            if self._at_artefact_seqs_found_in_cc():
+                self._get_rel_abund_of_at_in_cc()
+                return self.rel_abund_of_at_in_cc
+        return False
+
+    def _get_rel_abund_of_at_in_cc(self):
+        abund_of_at_in_cc = sum(
+            [self.cc_info.ref_seq_id_to_rel_abund_dict[rs.id] for rs in self.at_info.footprint_as_ref_seq_objs_set])
+        self.rel_abund_of_at_in_cc = abund_of_at_in_cc / self.cc_info.total_seq_abundance
+
+    def _at_artefact_seqs_found_in_cc(self):
+        """Here we check to see if the artefact seqs are found in the CC. Perhaps strictly, strictly, strictly speaking
+        we should be looking to see if each of these abundances is above the unlocked relative abundance, but given
+        that the unlocked rel abund is no 0.0001 this is so low that I think we can just be happy if the seqs
+        exist in the CladeCollection."""
+        return self.at_info.artefact_ref_seq_uids_set.issubset(
+            self.cc_info.footprint_as_frozen_set_of_ref_seq_uids)
+
+    def _at_non_artefact_seqs_found_in_cc_above_cutoff_seqs(self):
+        return self.at_info.non_artefact_ref_seq_uids_set.issubset(self.cc_info.above_cutoff_ref_seqs_id_set)
+
+
+
+
+class CCToATMatchInfoHolder:
     """Responsible for holding the information of AnalysisType and CladeCollection and relative abundance
     that the AnalysisType represents in the CladeCollection when doing the CheckPNTSupport and we
     find that the PNT is a better fit thatn the current AnalysisType."""
@@ -822,7 +1033,7 @@ class CheckPNTSupportWorker:
 
             if self.pnt_seq_rel_abund_total_for_cc > self.rel_abund_of_current_analysis_type_of_cc:
                 self.parent.mp_list_of_loss_of_support_info_holder_objs.append(
-                    LossOfSupportInfoHolder(
+                    CCToATMatchInfoHolder(
                         cc=self.cc, at=self.current_analysis_type_of_cc,
                         rel_abund_of_at_in_cc=self.rel_abund_of_current_analysis_type_of_cc))
             else:
@@ -864,17 +1075,7 @@ class CheckPNTSupportWorker:
         self.pnt_seq_rel_abund_total_for_cc = sum(pnt_seq_rel_abund_for_cc)
 
 
-class AnalysisTypeInfoHolder:
-    """An object to aid in fast access of the following information for each analysis type"""
-    def __init__(self, artefact_ref_seq_uids_set, non_artefact_ref_seq_uids_set, ref_seq_uids_set,
-                 footprint_as_ref_seq_objs_set, basal_seqs_set, clade, associated_cc_obj_list):
-        self.artefact_ref_seq_uids_set = artefact_ref_seq_uids_set
-        self.non_artefact_ref_seq_uids_set = non_artefact_ref_seq_uids_set
-        self.ref_seq_uids_set = ref_seq_uids_set
-        self.footprint_as_ref_seq_objs_set = footprint_as_ref_seq_objs_set
-        self.basal_seqs_set = basal_seqs_set
-        self.clade = clade
-        self.associated_cc_obj_list = associated_cc_obj_list
+
 
 class AnalysisTypeCreator:
     """Create AnalysisType objects from the supported initial type profiles that have been generated in the

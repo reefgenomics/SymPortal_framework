@@ -1379,12 +1379,14 @@ def reassociate_ccs_to_existing_types_and_update_dicts(cctocurrentinitialtypedic
                 current_list_of_initial_ccs.append(str(clade_collection_object.id))
                 match_type.list_of_clade_collections_found_in_initially = ','.join(current_list_of_initial_ccs)
                 match_type.save()
+
                 # update type dict
                 cctocurrentinitialtypedict[clade_collection_object.id] = [match_type.id]
 
                 # reinitiate type
                 list_of_ccs = [cc for cc in
                                CladeCollection.objects.filter(id__in=[int(x) for x in current_list_of_initial_ccs])]
+
                 match_type.init_type_attributes(list_of_clade_collections=list_of_ccs,
                                                 footprintlistofrefseqs=match_type.get_ordered_footprint_list())
 
