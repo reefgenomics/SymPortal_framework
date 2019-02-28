@@ -487,80 +487,64 @@ class CheckTypePairingHandler:
             print(f'Assessing new type:{pnt.name}')
             print('Potential new type already exists')
             return False
-
         self._assess_support_of_pnt()
-
-
         if self._pnt_has_support():
-
-            self._make_analysis_type_from_pnt()
-            self._update_at_artefact_info_dict_from_pnt()
-            self._update_fp_to_at_dict_from_pnt()
-
-            self._update_cc_info_for_ccs_that_support_new_type()
-
-            self._reinit_or_del_affected_types_and_create_stranded_cc_list()
-
-            # TODO we got here. We now need to work with the output of the MP.
-            # time to home stranded CladeCOllections
-            # TODO in the cc info have the refseqs that are above the cutoff and the ref seqs that are below the cutoff
-            # this will only ever have to be done at the initiation of the CC info dict, but will make looking
-            # for the ccs in common much faster
-            # TODO we are not updating the associated_cc_obj_list in the analysistypeinfo holder I don't think.
-            # we need to make sure that we do this.
-            if self._sufficient_stranded_ccs_for_new_analysis_type():
-                # Get ref_seqs in common
-                list_of_sets_of_ref_seqs_above_cutoff = [
-                    self.parent.cc_info_dict[cc.id].above_cutoff_ref_seqs_obj_set for cc in self.stranded_ccs]
-
-                self.ref_seqs_in_common_for_stranded_ccs = list_of_sets_of_ref_seqs_above_cutoff[0].intersection(
-                    *list_of_sets_of_ref_seqs_above_cutoff[1:])
-                if self.ref_seqs_in_common_for_stranded_ccs:
-                    if self._analysis_type_already_exists_with_profile_of_seqs_in_common():
-
-                        # reinit the type and update the AnalysisType object and dict
-                        list_of_clade_collections = self._reinit_existing_type_with_additional_ccs()
-
-                        self.update_at_info_object_for_affected_type(
-                            new_list_of_ccs_to_associate_to=list_of_clade_collections,
-                            at_obj=self.at_matching_stranded_ccs)
-
-                        self._add_exisiting_type_to_stranded_cc_info_objects(self.at_matching_stranded_ccs)
-                    else:
-                        if not self._ref_seqs_in_common_contain_multiple_basal_seqs():
-                            self._make_new_analysis_type_from_stranded_ccs()
-
-                            self.create_new_at_info_obj_and_add_to_at_info_dict(
-                                analysis_type_obj=self.new_analysis_type_from_stranded_ccs,
-                                list_of_ref_seq_objs_for_at=self.ref_seqs_in_common_for_stranded_ccs,
-                                list_of_cc_objs=self.stranded_ccs)
-
-                            self._add_exisiting_type_to_stranded_cc_info_objects(self.new_analysis_type_from_stranded_ccs)
-
-                            self._update_fp_to_at_dict(self.new_analysis_type_from_stranded_ccs)
-                        else:
-                            sccrh = StrandedCCRehomer(parent_check_type_pairing_handler=self)
-                            sccrh.rehome_stranded_ccs()
-                            # reassociated_ccs
-                else:
-                    #reassociated_ccs
-
-            else:
-                if self.stranded_ccs:
-                    #reassociate_ccs
+            self._make_new_at_from_pnt_and_update_dicts()
+            self._reassociate_stranded_ccs_if_necessary()
         else:
             print('\nInsufficient support for potential new type')
             return False
 
+    def _reassociate_stranded_ccs_if_necessary(self):
+        if self._sufficient_stranded_ccs_for_new_analysis_type():
+            # Get ref_seqs in common
+            self._get_ref_seqs_in_common_btw_stranded_ccs()
+            if self.ref_seqs_in_common_for_stranded_ccs:
+                if self._analysis_type_already_exists_with_profile_of_seqs_in_common():
+                    self._add_stranded_ccs_to_existing_at_and_update_dicts()
+                else:
+                    if not self._ref_seqs_in_common_contain_multiple_basal_seqs():
+                        self._add_stranded_ccs_to_new_at_made_from_common_ref_seqs_and_update_dicts()
+                    else:
+                        self._rehome_cc_individually()
+            else:
+                self._rehome_cc_individually()
+        else:
+            if self.stranded_ccs:
+                self._rehome_cc_individually()
 
-        # if we didn't find an existing type, check to see if multiple basals in the ref seqs in common.
-        # if there are not, then create a new type and associate the CCs to this type. Typw will need to be initiated,
-        # the AnalysisType info object for the artefact info dict will need to be made, the type will need to be added to the CCinfodict
-        # and the analysis type will need to be added to the footprint to analysis type dict.
-        # here we will do a little different, if not enough ccs for support or there are multiple basals in the ref seqs in common
-        # then reasociate_ccs_to_existing_types and update dicts
-        # finally, return true.
-        # BOOM!
+    def _make_new_at_from_pnt_and_update_dicts(self):
+        self._make_analysis_type_from_pnt()
+        self._update_at_artefact_info_dict_from_pnt()
+        self._update_fp_to_at_dict_from_pnt()
+        self._update_cc_info_for_ccs_that_support_new_type()
+        self._reinit_or_del_affected_types_and_create_stranded_cc_list()
+
+    def _rehome_cc_individually(self):
+        sccrh = StrandedCCRehomer(parent_check_type_pairing_handler=self)
+        sccrh.rehome_stranded_ccs()
+
+    def _add_stranded_ccs_to_new_at_made_from_common_ref_seqs_and_update_dicts(self):
+        self._make_new_analysis_type_from_stranded_ccs()
+        self.create_new_at_info_obj_and_add_to_at_info_dict(
+            analysis_type_obj=self.new_analysis_type_from_stranded_ccs,
+            list_of_ref_seq_objs_for_at=self.ref_seqs_in_common_for_stranded_ccs,
+            list_of_cc_objs=self.stranded_ccs)
+        self._add_exisiting_type_to_stranded_cc_info_objects(self.new_analysis_type_from_stranded_ccs)
+        self._update_fp_to_at_dict(self.new_analysis_type_from_stranded_ccs)
+
+    def _add_stranded_ccs_to_existing_at_and_update_dicts(self):
+        list_of_clade_collections = self._reinit_existing_type_with_additional_ccs()
+        self.update_at_info_object_for_affected_type(
+            new_list_of_ccs_to_associate_to=list_of_clade_collections,
+            at_obj=self.at_matching_stranded_ccs)
+        self._add_exisiting_type_to_stranded_cc_info_objects(self.at_matching_stranded_ccs)
+
+    def _get_ref_seqs_in_common_btw_stranded_ccs(self):
+        list_of_sets_of_ref_seqs_above_cutoff = [
+            self.parent.cc_info_dict[cc.id].above_cutoff_ref_seqs_obj_set for cc in self.stranded_ccs]
+        self.ref_seqs_in_common_for_stranded_ccs = list_of_sets_of_ref_seqs_above_cutoff[0].intersection(
+            *list_of_sets_of_ref_seqs_above_cutoff[1:])
 
     def _ref_seqs_in_common_contain_multiple_basal_seqs(self):
         """Return False if there is only one basal seq in the profile"""
@@ -686,12 +670,8 @@ class CheckTypePairingHandler:
 
     def _update_cc_info_for_ccs_that_support_new_type(self):
         for loss_of_support_info_obj in self.parent.mp_list_of_loss_of_support_info_holder_objs:
-            # remove the old type from the cc
             self._remove_no_longer_supported_type_from_cc_info(loss_of_support_info_obj)
-
-            # add the new type to the cc
             self.add_new_type_to_cc_info_dict_with_match_obj(loss_of_support_info_obj)
-
             self._populate_at_obj_to_cc_obj_to_be_removed_dit(loss_of_support_info_obj)
 
     def _populate_at_obj_to_cc_obj_to_be_removed_dit(self, loss_of_support_info_obj):
@@ -883,76 +863,81 @@ class StrandedCCRehomer:
 
     def rehome_stranded_ccs(self):
         """For each CladeCollection search through all of the AnalysisTypes and find the analysis type that
-        represents the highest proportion of the CladeCollections sequences."""
-        all_processes = []
+        represents the highest proportion of the CladeCollections sequences. If such a type is found,
+        associate the CladeCollection to that AnalysisType. Else, create a new AnalysisType that is just the maj seq
+        of the CladeCollection"""
+        self._find_best_at_match_for_each_stranded_cc()
+        self._convert_best_match_mp_queue_to_list()
+        self._associate_stranded_ccs()
 
-        for n in range(self.parent.parent.parent.parent.args.num_proc):
-            p = Process(target=self._rehome_stranded_ccs_worker, args=())
-            all_processes.append(p)
-            p.start()
-
-        for p in all_processes:
-            p.join()
-
-        # at this point we have the cc_to_at_match_info_holder_mp_list populated and we should
-        # For each cc check to see if the rel_abundance covered by the matching at is larger than the ref
-        for support_obj in iter(self.cc_to_at_match_info_holder_mp_list.get, 'STOP'):
-            self.cc_to_match_object_dict[support_obj.cc] = support_obj
-
-        # Need to iterate independently of the cc_to_match_object_dict as we may want to modify the value
-        # in the key value pairing
+    def _associate_stranded_ccs(self):
         for cc_obj in list(self.cc_to_match_object_dict.keys()):
-        # for cc_obj, support_obj in self.cc_to_match_object_dict.items():
             support_obj = self.cc_to_match_object_dict[cc_obj]
             clade_collection_info = self.parent.cc_info_dict[cc_obj.id]
             self._check_analysis_types_just_added_arent_better_match(support_obj, cc_obj, clade_collection_info)
 
-            #TODO you are here
-            most_abund_intra_of_clade_collection = max(
-                clade_collection_info.ref_seq_id_to_rel_abund_dict.items(), key=operator.itemgetter(1))
-            abundance = most_abund_intra_of_clade_collection[1]
-            ref_seq_uid = most_abund_intra_of_clade_collection[0]
+            abundance, ref_seq_uid = self._get_most_abundnant_ref_seq_info_for_cc(clade_collection_info)
 
             if self._rel_abund_of_match_is_higher_than_abund_of_maj_seq_of_cc(abundance):
-                # make new type and update all of the dictionaries
-                #TODO make this a one stop operation instead of doing all of the bespoke
-                # functions everytime we are making a new type
-                at_info = self.parent.analysis_type_info_dict[support_obj.at.id]
-                new_list_of_ccs_to_associate_to = at_info.associated_cc_obj_list + [cc_obj]
-
-                self.parent.reinit_affected_type(
-                    at_obj=support_obj.at,
-                    info_obj_for_at=at_info,
-                    new_list_of_ccs_to_associate_to=new_list_of_ccs_to_associate_to)
-                self.parent.update_at_info_object_for_affected_type(
-                    at_obj=support_obj.at,
-                    at_info_obj=at_info,
-                    new_list_of_ccs_to_associate_to=new_list_of_ccs_to_associate_to)
-                self.parent.add_new_type_to_cc_info_dict_with_match_obj(match_info_obj=support_obj)
-
+                self._associate_stranded_cc_to_existing_analysis_type(cc_obj, support_obj)
             else:
-                # make a new type that is simply the maj intra
-                # NB if a type that was just the CCs maj type already existed
-                # then we would have found a suitable match above.
-                # I.e. at this point we know that we need to create the AnalysisType that is just the maj seq
-                list_of_ref_seq_objs = [ReferenceSequence.objects.get(id=ref_seq_uid)]
-                maj_seq_type = self._make_new_maj_seq_analysis_type(
-                    cc_obj=cc_obj, list_of_ref_seq_objs=list_of_ref_seq_objs)
+                self._associate_stranded_cc_to_new_maj_seq_analysis_type(cc_obj, ref_seq_uid)
 
-                self.parent.create_new_at_info_obj_and_add_to_at_info_dict(
-                    analysis_type_obj=maj_seq_type,
-                    list_of_ref_seq_objs_for_at=list_of_ref_seq_objs,
-                    list_of_cc_objs=[cc_obj])
-                analysis_info_object = self.parent.parent.analysis_type_info_dict[maj_seq_type.id]
-                self.parent.add_a_type_to_cc_info_dict_without_match_obj(
-                    analysis_info_object=analysis_info_object,
-                    cc=cc_obj,
-                    analysis_type_obj=maj_seq_type)
+    def _associate_stranded_cc_to_new_maj_seq_analysis_type(self, cc_obj, ref_seq_uid):
+        """ Make a new type that is simply the maj intra
+        NB if a type that was just the CCs maj type already existed then we would have found a suitable match above.
+        I.e. at this point we know that we need to create the AnalysisType that is just the maj seq"""
+        list_of_ref_seq_objs = [ReferenceSequence.objects.get(id=ref_seq_uid)]
+        maj_seq_type = self._make_new_maj_seq_analysis_type(
+            cc_obj=cc_obj, list_of_ref_seq_objs=list_of_ref_seq_objs)
+        self.parent.create_new_at_info_obj_and_add_to_at_info_dict(
+            analysis_type_obj=maj_seq_type,
+            list_of_ref_seq_objs_for_at=list_of_ref_seq_objs,
+            list_of_cc_objs=[cc_obj])
+        analysis_info_object = self.parent.parent.analysis_type_info_dict[maj_seq_type.id]
+        self.parent.add_a_type_to_cc_info_dict_without_match_obj(
+            analysis_info_object=analysis_info_object,
+            cc=cc_obj,
+            analysis_type_obj=maj_seq_type)
+        self.parent._update_fp_to_at_dict(
+            analysis_type_obj=maj_seq_type,
+            at_info_obj=analysis_info_object)
 
-                self.parent._update_fp_to_at_dict(
-                    analysis_type_obj=maj_seq_type,
-                    at_info_obj=analysis_info_object)
-                # ToDO you got here.
+    def _associate_stranded_cc_to_existing_analysis_type(self, cc_obj, support_obj):
+        at_info = self.parent.analysis_type_info_dict[support_obj.at.id]
+        new_list_of_ccs_to_associate_to = at_info.associated_cc_obj_list + [cc_obj]
+        self.parent.reinit_affected_type(
+            at_obj=support_obj.at,
+            info_obj_for_at=at_info,
+            new_list_of_ccs_to_associate_to=new_list_of_ccs_to_associate_to)
+        self.parent.update_at_info_object_for_affected_type(
+            at_obj=support_obj.at,
+            at_info_obj=at_info,
+            new_list_of_ccs_to_associate_to=new_list_of_ccs_to_associate_to)
+        self.parent.add_new_type_to_cc_info_dict_with_match_obj(match_info_obj=support_obj)
+
+    def _get_most_abundnant_ref_seq_info_for_cc(self, clade_collection_info):
+        most_abund_intra_of_clade_collection = max(
+            clade_collection_info.ref_seq_id_to_rel_abund_dict.items(), key=operator.itemgetter(1))
+        abundance = most_abund_intra_of_clade_collection[1]
+        ref_seq_uid = most_abund_intra_of_clade_collection[0]
+        return abundance, ref_seq_uid
+
+    def _convert_best_match_mp_queue_to_list(self):
+        for support_obj in iter(self.cc_to_at_match_info_holder_mp_list.get, 'STOP'):
+            self.cc_to_match_object_dict[support_obj.cc] = support_obj
+
+    def _find_best_at_match_for_each_stranded_cc(self):
+        """Start the worker that will search through all of the AnalysisTypes and find the AnalysisType that represents
+        the highest relative abundance in the CladeCollection. The function will add a CCToATMatchInfoHolder for
+        each CladeCollection and Analysis best match found. Or, if no match is found will add None."""
+        all_processes = []
+        for n in range(self.parent.parent.parent.parent.args.num_proc):
+            p = Process(target=self._rehome_stranded_ccs_worker, args=())
+            all_processes.append(p)
+            p.start()
+        for p in all_processes:
+            p.join()
 
     def _make_new_maj_seq_analysis_type(self, cc_obj, list_of_ref_seq_objs):
         new_analysis_type = AnalysisType(
@@ -973,7 +958,8 @@ class StrandedCCRehomer:
             sccats.search_analysis_types()
 
     def _check_analysis_types_just_added_arent_better_match(self, support_obj, cc_obj, clade_collection_info):
-        """Checks to see whether the analysis types that may have been created """
+        """Checks to see whether the majseq AnalysisTypes that may have been created for the previous CladeCollections
+         are a better match than the current match. """
 
         new_best_rel_abund = 0
         new_best_at_match = None
