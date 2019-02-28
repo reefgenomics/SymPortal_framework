@@ -39,6 +39,7 @@ import distance
 import argparse
 import data_loading
 import sp_config
+import data_analysis
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
@@ -225,11 +226,14 @@ class SymPortalWorkFlowManager:
         self.data_analysis_object.save()
 
     def start_data_analysis(self):
-        data_sub_collection_run.main(
-            data_analysis_object=self.data_analysis_object, num_processors=self.args.num_proc,
-            no_figures=self.args.no_figures, no_ordinations=self.args.no_ordinations,
-            distance_method=self.args.distance_method, no_output=self.args.no_output,
-            debug=self.args.debug)
+        sp_data_analysis = data_analysis.SPDataAnalysis(
+            workflow_manager_parent=self, data_analysis_obj=self.data_analysis_object)
+        sp_data_analysis.analyse_data()
+        # data_sub_collection_run.main(
+        #     data_analysis_object=self.data_analysis_object, num_processors=self.args.num_proc,
+        #     no_figures=self.args.no_figures, no_ordinations=self.args.no_ordinations,
+        #     distance_method=self.args.distance_method, no_output=self.args.no_output,
+        #     debug=self.args.debug)
 
     # data loading methods
     def perform_data_loading(self):
