@@ -258,7 +258,7 @@ class AnalysisType(models.Model):
     # This will only be set to true when running an analysis against a database version.
     is_locked_type = models.BooleanField(default=False)
 
-    basal_seq = models.CharField(max_length=10, default=None)
+    basal_seq = models.CharField(max_length=10, default=None, null=True)
 
     # This method will populate the following attributes
     #  self.list_of_clade_collections_found_in_initially
@@ -647,7 +647,7 @@ class AnalysisType(models.Model):
                     max_val = maxmin_candidate
                     max_min_list[-1][0] = max_val  # Populate the tuple for this refseq with the new max
                 if maxmin_candidate < min_val:
-                    # If we find any of the intras at a rel abund of < 5% then we lower the lower limit to 0.5% (0.005)
+                    # If we find any of the intras at a rel abund of < 6% then we lower the lower limit to 0.01% (0.0001)
                     # This way we should hopefully mitigate any artefacts caused by the within cladeCutOff
                     # Additionally we need to note that our 0.03 within clade cutoff may be acting on this intra
                     # to cause an artefact. To do this we need to add the intra (ref_seq.id) to the types
