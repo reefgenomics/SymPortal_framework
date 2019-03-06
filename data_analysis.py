@@ -8,7 +8,7 @@ from collections import defaultdict
 import operator
 from django import db
 import pickle
-import virtual_analysis_type
+import virtual_objects
 import time
 class SPDataAnalysis:
     def __init__(self, workflow_manager_parent, data_analysis_obj):
@@ -28,7 +28,7 @@ class SPDataAnalysis:
         self.clade_footp_dicts_list = [{} for _ in self.clade_list]
         self.list_of_initial_types_after_collapse = None
         self.current_clade = None
-        self.virtual_object_manager = virtual_analysis_type.VirtualObjectManager(parent_sp_data_analysis=self)
+        self.virtual_object_manager = virtual_objects.VirtualObjectManager(parent_sp_data_analysis=self)
 
     def analyse_data(self):
         print('Beginning profile discovery')
@@ -66,8 +66,6 @@ class SPDataAnalysis:
         # Generate a dict that simply holds the total number of seqs per clade_collection_object
         # This will be used when working out relative proportions of seqs in the clade_collection_object
         artefact_assessor = ArtefactAssessor(parent_sp_data_analysis=self)
-        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'artefact_assessor.p'), 'wb') as f:
-            pickle.dump(artefact_assessor, f)
         artefact_assessor.assess_within_clade_cutoff_artefacts()
 
     def _collapse_footprints_and_make_analysis_types(self):
@@ -860,7 +858,7 @@ class CheckPNTSupportWorker:
 
 
     def check_pnt_support(self):
-        sys.stdout.write(f'\rChecking {self.vcc} {current_process().name}')
+        sys.stdout.write(f'\rChecking {self.vcc}')
 
 
         if not self._pnt_abundances_met():

@@ -9,9 +9,9 @@ class VirtualObjectManager():
     I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections."""
     def __init__(self, parent_sp_data_analysis):
         self.sp_data_analysis = parent_sp_data_analysis
-        # self.cc_manager = VirtualCladeCollectionManager(obj_manager=self)
-        with open(os.path.join(self.sp_data_analysis.workflow_manager.symportal_root_directory, 'tests', 'objects', 'cc_manager.p'), 'rb') as f:
-            self.cc_manager = pickle.load(f)
+        self.cc_manager = VirtualCladeCollectionManager(obj_manager=self)
+        # with open(os.path.join(self.sp_data_analysis.workflow_manager.symportal_root_directory, 'tests', 'objects', 'cc_manager.p'), 'rb') as f:
+        #     self.cc_manager = pickle.load(f)
         self.v_at_manager = VirtualAnalysisTypeManager(obj_manager=self)
 
 
@@ -21,7 +21,9 @@ class VirtualCladeCollectionManager():
     def __init__(self, obj_manager):
         self.obj_manager = obj_manager
         self.clade_collection_instances_dict = {}
+
         self._populate_virtual_cc_manager_from_db()
+
 
     def _populate_virtual_cc_manager_from_db(self):
         """When first instantiated we should grab all of the CladeCollections from the database that are part of
@@ -58,7 +60,7 @@ class VirtualCladeCollectionManager():
 
     def _vcc_id_to_vcc_obj_worker(self, cc_input_mp_queue, cc_to_info_items_mp_dict):
         for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
-            sys.stdout.write(f'\r{clade_collection_object} {current_process().name}')
+            sys.stdout.write(f'\r{clade_collection_object.data_set_sample_from.name} {current_process().name}')
 
             dss_objects_of_cc_list = list(DataSetSampleSequence.objects.filter(
                 clade_collection_found_in=clade_collection_object))
