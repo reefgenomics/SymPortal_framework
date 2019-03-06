@@ -3178,10 +3178,5 @@ class SeqOutputSeriesGeneratorWorker:
             self.sample_row_data_absolute.append(0)
             self.sample_row_data_relative.append(0)
 
-        # All sequences get 0s
-        for _ in self.parent.parent.clade_abundance_ordered_ref_seq_list:
-            self.sample_row_data_absolute.append(0)
-            self.sample_row_data_relative.append(0)
-
     def _dss_had_problem_in_processing(self):
         return self.dss.error_in_processing or self.sample_seq_tot == 0
