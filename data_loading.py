@@ -569,9 +569,16 @@ class DataLoading:
         for sample_name in self.list_of_samples_names:
             temp_list = []
             temp_list.append(sample_name.replace('-', '[dS]'))
+            fwd_file_path = None
+            rev_file_path = None
             for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
                 if sample_name in ntpath.basename(file_path):
-                    temp_list.append(file_path)
+                    if 'R1' in file_path:
+                        fwd_file_path = file_path
+                    if 'R2' in file_path:
+                        rev_file_path = file_path
+            temp_list.append(fwd_file_path)
+            temp_list.append(rev_file_path)
             assert (len(temp_list) == 3)
             sample_fastq_pairs.append('\t'.join(temp_list))
         write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
