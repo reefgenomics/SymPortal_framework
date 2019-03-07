@@ -284,7 +284,7 @@ class MothurAnalysis:
         # then reverse complement it
         # then do a pcr on it again using the same oligo set as the first run
         # we should then get the output from that pcr and add it to the previous run
-        if do_reverse_pcr_as_well and self._if_scrap_fasta_exists(fwd_output_scrapped_fasta_path):
+        if do_reverse_pcr_as_well and self._if_scrap_fasta_exists_clean_and_write_out(fwd_output_scrapped_fasta_path):
             remove_primer_mismatch_annotations_from_fasta(fwd_output_scrapped_fasta_path)
             self.fasta_path = fwd_output_scrapped_fasta_path
             self._rev_comp_make_and_write_mothur_batch_file()
@@ -339,7 +339,8 @@ class MothurAnalysis:
 
         self._run_mothur_batch_file_command()
 
-        self.name_file_path, self.fasta_path = self._extract_output_path_two_lines()
+        if not self._extract_output_path_two_lines():
+            return False
 
         self._update_sequence_collection_from_fasta_name_pair()
 
@@ -570,7 +571,10 @@ class MothurAnalysis:
         stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
-                return stdout_string_as_list[i + 1], stdout_string_as_list[i + 2]
+                self.name_file_path = stdout_string_as_list[i + 1]
+                self.fasta_path = stdout_string_as_list[i + 2]
+                return True
+        return False
 
     def _pcr_extract_good_and_scrap_output_paths(self):
         stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)

@@ -300,7 +300,7 @@ class SymPortalWorkFlowManager:
             output_user=self.submitting_user)
 
     def get_data_analysis_by_uid(self):
-        return DataAnalysis.objects.get(id=self.data_analysis_object.id)
+        return DataAnalysis.objects.get(id=self.args.data_analysis_id)
 
     def verify_data_analysis_uid_provided(self):
         if not self.args.data_analysis_id:

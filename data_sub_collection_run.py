@@ -4091,7 +4091,7 @@ def main(data_analysis_object, num_processors, no_figures=False, no_ordinations=
     os.makedirs(os.path.abspath(os.path.join(os.path.dirname(__file__), 'temp')),
                 exist_ok=True)
 
-    print('DATA SUBMISSION COMPLETE')
+    print('DATA ANALYSIS COMPLETE')
     print('Begin Output')
 
     # It doesn't make sense to automatically make an output from an analysis as we don't know which
