@@ -602,32 +602,6 @@ class DataLoading:
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_sample_objects)
 
-    def _generate_and_write_new_stability_file_without_datasheet(self):
-        self._read_in_mothur_dot_file_creation_output()
-        # We will use the stability file in the rest of the mothur qc but also to make the DataSetSamples (below)
-        end_index = self._identify_sample_names_without_datasheet()
-        new_stability_file = self._generate_new_stability_file_without_datasheet(end_index)
-        self.sample_fastq_pairs = new_stability_file
-        # write out the new stability file
-        write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), self.sample_fastq_pairs)
-
-    def _generate_new_stability_file_without_datasheet(self, end_index):
-        new_stability_file = []
-        for stability_file_line in self.sample_fastq_pairs:
-            pair_components = stability_file_line.split('\t')
-            # I am going to use '[dS]' as a place holder for a dash in the sample names
-            # Each line of the stability file is a three column format with the first
-            # column being the sample name. The second and third are the full paths of the .fastq files
-            # the sample name at the moment is garbage, we will extract the sample name from the
-            # first fastq path using the end_index that we determined above
-
-            new_stability_file.append(
-                '{}\t{}\t{}'.format(
-                    pair_components[1].split('/')[-1][:-end_index].replace('-', '[dS]'),
-                    pair_components[1],
-                    pair_components[2]))
-        return new_stability_file
-
     def _get_num_chars_in_common_with_fastq_names(self):
         i = 1
         while 1:
