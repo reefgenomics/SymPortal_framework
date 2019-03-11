@@ -10,6 +10,9 @@ from django import db
 import pickle
 import virtual_objects
 import time
+import numpy as np
+from scipy.stats import gaussian_kde
+
 class SPDataAnalysis:
     def __init__(self, workflow_manager_parent, data_analysis_obj):
         self.workflow_manager = workflow_manager_parent
@@ -40,7 +43,250 @@ class SPDataAnalysis:
 
         self._check_for_artefacts()
 
+        self._profile_assignment()
+
         print('Type discovery complete')
+
+
+    class ProfileAssigner:
+        """Responsible for searching a given VirtualCladeCollection for VirtualAnalysisTypes and associating
+        the found VirtualAnalysisTypes to the VirtualCladeCollection"""
+        def __init__(self, virtual_clade_collection, parent_sp_data_analysis):
+            self.sp_data_analysis = parent_sp_data_analysis
+            self.vcc = virtual_clade_collection
+            self.vat_match_object_list = []
+
+            # transient objects updated during vat checks
+            self.current_match_object = None
+
+        def assign_profiles(self):
+            list_of_vats_to_search = self._get_list_of_vats_to_search()
+
+            self._find_vats_in_vcc(list_of_vats_to_search)
+
+            self._associate_vcc_to_vats()
+
+        def _associate_vcc_to_vats(self):
+            for vat_match in self.vat_match_object_list:
+                vat_match.vat.clade_collection_obj_set_profile_assignment.append(vat_match.vcc)
+
+        def _find_vats_in_vcc(self, list_of_vats_to_search):
+            for vat in list_of_vats_to_search:
+                if self._search_for_vat_in_vcc(vat=vat):
+                    if self._vat_has_divs_in_common_with_other_vats(vat=vat):
+                        self._add_new_vat_to_list_if_highest_rel_abund_representative()
+                    else:
+                        self.vat_match_object_list.append(self.current_match_object)
+
+        def _get_list_of_vats_to_search(self):
+            return [
+                vat for vat in
+                self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values() if
+                vat.ref_seq_uids_set.issubset(self.vcc.footprint_as_frozen_set_of_ref_seq_uids)]
+
+        def _add_new_vat_to_list_if_highest_rel_abund_representative(self):
+            """Return True if the vat we are checking has a higher representative relative abundance than any
+            of the other vats that have returned a match so far. Else return False."""
+            new_match_list = []
+            for match_obj in self.vat_match_object_list:
+                if self._vats_have_divs_in_common(vat_one=match_obj.vat, vat_two=self.current_match_object.vat):
+                    if match_obj.rel_abund_of_at_in_cc > self.current_match_object.rel_abund_of_at_in_cc:
+                        new_match_list.append(match_obj)
+                    else:
+                        new_match_list.append(self.current_match_object)
+            self.vat_match_object_list = new_match_list
+
+        def _vats_have_divs_in_common(self, vat_one, vat_two):
+            return vat_one.ref_seq_uids_set.intersection(vat_two.ref_seq_uids_set)
+
+        def _vat_has_divs_in_common_with_other_vats(self, vat):
+            return vat.ref_seq_uids_set.intersection(*[vat_match_obj.vat.ref_seq_uids_set for vat_match_obj in self.vat_match_object_list])
+
+        def _search_for_vat_in_vcc(self, vat):
+            """This will check whether the DIV relative abundance requirements of
+            a vat are met by the vcc in question. If met we will keep track of what proportion of the CladeCollection
+            this set of refseqs represents. If the VAT is a single sequence VAT then we will require it to
+            be present at an abundance of at least 0.05."""
+            vcc_rel_abund_dict = self.vcc.ref_seq_id_to_rel_abund_dict
+
+            if len(vat.ref_seq_uids_set) > 1:
+                # NB here, when looking to see if the DIVs are found at the right proportions in the CladeCollection
+                # to match the VirtualAnalysisType we need to work with the seq abundances as a proportion of
+                # only the sequences in the CC that are found in the VAT. However, when we want to get an
+                # idea of whether this VAT match is better than another one, then we need to work with the VAT DIV
+                # rel abundances as a proportion of all of the sequences in the CladeCollection
+                total_abundance_of_seqs_of_vat = sum([rel_abund for ref_seq_uid, rel_abund in vcc_rel_abund_dict.items() if
+                                                      ref_seq_uid in vat.ref_seq_uids_set])
+
+                vcc_rel_abund_dict_for_vat = {ref_seq_uid : rel_abund/total_abundance_of_seqs_of_vat for
+                                              ref_seq_uid, rel_abund in vcc_rel_abund_dict.items() if
+                                              ref_seq_uid in vat.ref_seq_uids_set}
+
+                total_seq_rel_abund_for_cc = []
+                for ref_seq_id, ref_seq_req_abund_obj in vat.prof_assignment_required_rel_abund_dict.items():
+                    rel_abund_of_div_in_vat_seqs = vcc_rel_abund_dict_for_vat[ref_seq_id]
+                    total_seq_rel_abund_for_cc.append(vcc_rel_abund_dict[ref_seq_id])
+
+                    if ref_seq_req_abund_obj.max_abund <= rel_abund_of_div_in_vat_seqs <= ref_seq_req_abund_obj.min_abund:
+                        return False
+
+
+                self.current_match_object = CCToATMatchInfoHolder(
+                    vat=vat, vcc=self.vcc, rel_abund_of_at_in_cc=sum(total_seq_rel_abund_for_cc))
+                return True
+            else:
+                abund_of_vat_in_vcc = vcc_rel_abund_dict[list(vat.ref_seq_uids_set)[0]]
+                if abund_of_vat_in_vcc > 0.05:
+                    self.current_match_object = CCToATMatchInfoHolder(
+                        vat=vat, vcc=self.vcc, rel_abund_of_at_in_cc=abund_of_vat_in_vcc)
+                    return True
+                else:
+                    return False
+
+    def _profile_assignment(self):
+        for virtual_clade_collection in self.virtual_object_manager.cc_manager.clade_collection_instances_dict.values():
+            profile_assigner = self.ProfileAssigner(virtual_clade_collection = virtual_clade_collection,
+                parent_sp_data_analysis = self)
+            profile_assigner.assign_profiles()
+
+            # Reinit the VirtualAnalysisTypes to populate the post-profile assignment objects
+            self.reinit_vats_post_profile_assignment()
+
+            self.multimodal_detection()
+
+    def mumultimodal_detection(self):
+        mmd = self.MultiModalDetection(parent_sp_data_analysis=self)
+        mmd.run_multimodal_detection()
+
+
+    class MultiModalDetection:
+        def __init__(self, parent_sp_data_analysis):
+            self.sp_data_analysis = parent_sp_data_analysis
+            self.vat_uids_checked = []
+            self.restart = True
+            # attributes that will be updated with each vat checked
+            self.current_vat = None
+            # The two lists that will hold the VirtualCladeCollection objects belonging to each of the potential
+            # new VATs resulting from a splitting occurrence.
+            self.list_of_vcc_one = []
+            self.list_of_vccs_two = []
+
+        def run_multimodal_detection(self):
+            while self.restart:
+                self.restart = False
+                for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
+                    if vat.id in self.vat_uids_checked:
+                        continue
+                    if len(vat.ref_seq_uids_set) == 1:
+                        self.vat_uids_checked.append(vat.id)
+                        continue
+                    for ref_seq_uid_col in list(vat.post_prof_assignment_rel_abund_df):
+                        rel_abunds_of_ref_seq = vat.post_prof_assignment_rel_abund_df.loc[:,ref_seq_uid_col]
+                        x_grid = np.linspace(min(rel_abunds_of_ref_seq) - 1, max(rel_abunds_of_ref_seq) + 1, 2000)
+                        kde = gaussian_kde(rel_abunds_of_ref_seq)
+                        pdf = kde.evaluate(x_grid)
+                        c = list((np.diff(np.sign(np.diff(pdf))) < 0).nonzero()[0] + 1)
+                        modes = len(c)
+                        if modes == 2:
+                            # Must be sufficient separation between the peaks in x axis
+                            x_diff_valid = False
+                            if x_grid[c[1]] - x_grid[c[0]] > 0.7:
+                                x_diff_valid = True
+                            # plotHists(pdf, x_grid, listOfRatios, listOfTypesToAnalyse[k].name)
+                            # Must also be sufficient diff between minima y and small peak y
+                            # This represents the x spread and overlap of the two peaks
+                            d = list((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1)  # max and min indices
+
+                            if min([pdf[d[0]], pdf[d[2]]]) == 0:
+                                x_diff_valid = False
+                            else:
+                                if pdf[d[1]] / min([pdf[d[0]], pdf[d[2]]]) > 0.85:  # Insufficient separation of peaks
+                                    x_diff_valid = False
+                            if x_diff_valid:
+                                # Then we have found modes that are sufficiently separated.
+                                min_x = x_grid[list(((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1))[1]]
+                                for vcc_uid in vat.post_prof_assignment_rel_abund_df.index.tolist():
+                                    if vat.post_prof_assignment_rel_abund_df.at[vcc_uid, ref_seq_uid_col] < min_x:
+                                        self.list_of_vcc_one.append(vcc_uid)
+                                    else:
+                                        self.list_of_vccs_two.append(vcc_uid)
+                                    #TODO you are here.
+                                # if less than mix_x add to list one, else list two
+                                # if there are more than 3 ccs in each of the groups
+                                # create new virtual types. - This will be slightly different from the previous init
+                                # as we will need to create the post-assignment df and populate the list_of_clade_collections found in profile assignment.
+                                # delete the old virtual type
+                                # set restart to true
+                                # No need to update the CladeCollection dictionary of type abundances.
+
+    def reinit_vats_post_profile_assignment(self):
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            self.virtual_object_manager.vat_manager.reinit_vat_post_profile_assignment(
+                vat_to_reinit=vat, new_clade_collection_obj_set=vat.clade_collection_obj_set_profile_assignment)
+
+
+        """TODO
+        Create class to do this
+
+        
+
+        Once we have done the type profile assignment, we will need to do multimodal detection. This will require
+        a couple of new objects to be added to the analysis types.
+
+        self.types_checked_list = []
+        restart = True
+        while restart = True:
+            restart = False
+            For each analysis type:
+                Do this in a class
+                self.vat
+                self.x_diff_valid
+                self.list_of_cc_one
+                self.list_of_cc_two
+                if analysisType.id in self.types_check_list:
+                    continue
+                if len(analysisType.profile) == 1:
+                    add id to done list
+                    continue
+                for ref_seq in df:
+                    get list of the rel abundnces of the refseq in each of the CladeCollections
+                    x_grid = np.linspace(min(list_of_ratios) - 1, max(list_of_ratios) + 1, 2000)
+                    kde = gaussian_kde(list_of_ratios)
+                    pdf = kde.evaluate(x_grid)
+                    c = list((np.diff(np.sign(np.diff(pdf))) < 0).nonzero()[0] + 1)
+                    modes = len(c)
+                    if modes == 2:
+                        # Must be sufficient separation between the peaks in x axis
+                        x_diff_valid = False
+                        if x_grid[c[1]] - x_grid[c[0]] > 0.7:
+                            x_diff_valid = True
+                        # plotHists(pdf, x_grid, listOfRatios, listOfTypesToAnalyse[k].name)
+                        # Must also be sufficient diff between minima y and small peak y
+                        # This represents the x spread and overlap of the two peaks
+                        d = list((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1)  # max and min indices
+
+                        if min([pdf[d[0]], pdf[d[2]]]) == 0:
+                            x_diff_valid = False
+                        else:
+                            if pdf[d[1]] / min([pdf[d[0]], pdf[d[2]]]) > 0.85:  # Insufficient separation of peaks
+                                x_diff_valid = False
+
+                        if x_diff_valid:
+                            # Then we have found modes that are sufficiently separated.
+                            min_x = x_grid[list(((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1))[1]]
+                            #for each cc of the df
+                                #if less than mix_x add to list one, else list two
+                            #if there are more than 3 ccs in each of the groups
+                                #create new virtual types. - This will be slightly different from the previous init
+                                #as we will need to create the post-assignment df and populate the list_of_clade_collections found in profile assignment.
+                                #delete the old virtual type
+                                #set restart to true
+                                #No need to update the CladeCollection dictionary of type abundances.
+
+
+
+
+        """
 
 
 
@@ -49,7 +295,7 @@ class SPDataAnalysis:
         using the VirtualAnalysisTypes."""
         print('Populating starting analysis type info to cc info dict')
         clade_collection_to_type_tuple_list = []
-        for vat in self.virtual_object_manager.v_at_manager.analysis_type_instances_dict.values():
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
             initial_clade_collections = vat.clade_collection_obj_set_profile_discovery
             for cc in initial_clade_collections:
                 clade_collection_to_type_tuple_list.append((cc, vat))
@@ -69,6 +315,9 @@ class SPDataAnalysis:
     def _check_for_artefacts(self):
         # Generate a dict that simply holds the total number of seqs per clade_collection_object
         # This will be used when working out relative proportions of seqs in the clade_collection_object
+        #TODO both of these artefact assessing methods should working on artefact sequence identifications that
+        # are based on the total number of sequences in the cladeCollection rather than just the abundance of sequences
+        # of a cc that are DIVs in the type in question.
         artefact_assessor = ArtefactAssessor(parent_sp_data_analysis=self)
         with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'artefact_assessor.p'), 'wb') as f:
             pickle.dump(artefact_assessor, f)
@@ -93,7 +342,7 @@ class SPDataAnalysis:
     def _verify_all_ccs_associated_to_analysis_type(self):
         print('\nVerifying all CladeCollections have been associated to an AnalysisType...')
         clade_collections_represented_by_types = set()
-        for vat in self.virtual_object_manager.v_at_manager.analysis_type_instances_dict.values():
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
             clade_collections_represented_by_types.update(vat.clade_collection_obj_set_profile_discovery)
         ccs_of_data_analysis = set(self.ccs_of_analysis)
         if ccs_of_data_analysis.issuperset(clade_collections_represented_by_types):
@@ -130,7 +379,7 @@ class ArtefactAssessor:
         self.list_of_vccs = list(self.sp_data_analysis.virtual_object_manager.\
             cc_manager.clade_collection_instances_dict.values())
         # key:VirtualAnalysisType.id, value:VirtualAnalysisType
-        self.virtual_analysis_type_dict = self.sp_data_analysis.virtual_object_manager.v_at_manager.analysis_type_instances_dict
+        self.virtual_analysis_type_dict = self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict
         self.analysis_types_of_analysis = list(self.virtual_analysis_type_dict.values())
         self.set_of_clades_from_analysis = self._set_set_of_clades_from_analysis()
 
@@ -465,8 +714,8 @@ class CheckVCCToVATAssociations:
             # If the analysis type still has support then simply reinitialize it
             if self._afftected_type_still_has_sufficient_support(new_list_of_ccs_to_associate_to):
                 print(f'\nType {vat.name} supported by {len(new_list_of_ccs_to_associate_to)} CCs. Reinitiating.')
-                self.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager.\
-                    reinit_virtual_analysis_type(
+                self.artefact_assessor.sp_data_analysis.virtual_object_manager.vat_manager.\
+                    reinit_vat_pre_profile_assignment(
                     vat_to_reinit=vat, new_clade_collection_obj_set=new_list_of_ccs_to_associate_to)
             else:
                 self._del_affected_type_and_populate_stranded_cc_list(
@@ -531,7 +780,7 @@ class CheckVCCToVATAssociations:
         self._add_exisiting_type_to_stranded_cc_info_objects(vat=self.at_matching_stranded_ccs)
 
     def _reinit_existing_type_with_additional_ccs(self):
-        self.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager.\
+        self.artefact_assessor.sp_data_analysis.virtual_object_manager.vat_manager.\
             add_ccs_and_reinit_virtual_analysis_type(
             vat_to_add_ccs_to=self.at_matching_stranded_ccs,
             list_of_clade_collection_objs_to_add=self.stranded_ccs)
@@ -575,7 +824,7 @@ class CheckVCCToVATAssociations:
 
     def _make_new_analysis_type_from_stranded_ccs(self):
         self.new_analysis_type_from_stranded_ccs = self.artefact_assessor.sp_data_analysis.virtual_object_manager.\
-            v_at_manager.make_virtual_analysis_type(
+            vat_manager.make_vat_pre_profile_assignment(
             clade_collection_obj_list=self.stranded_ccs, ref_seq_obj_list=self.ref_seqs_in_common_for_stranded_ccs)
 
     def _update_fp_to_at_dict(self, vat):
@@ -732,7 +981,7 @@ class CheckVCCToVATAssociations:
             I.e. at this point we know that we need to create the AnalysisType that is just the maj seq"""
 
             maj_seq_vat = self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.virtual_object_manager. \
-                v_at_manager.make_virtual_analysis_type(clade_collection_obj_list=[cc_obj], ref_seq_obj_list=[ref_seq])
+                vat_manager.make_vat_pre_profile_assignment(clade_collection_obj_list=[cc_obj], ref_seq_obj_list=[ref_seq])
 
             self.add_a_type_to_cc_without_match_obj(cc=cc_obj, vat=maj_seq_vat)
 
@@ -753,7 +1002,7 @@ class CheckVCCToVATAssociations:
                 vat] = current_type_seq_tot_rel_abund_for_cc
 
         def _associate_stranded_cc_to_existing_analysis_type(self, cc_obj, support_obj):
-            self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager. \
+            self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.virtual_object_manager.vat_manager. \
                 add_ccs_and_reinit_virtual_analysis_type(
                 vat_to_add_ccs_to=support_obj.at, list_of_clade_collection_objs_to_add=[cc_obj])
             self.add_new_type_to_cc_with_match_obj(match_info_obj=support_obj)
@@ -912,7 +1161,7 @@ class CheckTypePairingHandler(CheckVCCToVATAssociations):
 
     def _make_analysis_type_from_pnt(self):
         print('\nSupport found. Creating new type.')
-        self.new_virtual_analysis_type_from_pnt = self.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager.make_virtual_analysis_type(
+        self.new_virtual_analysis_type_from_pnt = self.artefact_assessor.sp_data_analysis.virtual_object_manager.vat_manager.make_vat_pre_profile_assignment(
             clade_collection_obj_list=[support_obj.cc for support_obj in self.list_of_loss_of_support_info_holder_objs],
             ref_seq_obj_list=self.pnt.ref_seq_objects_set)
         print(f'{self.new_virtual_analysis_type_from_pnt.name} created.')
@@ -1027,7 +1276,7 @@ class AnalysisTypeCreator:
             self._create_new_virtual_analysis_type_from_initial_type(initial_type)
 
     def _create_new_virtual_analysis_type_from_initial_type(self, initial_type):
-        new_virtual_analysis_type = self.sp_data_analysis.virtual_object_manager.v_at_manager.make_virtual_analysis_type(
+        new_virtual_analysis_type = self.sp_data_analysis.virtual_object_manager.vat_manager.make_vat_pre_profile_assignment(
             clade_collection_obj_list=initial_type.clade_collection_list,
             ref_seq_obj_list=initial_type.profile)
 

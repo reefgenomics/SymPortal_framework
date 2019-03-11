@@ -12,7 +12,7 @@ class VirtualObjectManager():
         self.cc_manager = VirtualCladeCollectionManager(obj_manager=self)
         # with open(os.path.join(self.sp_data_analysis.workflow_manager.symportal_root_directory, 'tests', 'objects', 'cc_manager.p'), 'rb') as f:
         #     self.cc_manager = pickle.load(f)
-        self.v_at_manager = VirtualAnalysisTypeManager(obj_manager=self)
+        self.vat_manager = VirtualAnalysisTypeManager(obj_manager=self)
 
 
 class VirtualCladeCollectionManager():
@@ -28,7 +28,7 @@ class VirtualCladeCollectionManager():
     def _populate_virtual_cc_manager_from_db(self):
         """When first instantiated we should grab all of the CladeCollections from the database that are part of
         this DataAnalysis and make VirtualCladeCollectionsFrom them.
-        We will need to populate the VirtualAnalysisTypeManager analysis_type_instances_dict before
+        We will need to populate the VirtualAnalysisTypeManager vat_dict before
         we can populate the analysis_type_obj_to_representative_rel_abund_in_cc_dicts for each of the
         VirtualCladeCollections so we will do this in a seperate method.
         """
@@ -130,37 +130,74 @@ class VirutalAnalysisTypeInit:
         self.vat = vat_to_init
         self.vat_manager = parent_vat_manager
 
-    def init_virtual_analysis_type(self, ):
+    def init_vat_post_profile_assignment(self):
+        # todo implement as below but using the other clade collection list and populating the other df.
+        # create and populate the relative_seq_abund_profile_discovery_df
+        # Let's see if everything we need is here.
+        self._make_rel_abund_dfs_post_prof_assignment()
+
+        self._generate_maj_ref_seq_set_and_infer_codom(self.vat.post_prof_assignment_rel_abund_df)
+
+        self._generate_name(self.vat.relative_seq_abund_profile_assignment_df)
+
+    def _make_rel_abund_dfs_post_prof_assignment(self):
+        at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
+                             columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
+        for cc in self.vat.clade_collection_obj_set_profile_assignment:
+            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.cc_manager.clade_collection_instances_dict[
+                cc.id].ref_seq_id_to_rel_abund_dict
+            at_df.loc[cc.id] = pd.Series(
+                {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
+                 if
+                 rs_uid_key in list(at_df)})
+        at_df["sum"] = at_df.sum(axis=1)
+        at_df = at_df.iloc[:, 0:-1].div(at_df["sum"], axis=0)
+        self.vat.post_prof_assignment_rel_abund_df = at_df.reindex(
+            at_df.sum().sort_values(ascending=False).index, axis=1).astype('float')
+
+    def init_vat_pre_profile_assignment(self):
         self._make_rel_abund_dfs()
 
-        self._generate_maj_ref_seq_set_and_infer_codom()
+        self._generate_maj_ref_seq_set_and_infer_codom(self.vat.relative_seq_abund_profile_assignment_df)
 
-        self._populate_max_min_dict_and_artefact_set()
+        self._populate_artefact_set()
 
-        self.vat.non_artefact_ref_seq_uids_set = set([
-            rs_id for rs_id in self.vat.ref_seq_uids_set if rs_id not in self.vat.artefact_ref_seq_uids_set])
+        self._populate_max_min_profile_assignment_requirement_dict()
+
+        self.vat.non_artefact_ref_seq_uid_set = set([
+            rs_id for rs_id in self.vat.ref_seq_uids_set if rs_id not in self.vat.artefact_ref_seq_uid_set])
 
         self._set_basal_seq()
 
-        self._generate_name()
+        self._generate_name(self.vat.relative_seq_abund_profile_assignment_df)
 
         return self.vat
 
-    def _populate_max_min_dict_and_artefact_set(self):
-        # populate the max_min dict and artefact_ref_seq_uids_set
+    def _populate_artefact_set(self):
+        # Identify those DIVs of the analysis type that are artefact seqs for the purporses of checking artefacts
+        # NB when we are checking for AnalysisTypes that are caused due to artefact DIVs we are working with rel
+        # abundances as a proportion of all of the sequences in a CladeCollection. This is in contrast
+        # to when we are working with the required abundances during TypeAssignment when we are working with rel
+        # abundances of DIVs as a proportion of the CladeCollection sequences that DIVs in the type in question.
+        for rs_col in self.vat.relative_seq_abund_profile_discovery_df:
+            min = self.vat.relative_seq_abund_profile_discovery_df[rs_col].min()
+            if min < 0.06:
+                self.vat.artefact_ref_seq_uid_set.add(rs_col)
+
+    def _populate_max_min_profile_assignment_requirement_dict(self):
+        # populate the max_min dict that will be used during profile assignment
         for rs_col in self.vat.relative_seq_abund_profile_assignment_df:
             max = self.vat.relative_seq_abund_profile_assignment_df[rs_col].max()
             min = self.vat.relative_seq_abund_profile_assignment_df[rs_col].min()
             if min < 0.06:
                 min = 0.0001
-                self.vat.artefact_ref_seq_uids_set.add(rs_col)
             self.vat.prof_assignment_required_rel_abund_dict[rs_col] = self.RefSeqReqAbund(
                 max_rel_abund=max, min_rel_abund=min)
 
-    def _generate_maj_ref_seq_set_and_infer_codom(self):
+    def _generate_maj_ref_seq_set_and_infer_codom(self, vat_df):
         # get the most abund rs for each cc
         majority_reference_sequence_uid_set = set()
-        for index, row in self.vat.relative_seq_abund_profile_assignment_df.iterrows():
+        for index, row in vat_df.iterrows():
             majority_reference_sequence_uid_set.add(row.idxmax())
         self.vat.majority_reference_sequence_uid_set = majority_reference_sequence_uid_set
         if len(self.vat.majority_reference_sequence_uid_set) > 1:
@@ -229,7 +266,7 @@ class VirutalAnalysisTypeInit:
         else:
             self.vat.basal_seq = None
 
-    def _generate_name(self):
+    def _generate_name(self, at_df):
         if self.vat.co_dominant:
             list_of_maj_ref_seq = [rs for rs in self.vat.footprint_as_ref_seq_objs_set if rs.id in self.vat.majority_reference_sequence_uid_set]
             # Start the name with the co_dominant intras in order of abundance.
@@ -267,17 +304,42 @@ class VirtualAnalysisTypeManager():
         self.obj_manager = obj_manager
         self.next_uid = 1
         # key = uid of at, value = VirtualAnalysisType instance
-        self.analysis_type_instances_dict = {}
+        self.vat_dict = {}
 
-    def make_virtual_analysis_type(self, clade_collection_obj_list, ref_seq_obj_list):
+    def make_vat_post_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list):
         new_vat = self.VirtualAnalysisType(
-            clade_collection_obj_list=clade_collection_obj_list,
+            clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
+            ref_seq_obj_list=ref_seq_obj_list, id=self.next_uid)
+        vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=new_vat)
+        vat_init.init_vat_post_profile_assignment()
+
+        self.vat_dict[new_vat.id] = new_vat
+
+        self.next_uid += 1
+
+        return new_vat
+
+    def reinit_vat_post_profile_assignment(self, vat_to_reinit, new_clade_collection_obj_set):
+        recreated_vat = self.VirtualAnalysisType(
+            clade_collection_obj_list_post_prof_assignment=new_clade_collection_obj_set,
+            ref_seq_obj_list=vat_to_reinit.footprint_as_ref_seq_objs_set,
+            id=vat_to_reinit.id)
+
+        vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=recreated_vat)
+
+        reinstantiated_vat = vat_init.init_vat_post_profile_assignment()
+
+        self.vat_dict[reinstantiated_vat.id] = reinstantiated_vat
+
+    def make_vat_pre_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list):
+        new_vat = self.VirtualAnalysisType(
+            clade_collection_obj_list_pre_prof_assignment=clade_collection_obj_list,
             ref_seq_obj_list=ref_seq_obj_list,
             id=self.next_uid)
         vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=new_vat)
-        vat_init.init_virtual_analysis_type()
+        vat_init.init_vat_pre_profile_assignment()
 
-        self.analysis_type_instances_dict[new_vat.id] = new_vat
+        self.vat_dict[new_vat.id] = new_vat
 
         self.next_uid += 1
 
@@ -285,7 +347,7 @@ class VirtualAnalysisTypeManager():
 
     def delete_virtual_analysis_type(self, virtual_analysis_type):
         try:
-            del self.analysis_type_instances_dict[virtual_analysis_type.id]
+            del self.vat_dict[virtual_analysis_type.id]
         except KeyError:
             raise RuntimeError(
                 f'VirtualAnalysisType {virtual_analysis_type} '
@@ -297,53 +359,67 @@ class VirtualAnalysisTypeManager():
             vat_to_add_ccs_to.clade_collection_obj_set_profile_discovery.union(
             set(list_of_clade_collection_objs_to_add))
 
-        self.reinit_virtual_analysis_type(
+        self.reinit_vat_pre_profile_assignment(
             vat_to_reinit=vat_to_add_ccs_to,
             new_clade_collection_obj_set=new_clade_collection_obj_set_profile_discovery)
 
-    def remove_cc_and_reinit_virtual_analysis_type(
+    def remove_cc_and_reinit_vat_pre_profile_assignment(
             self, vat_to_remove_ccs_from, list_of_clade_collection_objs_to_remove):
 
         new_clade_collection_obj_set_profile_discovery = \
             vat_to_remove_ccs_from.clade_collection_obj_set_profile_discovery - set(
                 list_of_clade_collection_objs_to_remove)
 
-        self.reinit_virtual_analysis_type(
+        self.reinit_vat_pre_profile_assignment(
             vat_to_reinit=vat_to_remove_ccs_from,
             new_clade_collection_obj_set=new_clade_collection_obj_set_profile_discovery)
 
-    def reinit_virtual_analysis_type(self, vat_to_reinit, new_clade_collection_obj_set):
+    def reinit_vat_pre_profile_assignment(self, vat_to_reinit, new_clade_collection_obj_set):
         recreated_vat = self.VirtualAnalysisType(
-            clade_collection_obj_list=new_clade_collection_obj_set,
+            clade_collection_obj_list_pre_prof_assignment=new_clade_collection_obj_set,
             ref_seq_obj_list=vat_to_reinit.footprint_as_ref_seq_objs_set,
             id=vat_to_reinit.id)
 
         vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=recreated_vat)
 
-        reinstantiated_vat = vat_init.init_virtual_analysis_type()
+        reinstantiated_vat = vat_init.init_vat_pre_profile_assignment()
 
-        self.analysis_type_instances_dict[reinstantiated_vat.id] = reinstantiated_vat
+        self.vat_dict[reinstantiated_vat.id] = reinstantiated_vat
 
     class VirtualAnalysisType():
         """A RAM stored representation of the AnalysisType object. Instances of these objects do not yet
         exist in the database. We will eventually use these instances to make make AnalysisType objects that can be
         stored in the db. I am hoping that by using these virtual objects that we will be able to cut down on some of the
         attributes held in the AnalysisType model fields as many of these are used in the actual ananlysis. The only
-        attributes we would need to keep hold of those are those that are used in the outputs."""
+        attributes we would need to keep hold of those are those that are used in the outputs.
 
-        def __init__(self, clade_collection_obj_list, ref_seq_obj_list, id):
+        When doing init pre-profile assignment we will init from the clade_collection_obj_set_profile_discovery and
+        populate the relative_seq_abund_profile_discovery_df and the relative_seq_abund_profile_assignment_df.
+
+        When doing init post-profile assignment we will init from the clade_collection_obj_set_profile_assignment and
+        populate the post_prof_assignment_rel_abund_df
+        """
+
+        def __init__(
+                self, ref_seq_obj_list, id, clade_collection_obj_list_pre_prof_assignment=None,
+                clade_collection_obj_list_post_prof_assignment=None):
             self.id = id
             # There will be two different clade_collection_obj_sets. Firstly there is the set of CCs that are associated
             # to this VirtualAnalysisType during ProfileDiscovery. These CCs are used to define the max and min abundances
             # that ref seqs need to be found at.
-            # Secondly there will be the list of CladeCollections in which this VirtualAnalysisType is fond during
+            # Secondly there will be the list of CladeCollections in which this VirtualAnalysisType is found during
             # ProfileAssignment.
-            self.clade_collection_obj_set_profile_discovery = set(clade_collection_obj_list)
-            # TODO we will come to use this once we are at the ProfileAssingment stage
-            self.clade_collection_obj_set_profile_assignment = set()
+            if clade_collection_obj_list_pre_prof_assignment is not None:
+                self.clade_collection_obj_set_profile_discovery = set(clade_collection_obj_list_pre_prof_assignment)
+                self.clade_collection_obj_set_profile_assignment = set()
+            else:
+                self.clade_collection_obj_set_profile_discovery = set()
+                self.clade_collection_obj_set_profile_assignment = set(clade_collection_obj_list_post_prof_assignment)
+
             self.footprint_as_ref_seq_objs_set = ref_seq_obj_list
             self.ref_seq_uids_set = set([rs.id for rs in self.footprint_as_ref_seq_objs_set])
-            self.clade = list(clade_collection_obj_list)[0].clade
+            self.clade = list(clade_collection_obj_list_pre_prof_assignment)[0].clade
+
             # NB in the type discovery part the DataAnalysis we will be concerned with relative sequence abundances
             # as a proportion of all of the sequences found within a CladeCollection. But, as we move into ProfileAssignment
             # we will be concerned with the relative abundances of the sequences as a proportion of only those sequences
@@ -353,17 +429,27 @@ class VirtualAnalysisTypeManager():
             # working in ProfileAssignment we will use C3-0.8, C3b-0.2.
             # To work out the relative abundances for ProfileAssignment we can simply divide the rel abundances
             # for ProfileDiscovery by their summed rel abundances. We will hold two seperate DataFrame objects representing
-            # each of these differnt relative abundances. For
+            # each of these differnt relative abundances.
             self.relative_seq_abund_profile_discovery_df = None
             self.relative_seq_abund_profile_assignment_df = None
-            self.artefact_ref_seq_uids_set = set()
-            self.non_artefact_ref_seq_uids_set = set()
+
+            # To do the multimodal detection we need to create a final relative_seq_abund_df. This will be based on the
+            # CladeCollections in which the VirtualAnalysisType was found (clade_collection_obj_set_profile_assignment).
+            # It will also be based on the CladeCollection
+            # total seqs that are DIVs of the VirtualAnalysisType rather than all of the seqs in the CladeCollection.
+            self.post_prof_assignment_rel_abund_df = None
+
+            self.artefact_ref_seq_uid_set = set()
+            self.non_artefact_ref_seq_uid_set = set()
             self.co_dominant = None
             self.majority_reference_sequence_uid_set = set()
             self.name = None
 
             # key = ref seq id, val=RefSeqReqAbund object
             self.prof_assignment_required_rel_abund_dict = {}
+
+
+
 
         def __str__(self):
             return self.name
