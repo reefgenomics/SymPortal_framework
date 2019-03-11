@@ -38,7 +38,11 @@ class SPDataAnalysis:
 
         self._associate_vats_to_vccs()
 
-        self._check_for_additional_artefact_types()
+        self._check_for_artefacts()
+
+        print('Type discovery complete')
+
+
 
     def _associate_vats_to_vccs(self):
         """Populate the analysis_type_obj_to_representative_rel_abund_in_cc_dict of the VirtualCladeCollection
@@ -62,11 +66,16 @@ class SPDataAnalysis:
                 vat] = current_type_seq_tot_rel_abund_for_cc
             sys.stdout.write(f'\rCladeCollection:{cc} AnalysisType:{vat}')
 
-    def _check_for_additional_artefact_types(self):
+    def _check_for_artefacts(self):
         # Generate a dict that simply holds the total number of seqs per clade_collection_object
         # This will be used when working out relative proportions of seqs in the clade_collection_object
         artefact_assessor = ArtefactAssessor(parent_sp_data_analysis=self)
+        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'artefact_assessor.p'), 'wb') as f:
+            pickle.dump(artefact_assessor, f)
         artefact_assessor.assess_within_clade_cutoff_artefacts()
+        # with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'artefact_assessor_reassess_support.p'), 'wb') as f:
+        #     pickle.dump(artefact_assessor, f)
+        artefact_assessor.reassess_support_of_artefact_div_containing_types()
 
     def _collapse_footprints_and_make_analysis_types(self):
         for clade_fp_dict in self.clade_footp_dicts_list:
@@ -100,7 +109,6 @@ class SPDataAnalysis:
 
     def _populate_clade_fp_dicts_list(self):
         for cc_id, vcc in self.virtual_object_manager.cc_manager.clade_collection_instances_dict.items():
-            sys.stdout.write(f'\rFound footprint {vcc.above_cutoff_ref_seqs_obj_set}')
             clade_index = self.clade_list.index(vcc.clade)
             if vcc.above_cutoff_ref_seqs_obj_set in self.clade_footp_dicts_list[clade_index]:
                 self.clade_footp_dicts_list[clade_index][vcc.above_cutoff_ref_seqs_obj_set].cc_list.append(vcc)
@@ -116,12 +124,11 @@ class SPDataAnalysis:
         os.makedirs(self.temp_wkd, exist_ok=True)
 
 
-
 class ArtefactAssessor:
     def __init__(self, parent_sp_data_analysis):
         self.sp_data_analysis = parent_sp_data_analysis
-        # CladeCollection info
-        self.cc_info_dict = self.sp_data_analysis.virtual_object_manager.cc_manager.clade_collection_instances_dict
+        self.list_of_vccs = list(self.sp_data_analysis.virtual_object_manager.\
+            cc_manager.clade_collection_instances_dict.values())
         # key:VirtualAnalysisType.id, value:VirtualAnalysisType
         self.virtual_analysis_type_dict = self.sp_data_analysis.virtual_object_manager.v_at_manager.analysis_type_instances_dict
         self.analysis_types_of_analysis = list(self.virtual_analysis_type_dict.values())
@@ -142,11 +149,14 @@ class ArtefactAssessor:
         self.already_compared_analysis_type_uid_set = set()
         # Bool whether the pair comparisons need to be restarted.
         # This will be true when we have modified a type in anyway
-        self.restart_pair_comparisons = None
+        self.restart_pair_comparisons = True
+
+        # reassess support of artefact DIV containing analysis types attributes
+        self.already_checked_vat_uid_list = []
 
     def _init_fp_to_at_dict(self):
         ref_seq_fp_set_to_analysis_type_obj_dict = {}
-        for vat in self.analysis_types_of_analysis:
+        for vat in self.virtual_analysis_type_dict.values():
             ref_seq_fp_set_to_analysis_type_obj_dict[
                 frozenset(vat.footprint_as_ref_seq_objs_set)] = vat
         return ref_seq_fp_set_to_analysis_type_obj_dict
@@ -156,56 +166,97 @@ class ArtefactAssessor:
         1 - the non-artefact_ref_seqs match
         2 - neither of the types is a subset of the other
         3 - there are artefact ref seqs in at least one of the types"""
-        if vat_a.non_artefact_ref_seq_uids_set == vat_b.non_artefact_ref_seq_uids_set:
+        if vat_a.non_artefact_ref_seq_uid_set == vat_b.non_artefact_ref_seq_uid_set:
             if not set(vat_a.ref_seq_uids_set).issubset(vat_b.ref_seq_uids_set):
                 if not set(vat_b.ref_seq_uids_set).issubset(vat_a.ref_seq_uids_set):
-                    if vat_a.artefact_ref_seq_uids_set.union(vat_b.artefact_ref_seq_uids_set):
+                    if vat_a.artefact_ref_seq_uid_set.union(vat_b.artefact_ref_seq_uid_set):
                         return True
         return False
 
     def assess_within_clade_cutoff_artefacts(self):
+        """Check through all of the types to see if there are super types that have not been identified due to the
+        withincladecutoff. Please see:
+        https://github.com/didillysquat/SymPortal_framework/wiki/
+        The-SymPortal-logic#artefacts-during-the-its2-type-profile-discovery-phase
+        For further details"""
         for clade in self.set_of_clades_from_analysis:
             self.current_clade = clade
-            self.vat_uids_of_clade_dynamic =  [
-                vat_id for vat_id in self.virtual_analysis_type_dict.keys() if
-                self.virtual_analysis_type_dict[vat_id].clade == self.current_clade]
-
-            self.vat_uids_of_clade_static =  [
-                at_id for at_id in self.virtual_analysis_type_dict.keys() if
-                self.virtual_analysis_type_dict[at_id].clade == self.current_clade]
-
-            while 1:
+            self._set_static_and_dynamic_vat_lists()
+            self.restart_pair_comparisons = True
+            while self.restart_pair_comparisons:
                 self.restart_pair_comparisons = False
-                analysis_types_to_compare = [at_id for at_id in self.vat_uids_of_clade_dynamic if at_id in
-                                             self.vat_uids_of_clade_static]
-                for analysis_type_a_uid, analysis_type_b_uid in itertools.combinations(analysis_types_to_compare, 2):
+                self._set_vat_to_compare_pairwise()
+                for analysis_type_a_uid, analysis_type_b_uid in itertools.combinations(self.vat_uids_to_check_of_clade, 2):
                     if {analysis_type_a_uid, analysis_type_b_uid} not in self.already_compared_analysis_type_uid_set:
                         vat_a = self.virtual_analysis_type_dict[analysis_type_a_uid]
                         vat_b = self.virtual_analysis_type_dict[analysis_type_b_uid]
                         if self._types_should_be_checked(vat_a, vat_b):
                             print(f'\n\nChecking {vat_a.name} and {vat_b.name} for additional artefactual profiles')
-                            checked_type_pairing_handler = CheckTypePairingHandler(
-                                parent_artefact_assessor=self,
-                                vat_a=vat_a,
-                                vat_b=vat_b)
-                            if checked_type_pairing_handler.check_type_pairing():
+                            ctph = CheckTypePairingHandler(parent_artefact_assessor=self, vat_a=vat_a, vat_b=vat_b)
+                            if ctph.check_type_pairing():
                                 self.restart_pair_comparisons = True
-                                self.vat_uids_of_clade_dynamic = [
-                                    at_id for at_id in self.virtual_analysis_type_dict.keys() if
-                                    self.virtual_analysis_type_dict[at_id].clade == self.current_clade]
+                                self._reset_dynamic_vat_list()
                                 break
                             else:
-                                self.already_compared_analysis_type_uid_set.add(
-                                    frozenset({analysis_type_a_uid, analysis_type_b_uid}))
+                                self._log_completed_comparison(analysis_type_a_uid, analysis_type_b_uid)
                         else:
-                            self.already_compared_analysis_type_uid_set.add(
-                                frozenset({analysis_type_a_uid, analysis_type_b_uid}))
+                            self._log_completed_comparison(analysis_type_a_uid, analysis_type_b_uid)
 
-                    # If we make it to here we did a full run through the types without making a new type
-                    # Time to do the same for the next type
-                if not self.restart_pair_comparisons:
-                    break
+    def reassess_support_of_artefact_div_containing_types(self):
+        """Check to see how the association of VirtualCladeCollections to VirtualAnalysisTypes changes when taking into
+        account that some sequencs are now 'artefact' sequences and thus 'unlocked'. Please see:
+        https://github.com/didillysquat/SymPortal_framework/wiki
+        /The-SymPortal-logic#artefacts-during-the-its2-type-profile-assignment-phase
+        for further details."""
+        for clade in self.set_of_clades_from_analysis:
+            self.current_clade = clade
+            self.already_checked_vat_uid_list = []
+            self.restart_pair_comparisons = True
 
+            while self.restart_pair_comparisons:
+                self._set_artefact_div_vat_to_check()
+                self.restart_pair_comparisons = False
+
+                for vat_uid in self.vat_uids_to_check_of_clade:
+                    if vat_uid not in self.already_checked_vat_uid_list:
+
+                        vat_to_check = self.virtual_analysis_type_dict[vat_uid]
+                        print(f'\n\nChecking associations of VirtualCladeCollections to {vat_to_check.name}')
+                        cadivvata = CheckArtefactDIVVATAssociations(parent_artefact_assessor=self, vat_to_check=vat_to_check)
+                        if cadivvata.check_artefact_div_vat_associations():
+                            self.restart_pair_comparisons = True
+                            self.already_checked_vat_uid_list.append(vat_to_check.id)
+                            break
+                        else:
+                            self.already_checked_vat_uid_list.append(vat_to_check.id)
+
+    def _set_artefact_div_vat_to_check(self):
+        self.vat_uids_to_check_of_clade = [
+            vat.id for vat in self.virtual_analysis_type_dict.values() if
+            vat.clade == self.current_clade if
+            vat.artefact_ref_seq_uid_set]
+
+    def _reset_dynamic_vat_list(self):
+        self.vat_uids_of_clade_dynamic = [
+            at_id for at_id in self.virtual_analysis_type_dict.keys() if
+            self.virtual_analysis_type_dict[at_id].clade == self.current_clade]
+
+    def _log_completed_comparison(self, analysis_type_a_uid, analysis_type_b_uid):
+        self.already_compared_analysis_type_uid_set.add(
+            frozenset({analysis_type_a_uid, analysis_type_b_uid}))
+
+    def _set_vat_to_compare_pairwise(self):
+        self.vat_uids_to_check_of_clade = [at_id for at_id in self.vat_uids_of_clade_dynamic if at_id in
+                                     self.vat_uids_of_clade_static]
+
+
+    def _set_static_and_dynamic_vat_lists(self):
+        self.vat_uids_of_clade_dynamic = [
+            vat_id for vat_id in self.virtual_analysis_type_dict.keys() if
+            self.virtual_analysis_type_dict[vat_id].clade == self.current_clade]
+        self.vat_uids_of_clade_static = [
+            at_id for at_id in self.virtual_analysis_type_dict.keys() if
+            self.virtual_analysis_type_dict[at_id].clade == self.current_clade]
 
     def _type_non_artefacts_are_subsets_of_each_other(self, analysis_type_a, analysis_type_b):
         if set(self.virtual_analysis_type_dict[
@@ -226,7 +277,7 @@ class ArtefactAssessor:
         cc_to_initial_type_dict = defaultdict(list)
 
         clade_collection_to_type_tuple_list = []
-        for at in self.analysis_types_of_analysis:
+        for at in self.virtual_analysis_type_dict.values():
             type_uid = at.id
             initial_clade_collections = [int(x) for x in at.list_of_clade_collections_found_in_initially.split(',')]
             for CCID in initial_clade_collections:
@@ -236,7 +287,6 @@ class ArtefactAssessor:
             cc_to_initial_type_dict[ccid].append(atid)
 
         return dict(cc_to_initial_type_dict)
-
 
     def _generate_basal_seqs_set(self, footprint):
         basal_set = set()
@@ -257,7 +307,7 @@ class ArtefactAssessor:
 
     def _set_set_of_clades_from_analysis(self):
         self.set_of_clades_from_analysis = set()
-        for at in self.analysis_types_of_analysis:
+        for at in self.virtual_analysis_type_dict.values():
             self.set_of_clades_from_analysis.add(at.clade)
         return self.set_of_clades_from_analysis
 
@@ -368,58 +418,75 @@ class PotentialNewType:
             return None
 
 
-class CheckTypePairingHandler:
-    def __init__(self, parent_artefact_assessor, vat_a, vat_b):
+class CheckVCCToVATAssociations:
+    """Base class for use by the two ArtefactAssessor instances"""
+    def __init__(self, parent_artefact_assessor):
         self.artefact_assessor = parent_artefact_assessor
-        # AnalysisTypeAretefactInfoHolder for types a and b
-        self.vat_a = vat_a
-        self.vat_b = vat_b
-        # NB that the non_artefact ref seqs being the same is a prerequisite of doing a comparison
-        # as such we can set the below pnt non artefact ref seqs to match just one of the types being compared
-        self.pnt = self._init_pnt(self.vat_a, self.vat_b)
-        self.list_of_cc_objs_to_check = None
-
+        self.list_of_vcc_objs_to_check = None
         self.list_of_loss_of_support_info_holder_objs = []
-
-        # Attribute once support found
-        self.new_virtual_analysis_type_from_pnt = None
-        self.stranded_ccs = []
         self.at_obj_to_cc_obj_list_to_be_removed = defaultdict(list)
+        self.stranded_ccs = []
         self.ref_seqs_in_common_for_stranded_ccs = set()
         self.at_matching_stranded_ccs = None
         self.new_analysis_type_from_stranded_ccs = None
 
-    def _init_pnt(self, artefact_info_a, artefact_info_b):
-        name_of_ref_seqs_in_pnt = [ref_seq.name for ref_seq in
-                 artefact_info_a.footprint_as_ref_seq_objs_set.union(artefact_info_b.footprint_as_ref_seq_objs_set)]
+    def _assess_support_of_pnt_or_vat(self, pnt_or_vat):
+        for vcc in self.list_of_vcc_objs_to_check:
+            cpntsw = self.CheckPNTorVATSupportWorker(
+                virtual_clade_collection_object=vcc, parent_check_type_pairing=self, pnt_or_vat=pnt_or_vat)
+            cpntsw.check_pnt_support()
 
-        return PotentialNewType(
-            ref_seq_uids_set=self.vat_a.ref_seq_uids_set.union(self.vat_b.artefact_ref_seq_uids_set),
-            artefact_ref_seq_uid_set=self.vat_a.artefact_ref_seq_uids_set.union(self.vat_b.artefact_ref_seq_uids_set),
-            non_artefact_ref_seq_uid_set=self.vat_a.non_artefact_ref_seq_uids_set,
-            list_of_ref_seq_names=name_of_ref_seqs_in_pnt,
-            resf_seq_obj_set=artefact_info_a.footprint_as_ref_seq_objs_set.union(
-                artefact_info_b.footprint_as_ref_seq_objs_set))
+    def _pnt_or_vat_has_support(self):
+        return len(self.list_of_loss_of_support_info_holder_objs) >= 4
 
-    def check_type_pairing(self):
-        if self._pnt_profile_already_an_existing_analysis_type_profile():
-            print(f'Assessing support for potential new type:{self.pnt.name}')
-            print('Potential new type already exists')
-            return False
+    def _update_cc_info_for_ccs_that_support_new_type(self, vat_to_add_to_vcc):
+        for loss_of_support_info_obj in self.list_of_loss_of_support_info_holder_objs:
+            self._remove_no_longer_supported_type_from_cc_info(loss_of_support_info_obj)
+            self.add_new_type_to_cc_from_match_obj(loss_of_support_info_obj, vat_to_add_to_vcc)
+            self._populate_at_obj_to_cc_obj_to_be_removed_dict(loss_of_support_info_obj)
 
-        self._assess_support_of_pnt_non_mp()
+    def _remove_no_longer_supported_type_from_cc_info(self, loss_of_support_info_obj):
+        print(f'removing association of {loss_of_support_info_obj.cc} from {loss_of_support_info_obj.at}')
+        del loss_of_support_info_obj.cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
+            loss_of_support_info_obj.at]
 
-        if self._pnt_has_support():
-            self._make_new_at_from_pnt_and_update_dicts()
-            self._reassociate_stranded_ccs_if_necessary()
-        else:
-            print(f'Assessing support for potential new type:{self.pnt.name}')
-            print('Insufficient support for potential new type')
-            return False
-        return True
+    def add_new_type_to_cc_from_match_obj(self, match_info_obj, vat_to_add_to_vcc):
+        print(f'associating {match_info_obj.cc} to {vat_to_add_to_vcc.name}')
+        match_info_obj.cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
+            vat_to_add_to_vcc] = match_info_obj.rel_abund_of_at_in_cc
+
+    def _populate_at_obj_to_cc_obj_to_be_removed_dict(self, loss_of_support_info_obj):
+        self.at_obj_to_cc_obj_list_to_be_removed[
+            loss_of_support_info_obj.at].append(loss_of_support_info_obj.cc)
+
+    def _reinit_or_del_affected_types_and_create_stranded_cc_list(self):
+        for vat, cc_obj_list_val in self.at_obj_to_cc_obj_list_to_be_removed.items():
+            new_list_of_ccs_to_associate_to = [cc for cc in vat.clade_collection_obj_set_profile_discovery if cc not in cc_obj_list_val]
+            # If the analysis type still has support then simply reinitialize it
+            if self._afftected_type_still_has_sufficient_support(new_list_of_ccs_to_associate_to):
+                print(f'\nType {vat.name} supported by {len(new_list_of_ccs_to_associate_to)} CCs. Reinitiating.')
+                self.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager.\
+                    reinit_virtual_analysis_type(
+                    vat_to_reinit=vat, new_clade_collection_obj_set=new_list_of_ccs_to_associate_to)
+            else:
+                self._del_affected_type_and_populate_stranded_cc_list(
+                    vat=vat, new_list_of_ccs_to_associate_to=new_list_of_ccs_to_associate_to)
+
+    def _afftected_type_still_has_sufficient_support(self, new_list_of_ccs_to_associate_to):
+        return len(new_list_of_ccs_to_associate_to) >= 4
+
+    def _del_affected_type_and_populate_stranded_cc_list(self, vat, new_list_of_ccs_to_associate_to):
+        print(
+            f'Type {vat.name} no longer supported. '
+            f'Deleting. {len(new_list_of_ccs_to_associate_to)} CCs stranded.')
+        del self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[
+            frozenset(vat.footprint_as_ref_seq_objs_set)]
+        del self.artefact_assessor.virtual_analysis_type_dict[vat.id]
+        self.stranded_ccs.extend(new_list_of_ccs_to_associate_to)
 
     def _reassociate_stranded_ccs_if_necessary(self):
         if self._sufficient_stranded_ccs_for_new_analysis_type():
+            print(f'{len(self.stranded_ccs)} VirtualCladeCollections are stranded. Rehoming...')
             # Get ref_seqs in common
             self._get_ref_seqs_in_common_btw_stranded_ccs()
             if self.ref_seqs_in_common_for_stranded_ccs:
@@ -434,32 +501,54 @@ class CheckTypePairingHandler:
             else:
                 self._rehome_cc_individually()
         else:
+
             if self.stranded_ccs:
+                print(f'{len(self.stranded_ccs)} VirtualCladeCollections are stranded. Rehoming...')
                 self._rehome_cc_individually()
+            else:
+                print(f'There are no stranded VirtualCladeCollections.')
 
-    def _make_new_at_from_pnt_and_update_dicts(self):
-        self._make_analysis_type_from_pnt()
-        self._update_fp_to_at_dict_from_pnt()
-        self._update_cc_info_for_ccs_that_support_new_type()
-        self._reinit_or_del_affected_types_and_create_stranded_cc_list()
+    def _sufficient_stranded_ccs_for_new_analysis_type(self):
+        return len(self.stranded_ccs) >= 4
 
-    def _rehome_cc_individually(self):
-        sccrh = StrandedCCRehomer(parent_check_type_pairing_handler=self)
-        sccrh.rehome_stranded_ccs()
+    def _get_ref_seqs_in_common_btw_stranded_ccs(self):
+        print('Finding ReferenceSequences in common between the VirtualCladeCollections')
+        list_of_sets_of_ref_seqs_above_cutoff = [cc.above_cutoff_ref_seqs_obj_set for cc in self.stranded_ccs]
+        self.ref_seqs_in_common_for_stranded_ccs = list_of_sets_of_ref_seqs_above_cutoff[0].intersection(
+            *list_of_sets_of_ref_seqs_above_cutoff[1:])
+        print(f'{len(self.ref_seqs_in_common_for_stranded_ccs)} ReferenceSequences found in common.')
 
-    def _add_stranded_ccs_to_new_at_made_from_common_ref_seqs_and_update_dicts(self):
-        self._make_new_analysis_type_from_stranded_ccs()
-        self._add_exisiting_type_to_stranded_cc_info_objects(vat=self.new_analysis_type_from_stranded_ccs)
-        self._update_fp_to_at_dict(self.new_analysis_type_from_stranded_ccs)
+    def _analysis_type_already_exists_with_profile_of_seqs_in_common(self):
+        try:
+            self.at_matching_stranded_ccs = self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[
+                frozenset(self.ref_seqs_in_common_for_stranded_ccs)]
+            return True
+        except KeyError:
+            return False
 
     def _add_stranded_ccs_to_existing_at_and_update_dicts(self):
         self._reinit_existing_type_with_additional_ccs()
         self._add_exisiting_type_to_stranded_cc_info_objects(vat=self.at_matching_stranded_ccs)
 
-    def _get_ref_seqs_in_common_btw_stranded_ccs(self):
-        list_of_sets_of_ref_seqs_above_cutoff = [cc.above_cutoff_ref_seqs_obj_set for cc in self.stranded_ccs]
-        self.ref_seqs_in_common_for_stranded_ccs = list_of_sets_of_ref_seqs_above_cutoff[0].intersection(
-            *list_of_sets_of_ref_seqs_above_cutoff[1:])
+    def _reinit_existing_type_with_additional_ccs(self):
+        self.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager.\
+            add_ccs_and_reinit_virtual_analysis_type(
+            vat_to_add_ccs_to=self.at_matching_stranded_ccs,
+            list_of_clade_collection_objs_to_add=self.stranded_ccs)
+
+    def _add_exisiting_type_to_stranded_cc_info_objects(self, vat):
+        for cc in self.stranded_ccs:
+            self.add_a_type_to_cc_without_match_obj(cc=cc, vat=vat)
+
+    def add_a_type_to_cc_without_match_obj(self, cc, vat):
+        current_type_seq_rel_abund_for_cc = []
+        cc_ref_seq_abundance_dict = cc.ref_seq_id_to_rel_abund_dict
+        for ref_seq in vat.footprint_as_ref_seq_objs_set:
+            rel_abund = cc_ref_seq_abundance_dict[ref_seq.id]
+            current_type_seq_rel_abund_for_cc.append(rel_abund)
+        current_type_seq_tot_rel_abund_for_cc = sum(current_type_seq_rel_abund_for_cc)
+        cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
+            vat] = current_type_seq_tot_rel_abund_for_cc
 
     def _ref_seqs_in_common_contain_multiple_basal_seqs(self):
         """Return False if there is only one basal seq in the profile"""
@@ -479,121 +568,347 @@ class CheckTypePairingHandler:
         else:
             return False
 
+    def _add_stranded_ccs_to_new_at_made_from_common_ref_seqs_and_update_dicts(self):
+        self._make_new_analysis_type_from_stranded_ccs()
+        self._add_exisiting_type_to_stranded_cc_info_objects(vat=self.new_analysis_type_from_stranded_ccs)
+        self._update_fp_to_at_dict(self.new_analysis_type_from_stranded_ccs)
+
     def _make_new_analysis_type_from_stranded_ccs(self):
         self.new_analysis_type_from_stranded_ccs = self.artefact_assessor.sp_data_analysis.virtual_object_manager.\
             v_at_manager.make_virtual_analysis_type(
             clade_collection_obj_list=self.stranded_ccs, ref_seq_obj_list=self.ref_seqs_in_common_for_stranded_ccs)
 
-    def add_new_type_to_cc_from_match_obj(self, match_info_obj):
-        match_info_obj.cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
-            self.new_virtual_analysis_type_from_pnt] = match_info_obj.rel_abund_of_at_in_cc
-
-    def _add_exisiting_type_to_stranded_cc_info_objects(self, vat):
-        for cc in self.stranded_ccs:
-            self.add_a_type_to_cc_without_match_obj(cc=cc, vat=vat)
-
-    def add_a_type_to_cc_without_match_obj(self, cc, vat):
-        current_type_seq_rel_abund_for_cc = []
-        cc_ref_seq_abundance_dict = cc.ref_seq_id_to_rel_abund_dict
-        for ref_seq in vat.footprint_as_ref_seq_objs_set:
-            rel_abund = cc_ref_seq_abundance_dict[ref_seq.id]
-            current_type_seq_rel_abund_for_cc.append(rel_abund)
-        current_type_seq_tot_rel_abund_for_cc = sum(current_type_seq_rel_abund_for_cc)
-        cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
-            vat] = current_type_seq_tot_rel_abund_for_cc
-
-    def _reinit_existing_type_with_additional_ccs(self):
-        self.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager.\
-            add_ccs_and_reinit_virtual_analysis_type(
-            vat_to_add_ccs_to=self.at_matching_stranded_ccs,
-            list_of_clade_collection_objs_to_add=self.stranded_ccs)
-
-    def _analysis_type_already_exists_with_profile_of_seqs_in_common(self):
-        try:
-            self.at_matching_stranded_ccs = self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[
-                frozenset(self.ref_seqs_in_common_for_stranded_ccs)]
-            return True
-        except KeyError:
-            return False
-
-    def _sufficient_stranded_ccs_for_new_analysis_type(self):
-        return len(self.stranded_ccs) >= 4
-
-    def _reinit_or_del_affected_types_and_create_stranded_cc_list(self):
-        for vat, cc_obj_list_val in self.at_obj_to_cc_obj_list_to_be_removed.items():
-            new_list_of_ccs_to_associate_to = [cc for cc in vat.clade_collection_obj_set_profile_discovery if cc not in cc_obj_list_val]
-            # If the analysis type still has support then simply reinitialize it
-            if self._afftected_type_still_has_sufficient_support(new_list_of_ccs_to_associate_to):
-                print(f'Type {vat.name} supported by {len(new_list_of_ccs_to_associate_to)} CCs. Reinitiating.')
-                self.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager.\
-                    reinit_virtual_analysis_type(
-                    vat_to_reinit=vat, new_clade_collection_obj_set=new_list_of_ccs_to_associate_to)
-            else:
-                self._del_affected_type_and_populate_stranded_cc_list(
-                    vat=vat, new_list_of_ccs_to_associate_to=new_list_of_ccs_to_associate_to)
-
-    def _update_cc_info_for_ccs_that_support_new_type(self):
-        for loss_of_support_info_obj in self.list_of_loss_of_support_info_holder_objs:
-            self._remove_no_longer_supported_type_from_cc_info(loss_of_support_info_obj)
-            self.add_new_type_to_cc_from_match_obj(loss_of_support_info_obj)
-            self._populate_at_obj_to_cc_obj_to_be_removed_dict(loss_of_support_info_obj)
-
-    def _populate_at_obj_to_cc_obj_to_be_removed_dict(self, loss_of_support_info_obj):
-        self.at_obj_to_cc_obj_list_to_be_removed[
-            loss_of_support_info_obj.at].append(loss_of_support_info_obj.cc)
-
-    def _remove_no_longer_supported_type_from_cc_info(self, loss_of_support_info_obj):
-        del loss_of_support_info_obj.cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
-            loss_of_support_info_obj.at]
-
-    def _del_affected_type_and_populate_stranded_cc_list(self, vat, new_list_of_ccs_to_associate_to):
-        print(
-            f'Type {vat.name} no longer supported. '
-            f'Deleting. {len(new_list_of_ccs_to_associate_to)} CCs stranded.')
-        del self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[
-            frozenset(vat.footprint_as_ref_seq_objs_set)]
-        del self.artefact_assessor.virtual_analysis_type_dict[vat.id]
-        self.stranded_ccs.extend(new_list_of_ccs_to_associate_to)
-
-
-
-    def _generate_basal_seqs_set(self, footprint):
-        basal_set = set()
-        found_c15_a = False
-        for rs in footprint:
-            if rs.name == 'C3':
-                basal_set.add('C3')
-            elif rs.name == 'C1':
-                basal_set.add('C1')
-            elif 'C15' in rs.name and not found_c15_a:
-                basal_set.add('C15')
-                found_c15_a = True
-
-        if basal_set:
-            return basal_set
-        else:
-            return None
-
-    def reinit_affected_type(self, at_obj, info_obj_for_at, new_list_of_ccs_to_associate_to):
-        # NB initiating the type will cause a new ordered footprint list to be calculated so it is
-        # find to pass an unordered list or set to the footprintlistofrefseqs argument.
-        at_obj.init_type_attributes(
-            list_of_clade_collections=new_list_of_ccs_to_associate_to,
-            footprintlistofrefseqs=info_obj_for_at.footprint_as_ref_seq_objs_set)
-
-    def _afftected_type_still_has_sufficient_support(self, new_list_of_ccs_to_associate_to):
-        return len(new_list_of_ccs_to_associate_to) >= 4
-
     def _update_fp_to_at_dict(self, vat):
         self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[
             frozenset(vat.footprint_as_ref_seq_objs_set)] = vat
 
-    def _update_fp_to_at_dict_from_pnt(self):
-        self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[frozenset(
-            self.new_virtual_analysis_type_from_pnt.footprint_as_ref_seq_objs_set
-        )] = self.new_virtual_analysis_type_from_pnt
+    def _rehome_cc_individually(self):
+        sccrh = self.StrandedCCRehomer(parent_check_type_pairing_handler=self)
+        sccrh.rehome_stranded_ccs()
+
+    class CheckPNTorVATSupportWorker:
+        def __init__(self, parent_check_type_pairing, virtual_clade_collection_object, pnt_or_vat):
+
+            self.check_type_pairing = parent_check_type_pairing
+            self.vcc = virtual_clade_collection_object
+            self.pnt_or_vat = pnt_or_vat
+            self.pnt_seq_rel_abund_total_for_cc = None
+            self.rel_abund_of_current_virtual_analysis_type_of_cc = None
+            self.current_virtual_analysis_type_of_cc = None
+            self.within_clade_cutoff = self.check_type_pairing.artefact_assessor. \
+                sp_data_analysis.workflow_manager.within_clade_cutoff
+            self.unlocked_abundance = self.check_type_pairing.artefact_assessor.sp_data_analysis.unlocked_abundance
+
+        def check_pnt_support(self):
+            sys.stdout.write(f'\rChecking {self.vcc}')
+
+            if not self._pnt_or_vat_abundances_met():
+                return
+
+            if self._vcc_has_analysis_types_associated_to_it():
+                self._get_rel_abund_represented_by_current_at_of_cc()
+
+                if self.pnt_seq_rel_abund_total_for_cc > self.rel_abund_of_current_virtual_analysis_type_of_cc:
+                    self.check_type_pairing.list_of_loss_of_support_info_holder_objs.append(
+                        CCToATMatchInfoHolder(
+                            vcc=self.vcc, vat=self.current_virtual_analysis_type_of_cc,
+                            rel_abund_of_at_in_cc=self.rel_abund_of_current_virtual_analysis_type_of_cc))
+                else:
+                    # if cc doesn't support pnt then nothing to do
+                    pass
+
+            else:
+                # This could be buggy.
+                raise RuntimeError('Could not find associated AnalysisType with basal seq that matches that of '
+                                   'the PotentialNewType')
+
+        def _get_rel_abund_represented_by_current_at_of_cc(self):
+            # if pnt has basal type then make sure that the basal type we are comparing to is either the match
+            # or none.
+            # else if pnt doesn't have basal type. compare to the type with the highest match.
+            if self.pnt_or_vat.basal_seq is not None:
+                # first look for exact basal match
+                for vat, vat_rel_abund in self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items():
+                    if vat.basal_seq == self.pnt_or_vat.basal_seq:
+                        self.rel_abund_of_current_virtual_analysis_type_of_cc = vat_rel_abund
+                        self.current_virtual_analysis_type_of_cc = vat
+                        return
+                # then look for None basal match
+                for vat, vat_rel_abund in self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items():
+                    if vat.basal_seq is None:
+                        self.rel_abund_of_current_virtual_analysis_type_of_cc = vat_rel_abund
+                        self.current_virtual_analysis_type_of_cc = vat
+                        return
+                raise NotImplementedError
+            else:
+                # then compare to the AnalysisType that has the highest relative abundance currently.
+                top = 0
+                for vat, vat_rel_abund in self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items():
+                    if vat_rel_abund > top:
+                        self.rel_abund_of_current_virtual_analysis_type_of_cc = vat_rel_abund
+                        self.current_virtual_analysis_type_of_cc = vat
+
+        def _vcc_has_analysis_types_associated_to_it(self):
+            return self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict
+
+        def _pnt_or_vat_abundances_met(self):
+            """This will check whether the DIV relative abundance requirements of
+            either a pnt or vat are met by the vcc in question."""
+            vcc_rel_abund_dict = self.vcc.ref_seq_id_to_rel_abund_dict
+
+            total_seq_rel_abund_for_cc = []
+
+            for ref_seq_id in self.pnt_or_vat.non_artefact_ref_seq_uid_set:
+                rel_abund = vcc_rel_abund_dict[ref_seq_id]
+                total_seq_rel_abund_for_cc.append(rel_abund)
+                if rel_abund < self.within_clade_cutoff:
+                    return False
+
+            for ref_seq_id in self.pnt_or_vat.artefact_ref_seq_uid_set:
+                rel_abund = vcc_rel_abund_dict[ref_seq_id]
+                total_seq_rel_abund_for_cc.append(rel_abund)
+                if rel_abund < self.unlocked_abundance:
+                    return False
+
+            self.pnt_seq_rel_abund_total_for_cc = sum(total_seq_rel_abund_for_cc)
+            return True
+
+    class StrandedCCRehomer:
+        """Responsible for find new AnalysisTypes for the stranded CladeCollections to be associated with.
+        Not having CCs reasigned to a type causes problems. Due to the fact that strict limits are being used to
+        assign CladeCollections to the discovered AnalysisTypes it means that these stranded CCs are getting
+        bad associations. A such, we need to reassociate them to the best possible types.
+
+        For each CladeCollection object we are going to do a sort of mini type assignment
+        Because a lot of the single DIV AnalysisTypes will have been gotten rid of at this point
+        there is a possibility that there will not be an AnalysisType for the CCs to fit into.
+
+        Also it may be that the CCs now fit into a lesser intra single intra type.
+        e.g. B5c if original type was B5-B5s-B5c.
+        In this case we would obviously rather have the type B5 associated with the clade_collection_object.
+        So we should check to see if the abundance of the type that the clade_collection_object has been found
+        in is larger than the abundance of the CCs Maj intra.
+
+        If it is not then we should simply create a new type of the maj intra and associate the
+        CladeCollection object to that.
+
+        We also we need to be mindful of the fact that a CladeCollection object may not find a
+        match at all, e.g. the best_type_uid will = 'None'.
+
+        In this case we will also need to make the Maj intra the type.
+        """
+
+        def __init__(self, parent_check_type_pairing_handler):
+            self.check_type_pairing_handler = parent_check_type_pairing_handler
+            self.cc_to_at_match_info_holder_list = []
+            self.analysis_types_just_created = []
+            self.cc_to_match_object_dict = {}
+
+        def rehome_stranded_ccs(self):
+            """For each CladeCollection search through all of the AnalysisTypes and find the analysis type that
+            represents the highest proportion of the CladeCollections sequences. If such a type is found,
+            associate the CladeCollection to that AnalysisType. Else, create a new AnalysisType that is just the maj seq
+            of the CladeCollection"""
+            self._find_best_at_match_for_each_stranded_cc()
+            self._convert_best_match_list_to_dict()
+            self._associate_stranded_ccs()
+
+        def _associate_stranded_ccs(self):
+            #TODO there seems to be a bug here where the best match is not being found for a C1 and C1c vccs.
+            for cc_obj in list(self.cc_to_match_object_dict.keys()):
+                support_obj = self.cc_to_match_object_dict[cc_obj]
+                self._check_analysis_types_just_added_arent_better_match(support_obj=support_obj, cc_obj=cc_obj)
+
+                rel_abund, ref_seq = self._get_most_abundnant_ref_seq_info_for_cc(cc_obj)
+
+                if self._rel_abund_of_match_is_higher_than_abund_of_maj_seq_of_cc(rel_abund, support_obj):
+                    self._associate_stranded_cc_to_existing_analysis_type(cc_obj, support_obj)
+                else:
+                    self._associate_stranded_cc_to_new_maj_seq_analysis_type(cc_obj, ref_seq)
+
+        def _associate_stranded_cc_to_new_maj_seq_analysis_type(self, cc_obj, ref_seq):
+            """ Make a new type that is simply the maj intra
+            NB if a type that was just the CCs maj type already existed then we would have found a suitable match above.
+            I.e. at this point we know that we need to create the AnalysisType that is just the maj seq"""
+
+            maj_seq_vat = self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.virtual_object_manager. \
+                v_at_manager.make_virtual_analysis_type(clade_collection_obj_list=[cc_obj], ref_seq_obj_list=[ref_seq])
+
+            self.add_a_type_to_cc_without_match_obj(cc=cc_obj, vat=maj_seq_vat)
+
+            self._update_fp_to_at_dict(vat=maj_seq_vat)
+
+        def _update_fp_to_at_dict(self, vat):
+            self.check_type_pairing_handler.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[
+                frozenset(vat.footprint_as_ref_seq_objs_set)] = vat
+
+        def add_a_type_to_cc_without_match_obj(self, cc, vat):
+            current_type_seq_rel_abund_for_cc = []
+            cc_ref_seq_abundance_dict = cc.ref_seq_id_to_rel_abund_dict
+            for ref_seq in vat.footprint_as_ref_seq_objs_set:
+                rel_abund = cc_ref_seq_abundance_dict[ref_seq.id]
+                current_type_seq_rel_abund_for_cc.append(rel_abund)
+            current_type_seq_tot_rel_abund_for_cc = sum(current_type_seq_rel_abund_for_cc)
+            cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
+                vat] = current_type_seq_tot_rel_abund_for_cc
+
+        def _associate_stranded_cc_to_existing_analysis_type(self, cc_obj, support_obj):
+            self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager. \
+                add_ccs_and_reinit_virtual_analysis_type(
+                vat_to_add_ccs_to=support_obj.at, list_of_clade_collection_objs_to_add=[cc_obj])
+            self.add_new_type_to_cc_with_match_obj(match_info_obj=support_obj)
+
+        def add_new_type_to_cc_with_match_obj(self, match_info_obj):
+            match_info_obj.cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
+                match_info_obj.at] = match_info_obj.rel_abund_of_at_in_cc
+
+        def _get_most_abundnant_ref_seq_info_for_cc(self, cc_obj):
+            most_abund_dss_of_clade_collection = cc_obj.ordered_dsss_objs[0]
+            rel_abund = most_abund_dss_of_clade_collection.abundance / cc_obj.total_seq_abundance
+            ref_seq = most_abund_dss_of_clade_collection.reference_sequence_of
+            return rel_abund, ref_seq
+
+        def _convert_best_match_list_to_dict(self):
+            for support_obj in self.cc_to_at_match_info_holder_list:
+                self.cc_to_match_object_dict[support_obj.cc] = support_obj
+
+        def _find_best_at_match_for_each_stranded_cc(self):
+            """Start the worker that will search through all of the AnalysisTypes and find the AnalysisType that represents
+            the highest relative abundance in the CladeCollection. The function will add a CCToATMatchInfoHolder for
+            each CladeCollection and Analysis best match found. Or, if no match is found will add None."""
+            for cc in self.check_type_pairing_handler.stranded_ccs:
+                print(f'Searching for best match to {cc}')
+                sccats = StrandedCladeCollectionAnalysisTypeSearcher(
+                    parent_stranded_cc_rehomer=self, virtual_clade_collection_object=cc)
+                sccats.search_analysis_types()
+
+        def _make_new_maj_seq_analysis_type(self, cc_obj, list_of_ref_seq_objs):
+            new_analysis_type = AnalysisType(
+                data_analysis_from=self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.data_analysis_obj,
+                clade=self.check_type_pairing_handler.artefact_assessor.current_clade)
+            new_analysis_type.init_type_attributes(
+                [cc_obj], list_of_ref_seq_objs)
+            return new_analysis_type
+
+        def _rel_abund_of_match_is_higher_than_abund_of_maj_seq_of_cc(self, rel_abund, support_obj):
+            return support_obj.rel_abund_of_at_in_cc >= rel_abund
+
+        def _check_analysis_types_just_added_arent_better_match(self, support_obj, cc_obj):
+            """Checks to see whether the majseq AnalysisTypes that may have been created for the previous CladeCollections
+             are a better match than the current match. """
+            new_best_rel_abund = 0
+            new_best_at_match = None
+            for vat in self.analysis_types_just_created:
+                atficc = AnalysisTypeFoundInCladeCollection(
+                    virtual_analysis_type=vat, virtual_calde_collection=cc_obj)
+                if atficc.search_for_at_in_cc():  # then a match was found
+                    if support_obj is not None:
+                        if atficc.rel_abund_of_at_in_cc > support_obj.rel_abund_of_at_in_cc:
+                            new_best_at_match = vat
+                            new_best_rel_abund = atficc.rel_abund_of_at_in_cc
+                    else:  # no need to check if higher as there was no match originally
+                        new_best_at_match = vat
+                        new_best_rel_abund = atficc.rel_abund_of_at_in_cc
+
+            if new_best_at_match is not None:  # Then we must have found a better match/a match
+                # if support object already existed then modify it
+                if support_obj is not None:
+                    support_obj.at = new_best_at_match
+                    support_obj.rel_abund_of_at_in_cc = new_best_rel_abund
+                else:
+                    # create a new support object and add it to the dict instead of the None value
+                    self.cc_to_match_object_dict[cc_obj] = CCToATMatchInfoHolder(
+                        vat=new_best_at_match,
+                        vcc=cc_obj,
+                        rel_abund_of_at_in_cc=new_best_rel_abund)
 
 
+class CheckArtefactDIVVATAssociations(CheckVCCToVATAssociations):
+    """Check to see whether there are additional VirtualCladeCollections that will support a given VirtualAnalysisType
+    now that artefact or unlocked DIVs are being taken into account. If there are additional VCC that support,
+    reassociate these VCCs."""
+    def __init__(self, parent_artefact_assessor, vat_to_check):
+        super().__init__(parent_artefact_assessor=parent_artefact_assessor)
+        self.vat_to_check = vat_to_check
+
+    def check_artefact_div_vat_associations(self):
+        self._set_vccs_to_check()
+        self._assess_support_of_pnt_or_vat(pnt_or_vat=self.vat_to_check)
+        if self.list_of_loss_of_support_info_holder_objs:
+            print(f'Found {len(self.list_of_loss_of_support_info_holder_objs)} '
+                  f'VirtualCladeCollections that support {self.vat_to_check.name}')
+            print('Reassociating VirtualCladeCollections...')
+            self._update_cc_info_for_ccs_that_support_new_type(vat_to_add_to_vcc=self.vat_to_check)
+            self._reinit_or_del_affected_types_and_create_stranded_cc_list()
+            self._reassociate_stranded_ccs_if_necessary()
+            return True
+        else:
+            return False
+
+    def _set_vccs_to_check(self):
+        # its important that we don't check the VirtualCladeCollections that are already associated with the
+        # VirtualAnalysisType. This way, any VirtualCladeCollections that we do find to be a better match to the
+        # VAT in question we can add to the VAT and remove from their old VAT, just like we did when looking
+        # for support for the PotentialNewType in the first round of artefact assessment.
+        self.list_of_vcc_objs_to_check = [
+            vcc for vcc in self.artefact_assessor.list_of_vccs if
+            vcc.clade == self.vat_to_check.clade if
+            vcc.footprint_as_frozen_set_of_ref_seq_uids.issuperset(
+                self.vat_to_check.ref_seq_uids_set) if
+            vcc not in self.vat_to_check.clade_collection_obj_set_profile_discovery]
+
+
+
+class CheckTypePairingHandler(CheckVCCToVATAssociations):
+    """Check to see whether a PotentialNewType has sufficient support to become a new VirtualAnalysisType. If so
+    then redistribute the VirtualCladeCollections that noew support it (and no long support the VATs they were
+    previously supporting."""
+    def __init__(self, parent_artefact_assessor, vat_a, vat_b):
+        super().__init__(parent_artefact_assessor=parent_artefact_assessor)
+        # AnalysisTypeAretefactInfoHolder for types a and b
+        self.vat_a = vat_a
+        self.vat_b = vat_b
+        # NB that the non_artefact ref seqs being the same is a prerequisite of doing a comparison
+        # as such we can set the below pnt non artefact ref seqs to match just one of the types being compared
+        self.pnt = self._init_pnt(self.vat_a, self.vat_b)
+
+        # Attribute once support found
+        self.new_virtual_analysis_type_from_pnt = None
+
+    def check_type_pairing(self):
+        if self._pnt_profile_already_an_existing_analysis_type_profile():
+            print(f'Assessing support for potential new type:{self.pnt.name}')
+            print('Potential new type already exists')
+            return False
+
+        self._set_vccs_to_check()
+
+        self._assess_support_of_pnt_or_vat(pnt_or_vat=self.pnt)
+
+        if self._pnt_or_vat_has_support():
+            self._make_new_at_from_pnt_and_update_dicts()
+            self._reassociate_stranded_ccs_if_necessary()
+        else:
+            print(f'Assessing support for potential new type:{self.pnt.name}')
+            print('Insufficient support for potential new type')
+            return False
+        return True
+
+    def _set_vccs_to_check(self):
+        self.list_of_vcc_objs_to_check = [vcc for vcc in self.artefact_assessor.list_of_vccs if
+                                          vcc.clade == self.vat_a.clade if
+                                          vcc.footprint_as_frozen_set_of_ref_seq_uids.issuperset(
+                                              self.pnt.ref_seq_uids_set)]
+
+    def _pnt_profile_already_an_existing_analysis_type_profile(self):
+        return frozenset(
+            self.pnt.ref_seq_objects_set) in self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict.keys()
+
+    def _make_new_at_from_pnt_and_update_dicts(self):
+        self._make_analysis_type_from_pnt()
+        self._update_fp_to_at_dict_from_pnt()
+        self._update_cc_info_for_ccs_that_support_new_type(vat_to_add_to_vcc=self.new_virtual_analysis_type_from_pnt)
+        self._reinit_or_del_affected_types_and_create_stranded_cc_list()
 
     def _make_analysis_type_from_pnt(self):
         print('\nSupport found. Creating new type.')
@@ -602,26 +917,22 @@ class CheckTypePairingHandler:
             ref_seq_obj_list=self.pnt.ref_seq_objects_set)
         print(f'{self.new_virtual_analysis_type_from_pnt.name} created.')
 
+    def _update_fp_to_at_dict_from_pnt(self):
+        self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[frozenset(
+            self.new_virtual_analysis_type_from_pnt.footprint_as_ref_seq_objs_set
+        )] = self.new_virtual_analysis_type_from_pnt
 
-    def _pnt_has_support(self):
-        return len(self.list_of_loss_of_support_info_holder_objs) >= 4
+    def _init_pnt(self, artefact_info_a, artefact_info_b):
+        name_of_ref_seqs_in_pnt = [ref_seq.name for ref_seq in
+                 artefact_info_a.footprint_as_ref_seq_objs_set.union(artefact_info_b.footprint_as_ref_seq_objs_set)]
 
-    def _assess_support_of_pnt_non_mp(self):
-        self.list_of_cc_objs_to_check = [vcc for vcc in self.artefact_assessor.cc_info_dict.values() if
-                                         vcc.clade == self.vat_a.clade if
-                                         vcc.footprint_as_frozen_set_of_ref_seq_uids.issuperset(
-                                             self.pnt.ref_seq_uids_set)]
-
-        for vcc in self.list_of_cc_objs_to_check:
-
-            cpntsw = CheckPNTSupportWorker(
-                virtual_clade_collection_object=vcc, parent_check_type_pairing=self)
-            cpntsw.check_pnt_support()
-
-
-    def _pnt_profile_already_an_existing_analysis_type_profile(self):
-        return frozenset(self.pnt.ref_seq_objects_set) in self.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict.keys()
-
+        return PotentialNewType(
+            ref_seq_uids_set=self.vat_a.ref_seq_uids_set.union(self.vat_b.artefact_ref_seq_uid_set),
+            artefact_ref_seq_uid_set=self.vat_a.artefact_ref_seq_uid_set.union(self.vat_b.artefact_ref_seq_uid_set),
+            non_artefact_ref_seq_uid_set=self.vat_a.non_artefact_ref_seq_uid_set,
+            list_of_ref_seq_names=name_of_ref_seqs_in_pnt,
+            resf_seq_obj_set=artefact_info_a.footprint_as_ref_seq_objs_set.union(
+                artefact_info_b.footprint_as_ref_seq_objs_set))
 
 class StrandedCladeCollectionAnalysisTypeSearcher:
     """For a given stranded CladeCollection it will search the AnalysisTypes to identify the the AnalysisType that
@@ -656,153 +967,7 @@ class StrandedCladeCollectionAnalysisTypeSearcher:
                 self.best_rel_abund_of_at_in_cc = atficc.rel_abund_of_at_in_cc
 
 
-class StrandedCCRehomer:
-    """Responsible for find new AnalysisTypes for the stranded CladeCollections to be associated with.
-    Not having CCs reasigned to a type causes problems. Due to the fact that strict limits are being used to
-    assign CladeCollections to the discovered AnalysisTypes it means that these stranded CCs are getting
-    bad associations. A such, we need to reassociate them to the best possible types.
 
-    For each CladeCollection object we are going to do a sort of mini type assignment
-    Because a lot of the single DIV AnalysisTypes will have been gotten rid of at this point
-    there is a possibility that there will not be an AnalysisType for the CCs to fit into.
-
-    Also it may be that the CCs now fit into a lesser intra single intra type.
-    e.g. B5c if original type was B5-B5s-B5c.
-    In this case we would obviously rather have the type B5 associated with the clade_collection_object.
-    So we should check to see if the abundance of the type that the clade_collection_object has been found
-    in is larger than the abundance of the CCs Maj intra.
-
-    If it is not then we should simply create a new type of the maj intra and associate the
-    CladeCollection object to that.
-
-    We also we need to be mindful of the fact that a CladeCollection object may not find a
-    match at all, e.g. the best_type_uid will = 'None'.
-
-    In this case we will also need to make the Maj intra the type.
-    """
-    def __init__(self, parent_check_type_pairing_handler):
-        self.check_type_pairing_handler = parent_check_type_pairing_handler
-        self.cc_to_at_match_info_holder_list = []
-        self.analysis_types_just_created = []
-        self.cc_to_match_object_dict = {}
-
-
-    def rehome_stranded_ccs(self):
-        """For each CladeCollection search through all of the AnalysisTypes and find the analysis type that
-        represents the highest proportion of the CladeCollections sequences. If such a type is found,
-        associate the CladeCollection to that AnalysisType. Else, create a new AnalysisType that is just the maj seq
-        of the CladeCollection"""
-        self._find_best_at_match_for_each_stranded_cc()
-        self._convert_best_match_list_to_dict()
-        self._associate_stranded_ccs()
-
-    def _associate_stranded_ccs(self):
-        for cc_obj in list(self.cc_to_match_object_dict.keys()):
-            support_obj = self.cc_to_match_object_dict[cc_obj]
-            self._check_analysis_types_just_added_arent_better_match(support_obj=support_obj, cc_obj=cc_obj)
-
-            rel_abund, ref_seq = self._get_most_abundnant_ref_seq_info_for_cc(cc_obj)
-
-            if self._rel_abund_of_match_is_higher_than_abund_of_maj_seq_of_cc(rel_abund, support_obj):
-                self._associate_stranded_cc_to_existing_analysis_type(cc_obj, support_obj)
-            else:
-                self._associate_stranded_cc_to_new_maj_seq_analysis_type(cc_obj, ref_seq)
-
-    def _associate_stranded_cc_to_new_maj_seq_analysis_type(self, cc_obj, ref_seq):
-        """ Make a new type that is simply the maj intra
-        NB if a type that was just the CCs maj type already existed then we would have found a suitable match above.
-        I.e. at this point we know that we need to create the AnalysisType that is just the maj seq"""
-
-        maj_seq_vat = self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.virtual_object_manager.\
-            v_at_manager.make_virtual_analysis_type(clade_collection_obj_list=[cc_obj], ref_seq_obj_list=[ref_seq])
-
-        self.add_a_type_to_cc_without_match_obj(cc=cc_obj, vat=maj_seq_vat)
-
-        self._update_fp_to_at_dict(vat=maj_seq_vat)
-
-    def _update_fp_to_at_dict(self, vat):
-        self.check_type_pairing_handler.artefact_assessor.ref_seq_fp_set_to_analysis_type_obj_dict[
-            frozenset(vat.footprint_as_ref_seq_objs_set)] = vat
-
-    def add_a_type_to_cc_without_match_obj(self, cc, vat):
-        current_type_seq_rel_abund_for_cc = []
-        cc_ref_seq_abundance_dict = cc.ref_seq_id_to_rel_abund_dict
-        for ref_seq in vat.footprint_as_ref_seq_objs_set:
-            rel_abund = cc_ref_seq_abundance_dict[ref_seq.id]
-            current_type_seq_rel_abund_for_cc.append(rel_abund)
-        current_type_seq_tot_rel_abund_for_cc = sum(current_type_seq_rel_abund_for_cc)
-        cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
-            vat] = current_type_seq_tot_rel_abund_for_cc
-
-    def _associate_stranded_cc_to_existing_analysis_type(self, cc_obj, support_obj):
-        self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.virtual_object_manager.v_at_manager. \
-            add_ccs_and_reinit_virtual_analysis_type(
-            vat_to_add_ccs_to=support_obj.at, list_of_clade_collection_objs_to_add=[cc_obj])
-        self.add_new_type_to_cc_with_match_obj(match_info_obj=support_obj)
-
-    def add_new_type_to_cc_with_match_obj(self, match_info_obj):
-        match_info_obj.cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
-            match_info_obj.at] = match_info_obj.rel_abund_of_at_in_cc
-
-    def _get_most_abundnant_ref_seq_info_for_cc(self, cc_obj):
-        most_abund_dss_of_clade_collection = cc_obj.ordered_dsss_objs[0]
-        rel_abund = most_abund_dss_of_clade_collection.abundance / cc_obj.total_seq_abundance
-        ref_seq = most_abund_dss_of_clade_collection.reference_sequence_of
-        return rel_abund, ref_seq
-
-    def _convert_best_match_list_to_dict(self):
-        for support_obj in self.cc_to_at_match_info_holder_list:
-            self.cc_to_match_object_dict[support_obj.cc] = support_obj
-
-    def _find_best_at_match_for_each_stranded_cc(self):
-        """Start the worker that will search through all of the AnalysisTypes and find the AnalysisType that represents
-        the highest relative abundance in the CladeCollection. The function will add a CCToATMatchInfoHolder for
-        each CladeCollection and Analysis best match found. Or, if no match is found will add None."""
-        for cc in self.check_type_pairing_handler.stranded_ccs:
-            print(f'Searching for best match to {cc}')
-            sccats = StrandedCladeCollectionAnalysisTypeSearcher(
-                parent_stranded_cc_rehomer=self, virtual_clade_collection_object=cc)
-            sccats.search_analysis_types()
-
-    def _make_new_maj_seq_analysis_type(self, cc_obj, list_of_ref_seq_objs):
-        new_analysis_type = AnalysisType(
-            data_analysis_from=self.check_type_pairing_handler.artefact_assessor.sp_data_analysis.data_analysis_obj,
-            clade=self.check_type_pairing_handler.artefact_assessor.current_clade)
-        new_analysis_type.init_type_attributes(
-            [cc_obj], list_of_ref_seq_objs)
-        return new_analysis_type
-
-    def _rel_abund_of_match_is_higher_than_abund_of_maj_seq_of_cc(self, rel_abund, support_obj):
-        return support_obj.rel_abund_of_at_in_cc >= rel_abund
-
-    def _check_analysis_types_just_added_arent_better_match(self, support_obj, cc_obj):
-        """Checks to see whether the majseq AnalysisTypes that may have been created for the previous CladeCollections
-         are a better match than the current match. """
-        new_best_rel_abund = 0
-        new_best_at_match = None
-        for vat in self.analysis_types_just_created:
-            atficc = AnalysisTypeFoundInCladeCollection(
-                virtual_analysis_type=vat, virtual_calde_collection=cc_obj)
-            if atficc.search_for_at_in_cc():  # then a match was found
-                if support_obj is not None:
-                    if atficc.rel_abund_of_at_in_cc > support_obj.rel_abund_of_at_in_cc:
-                        new_best_at_match = vat
-                        new_best_rel_abund = atficc.rel_abund_of_at_in_cc
-                else: # no need to check if higher as there was no match originally
-                    new_best_at_match = vat
-                    new_best_rel_abund = atficc.rel_abund_of_at_in_cc
-
-        if new_best_at_match is not None:  # Then we must have found a better match/a match
-            # if support object already existed then modify it
-            if support_obj is not None:
-                support_obj.at = new_best_at_match
-                support_obj.rel_abund_of_at_in_cc = new_best_rel_abund
-            else:
-                # create a new support object and add it to the dict instead of the None value
-                self.cc_to_match_object_dict[cc_obj] = CCToATMatchInfoHolder(
-                    vat=new_best_at_match,
-                    vcc=cc_obj,
-                    rel_abund_of_at_in_cc=new_best_rel_abund)
 
 
 class AnalysisTypeFoundInCladeCollection:
@@ -829,11 +994,11 @@ class AnalysisTypeFoundInCladeCollection:
         we should be looking to see if each of these abundances is above the unlocked relative abundance, but given
         that the unlocked rel abund is no 0.0001 this is so low that I think we can just be happy if the seqs
         exist in the CladeCollection."""
-        return self.vat.artefact_ref_seq_uids_set.issubset(
+        return self.vat.artefact_ref_seq_uid_set.issubset(
             self.vcc.footprint_as_frozen_set_of_ref_seq_uids)
 
     def _at_non_artefact_seqs_found_in_cc_above_cutoff_seqs(self):
-        return self.vat.non_artefact_ref_seq_uids_set.issubset(self.vcc.above_cutoff_ref_seqs_id_set)
+        return self.vat.non_artefact_ref_seq_uid_set.issubset(self.vcc.above_cutoff_ref_seqs_id_set)
 
 
 class CCToATMatchInfoHolder:
@@ -848,92 +1013,7 @@ class CCToATMatchInfoHolder:
 
 
 
-class CheckPNTSupportWorker:
-    def __init__(self, parent_check_type_pairing, virtual_clade_collection_object):
-        self.check_type_pairing = parent_check_type_pairing
-        self.pnt_seq_rel_abund_total_for_cc = None
-        self.vcc = virtual_clade_collection_object
-        self.rel_abund_of_current_virtual_analysis_type_of_cc = None
-        self.current_virtual_analysis_type_of_cc = None
 
-
-    def check_pnt_support(self):
-        sys.stdout.write(f'\rChecking {self.vcc}')
-
-
-        if not self._pnt_abundances_met():
-            return
-
-        if self._cc_has_analysis_types_associated_to_it():
-            self._get_rel_abund_represented_by_current_at_of_cc()
-
-
-            if self.pnt_seq_rel_abund_total_for_cc > self.rel_abund_of_current_virtual_analysis_type_of_cc:
-                self.check_type_pairing.list_of_loss_of_support_info_holder_objs.append(
-                    CCToATMatchInfoHolder(
-                        vcc=self.vcc, vat=self.current_virtual_analysis_type_of_cc,
-                        rel_abund_of_at_in_cc=self.rel_abund_of_current_virtual_analysis_type_of_cc))
-            else:
-                # if cc doesn't support pnt then nothing to do
-                pass
-
-        else:
-            # TODO we may have to revisit this theory when debugging. I'm not sure taht every cc will have
-            # an AnalysisType for every basal sequence found in it
-            # lets have a look through each of the analysis types and see if one of them has the cc associated with it
-            # if it doesn't or does then this will mean two very differnt things
-            # Turns out that the cc simply doesn't have a type associated with it. This should not be happening.
-            raise RuntimeError('Could not find associated AnalysisType with basal seq that matches that of '
-                               'the PotentialNewType')
-
-    def _get_rel_abund_represented_by_current_at_of_cc(self):
-        # if pnt has basal type then make sure that the basal type we are comparing to is either the match
-        # or none.
-        # else if pnt doesn't have basal type. compare to the type with the highest match.
-        if self.check_type_pairing.pnt.basal_seq is not None:
-            # first look for exact basal match
-            for vat, vat_rel_abund in self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items():
-                if vat.basal_seq == self.check_type_pairing.pnt.basal_seq:
-                    self.rel_abund_of_current_virtual_analysis_type_of_cc = vat_rel_abund
-                    self.current_virtual_analysis_type_of_cc = vat
-                    return
-            # then look for None basal match
-            for vat, vat_rel_abund in self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items():
-                if vat.basal_seq is None:
-                    self.rel_abund_of_current_virtual_analysis_type_of_cc = vat_rel_abund
-                    self.current_virtual_analysis_type_of_cc = vat
-                    return
-                apples = 'asdf'
-        else:
-            # then compare to the AnalysisType that has the highest relative abundance currently.
-            top = 0
-            for vat, vat_rel_abund in self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items():
-                if vat_rel_abund > top:
-                    self.rel_abund_of_current_virtual_analysis_type_of_cc = vat_rel_abund
-                    self.current_virtual_analysis_type_of_cc = vat
-
-
-    def _cc_has_analysis_types_associated_to_it(self):
-        return self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict
-
-    def _pnt_abundances_met(self):
-        cc_rel_abund_dict = self.vcc.ref_seq_id_to_rel_abund_dict
-        pnt_seq_rel_abund_for_cc = []
-
-        for ref_seq_id in self.check_type_pairing.pnt.non_artefact_ref_seq_uid_set:
-            rel_abund = cc_rel_abund_dict[ref_seq_id]
-            pnt_seq_rel_abund_for_cc.append(rel_abund)
-            if rel_abund < self.check_type_pairing.artefact_assessor.sp_data_analysis.workflow_manager.within_clade_cutoff:
-                return False
-
-        for ref_seq_id in self.check_type_pairing.pnt.artefact_ref_seq_uid_set:
-            rel_abund = cc_rel_abund_dict[ref_seq_id]
-            pnt_seq_rel_abund_for_cc.append(rel_abund)
-            if rel_abund < self.check_type_pairing.artefact_assessor.sp_data_analysis.unlocked_abundance:
-                return False
-
-        self.pnt_seq_rel_abund_total_for_cc = sum(pnt_seq_rel_abund_for_cc)
-        return True
 
 class AnalysisTypeCreator:
     """Create AnalysisType objects from the supported initial type profiles that have been generated in the
@@ -1180,7 +1260,7 @@ class SupportedFootPrintIdentifier:
         self._set_attributes_for_collapse_dict_population()
         if self.n_minus_one_list:
             for longer_initial_type in self.unsupported_list:
-                sys.stdout.write(f'Assessing footprint {longer_initial_type} for supported type\r')
+                # sys.stdout.write(f'\rAssessing footprint {longer_initial_type} for supported type')
                 self.top_score = 0
                 for shorter_initial_type in self.n_minus_one_list:
                     collapse_assessor = CollapseAssessor(
