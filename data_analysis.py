@@ -154,7 +154,7 @@ class SPDataAnalysis:
 
             self.multimodal_detection()
 
-    def mumultimodal_detection(self):
+    def multimodal_detection(self):
         mmd = self.MultiModalDetection(parent_sp_data_analysis=self)
         mmd.run_multimodal_detection()
 
@@ -168,125 +168,96 @@ class SPDataAnalysis:
             self.current_vat = None
             # The two lists that will hold the VirtualCladeCollection objects belonging to each of the potential
             # new VATs resulting from a splitting occurrence.
-            self.list_of_vcc_one = []
-            self.list_of_vccs_two = []
+            self.list_of_vcc_uids_one = []
+            self.list_of_vcc_uids_two = []
 
         def run_multimodal_detection(self):
+            print('Starting MultiModalDetection')
             while self.restart:
                 self.restart = False
-                for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
-                    if vat.id in self.vat_uids_checked:
+                for vat_uid in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.keys():
+                    self.current_vat = self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict[vat_uid]
+                    if self.current_vat.id in self.vat_uids_checked:
                         continue
-                    if len(vat.ref_seq_uids_set) == 1:
-                        self.vat_uids_checked.append(vat.id)
+                    if len(self.current_vat.ref_seq_uids_set) == 1:
+                        self.vat_uids_checked.append(self.current_vat.id)
                         continue
-                    for ref_seq_uid_col in list(vat.post_prof_assignment_rel_abund_df):
-                        rel_abunds_of_ref_seq = vat.post_prof_assignment_rel_abund_df.loc[:,ref_seq_uid_col]
-                        x_grid = np.linspace(min(rel_abunds_of_ref_seq) - 1, max(rel_abunds_of_ref_seq) + 1, 2000)
-                        kde = gaussian_kde(rel_abunds_of_ref_seq)
-                        pdf = kde.evaluate(x_grid)
-                        c = list((np.diff(np.sign(np.diff(pdf))) < 0).nonzero()[0] + 1)
-                        modes = len(c)
-                        if modes == 2:
-                            # Must be sufficient separation between the peaks in x axis
-                            x_diff_valid = False
-                            if x_grid[c[1]] - x_grid[c[0]] > 0.7:
-                                x_diff_valid = True
-                            # plotHists(pdf, x_grid, listOfRatios, listOfTypesToAnalyse[k].name)
-                            # Must also be sufficient diff between minima y and small peak y
-                            # This represents the x spread and overlap of the two peaks
-                            d = list((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1)  # max and min indices
+                    for ref_seq_uid_col in list(self.current_vat.post_prof_assignment_rel_abund_df):
+                        self._assess_if_div_multimodal(ref_seq_uid_col)
 
-                            if min([pdf[d[0]], pdf[d[2]]]) == 0:
-                                x_diff_valid = False
-                            else:
-                                if pdf[d[1]] / min([pdf[d[0]], pdf[d[2]]]) > 0.85:  # Insufficient separation of peaks
-                                    x_diff_valid = False
-                            if x_diff_valid:
-                                # Then we have found modes that are sufficiently separated.
-                                min_x = x_grid[list(((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1))[1]]
-                                for vcc_uid in vat.post_prof_assignment_rel_abund_df.index.tolist():
-                                    if vat.post_prof_assignment_rel_abund_df.at[vcc_uid, ref_seq_uid_col] < min_x:
-                                        self.list_of_vcc_one.append(vcc_uid)
-                                    else:
-                                        self.list_of_vccs_two.append(vcc_uid)
-                                    #TODO you are here.
-                                # if less than mix_x add to list one, else list two
-                                # if there are more than 3 ccs in each of the groups
-                                # create new virtual types. - This will be slightly different from the previous init
-                                # as we will need to create the post-assignment df and populate the list_of_clade_collections found in profile assignment.
-                                # delete the old virtual type
-                                # set restart to true
-                                # No need to update the CladeCollection dictionary of type abundances.
+        def _assess_if_div_multimodal(self, ref_seq_uid_col):
+            c, modes, pdf, x_grid = self._find_modes_of_abundances(ref_seq_uid_col)
+            if modes == 2:
+                x_diff_valid = self._assess_if_modes_sufficiently_separated(c, pdf, x_grid)
+                if x_diff_valid:
+                    self._assign_vccs_to_modes(pdf, ref_seq_uid_col, x_grid)
+
+                    if self._sufficient_support_of_each_mode():
+                        self._split_vat_into_two_new_vats()
+
+        def _assess_if_modes_sufficiently_separated(self, c, pdf, x_grid):
+            # Must be sufficient separation between the peaks in x axis
+            x_diff_valid = False
+            if x_grid[c[1]] - x_grid[c[0]] > 0.7:
+                x_diff_valid = True
+            # plotHists(pdf, x_grid, listOfRatios, listOfTypesToAnalyse[k].name)
+            # Must also be sufficient diff between minima y and small peak y
+            # This represents the x spread and overlap of the two peaks
+            d = list((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1)  # max and min indices
+            if min([pdf[d[0]], pdf[d[2]]]) == 0:
+                x_diff_valid = False
+            else:
+                if pdf[d[1]] / min([pdf[d[0]], pdf[d[2]]]) > 0.85:  # Insufficient separation of peaks
+                    x_diff_valid = False
+            return x_diff_valid
+
+        def _assign_vccs_to_modes(self, pdf, ref_seq_uid_col, x_grid):
+            # Then we have found modes that are sufficiently separated.
+            min_x = x_grid[list(((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1))[1]]
+            for vcc_uid in self.current_vat.post_prof_assignment_rel_abund_df.index.tolist():
+                if self.current_vat.post_prof_assignment_rel_abund_df.at[
+                    vcc_uid, ref_seq_uid_col] < min_x:
+                    self.list_of_vcc_uids_one.append(vcc_uid)
+                else:
+                    self.list_of_vcc_uids_two.append(vcc_uid)
+
+        def _sufficient_support_of_each_mode(self):
+            return len(self.list_of_vcc_uids_one) >= 3 and len(self.list_of_vcc_uids_two) >= 3
+
+        def _split_vat_into_two_new_vats(self):
+            print('MultiModalDetection: Splitting ')
+            list_of_vcc_objs_one = [
+                vcc for vcc in self.current_vat.clade_collection_obj_set_profile_assignment if
+                vcc.id in self.list_of_vcc_uids_one]
+            self.sp_data_analysis.virtual_object_manager.vat_manager. \
+                make_vat_post_profile_assignment(
+                clade_collection_obj_list=list_of_vcc_objs_one,
+                ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
+            list_of_vcc_objs_two = [
+                vcc for vcc in self.current_vat.clade_collection_obj_set_profile_assignment if
+                vcc.id in self.list_of_vcc_uids_one]
+            self.sp_data_analysis.virtual_object_manager.vat_manager. \
+                make_vat_post_profile_assignment(
+                clade_collection_obj_list=list_of_vcc_objs_two,
+                ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
+            self.sp_data_analysis.virtual_object_manager.vat_manager. \
+                delete_virtual_analysis_type(self.current_vat)
+            self.restart = True
+
+        def _find_modes_of_abundances(self, ref_seq_uid_col):
+            rel_abunds_of_ref_seq = self.current_vat.post_prof_assignment_rel_abund_df.loc[
+                                    :, ref_seq_uid_col]
+            x_grid = np.linspace(min(rel_abunds_of_ref_seq) - 1, max(rel_abunds_of_ref_seq) + 1, 2000)
+            kde = gaussian_kde(rel_abunds_of_ref_seq)
+            pdf = kde.evaluate(x_grid)
+            c = list((np.diff(np.sign(np.diff(pdf))) < 0).nonzero()[0] + 1)
+            modes = len(c)
+            return c, modes, pdf, x_grid
 
     def reinit_vats_post_profile_assignment(self):
         for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
             self.virtual_object_manager.vat_manager.reinit_vat_post_profile_assignment(
                 vat_to_reinit=vat, new_clade_collection_obj_set=vat.clade_collection_obj_set_profile_assignment)
-
-
-        """TODO
-        Create class to do this
-
-        
-
-        Once we have done the type profile assignment, we will need to do multimodal detection. This will require
-        a couple of new objects to be added to the analysis types.
-
-        self.types_checked_list = []
-        restart = True
-        while restart = True:
-            restart = False
-            For each analysis type:
-                Do this in a class
-                self.vat
-                self.x_diff_valid
-                self.list_of_cc_one
-                self.list_of_cc_two
-                if analysisType.id in self.types_check_list:
-                    continue
-                if len(analysisType.profile) == 1:
-                    add id to done list
-                    continue
-                for ref_seq in df:
-                    get list of the rel abundnces of the refseq in each of the CladeCollections
-                    x_grid = np.linspace(min(list_of_ratios) - 1, max(list_of_ratios) + 1, 2000)
-                    kde = gaussian_kde(list_of_ratios)
-                    pdf = kde.evaluate(x_grid)
-                    c = list((np.diff(np.sign(np.diff(pdf))) < 0).nonzero()[0] + 1)
-                    modes = len(c)
-                    if modes == 2:
-                        # Must be sufficient separation between the peaks in x axis
-                        x_diff_valid = False
-                        if x_grid[c[1]] - x_grid[c[0]] > 0.7:
-                            x_diff_valid = True
-                        # plotHists(pdf, x_grid, listOfRatios, listOfTypesToAnalyse[k].name)
-                        # Must also be sufficient diff between minima y and small peak y
-                        # This represents the x spread and overlap of the two peaks
-                        d = list((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1)  # max and min indices
-
-                        if min([pdf[d[0]], pdf[d[2]]]) == 0:
-                            x_diff_valid = False
-                        else:
-                            if pdf[d[1]] / min([pdf[d[0]], pdf[d[2]]]) > 0.85:  # Insufficient separation of peaks
-                                x_diff_valid = False
-
-                        if x_diff_valid:
-                            # Then we have found modes that are sufficiently separated.
-                            min_x = x_grid[list(((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1))[1]]
-                            #for each cc of the df
-                                #if less than mix_x add to list one, else list two
-                            #if there are more than 3 ccs in each of the groups
-                                #create new virtual types. - This will be slightly different from the previous init
-                                #as we will need to create the post-assignment df and populate the list_of_clade_collections found in profile assignment.
-                                #delete the old virtual type
-                                #set restart to true
-                                #No need to update the CladeCollection dictionary of type abundances.
-
-
-
-
-        """
 
 
 
