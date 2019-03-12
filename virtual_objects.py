@@ -131,9 +131,6 @@ class VirutalAnalysisTypeInit:
         self.vat_manager = parent_vat_manager
 
     def init_vat_post_profile_assignment(self):
-        # todo implement as below but using the other clade collection list and populating the other df.
-        # create and populate the relative_seq_abund_profile_discovery_df
-        # Let's see if everything we need is here.
         self._make_rel_abund_dfs_post_prof_assignment()
 
         self._generate_maj_ref_seq_set_and_infer_codom(self.vat.post_prof_assignment_rel_abund_df)
@@ -319,19 +316,8 @@ class VirtualAnalysisTypeManager():
 
         return new_vat
 
-    def reinit_vat_post_profile_assignment(self, vat_to_reinit, new_clade_collection_obj_set):
-        recreated_vat = self.VirtualAnalysisType(
-            clade_collection_obj_list_post_prof_assignment=new_clade_collection_obj_set,
-            ref_seq_obj_list=vat_to_reinit.footprint_as_ref_seq_objs_set,
-            id=vat_to_reinit.id)
-
-        vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=recreated_vat)
-
-        reinstantiated_vat = vat_init.init_vat_post_profile_assignment()
-
-        self.vat_dict[reinstantiated_vat.id] = reinstantiated_vat
-
     def make_vat_pre_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list):
+
         new_vat = self.VirtualAnalysisType(
             clade_collection_obj_list_pre_prof_assignment=clade_collection_obj_list,
             ref_seq_obj_list=ref_seq_obj_list,
@@ -344,6 +330,23 @@ class VirtualAnalysisTypeManager():
         self.next_uid += 1
 
         return new_vat
+
+    def reinit_vat_post_profile_assignment(self, vat_to_reinit, new_clade_collection_obj_set):
+
+        vat_to_reinit.clade_collection_obj_set_profile_assignment = set(new_clade_collection_obj_set)
+
+        vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=vat_to_reinit)
+
+        vat_init.init_vat_post_profile_assignment()
+
+    def reinit_vat_pre_profile_assignment(self, vat_to_reinit, new_clade_collection_obj_set):
+        vat_to_reinit.clade_collection_obj_set_profile_discovery = set(new_clade_collection_obj_set)
+
+        vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=vat_to_reinit)
+
+        vat_init.init_vat_pre_profile_assignment()
+
+
 
     def delete_virtual_analysis_type(self, virtual_analysis_type):
         try:
@@ -374,17 +377,7 @@ class VirtualAnalysisTypeManager():
             vat_to_reinit=vat_to_remove_ccs_from,
             new_clade_collection_obj_set=new_clade_collection_obj_set_profile_discovery)
 
-    def reinit_vat_pre_profile_assignment(self, vat_to_reinit, new_clade_collection_obj_set):
-        recreated_vat = self.VirtualAnalysisType(
-            clade_collection_obj_list_pre_prof_assignment=new_clade_collection_obj_set,
-            ref_seq_obj_list=vat_to_reinit.footprint_as_ref_seq_objs_set,
-            id=vat_to_reinit.id)
 
-        vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=recreated_vat)
-
-        reinstantiated_vat = vat_init.init_vat_pre_profile_assignment()
-
-        self.vat_dict[reinstantiated_vat.id] = reinstantiated_vat
 
     class VirtualAnalysisType():
         """A RAM stored representation of the AnalysisType object. Instances of these objects do not yet
