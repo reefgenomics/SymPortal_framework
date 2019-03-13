@@ -12,6 +12,11 @@ import virtual_objects
 import time
 import numpy as np
 from scipy.stats import gaussian_kde
+import symportal_utils
+import general
+import string
+import re
+import sp_config
 
 class SPDataAnalysis:
     def __init__(self, workflow_manager_parent, data_analysis_obj):
@@ -50,12 +55,223 @@ class SPDataAnalysis:
         #             vcc_with_multiple_types_that_share_div.append(vcc)
 
         self._check_for_artefacts()
-        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_artefact_assess.p'), 'wb') as f:
-             pickle.dump(self, f)
-        self._profile_assignment()
-
         print('Type discovery complete')
 
+        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_artefact_assess.p'), 'wb') as f:
+             pickle.dump(self, f)
+
+        self._profile_assignment()
+
+        self._name_divs()
+
+        self._associate_species_designations()
+
+    def _associate_species_designations(self):
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            species_association = self.SpeciesAssociation(vat=vat)
+            species_association.assign_species()
+
+    class SpeciesAssociation:
+        def __init__(self, vat):
+            self.vat = vat
+            self.assigned_species = []
+            self.maj_seq_names = [rs.name for rs in self.vat.majority_reference_sequence_obj_set]
+            self.all_seq_names = [rs.name for rs in self.vat.footprint_as_ref_seq_objs_set]
+
+        def assign_species(self):
+            """For each analysis type check and assign the associated species"""
+
+            self._designate_species()
+
+            self._associate_species_info_to_vat()
+
+        def _designate_species(self):
+            if self.vat.clade == 'A':
+                self._clade_a_associations()
+            elif self.vat.clade == 'B':
+                self._clade_b_associations()
+            elif self.vat.clade == 'C':
+                self._clade_c_associations()
+            elif self.vat.clade == 'D':
+                self._clade_d_associations()
+            elif self.vat.clade == 'E':
+                self._clade_e_associations()
+            elif self.vat.clade == 'F':
+                self._clade_f_associations()
+            elif self.vat.clade == 'G':
+                pass
+            elif self.vat.clade == 'H':
+                pass
+            elif self.vat.clade == 'I':
+                pass
+
+        def _associate_species_info_to_vat(self):
+            if not self.assigned_species:  # If no suggested species have been associated
+                self.vat.species = 'None'
+            else:
+                self.vat.species = ','.join(self.assigned_species)
+
+        def _clade_f_associations(self):
+            if 'F1' in self.maj_seq_names:
+                self.assigned_species.append('S. kawagutii')
+
+        def _clade_e_associations(self):
+            self.assigned_species.append('S. voratum')
+
+        def _clade_d_associations(self):
+            # I have decided that we are not going to take into account the abundance of non-maj intragenomic
+            # defining sequences. e.g. D6 when calling associated species.
+            # This is because there can be a large difference sample to sample in the abundance of the sequences
+            # Rather we will assign both clade D species if the required sequences are present
+            # We are also giving the researcher the average abundances and SDs for each output type
+            if 'D1' in self.maj_seq_names:
+                if 'D4' not in self.all_seq_names:
+                    self.assigned_species.append('S. glynnii')
+                else:  # There is a significant abundance of D4
+                    if 'D6' in self.all_seq_names:
+                        # Then there is a significant amount of D6
+                        self.assigned_species.extend(['S. glynnii', 'S. trenchii'])
+                    else:
+                        # THere is D1, D4 but not D6
+                        self.assigned_species.append('S. trenchii')
+            if 'D8' in self.maj_seq_names or 'D12' in self.maj_seq_names or 'D13' in self.maj_seq_names:
+                self.assigned_species.append('S. eurythalpos')
+            if 'D15' in self.maj_seq_names:
+                self.assigned_species.append('S. boreum')
+
+        def _clade_c_associations(self):
+            if 'C1' in self.maj_seq_names:
+                self.assigned_species.append('S. goreaui')
+            if 'C3' in self.all_seq_names and 'C3gulf' in self.all_seq_names:
+                self.assigned_species.append('S. thermophilum')
+
+        def _clade_b_associations(self):
+            if 'B1' in self.maj_seq_names:
+                self.assigned_species.extend(['S. minutum', 'S. antillogorgium', 'S. pseudominutum'])
+            if 'B2' in self.maj_seq_names:
+                self.assigned_species.append('S. psygmophilum')
+            if 'B4' in self.maj_seq_names:
+                self.assigned_species.append('S. muscatinei')
+            if 'B7' in self.maj_seq_names or 'B13' in self.maj_seq_names:
+                self.assigned_species.append('S. endomadracis')
+            if 'B2a' in self.maj_seq_names:
+                self.assigned_species.append('S. aenigmaticum')
+
+        def _clade_a_associations(self):
+            if 'A1' in self.maj_seq_names:
+                self.assigned_species.append('S. microadriaticum')
+            if 'A2' in self.maj_seq_names:
+                self.assigned_species.append('S. pilosum')
+            if 'A3' in self.maj_seq_names:
+                self.assigned_species.extend(['S. natans', 'S. tridacnidorum'])
+            if 'A4' in self.maj_seq_names:
+                self.assigned_species.append('S. linucheae')
+
+    def _name_divs(self):
+        if sp_config.system_type == 'remote':
+            print('Naming unamed DIVs')
+            div_namer = self.DIVNamer(parent_sp_data_analysis=self)
+            div_namer.name_unamed_div_seqs()
+            print('DIV naming complete')
+        else:
+            print('Automatic sequence name generation is currently disabled for local instances of SymPortal.\n'
+                  'This is to prevent naming conlifcts between the remote and the '
+                  'local instances of SymPortal from arising\n')
+
+    class DIVNamer:
+        def __init__(self, parent_sp_data_analysis):
+            self.sp_data_analysis = parent_sp_data_analysis
+            self.query_fasta_as_list = []
+            self.query_fasta_path = os.path.join(
+                self.sp_data_analysis.workflow_manager.symportal_root_directory,
+                'symbiodiniumDB', 'unnamedRefSeqs.fasta')
+            self.db_fasta_as_list = []
+            self.db_fasta_path = os.path.join(
+                self.sp_data_analysis.workflow_manager.symportal_root_directory,
+                'symbiodiniumDB', 'named_seqs_in_SP_remote_db.fa')
+            self.blast_output_path = os.path.join(
+                self.sp_data_analysis.workflow_manager.symportal_root_directory,
+                'symbiodiniumDB', 'blast.out')
+            self.set_of_unamed_divs = set()
+            self.blast_analysis_object = symportal_utils.BlastnAnalysis(
+                input_file_path=self.query_fasta_path, output_file_path=self.blast_output_path,
+                db_path=self.db_fasta_path, output_format_string='6 qseqid sseqid evalue pident qcovs', num_threads=20)
+            self.blast_output_dict = None
+            self.list_of_sequence_names_that_already_exist = self._set_exist_seq_names()
+
+        def _set_exist_seq_names(self):
+            list_of_sequence_names_that_already_exist = [ref_seq.name for ref_seq in
+                                                         ReferenceSequence.objects.filter(has_name=True)]
+            list_of_sequence_names_that_already_exist.append('D1a')
+            return list_of_sequence_names_that_already_exist
+
+        def name_unamed_div_seqs(self):
+            """ Generate names for the DIV ReferenceSequences that currently have no names. This will only happen
+            on 'remote' type systems.
+            """
+
+            for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
+                self.set_of_unamed_divs.update([rs for rs in vat.footprint_as_ref_seq_objs_set if not rs.has_name])
+
+            if self.set_of_unamed_divs:
+
+                self._create_and_write_query_fasta()
+
+                self._create_and_write_db_fasta()
+
+                self.blast_analysis_object.make_db(title_for_db='name_ref_seqs')
+
+                self.blast_analysis_object.execute_blastn_analysis()
+
+                self.blast_output_dict = {blast_line.split('\t')[0]:blast_line.split('\t')[1:] for blast_line in
+                                          self.blast_analysis_object.return_blast_output_as_list()}
+
+                self._generate_and_assign_new_names()
+
+                self._regenerate_vat_names()
+
+        def _regenerate_vat_names(self):
+            """Some of the DIVs were not names and so their ID was being used in the vat name.
+            Now that all DIVs have names, use these names."""
+            for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
+                vat.generate_name()
+
+        def _generate_and_assign_new_names(self):
+            # Now assign names to those that aren't exact matches
+            for no_name_ref_seq_id, output_items in self.blast_output_dict.items():
+                ref_seq_in_question = ReferenceSequence.objects.get(id=int(no_name_ref_seq_id))
+                if not ref_seq_in_question.has_name:
+                    new_name = self._create_new_reference_sequence_name(output_items[1])
+                    ref_seq_in_question.name = new_name
+                    ref_seq_in_question.has_name = True
+                    ref_seq_in_question.save()
+                    self.list_of_sequence_names_that_already_exist.append(new_name)
+
+        def _create_new_reference_sequence_name(self, closest_match):
+            match_object = re.match("^[A-I]{1}[0-9]{1,3}", closest_match)
+            base_name = match_object.group(0)
+
+            #https://stackoverflow.com/questions/23686398/iterate-a-to-zzz-in-python
+            for x in range(1, 4):
+                for combo in itertools.product(string.ascii_lowercase, repeat=x):
+                    alpha = ''.join(combo)
+                    if f'{base_name}{alpha}' not in self.list_of_sequence_names_that_already_exist:
+                        return f'{base_name}{alpha}'
+            return False
+
+        def _create_and_write_db_fasta(self):
+            # create the fasta that will be the database to blast against
+            for rs in ReferenceSequence.objects.filter(has_name=True):
+                self.db_fasta_as_list.extend(['>{}'.format(rs.name), rs.sequence])
+            general.write_list_to_destination(destination=self.db_fasta_as_list,
+                                              list_to_write=self.db_fasta_path)
+
+        def _create_and_write_query_fasta(self):
+            # create the fasta as a file that will be queried in the blast
+            for rs in self.set_of_unamed_divs:
+                self.query_fasta_as_list.extend([f'>{rs.id}', rs.sequence])
+            general.write_list_to_destination(
+                destination=self.query_fasta_path, list_to_write=self.query_fasta_as_list)
 
     class ProfileAssigner:
         """Responsible for searching a given VirtualCladeCollection for VirtualAnalysisTypes and associating
@@ -145,7 +361,6 @@ class SPDataAnalysis:
                     if ref_seq_req_abund_obj.max_abund <= rel_abund_of_div_in_vat_seqs <= ref_seq_req_abund_obj.min_abund:
                         return False
 
-
                 self.potential_match_object = CCToATMatchInfoHolder(
                     vat=vat, vcc=self.vcc, rel_abund_of_at_in_cc=sum(total_seq_rel_abund_for_cc))
                 return True
@@ -159,6 +374,7 @@ class SPDataAnalysis:
                     return False
 
     def _profile_assignment(self):
+        print('\nBeginning profile assignment')
         for virtual_clade_collection in self.virtual_object_manager.cc_manager.clade_collection_instances_dict.values():
             profile_assigner = self.ProfileAssigner(virtual_clade_collection = virtual_clade_collection,
                 parent_sp_data_analysis = self)
@@ -168,11 +384,11 @@ class SPDataAnalysis:
         self.reinit_vats_post_profile_assignment()
 
         self.multimodal_detection()
+        print('Profile Assignment Complete')
 
     def multimodal_detection(self):
         mmd = self.MultiModalDetection(parent_sp_data_analysis=self)
         mmd.run_multimodal_detection()
-
 
     class MultiModalDetection:
         def __init__(self, parent_sp_data_analysis):

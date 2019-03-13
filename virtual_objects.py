@@ -135,7 +135,7 @@ class VirutalAnalysisTypeInit:
 
         self._generate_maj_ref_seq_set_and_infer_codom(self.vat.post_prof_assignment_rel_abund_df)
 
-        self._generate_name(self.vat.relative_seq_abund_profile_assignment_df)
+        self._generate_name(self.vat.post_prof_assignment_rel_abund_df)
 
     def _make_rel_abund_dfs_post_prof_assignment(self):
         at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
@@ -201,6 +201,9 @@ class VirutalAnalysisTypeInit:
             self.vat.co_dominant = True
         else:
             self.vat.co_dominant = False
+        self.majority_reference_sequence_obj_set = set(
+            [rs for rs in self.vat.footprint_as_ref_seq_objs_set if
+             rs.id in self.vat.majority_reference_sequence_uid_set])
 
     def _make_rel_abund_dfs(self):
         at_df = self._create_rel_seq_abund_profile_disco_df()
@@ -269,7 +272,7 @@ class VirutalAnalysisTypeInit:
             # Start the name with the co_dominant intras in order of abundance.
             # Then append the nonco_dominant intras in order of abundance
             ordered_list_of_co_dom_ref_seq_obj = []
-            for ref_seq_id in list(self.vat.post_prof_assignment_rel_abund_df):
+            for ref_seq_id in list(at_df):
                 for ref_seq in list_of_maj_ref_seq:
                     if ref_seq.id == ref_seq_id:
                         ordered_list_of_co_dom_ref_seq_obj.append(ref_seq)
@@ -277,7 +280,7 @@ class VirutalAnalysisTypeInit:
             co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
 
             list_of_remaining_ref_seq_objs = []
-            for ref_seq_id in list(self.vat.post_prof_assignment_rel_abund_df):
+            for ref_seq_id in list(at_df):
                 for ref_seq in self.vat.footprint_as_ref_seq_objs_set:
                     if ref_seq not in ordered_list_of_co_dom_ref_seq_obj and ref_seq.id == ref_seq_id:
                         list_of_remaining_ref_seq_objs.append(ref_seq)
@@ -287,7 +290,7 @@ class VirutalAnalysisTypeInit:
             self.vat.name = co_dom_name_part
         else:
             ordered_list_of_ref_seqs = []
-            for ref_seq_id in list(self.vat.post_prof_assignment_rel_abund_df):
+            for ref_seq_id in list(at_df):
                 for ref_seq in self.vat.footprint_as_ref_seq_objs_set:
                     if ref_seq.id == ref_seq_id:
                         ordered_list_of_ref_seqs.append(ref_seq)
@@ -436,12 +439,45 @@ class VirtualAnalysisTypeManager():
             self.non_artefact_ref_seq_uid_set = set()
             self.co_dominant = None
             self.majority_reference_sequence_uid_set = set()
+            self.majority_reference_sequence_obj_set = set()
             self.name = None
 
             # key = ref seq id, val=RefSeqReqAbund object
             self.prof_assignment_required_rel_abund_dict = {}
 
+            # will be used to hold the species information associated at the end of the analysis
+            self.species = None
 
+        def generate_name(self, at_df):
+            if self.co_dominant:
+                list_of_maj_ref_seq = [rs for rs in self.footprint_as_ref_seq_objs_set if
+                                       rs.id in self.majority_reference_sequence_uid_set]
+                # Start the name with the co_dominant intras in order of abundance.
+                # Then append the nonco_dominant intras in order of abundance
+                ordered_list_of_co_dom_ref_seq_obj = []
+                for ref_seq_id in list(at_df):
+                    for ref_seq in list_of_maj_ref_seq:
+                        if ref_seq.id == ref_seq_id:
+                            ordered_list_of_co_dom_ref_seq_obj.append(ref_seq)
+
+                co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
+
+                list_of_remaining_ref_seq_objs = []
+                for ref_seq_id in list(at_df):
+                    for ref_seq in self.footprint_as_ref_seq_objs_set:
+                        if ref_seq not in ordered_list_of_co_dom_ref_seq_obj and ref_seq.id == ref_seq_id:
+                            list_of_remaining_ref_seq_objs.append(ref_seq)
+
+                if list_of_remaining_ref_seq_objs:
+                    co_dom_name_part += '-{}'.format('-'.join([rs.name for rs in list_of_remaining_ref_seq_objs]))
+                self.name = co_dom_name_part
+            else:
+                ordered_list_of_ref_seqs = []
+                for ref_seq_id in list(at_df):
+                    for ref_seq in self.vat.footprint_as_ref_seq_objs_set:
+                        if ref_seq.id == ref_seq_id:
+                            ordered_list_of_ref_seqs.append(ref_seq)
+                self.name = '-'.join(rs.name for rs in ordered_list_of_ref_seqs)
 
 
         def __str__(self):
