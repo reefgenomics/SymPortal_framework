@@ -269,7 +269,7 @@ class VirutalAnalysisTypeInit:
             # Start the name with the co_dominant intras in order of abundance.
             # Then append the nonco_dominant intras in order of abundance
             ordered_list_of_co_dom_ref_seq_obj = []
-            for ref_seq_id in list(self.vat.relative_seq_abund_profile_assignment_df):
+            for ref_seq_id in list(self.vat.post_prof_assignment_rel_abund_df):
                 for ref_seq in list_of_maj_ref_seq:
                     if ref_seq.id == ref_seq_id:
                         ordered_list_of_co_dom_ref_seq_obj.append(ref_seq)
@@ -277,7 +277,7 @@ class VirutalAnalysisTypeInit:
             co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
 
             list_of_remaining_ref_seq_objs = []
-            for ref_seq_id in list(self.vat.relative_seq_abund_profile_assignment_df):
+            for ref_seq_id in list(self.vat.post_prof_assignment_rel_abund_df):
                 for ref_seq in self.vat.footprint_as_ref_seq_objs_set:
                     if ref_seq not in ordered_list_of_co_dom_ref_seq_obj and ref_seq.id == ref_seq_id:
                         list_of_remaining_ref_seq_objs.append(ref_seq)
@@ -287,7 +287,7 @@ class VirutalAnalysisTypeInit:
             self.vat.name = co_dom_name_part
         else:
             ordered_list_of_ref_seqs = []
-            for ref_seq_id in list(self.vat.relative_seq_abund_profile_assignment_df):
+            for ref_seq_id in list(self.vat.post_prof_assignment_rel_abund_df):
                 for ref_seq in self.vat.footprint_as_ref_seq_objs_set:
                     if ref_seq.id == ref_seq_id:
                         ordered_list_of_ref_seqs.append(ref_seq)
@@ -405,14 +405,14 @@ class VirtualAnalysisTypeManager():
             if clade_collection_obj_list_pre_prof_assignment is not None:
                 self.clade_collection_obj_set_profile_discovery = set(clade_collection_obj_list_pre_prof_assignment)
                 self.clade_collection_obj_set_profile_assignment = set()
+                self.clade = list(clade_collection_obj_list_pre_prof_assignment)[0].clade
             else:
                 self.clade_collection_obj_set_profile_discovery = set()
                 self.clade_collection_obj_set_profile_assignment = set(clade_collection_obj_list_post_prof_assignment)
+                self.clade = list(clade_collection_obj_list_post_prof_assignment)[0].clade
 
             self.footprint_as_ref_seq_objs_set = ref_seq_obj_list
             self.ref_seq_uids_set = set([rs.id for rs in self.footprint_as_ref_seq_objs_set])
-            self.clade = list(clade_collection_obj_list_pre_prof_assignment)[0].clade
-
             # NB in the type discovery part the DataAnalysis we will be concerned with relative sequence abundances
             # as a proportion of all of the sequences found within a CladeCollection. But, as we move into ProfileAssignment
             # we will be concerned with the relative abundances of the sequences as a proportion of only those sequences

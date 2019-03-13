@@ -66,9 +66,10 @@ class SPDataAnalysis:
             self.vat_match_object_list = []
 
             # transient objects updated during vat checks
-            self.current_match_object = None
+            self.potential_match_object = None
 
         def assign_profiles(self):
+            print(f'\nAssigning ITS2 type profiles to {self.vcc}:')
             list_of_vats_to_search = self._get_list_of_vats_to_search()
 
             self._find_vats_in_vcc(list_of_vats_to_search)
@@ -77,7 +78,8 @@ class SPDataAnalysis:
 
         def _associate_vcc_to_vats(self):
             for vat_match in self.vat_match_object_list:
-                vat_match.vat.clade_collection_obj_set_profile_assignment.append(vat_match.vcc)
+                print(f'Assigning {vat_match.at.name}')
+                vat_match.at.clade_collection_obj_set_profile_assignment.add(vat_match.cc)
 
         def _find_vats_in_vcc(self, list_of_vats_to_search):
             for vat in list_of_vats_to_search:
@@ -85,7 +87,7 @@ class SPDataAnalysis:
                     if self._vat_has_divs_in_common_with_other_vats(vat=vat):
                         self._add_new_vat_to_list_if_highest_rel_abund_representative()
                     else:
-                        self.vat_match_object_list.append(self.current_match_object)
+                        self.vat_match_object_list.append(self.potential_match_object)
 
         def _get_list_of_vats_to_search(self):
             return [
@@ -98,18 +100,22 @@ class SPDataAnalysis:
             of the other vats that have returned a match so far. Else return False."""
             new_match_list = []
             for match_obj in self.vat_match_object_list:
-                if self._vats_have_divs_in_common(vat_one=match_obj.vat, vat_two=self.current_match_object.vat):
-                    if match_obj.rel_abund_of_at_in_cc > self.current_match_object.rel_abund_of_at_in_cc:
+                if self._vats_have_divs_in_common(vat_one=match_obj.at, vat_two=self.potential_match_object.at):
+                    if match_obj.rel_abund_of_at_in_cc > self.potential_match_object.rel_abund_of_at_in_cc:
                         new_match_list.append(match_obj)
                     else:
-                        new_match_list.append(self.current_match_object)
+                        new_match_list.append(self.potential_match_object)
             self.vat_match_object_list = new_match_list
 
         def _vats_have_divs_in_common(self, vat_one, vat_two):
             return vat_one.ref_seq_uids_set.intersection(vat_two.ref_seq_uids_set)
 
         def _vat_has_divs_in_common_with_other_vats(self, vat):
-            return vat.ref_seq_uids_set.intersection(*[vat_match_obj.vat.ref_seq_uids_set for vat_match_obj in self.vat_match_object_list])
+            if self.vat_match_object_list:
+                divs_in_common_with_other_matched_vats = vat.ref_seq_uids_set.intersection(*[vat_match_obj.at.ref_seq_uids_set for vat_match_obj in self.vat_match_object_list])
+                return divs_in_common_with_other_matched_vats
+            else:
+                return False
 
         def _search_for_vat_in_vcc(self, vat):
             """This will check whether the DIV relative abundance requirements of
@@ -140,13 +146,13 @@ class SPDataAnalysis:
                         return False
 
 
-                self.current_match_object = CCToATMatchInfoHolder(
+                self.potential_match_object = CCToATMatchInfoHolder(
                     vat=vat, vcc=self.vcc, rel_abund_of_at_in_cc=sum(total_seq_rel_abund_for_cc))
                 return True
             else:
                 abund_of_vat_in_vcc = vcc_rel_abund_dict[list(vat.ref_seq_uids_set)[0]]
                 if abund_of_vat_in_vcc > 0.05:
-                    self.current_match_object = CCToATMatchInfoHolder(
+                    self.potential_match_object = CCToATMatchInfoHolder(
                         vat=vat, vcc=self.vcc, rel_abund_of_at_in_cc=abund_of_vat_in_vcc)
                     return True
                 else:
@@ -158,10 +164,10 @@ class SPDataAnalysis:
                 parent_sp_data_analysis = self)
             profile_assigner.assign_profiles()
 
-            # Reinit the VirtualAnalysisTypes to populate the post-profile assignment objects
-            self.reinit_vats_post_profile_assignment()
+        # Reinit the VirtualAnalysisTypes to populate the post-profile assignment objects
+        self.reinit_vats_post_profile_assignment()
 
-            self.multimodal_detection()
+        self.multimodal_detection()
 
     def multimodal_detection(self):
         mmd = self.MultiModalDetection(parent_sp_data_analysis=self)
@@ -181,18 +187,27 @@ class SPDataAnalysis:
             self.list_of_vcc_uids_two = []
 
         def run_multimodal_detection(self):
-            print('Starting MultiModalDetection')
+            print('\nStarting MultiModalDetection')
             while self.restart:
                 self.restart = False
                 for vat_uid in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.keys():
                     self.current_vat = self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict[vat_uid]
+                    sys.stdout.write(f'\rChecking {self.current_vat.name}')
                     if self.current_vat.id in self.vat_uids_checked:
                         continue
+                    else:
+                        self.vat_uids_checked.append(self.current_vat.id)
                     if len(self.current_vat.ref_seq_uids_set) == 1:
                         self.vat_uids_checked.append(self.current_vat.id)
                         continue
+                    if len(self.current_vat.clade_collection_obj_set_profile_assignment) < 6:
+                        self.vat_uids_checked.append(self.current_vat.id)
+                        continue
                     for ref_seq_uid_col in list(self.current_vat.post_prof_assignment_rel_abund_df):
-                        self._assess_if_div_multimodal(ref_seq_uid_col)
+                        if not self.restart:
+                            self._assess_if_div_multimodal(ref_seq_uid_col)
+                    if self.restart:
+                        break
 
         def _assess_if_div_multimodal(self, ref_seq_uid_col):
             c, modes, pdf, x_grid = self._find_modes_of_abundances(ref_seq_uid_col)
@@ -234,28 +249,31 @@ class SPDataAnalysis:
             return len(self.list_of_vcc_uids_one) >= 3 and len(self.list_of_vcc_uids_two) >= 3
 
         def _split_vat_into_two_new_vats(self):
-            print('MultiModalDetection: Splitting ')
+            print(f'\n\nMultiModalDetection: Splitting {self.current_vat.name}')
             list_of_vcc_objs_one = [
                 vcc for vcc in self.current_vat.clade_collection_obj_set_profile_assignment if
                 vcc.id in self.list_of_vcc_uids_one]
-            self.sp_data_analysis.virtual_object_manager.vat_manager. \
+            resultant_type_one = self.sp_data_analysis.virtual_object_manager.vat_manager. \
                 make_vat_post_profile_assignment(
                 clade_collection_obj_list=list_of_vcc_objs_one,
                 ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
+            print(f'Created {resultant_type_one.name}')
             list_of_vcc_objs_two = [
                 vcc for vcc in self.current_vat.clade_collection_obj_set_profile_assignment if
                 vcc.id in self.list_of_vcc_uids_one]
-            self.sp_data_analysis.virtual_object_manager.vat_manager. \
+            resultant_type_two = self.sp_data_analysis.virtual_object_manager.vat_manager. \
                 make_vat_post_profile_assignment(
                 clade_collection_obj_list=list_of_vcc_objs_two,
                 ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
+            print(f'Created {resultant_type_two.name}')
+            print(f'Destroyed {self.current_vat.name}\n')
             self.sp_data_analysis.virtual_object_manager.vat_manager. \
                 delete_virtual_analysis_type(self.current_vat)
             self.restart = True
 
         def _find_modes_of_abundances(self, ref_seq_uid_col):
             rel_abunds_of_ref_seq = self.current_vat.post_prof_assignment_rel_abund_df.loc[
-                                    :, ref_seq_uid_col]
+                                    :, ref_seq_uid_col].values.tolist()
             x_grid = np.linspace(min(rel_abunds_of_ref_seq) - 1, max(rel_abunds_of_ref_seq) + 1, 2000)
             kde = gaussian_kde(rel_abunds_of_ref_seq)
             pdf = kde.evaluate(x_grid)
@@ -264,10 +282,12 @@ class SPDataAnalysis:
             return c, modes, pdf, x_grid
 
     def reinit_vats_post_profile_assignment(self):
+        print('\nReinstantiating VirtualAnalysisTypes')
         for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            sys.stdout.write(f'\r{vat.name}')
             self.virtual_object_manager.vat_manager.reinit_vat_post_profile_assignment(
                 vat_to_reinit=vat, new_clade_collection_obj_set=vat.clade_collection_obj_set_profile_assignment)
-
+        print('\nReinstantiation complete')
 
 
     def _associate_vats_to_vccs(self):
