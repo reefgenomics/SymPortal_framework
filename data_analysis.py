@@ -22,7 +22,7 @@ class SPDataAnalysis:
     def __init__(self, workflow_manager_parent, data_analysis_obj):
         self.workflow_manager = workflow_manager_parent
         self.temp_wkd = os.path.join(self.workflow_manager.symportal_root_directory, 'temp')
-        self._setup_temp_wkd()
+        self._del_and_remake_temp_wkd()
         self.data_analysis_obj = data_analysis_obj
         # The abundance that a given DIV must be found at when it has been considered 'unlocked'
         # https://github.com/didillysquat/SymPortal_framework/wiki/The-SymPortal-logic#type-profile-assignment---logic
@@ -36,7 +36,9 @@ class SPDataAnalysis:
         self.clade_footp_dicts_list = [{} for _ in self.clade_list]
         self.list_of_initial_types_after_collapse = None
         self.current_clade = None
-        self.virtual_object_manager = virtual_objects.VirtualObjectManager(parent_sp_data_analysis=self)
+        self.virtual_object_manager = virtual_objects.VirtualObjectManager(
+            within_clade_cutoff=self.workflow_manager.within_clade_cutoff,
+            ccs_of_analysis=self.ccs_of_analysis, num_proc=self.workflow_manager.args.num_proc)
 
     def analyse_data(self):
         print('Beginning profile discovery')
@@ -47,7 +49,7 @@ class SPDataAnalysis:
         self._associate_vats_to_vccs()
 
         # vcc_with_multiple_types_that_share_div = []
-        # for vcc in self.virtual_object_manager.cc_manager.clade_collection_instances_dict.values():
+        # for vcc in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.values():
         #     if len(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items()) > 1:
         #         vats_list = list(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.keys())
         #         shared_ref_seqs = vats_list[0].footprint_as_ref_seq_objs_set.intersection(*[vat.footprint_as_ref_seq_objs_set for vat in vats_list[1:]])
@@ -65,6 +67,15 @@ class SPDataAnalysis:
         self._name_divs()
 
         self._associate_species_designations()
+
+        self._del_and_remake_temp_wkd()
+
+        print('DATA ANALYSIS COMPLETE')
+
+    def _del_and_remake_temp_wkd(self):
+        if os.path.exists(self.temp_wkd):
+            shutil.rmtree(self.temp_wkd)
+        os.makedirs(self.temp_wkd, exist_ok=True)
 
     def _associate_species_designations(self):
         for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
@@ -375,7 +386,7 @@ class SPDataAnalysis:
 
     def _profile_assignment(self):
         print('\nBeginning profile assignment')
-        for virtual_clade_collection in self.virtual_object_manager.cc_manager.clade_collection_instances_dict.values():
+        for virtual_clade_collection in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.values():
             profile_assigner = self.ProfileAssigner(virtual_clade_collection = virtual_clade_collection,
                 parent_sp_data_analysis = self)
             profile_assigner.assign_profiles()
@@ -419,7 +430,7 @@ class SPDataAnalysis:
                     if len(self.current_vat.clade_collection_obj_set_profile_assignment) < 6:
                         self.vat_uids_checked.append(self.current_vat.id)
                         continue
-                    for ref_seq_uid_col in list(self.current_vat.post_prof_assignment_rel_abund_df):
+                    for ref_seq_uid_col in list(self.current_vat.multi_modal_detection_rel_abund_df):
                         if not self.restart:
                             self._assess_if_div_multimodal(ref_seq_uid_col)
                     if self.restart:
@@ -454,8 +465,8 @@ class SPDataAnalysis:
         def _assign_vccs_to_modes(self, pdf, ref_seq_uid_col, x_grid):
             # Then we have found modes that are sufficiently separated.
             min_x = x_grid[list(((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1))[1]]
-            for vcc_uid in self.current_vat.post_prof_assignment_rel_abund_df.index.tolist():
-                if self.current_vat.post_prof_assignment_rel_abund_df.at[
+            for vcc_uid in self.current_vat.multi_modal_detection_rel_abund_df.index.tolist():
+                if self.current_vat.multi_modal_detection_rel_abund_df.at[
                     vcc_uid, ref_seq_uid_col] < min_x:
                     self.list_of_vcc_uids_one.append(vcc_uid)
                 else:
@@ -488,7 +499,7 @@ class SPDataAnalysis:
             self.restart = True
 
         def _find_modes_of_abundances(self, ref_seq_uid_col):
-            rel_abunds_of_ref_seq = self.current_vat.post_prof_assignment_rel_abund_df.loc[
+            rel_abunds_of_ref_seq = self.current_vat.multi_modal_detection_rel_abund_df.loc[
                                     :, ref_seq_uid_col].values.tolist()
             x_grid = np.linspace(min(rel_abunds_of_ref_seq) - 1, max(rel_abunds_of_ref_seq) + 1, 2000)
             kde = gaussian_kde(rel_abunds_of_ref_seq)
@@ -517,7 +528,7 @@ class SPDataAnalysis:
                 clade_collection_to_type_tuple_list.append((cc, vat))
 
         for cc, vat in clade_collection_to_type_tuple_list:
-            virtual_cc = self.virtual_object_manager.cc_manager.clade_collection_instances_dict[cc.id]
+            virtual_cc = self.virtual_object_manager.vcc_manager.clade_collection_instances_dict[cc.id]
             current_type_seq_rel_abund_for_cc = []
             cc_ref_seq_abundance_dict = virtual_cc.ref_seq_id_to_rel_abund_dict
             for ref_seq in vat.footprint_as_ref_seq_objs_set:
@@ -568,7 +579,7 @@ class SPDataAnalysis:
         return clade_fp_dict
 
     def _populate_clade_fp_dicts_list(self):
-        for cc_id, vcc in self.virtual_object_manager.cc_manager.clade_collection_instances_dict.items():
+        for cc_id, vcc in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.items():
             clade_index = self.clade_list.index(vcc.clade)
             if vcc.above_cutoff_ref_seqs_obj_set in self.clade_footp_dicts_list[clade_index]:
                 self.clade_footp_dicts_list[clade_index][vcc.above_cutoff_ref_seqs_obj_set].cc_list.append(vcc)
@@ -578,17 +589,12 @@ class SPDataAnalysis:
                 cc=vcc, maj_dss_seq_list=vcc.ordered_dsss_objs[0])
 
 
-    def _setup_temp_wkd(self):
-        if os.path.exists(self.temp_wkd):
-            shutil.rmtree(self.temp_wkd)
-        os.makedirs(self.temp_wkd, exist_ok=True)
-
 
 class ArtefactAssessor:
     def __init__(self, parent_sp_data_analysis):
         self.sp_data_analysis = parent_sp_data_analysis
         self.list_of_vccs = list(self.sp_data_analysis.virtual_object_manager.\
-            cc_manager.clade_collection_instances_dict.values())
+            vcc_manager.clade_collection_instances_dict.values())
         # key:VirtualAnalysisType.id, value:VirtualAnalysisType
         self.virtual_analysis_type_dict = self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict
         self.analysis_types_of_analysis = list(self.virtual_analysis_type_dict.values())

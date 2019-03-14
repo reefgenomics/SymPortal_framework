@@ -1,18 +1,64 @@
 import pandas as pd
 from multiprocessing import Queue, Manager, Process, current_process
 import sys
-from dbApp.models import DataSetSampleSequence
+from dbApp.models import DataSetSampleSequence, DataSetSample, CladeCollection
 import pickle
 import os
 class VirtualObjectManager():
     """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
-    I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections."""
-    def __init__(self, parent_sp_data_analysis):
-        self.sp_data_analysis = parent_sp_data_analysis
-        self.cc_manager = VirtualCladeCollectionManager(obj_manager=self)
-        # with open(os.path.join(self.sp_data_analysis.workflow_manager.symportal_root_directory, 'tests', 'objects', 'cc_manager.p'), 'rb') as f:
-        #     self.cc_manager = pickle.load(f)
+    I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.
+    #TODO initalise this from either a list of DataSetSample uids or a list of DataSet uids"""
+    def __init__(self, within_clade_cutoff, ccs_of_analysis, num_proc, list_of_data_set_sample_uids=None,
+                 list_of_data_set_uids=None):
+        if list_of_data_set_sample_uids:
+            self.list_of_data_set_sample_uids = list_of_data_set_sample_uids
+            self.list_of_data_set_uids = {
+                dss.data_submission_from.id for dss in
+                DataSetSample.objects.filter(id__in=self.list_of_data_set_sample_uids)}
+        else:
+            self.list_of_data_set_uids = list_of_data_set_uids
+            self.list_of_data_set_sample_uids = [
+                dss.id for dss in DataSetSample.objects.filter(data_submission_from__in=self.list_of_data_set_uids)]
+        self.ccs_of_analysis = ccs_of_analysis
+        self.within_clade_cutoff = within_clade_cutoff
+        self.num_proc = num_proc
+        self.vcc_manager = VirtualCladeCollectionManager(obj_manager=self)
+        # with open(os.path.join(self.sp_data_analysis.workflow_manager.symportal_root_directory, 'tests', 'objects', 'vcc_manager.p'), 'rb') as f:
+        #     self.vcc_manager = pickle.load(f)
         self.vat_manager = VirtualAnalysisTypeManager(obj_manager=self)
+        self.vdss_manager = VirtualDataSetSampleManager(parent_virtual_object_manager=self)
+
+
+    def _set_ccs_of_analysis(self):
+        return list(CladeCollection.objects.filter(data_set_sample_from__in=self.list_of_data_set_sample_uids))
+
+class VirtualDataSetSampleManager:
+    def __init__(self, parent_virtual_object_manager):
+        self.virtual_obj_manager = parent_virtual_object_manager
+        self.vdss_dict = dict()
+        self._populate_virtual_dss_manager_from_db()
+
+    def _populate_virtual_dss_manager_from_db(self):
+        for dss in DataSetSample.objects.filter(id__in=self.virtual_obj_manager.list_of_data_set_sample_uids):
+            new_vdss = self.VirtualDataSetSample(
+                uid=dss.id, data_set_id=dss.data_submission_from.id,
+                list_of_cc_uids=[cc.id for cc in CladeCollection.objects.filter(data_set_sample_from=dss)],
+                name=dss.name,list_of_cladal_abundances=[int(_) for _ in dss.cladal_seq_totals.split(',')])
+            self.vdss_dict[new_vdss.uid] = new_vdss
+
+    class VirtualDataSetSample:
+        def __init__(self, uid, data_set_id, list_of_cc_uids, name, list_of_cladal_abundances):
+            self.uid = uid
+            self.data_set_id = data_set_id
+            self.set_of_cc_uids = set(list_of_cc_uids)
+            self.name = name
+            self.list_of_cladal_abundances = list_of_cladal_abundances
+            self.total_seqs = sum(self.list_of_cladal_abundances)
+            self.cladal_abundances_dict = {
+                clade : abund/self.total_seqs for
+                clade, abund in
+                zip(list('ABCDEFGHI'), self.list_of_cladal_abundances)}
+
 
 
 class VirtualCladeCollectionManager():
@@ -22,10 +68,10 @@ class VirtualCladeCollectionManager():
         self.obj_manager = obj_manager
         self.clade_collection_instances_dict = {}
 
-        self._populate_virtual_cc_manager_from_db()
+        self._populate_virtual_vcc_manager_from_db()
 
 
-    def _populate_virtual_cc_manager_from_db(self):
+    def _populate_virtual_vcc_manager_from_db(self):
         """When first instantiated we should grab all of the CladeCollections from the database that are part of
         this DataAnalysis and make VirtualCladeCollectionsFrom them.
         We will need to populate the VirtualAnalysisTypeManager vat_dict before
@@ -41,14 +87,14 @@ class VirtualCladeCollectionManager():
         mp_manager = Manager()
         cc_to_info_items_mp_dict = mp_manager.dict()
 
-        for cc in self.obj_manager.sp_data_analysis.ccs_of_analysis:
+        for cc in self.obj_manager.ccs_of_analysis:
             cc_input_mp_queue.put(cc)
 
-        for n in range(self.obj_manager.sp_data_analysis.workflow_manager.args.num_proc):
+        for n in range(self.obj_manager.num_proc):
             cc_input_mp_queue.put('STOP')
 
         all_processes = []
-        for n in range(self.obj_manager.sp_data_analysis.workflow_manager.args.num_proc):
+        for n in range(self.obj_manager.num_proc):
             p = Process(target=self._vcc_id_to_vcc_obj_worker, args=(cc_input_mp_queue, cc_to_info_items_mp_dict))
             all_processes.append(p)
             p.start()
@@ -71,7 +117,7 @@ class VirtualCladeCollectionManager():
                 dsss.reference_sequence_of.id for dsss in dss_objects_of_cc_list]
 
             above_cutoff_ref_seqs_obj_set = clade_collection_object.cutoff_footprint(
-                self.obj_manager.sp_data_analysis.data_analysis_obj.within_clade_cutoff)
+                self.obj_manager.within_clade_cutoff)
 
             total_sequences_in_cladecollection = sum([dsss.abundance for dsss in dss_objects_of_cc_list])
 
@@ -84,14 +130,20 @@ class VirtualCladeCollectionManager():
             for i in range(len(dss_objects_of_cc_list)):
                 ref_seq_id_to_rel_abund_dict[list_of_ref_seq_uids_in_cc[i]] = list_of_rel_abundances[i]
 
+            ref_seq_id_to_abs_abund_dict = {}
+            for dss in dss_objects_of_cc_list:
+                ref_seq_id_to_abs_abund_dict[dss.id] = dss.abundance
+
             cc_to_info_items_mp_dict[clade_collection_object.id] = VirtualCladeCollection(
                 clade=clade_collection_object.clade,
                 footprint_as_frozen_set_of_ref_seq_uids=ref_seq_frozen_set,
                 ref_seq_id_to_rel_abund_dict=ref_seq_id_to_rel_abund_dict,
+                ref_seq_id_to_abs_abund_dict=ref_seq_id_to_abs_abund_dict,
                 total_seq_abundance=total_sequences_in_cladecollection,
                 cc_object=clade_collection_object,
                 above_cutoff_ref_seqs_obj_set=above_cutoff_ref_seqs_obj_set,
                 ordered_dsss_objs=sorted_dss_objects_of_cc_list,
+                vdss_uid=clade_collection_object.data_set_sample_from.id,
                 sample_from_name=str(clade_collection_object))
 
 
@@ -99,7 +151,8 @@ class VirtualCladeCollection:
     """A RAM stored representation of a CladeCollection object that already exists in the DB"""
     def __init__(
             self, clade, footprint_as_frozen_set_of_ref_seq_uids, ref_seq_id_to_rel_abund_dict,
-            total_seq_abundance, cc_object, above_cutoff_ref_seqs_obj_set, ordered_dsss_objs, sample_from_name=None):
+            ref_seq_id_to_abs_abund_dict, total_seq_abundance, cc_object, above_cutoff_ref_seqs_obj_set,
+            ordered_dsss_objs, vdss_uid, sample_from_name=None):
 
         self.clade = clade
         self.cc_object = cc_object
@@ -108,7 +161,9 @@ class VirtualCladeCollection:
         # within_clade_cutoff. The above cutoff equivalents are stored below
         self.footprint_as_frozen_set_of_ref_seq_uids = footprint_as_frozen_set_of_ref_seq_uids
         self.ref_seq_id_to_rel_abund_dict = ref_seq_id_to_rel_abund_dict
+        self.ref_seq_id_to_abs_abund_dict = ref_seq_id_to_abs_abund_dict
         self.total_seq_abundance = total_seq_abundance
+        self.vdss_uid = vdss_uid
         self.sample_from_name = sample_from_name
         self.above_cutoff_ref_seqs_obj_set = above_cutoff_ref_seqs_obj_set
         self.above_cutoff_ref_seqs_id_set = [rs.id for rs in self.above_cutoff_ref_seqs_obj_set]
@@ -126,22 +181,43 @@ class VirtualCladeCollection:
 
 
 class VirutalAnalysisTypeInit:
+    """Class for instantiasing VirtualAnalysisTypes
+
+    Abbreviations:
+    vat = VirtualAnalysisType
+    vcc = VirtualCladeCollection
+    vdss = VirtualDataSetSample
+    """
     def __init__(self, parent_vat_manager, vat_to_init):
         self.vat = vat_to_init
         self.vat_manager = parent_vat_manager
 
     def init_vat_post_profile_assignment(self):
-        self._make_rel_abund_dfs_post_prof_assignment()
+        self._make_multi_modal_rel_abund_df()
 
-        self._generate_maj_ref_seq_set_and_infer_codom(self.vat.post_prof_assignment_rel_abund_df)
+        self._make_abs_and_rel_abund_output_series()
 
-        self._generate_name(self.vat.post_prof_assignment_rel_abund_df)
+        self._generate_maj_ref_seq_set_and_infer_codom(self.vat.multi_modal_detection_rel_abund_df)
 
-    def _make_rel_abund_dfs_post_prof_assignment(self):
+        self._generate_name(self.vat.multi_modal_detection_rel_abund_df)
+
+    def _make_abs_and_rel_abund_output_series(self):
+        index_for_series = [vcc.id for vcc in self.vat.clade_collection_obj_set_profile_discovery]
+        self.type_output_rel_abund_series = pd.Series(index=index_for_series)
+        self.type_output_abs_abund_series = pd.Series(index=index_for_series)
+        for vcc in self.vat.clade_collection_obj_set_profile_discovery:
+            vdss_of_vcc = self.vat_manager.obj_manager.vdss_manager.vdss_dict[vcc.vdss_uid]
+            cladal_proportion_dict = vdss_of_vcc.cladal_abundances_dict
+
+            self.type_output_rel_abund_series.at[vcc.id] = sum([vcc.ref_seq_id_to_abs_abund_dict[ref_seq_id] for ref_seq_id in self.vat.ref_seq_uids_set]) * cladal_proportion_dict[vcc.clade]
+
+            self.type_output_abs_abund_series.at[vcc.id] = sum([vcc.ref_seq_id_to_abs_abund_dict[ref_seq_id] for ref_seq_id in self.vat.ref_seq_uids_set])
+
+    def _make_multi_modal_rel_abund_df(self):
         at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
                              columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
         for cc in self.vat.clade_collection_obj_set_profile_assignment:
-            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.cc_manager.clade_collection_instances_dict[
+            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.clade_collection_instances_dict[
                 cc.id].ref_seq_id_to_rel_abund_dict
             at_df.loc[cc.id] = pd.Series(
                 {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
@@ -149,7 +225,7 @@ class VirutalAnalysisTypeInit:
                  rs_uid_key in list(at_df)})
         at_df["sum"] = at_df.sum(axis=1)
         at_df = at_df.iloc[:, 0:-1].div(at_df["sum"], axis=0)
-        self.vat.post_prof_assignment_rel_abund_df = at_df.reindex(
+        self.vat.multi_modal_detection_rel_abund_df = at_df.reindex(
             at_df.sum().sort_values(ascending=False).index, axis=1).astype('float')
 
     def init_vat_pre_profile_assignment(self):
@@ -230,7 +306,7 @@ class VirutalAnalysisTypeInit:
         at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_discovery],
                              columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
         for cc in self.vat.clade_collection_obj_set_profile_discovery:
-            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.cc_manager.clade_collection_instances_dict[
+            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.clade_collection_instances_dict[
                 cc.id].ref_seq_id_to_rel_abund_dict
             at_df.loc[cc.id] = pd.Series(
                 {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
@@ -393,7 +469,7 @@ class VirtualAnalysisTypeManager():
         populate the relative_seq_abund_profile_discovery_df and the relative_seq_abund_profile_assignment_df.
 
         When doing init post-profile assignment we will init from the clade_collection_obj_set_profile_assignment and
-        populate the post_prof_assignment_rel_abund_df
+        populate the multi_modal_detection_rel_abund_df
         """
 
         def __init__(
@@ -433,7 +509,13 @@ class VirtualAnalysisTypeManager():
             # CladeCollections in which the VirtualAnalysisType was found (clade_collection_obj_set_profile_assignment).
             # It will also be based on the CladeCollection
             # total seqs that are DIVs of the VirtualAnalysisType rather than all of the seqs in the CladeCollection.
-            self.post_prof_assignment_rel_abund_df = None
+            self.multi_modal_detection_rel_abund_df = None
+
+            # For the output we will need a relative and absolute abundance set of dataframes.
+            # The relative abundance dataframe should be proportional to the total sequencs of the CladeCollection
+            # across all clades
+            self.type_output_rel_abund_series = None
+            self.type_output_abs_abund_series = None
 
             self.artefact_ref_seq_uid_set = set()
             self.non_artefact_ref_seq_uid_set = set()
