@@ -38,7 +38,9 @@ class SPDataAnalysis:
         self.current_clade = None
         self.virtual_object_manager = virtual_objects.VirtualObjectManager(
             within_clade_cutoff=self.workflow_manager.within_clade_cutoff,
-            ccs_of_analysis=self.ccs_of_analysis, num_proc=self.workflow_manager.args.num_proc)
+            num_proc=self.workflow_manager.args.num_proc,
+            list_of_data_set_sample_uids=[
+                int(dss_id_str) for dss_id_str in self.data_analysis_obj.list_of_data_set_uids.split(',')])
 
     def analyse_data(self):
         print('Beginning profile discovery')
@@ -245,7 +247,7 @@ class SPDataAnalysis:
             """Some of the DIVs were not names and so their ID was being used in the vat name.
             Now that all DIVs have names, use these names."""
             for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
-                vat.generate_name()
+                vat.generate_name(df=vat.multi_modal_detection_rel_abund_df)
 
         def _generate_and_assign_new_names(self):
             # Now assign names to those that aren't exact matches

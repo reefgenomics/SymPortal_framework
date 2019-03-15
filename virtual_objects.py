@@ -1,28 +1,27 @@
 import pandas as pd
 from multiprocessing import Queue, Manager, Process, current_process
 import sys
-from dbApp.models import DataSetSampleSequence, DataSetSample, CladeCollection
+from dbApp.models import DataSetSampleSequence, DataSetSample, CladeCollection, ReferenceSequence
 import pickle
 import os
 class VirtualObjectManager():
     """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
     I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.
     #TODO initalise this from either a list of DataSetSample uids or a list of DataSet uids"""
-    def __init__(self, within_clade_cutoff, ccs_of_analysis, num_proc, list_of_data_set_sample_uids=None,
+    def __init__(self, within_clade_cutoff, num_proc, list_of_data_set_sample_uids=None,
                  list_of_data_set_uids=None):
         if list_of_data_set_sample_uids:
             self.list_of_data_set_sample_uids = list_of_data_set_sample_uids
-            self.list_of_data_set_uids = {
-                dss.data_submission_from.id for dss in
-                DataSetSample.objects.filter(id__in=self.list_of_data_set_sample_uids)}
+            data_set_samples = DataSetSample.objects.filter(id__in=self.list_of_data_set_sample_uids)
+            self.list_of_data_set_uids = [dss.data_submission_from.id for dss in data_set_samples]
         else:
             self.list_of_data_set_uids = list_of_data_set_uids
-            self.list_of_data_set_sample_uids = [
-                dss.id for dss in DataSetSample.objects.filter(data_submission_from__in=self.list_of_data_set_uids)]
-        self.ccs_of_analysis = ccs_of_analysis
+            data_set_samples = DataSetSample.objects.filter(data_submission_from__in=self.list_of_data_set_uids)
+            self.list_of_data_set_sample_uids = [dss.id for dss in data_set_samples]
+        ccs_of_analysis = CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples)
         self.within_clade_cutoff = within_clade_cutoff
         self.num_proc = num_proc
-        self.vcc_manager = VirtualCladeCollectionManager(obj_manager=self)
+        self.vcc_manager = VirtualCladeCollectionManager(obj_manager=self, ccs_of_analysis=ccs_of_analysis)
         # with open(os.path.join(self.sp_data_analysis.workflow_manager.symportal_root_directory, 'tests', 'objects', 'vcc_manager.p'), 'rb') as f:
         #     self.vcc_manager = pickle.load(f)
         self.vat_manager = VirtualAnalysisTypeManager(obj_manager=self)
@@ -64,14 +63,14 @@ class VirtualDataSetSampleManager:
 class VirtualCladeCollectionManager():
     """Unlike the VirtualAnalysisType the VirtualCladeCollection will be a proxy for an object that already exists
     in the datbase already. As such we won't need to generate pks."""
-    def __init__(self, obj_manager):
+    def __init__(self, obj_manager, ccs_of_analysis):
         self.obj_manager = obj_manager
         self.clade_collection_instances_dict = {}
 
-        self._populate_virtual_vcc_manager_from_db()
+        self._populate_virtual_vcc_manager_from_db(ccs_of_analysis)
 
 
-    def _populate_virtual_vcc_manager_from_db(self):
+    def _populate_virtual_vcc_manager_from_db(self,ccs_of_analysis):
         """When first instantiated we should grab all of the CladeCollections from the database that are part of
         this DataAnalysis and make VirtualCladeCollectionsFrom them.
         We will need to populate the VirtualAnalysisTypeManager vat_dict before
@@ -79,15 +78,15 @@ class VirtualCladeCollectionManager():
         VirtualCladeCollections so we will do this in a seperate method.
         """
 
-        self.clade_collection_instances_dict = self._create_cc_info_dict()
+        self.clade_collection_instances_dict = self._create_cc_info_dict(ccs_of_analysis)
 
-    def _create_cc_info_dict(self):
+    def _create_cc_info_dict(self, ccs_of_analysis):
         print('Instantiating VirtualCladeCollectionManager')
         cc_input_mp_queue = Queue()
         mp_manager = Manager()
         cc_to_info_items_mp_dict = mp_manager.dict()
 
-        for cc in self.obj_manager.ccs_of_analysis:
+        for cc in ccs_of_analysis:
             cc_input_mp_queue.put(cc)
 
         for n in range(self.obj_manager.num_proc):
@@ -382,6 +381,13 @@ class VirtualAnalysisTypeManager():
         # key = uid of at, value = VirtualAnalysisType instance
         self.vat_dict = {}
 
+    def make_vat_post_profile_assignment_from_analysis_type(self, db_analysis_type_object):
+        db_analysis_type_cc_uids = [
+            int(cc_id_str) for cc_id_str in db_analysis_type_object.list_of_clade_collections.split(',')]
+        vcc_list = [vcc for vcc in self.obj_manager.vcc_manager.vcc_dict.values() if vcc.id in db_analysis_type_cc_uids]
+        ref_seq_obj_list = ReferenceSequence.objects.filter(id__in=[int(rs_id_str) for rs_id_str in db_analysis_type_object.ordered_footprint_list.split(',')])
+        self.make_vat_post_profile_assignment(clade_collection_obj_list=vcc_list, ref_seq_obj_list=ref_seq_obj_list)
+
     def make_vat_post_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list):
         new_vat = self.VirtualAnalysisType(
             clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
@@ -530,7 +536,7 @@ class VirtualAnalysisTypeManager():
             # will be used to hold the species information associated at the end of the analysis
             self.species = None
 
-        def generate_name(self, at_df):
+        def generate_name(self, at_df, use_rs_ids_rather_than_names=False):
             if self.co_dominant:
                 list_of_maj_ref_seq = [rs for rs in self.footprint_as_ref_seq_objs_set if
                                        rs.id in self.majority_reference_sequence_uid_set]
@@ -542,7 +548,10 @@ class VirtualAnalysisTypeManager():
                         if ref_seq.id == ref_seq_id:
                             ordered_list_of_co_dom_ref_seq_obj.append(ref_seq)
 
-                co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
+                if not use_rs_ids_rather_than_names:
+                    co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
+                else:
+                    co_dom_name_part = '/'.join(rs.id for rs in ordered_list_of_co_dom_ref_seq_obj)
 
                 list_of_remaining_ref_seq_objs = []
                 for ref_seq_id in list(at_df):
@@ -551,15 +560,25 @@ class VirtualAnalysisTypeManager():
                             list_of_remaining_ref_seq_objs.append(ref_seq)
 
                 if list_of_remaining_ref_seq_objs:
-                    co_dom_name_part += '-{}'.format('-'.join([rs.name for rs in list_of_remaining_ref_seq_objs]))
-                self.name = co_dom_name_part
+                    if not use_rs_ids_rather_than_names:
+                        co_dom_name_part += '-{}'.format('-'.join([rs.name for rs in list_of_remaining_ref_seq_objs]))
+                        self.name = co_dom_name_part
+                        return co_dom_name_part
+                    else:
+                        co_dom_name_part += '-{}'.format('-'.join([rs.id for rs in list_of_remaining_ref_seq_objs]))
+                        return co_dom_name_part
+
             else:
                 ordered_list_of_ref_seqs = []
                 for ref_seq_id in list(at_df):
-                    for ref_seq in self.vat.footprint_as_ref_seq_objs_set:
+                    for ref_seq in self.footprint_as_ref_seq_objs_set:
                         if ref_seq.id == ref_seq_id:
                             ordered_list_of_ref_seqs.append(ref_seq)
-                self.name = '-'.join(rs.name for rs in ordered_list_of_ref_seqs)
+                if not use_rs_ids_rather_than_names:
+                    self.name = '-'.join(rs.name for rs in ordered_list_of_ref_seqs)
+                    return self.name
+                else:
+                    return '-'.join(rs.id for rs in ordered_list_of_ref_seqs)
 
 
         def __str__(self):

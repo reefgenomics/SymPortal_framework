@@ -15,6 +15,7 @@ from collections import Counter
 import numpy as np
 import sp_config
 import plotting
+import virtual_objects
 
 
 class OutputTypeCountTable:
@@ -34,46 +35,341 @@ class OutputTypeCountTable:
     Do class on a vat by vat basis
     """
     def __init__(
-            self, data_set_uids_to_output=None, data_set_sample_uid_set_to_output=None,
-            data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None):
-        if virtual_object_manager:
-            self.virtual_object_manager=virtual_object_manager
-        else:
-            self._create_virtual_object_manager()
-        if data_set_sample_uid_set_to_output:
-            self.data_set_sample_uid_set_to_output = data_set_sample_uid_set_to_output
-            self.data_set_uid_set_to_output = self._get_data_set_uids_of_data_sets()
-        else:
-            self.data_set_uid_set_to_output = data_set_uids_to_output
-            # TODO you need to write this and then it is time to complete writing the make_output_series method.
-            self.data_set_sample_uid_set_to_output = self._get_data_set_sample_uids_of_data_sets()
-        if data_analysis_uid:
-            self.data_analysis = DataAnalysis.objects.get(id=data_analysis_uid)
-        else:
-            self.data_analysis = data_analysis_obj
+            self, num_proc, within_clade_cutoff, call_type, symportal_root_directory, data_set_uids_to_output=None, data_set_sample_uid_set_to_output=None,
+            data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None, date_time_str=None):
+
+        self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output = self._init_dss_and_ds_uids(
+            data_set_sample_uid_set_to_output, data_set_uids_to_output)
+
+        # Need to pass in the passed attributes rather than the self. attributes so we know which one is None
+        self.virtual_object_manager = self._init_virtual_object_manager(
+            virtual_object_manager, data_set_uids_to_output, data_set_sample_uid_set_to_output,
+            num_proc, within_clade_cutoff)
+
+        self.vcc_uids_to_output = self._set_vcc_uids_to_output()
+
+        self.data_analysis_obj = self._init_da_object(data_analysis_obj, data_analysis_uid)
+
+        if call_type == 'analysis':
+            self.date_time_str = self.data_analysis_obj.time_stamp
+        elif call_type == 'stand_alone':
+            self.data_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+
         self.clades_of_output = set()
         # A sorting of the vats of the output only by the len of the vccs of the output that they associate with
         # i.e. before they are then sorted by clade. This will be used when calculating the order of the samples
         self.overall_sorted_list_of_vats = None
         # The above overall_sorted_list_of_vats is then ordered by clade to produce clade_sorted_list_of_vats_to_output
         self.clade_sorted_list_of_vats_to_output = self._set_clade_sorted_list_of_vats_to_output()
-        self.sorted_list_of_vdss_to_output = self._set_sorted_list_of_vdss_to_output()
+        self.sorted_list_of_vdss_uids_to_output = self._set_sorted_list_of_vdss_to_output()
         self.number_of_samples = None
+        self.call_type = call_type
+        self.rel_abund_output_df, self.abs_abund_output_df = self._init_dfs()
+        # set of all of the species found in the vats
+        self.species_set = set()
+        self.species_ref_dict = self._set_species_ref_dict()
+        self.output_file_paths_list = []
+        self.output_dir = os.path.join(symportal_root_directory, 'outputs', 'analyses', self.data_analysis_obj.id)
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.path_to_relative_count_table = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.relative.txt')
+        self.path_to_absolute_count_table = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.absolute.txt')
+        self.output_file_paths_list.extend([
+            self.path_to_relative_count_table, self.path_to_absolute_count_table])
 
 
-        # TODO init as an empty df once you have calculated the sample order
-        self.rel_abund_output_df = None
-        self.abs_abund_output_df = None
-        # create once you've calculated the sample order
-        self.df_index = None
 
+    def _set_vcc_uids_to_output(self):
+        list_of_sets_of_vcc_uids_in_vdss = [
+            self.virtual_object_manager.vdss_manager.vdss_dict[vdss_uid].set_of_cc_uids for vdss_uid in
+            self.data_set_sample_uid_set_to_output]
+        vcc_uids_to_output = list_of_sets_of_vcc_uids_in_vdss[0].union(*list_of_sets_of_vcc_uids_in_vdss[1:])
+        return vcc_uids_to_output
 
     def output_types(self):
 
-        for clade in self.clades_of_output:
-            for vat in [vat for vat in self.clade_sorted_list_of_vats_to_output if vat.clade == clade]:
-                tosp = self.TypeOutputSeriesPopulation(parent_output_type_count_table=self, vat=vat)
-                tosp.make_output_series()
+        self._populate_main_body_of_dfs()
+
+        self._populate_meta_info_of_dfs()
+
+        self._write_out_dfs()
+
+    def _populate_meta_info_of_dfs(self):
+        self._append_species_header_to_dfs()
+        self._append_species_references_to_dfs()
+        if self.call_type == 'analysis':
+            self._append_meta_info_for_analysis_call_type()
+        else:
+            # call_type=='stand_alone'
+            self._append_meta_info_for_stand_alone_call_type()
+
+    def _write_out_dfs(self):
+        self.rel_abund_output_df.to_csv(self.path_to_relative_count_table, sep="\t", header=False)
+        self.abs_abund_output_df.to_csv(self.path_to_absolute_count_table, sep="\t", header=False)
+
+    def _append_meta_info_for_stand_alone_call_type(self):
+        data_sets_of_analysis = len(self.data_analysis_obj.list_of_data_set_uids.split(','))
+        if self.call_type == 'stand_alone_data_sets':
+            meta_info_string_items = self._make_stand_alone_data_set_meta_info_string(data_sets_of_analysis)
+        else:
+            meta_info_string_items = self._make_stand_alone_data_set_samples_meta_info_string(data_sets_of_analysis)
+        self._append_meta_info_summary_string_to_dfs(meta_info_string_items)
+        self._append_data_set_info_to_dfs()
+
+    def _append_meta_info_for_analysis_call_type(self):
+        meta_info_string_items = self._make_analysis_meta_info_string()
+        self._append_meta_info_summary_string_to_dfs(meta_info_string_items)
+        self._append_data_set_info_to_dfs()
+
+    def _append_species_references_to_dfs(self):
+        # now add the references for each of the associated species
+        for species in self.species_set:
+            if species in self.species_ref_dict.keys():
+                temp_series = pd.Series([self.species_ref_dict[species]], index=[list(self.rel_abund_output_df)[0]],
+                                        name=species)
+                self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
+                self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+
+    def _append_species_header_to_dfs(self):
+        # add a blank row with just the header Species reference
+        temp_blank_series_with_name = pd.Series(name='Species reference')
+        self.rel_abund_output_df = self.rel_abund_output_df.append(temp_blank_series_with_name)
+        self.abs_abund_output_df = self.abs_abund_output_df.append(temp_blank_series_with_name)
+
+    def _append_data_set_info_to_dfs(self):
+        for data_set_object in DataSet.objects.filter(id__in=self.data_set_uid_set_to_output):
+            data_set_meta_list = [
+                f'Data_set ID: {data_set_object.id}; '
+                f'Data_set name: {data_set_object.name}; '
+                f'submitting_user: {data_set_object.submitting_user}; '
+                f'time_stamp: {data_set_object.time_stamp}']
+
+            temp_series = pd.Series(
+                data_set_meta_list, index=[list(self.rel_abund_output_df)[0]], name='data_set_info')
+            self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
+            self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+
+    def _make_analysis_meta_info_string(self):
+        meta_info_string_items = [
+            f'Output as part of data_analysis ID: {self.data_analysis_obj.id}; '
+            f'Number of data_set objects as part of analysis = {len(self.data_set_uid_set_to_output)}; '
+            f'submitting_user: {self.data_analysis_obj.submitting_user}; '
+            f'time_stamp: {self.data_analysis_obj.time_stamp}']
+        return meta_info_string_items
+
+    def _append_meta_info_summary_string_to_dfs(self, meta_info_string_items):
+        temp_series = pd.Series(
+            meta_info_string_items, index=[list(self.rel_abund_output_df)[0]], name='meta_info_summary')
+        self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
+        self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+
+    def _make_stand_alone_data_set_meta_info_string(self, data_sets_of_analysis):
+        meta_info_string_items = [
+            f'Stand_alone_data_sets output by {sp_config.user_name} on {self.data_time_str}; '
+            f'data_analysis ID: {self.data_analysis_obj.id}; '
+            f'Number of data_set objects as part of output = {len(self.data_set_uid_set_to_output)}; '
+            f'Number of data_set objects as part of analysis = {data_sets_of_analysis}']
+        return meta_info_string_items
+
+    def _make_stand_alone_data_set_samples_meta_info_string(self, data_sets_of_analysis):
+        # self.call_type == 'stand_alone_data_set_samples'
+        meta_info_string_items = [
+            f'Stand_alone_data_set_samples output by {sp_config.user_name} on {self.data_time_str}; '
+            f'data_analysis ID: {self.data_analysis_obj.id}; '
+            f'Number of data_set objects as part of output = {len(self.data_set_uid_set_to_output)}; '
+            f'Number of data_set objects as part of analysis = {data_sets_of_analysis}']
+        return meta_info_string_items
+
+    def _populate_main_body_of_dfs(self):
+        for vat in self.clade_sorted_list_of_vats_to_output:
+            tosp = self.TypeOutputSeriesPopulation(parent_output_type_count_table=self, vat=vat)
+            data_relative_list, data_absolute_list = tosp.make_output_series()
+            self.rel_abund_output_df[vat.id] = data_relative_list
+            self.abs_abund_output_df[vat.id] = data_absolute_list
+            if vat.species != 'None':
+                self.species_set.update(vat.species.split(','))
+
+    class TypeOutputSeriesPopulation:
+        """will create a relative abundance and absolute abundance
+        output pandas series for a given VirtualAnalysisType
+        """
+        def __init__(self, parent_output_type_count_table, vat):
+            self.output_type_count_table = parent_output_type_count_table
+            self.vat = vat
+            self.data_relative_list = []
+            self.data_absolute_list = []
+
+        def make_output_series(self):
+            """type_uid"""
+            self._pop_type_uid()
+
+            self._pop_type_clade()
+
+            self._pop_maj_seq_str()
+
+            self._pop_species()
+
+            self._pop_type_local_and_global_abundances()
+
+            self._pop_type_name()
+
+            self._pop_type_abundances()
+
+            self._pop_vat_accession_name()
+
+            self._pop_av_and_stdev_abund()
+
+            return self.data_relative_list, self.data_absolute_list
+            # TODO you are here.
+
+        def _pop_av_and_stdev_abund(self):
+            average_abund_and_sd_string = ''
+            for rs_id in list(self.vat.multi_modal_detection_rel_abund_df):
+                if average_abund_and_sd_string == '':
+                    average_abund_and_sd_string = self._append_rel_abund_and_sd_str_for_rs(
+                        average_abund_and_sd_string, rs_id)
+                else:
+                    average_abund_and_sd_string = self._append_dash_or_slash_if_maj_seq(average_abund_and_sd_string,
+                                                                                        rs_id)
+                    average_abund_and_sd_string = self._append_rel_abund_and_sd_str_for_rs(
+                        average_abund_and_sd_string, rs_id)
+            self.data_relative_list.append(average_abund_and_sd_string)
+            self.data_absolute_list.append(average_abund_and_sd_string)
+
+        def _append_dash_or_slash_if_maj_seq(self, average_abund_and_sd_string, rs_id):
+            if rs_id in self.vat.majority_reference_sequence_uid_set:
+                average_abund_and_sd_string += '/'
+            else:
+                average_abund_and_sd_string += '-'
+            return average_abund_and_sd_string
+
+        def _append_rel_abund_and_sd_str_for_rs(self, average_abund_and_sd_string, rs_id):
+            average_abund_str = "{0:.3f}".format(self.vat.multi_modal_detection_rel_abund_df[rs_id].mean())
+            std_dev_str = "{0:.3f}".format(self.vat.multi_modal_detection_rel_abund_df[rs_id].std())
+            average_abund_and_sd_string += f'{average_abund_str}[{std_dev_str}]'
+            return average_abund_and_sd_string
+
+        def _pop_vat_accession_name(self):
+            vat_accession_name = self.vat.generate_name(
+                df=self.vat.multi_modal_detection_rel_abund_df,
+                use_rs_ids_rather_than_names=True)
+            self.data_relative_list.append(self.vat_accession_name)
+            self.data_absolute_list.append(self.vat_accession_name)
+
+        def _pop_type_abundances(self):
+            # type abundances
+            temp_rel_abund_holder_list = []
+            temp_abs_abund_holder_list = []
+            for vdss_uid in self.output_type_count_table.sorted_list_of_vdss_uids_to_output:
+                count = 0
+                vdss_obj = self.output_type_count_table.virtual_object_manager.vdss_manager.vdss_dict[vdss_uid]
+                for vcc_uid in vdss_obj.set_of_cc_uids:
+                    if vcc_uid in self.vat.type_output_rel_abund_series:
+                        count += 1
+                        temp_rel_abund_holder_list.append(self.vat.type_output_rel_abund_series[vcc_uid])
+                        temp_abs_abund_holder_list.append(self.vat.type_output_abs_abund_series[vcc_uid])
+
+                if count == 0:  # type not found in vdss
+                    temp_rel_abund_holder_list.append(0)
+                if count > 1:  # more than one vcc from vdss associated with type
+                    raise RuntimeError('More than one vcc of vdss matched vat in output')
+            self.data_relative_list.extend(temp_rel_abund_holder_list)
+            self.data_absolute_list.extend(temp_abs_abund_holder_list)
+
+        def _pop_type_name(self):
+            # name
+            self.data_absolute_list.append(self.vat.name)
+            self.data_relative_list.append(self.vat.name)
+
+        def _pop_type_local_and_global_abundances(self):
+            # local_output_type_abundance
+            # all analysis_type_abundance
+            vccs_of_type = self.vat.clade_collection_obj_set_profile_assignment
+            vccs_of_type_from_output = [vcc for vcc in vccs_of_type if
+                                        vcc.vdss_uid in self.output_type_count_table.sorted_list_of_vdss_uids_to_output]
+            self.data_absolute_list.extend([str(len(vccs_of_type_from_output)), str(len(vccs_of_type))])
+            self.data_relative_list.extend([str(len(vccs_of_type_from_output)), str(len(vccs_of_type))])
+
+        def _pop_species(self):
+            # species
+            self.data_absolute_list.append(self.vat.species)
+            self.data_relative_list.append(self.vat.species)
+
+        def _pop_maj_seq_str(self):
+            # majority sequences string e.g. C3/C3b
+            ordered_maj_seq_names = []
+            for rs_id in list(self.vat.multi_modal_detection_rel_abund_df):
+                for rs in self.vat.footprint_as_ref_seq_objs_set:
+                    if rs.id == rs_id and rs in self.vat.majority_reference_sequence_obj_set:
+                        ordered_maj_seq_names.append(rs.name)
+            maj_seq_str = '/'.join(ordered_maj_seq_names)
+            self.data_absolute_list.append(maj_seq_str)
+            self.data_relative_list.append(maj_seq_str)
+
+        def _pop_type_clade(self):
+            # clade
+            self.data_absolute_list.append(self.vat.clade)
+            self.data_relative_list.append(self.vat.clade)
+
+        def _pop_type_uid(self):
+            # Type uid
+            self.data_absolute_list.append(self.vat.id)
+            self.data_relative_list.append(self.vat.id)
+
+    def _create_virtual_object_manager(self):
+        foo = 'apples'
+
+    def _init_da_object(self, data_analysis_obj, data_analysis_uid):
+        if data_analysis_uid:
+            self.data_analysis_obj = DataAnalysis.objects.get(id=data_analysis_uid)
+        else:
+            self.data_analysis_obj = data_analysis_obj
+        return self.data_analysis_obj
+
+    def _init_dfs(self):
+        pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence',
+                       'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
+        post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
+        self.df_index = pre_headers + self.sorted_list_of_vdss_uids_to_output + post_headers
+        return pd.DataFrame(index=self.df_index), pd.DataFrame(index=self.df_index)
+
+    def _init_dss_and_ds_uids(self, data_set_sample_uid_set_to_output, data_set_uids_to_output):
+        if data_set_sample_uid_set_to_output:
+            self.data_set_sample_uid_set_to_output = data_set_sample_uid_set_to_output
+            self.data_set_uid_set_to_output = [ds.id for ds in DataSet.objects.filter(
+                datasetsample__in=self.data_set_sample_uid_set_to_output).distinct()]
+        else:
+            self.data_set_uid_set_to_output = data_set_uids_to_output
+            self.data_set_sample_uid_set_to_output = [
+                dss.id for dss in DataSetSample.objects.filter(
+                    data_submission_from__in=self.data_set_uid_set_to_output)]
+        return self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output
+    def _init_virtual_object_manager(
+            self, virtual_object_manager, data_set_uids_to_output, data_set_sample_uid_set_to_output,
+            num_proc, within_clade_cutoff):
+        if virtual_object_manager:
+            return virtual_object_manager
+        else:
+            if data_set_uids_to_output:
+                virtual_object_manager = virtual_objects.VirtualObjectManager(
+                    num_proc=num_proc, within_clade_cutoff=within_clade_cutoff,
+                    list_of_data_set_uids=data_set_uids_to_output)
+            else:
+                virtual_object_manager = virtual_objects.VirtualObjectManager(
+                    num_proc=num_proc, within_clade_cutoff=within_clade_cutoff,
+                    list_of_data_set_sample_uids=data_set_sample_uid_set_to_output)
+
+            for at in AnalysisType.objects.filter(
+                    cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=
+                    self.data_set_sample_uid_set_to_output).distinct():
+                virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
+
+
 
     def _get_data_set_uids_of_data_sets(self):
         vds_uid_set = set()
@@ -116,19 +412,83 @@ class OutputTypeCountTable:
             clade_ordered_type_order.extend([vat for vat in self.overall_sorted_list_of_vats if vat.clade == clade])
         return clade_ordered_type_order
 
-    class TypeOutputSeriesPopulation:
-        """will create a relative abundance and absolute abundance
-        output pandas series for a given VirtualAnalysisType
-        """
-        def __init__(self, parent_output_type_count_table, vat):
-            self.output_type_count_table = parent_output_type_count_table
-            self.vat = vat
-
-        def make_output_series(self):
-
-
-    def _create_virtual_object_manager(self):
-        foo = 'apples'
+    def _set_species_ref_dict(self):
+        return {
+        'S. microadriaticum': 'Freudenthal, H. D. (1962). Symbiodinium gen. nov. and Symbiodinium microadriaticum '
+                              'sp. nov., a Zooxanthella: Taxonomy, Life Cycle, and Morphology. The Journal of '
+                              'Protozoology 9(1): 45-52',
+        'S. pilosum': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                      'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                      'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                      'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                      'Journal of Phycology 23(3): 469-481.',
+        'S. natans': 'Hansen, G. and N. Daugbjerg (2009). Symbiodinium natans sp. nob.: A free-living '
+                     'dinoflagellate from Tenerife (northeast Atlantic Ocean). Journal of Phycology 45(1): 251-263.',
+        'S. tridacnidorum': 'Lee, S. Y., H. J. Jeong, N. S. Kang, T. Y. Jang, S. H. Jang and T. C. Lajeunesse (2015). '
+                            'Symbiodinium tridacnidorum sp. nov., a dinoflagellate common to Indo-Pacific giant clams,'
+                            ' and a revised morphological description of Symbiodinium microadriaticum Freudenthal, '
+                            'emended Trench & Blank. European Journal of Phycology 50(2): 155-172.',
+        'S. linucheae': 'Trench, R. K. and L.-v. Thinh (1995). Gymnodinium linucheae sp. nov.: The dinoflagellate '
+                        'symbiont of the jellyfish Linuche unguiculata. European Journal of Phycology 30(2): 149-154.',
+        'S. minutum': 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). A genetics-based description of '
+                      'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), two dinoflagellates '
+                      'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
+        'S. antillogorgium': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                             'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                             'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                             'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. pseudominutum': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                            'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                            'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                            'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. psygmophilum': 'Lajeunesse, T. C., J. E. Parkinson and J. D. Reimer (2012). '
+                           'A genetics-based description of '
+                           'Symbiodinium minutum sp. nov. and S. psygmophilum sp. nov. (dinophyceae), '
+                           'two dinoflagellates '
+                           'symbiotic with cnidaria. Journal of Phycology 48(6): 1380-1391.',
+        'S. muscatinei': 'No reference available',
+        'S. endomadracis': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                           'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                           'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                           'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. aenigmaticum': 'Parkinson, J. E., M. A. Coffroth and T. C. LaJeunesse (2015). "New species of Clade B '
+                           'Symbiodinium (Dinophyceae) from the greater Caribbean belong to different functional '
+                           'guilds: S. aenigmaticum sp. nov., S. antillogorgium sp. nov., S. endomadracis sp. nov., '
+                           'and S. pseudominutum sp. nov." Journal of phycology 51(5): 850-858.',
+        'S. goreaui': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                      'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                      'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                      'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                      'Journal of Phycology 23(3): 469-481.',
+        'S. thermophilum': 'Hume, B. C. C., C. D`Angelo, E. G. Smith, J. R. Stevens, J. Burt and J. Wiedenmann (2015).'
+                           ' Symbiodinium thermophilum sp. nov., a thermotolerant symbiotic alga prevalent in corals '
+                           'of the world`s hottest sea, the Persian/Arabian Gulf. Sci. Rep. 5.',
+        'S. glynnii': 'LaJeunesse, T. C., D. T. Pettay, E. M. Sampayo, N. Phongsuwan, B. Brown, D. O. Obura, O. '
+                      'Hoegh-Guldberg and W. K. Fitt (2010). Long-standing environmental conditions, geographic '
+                      'isolation and host-symbiont specificity influence the relative ecological dominance and '
+                      'genetic diversification of coral endosymbionts in the genus Symbiodinium. Journal of '
+                      'Biogeography 37(5): 785-800.',
+        'S. trenchii': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
+                       '(2014). Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
+                       ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
+        'S. eurythalpos': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, '
+                          'S. Keshavmurthy and C. A. Chen '
+                          '(2014). Ecologically differentiated stress-tolerant '
+                          'endosymbionts in the dinoflagellate genus'
+                          ' Symbiodinium (Dinophyceae) Clade D are different species. Phycologia 53(4): 305-319.',
+        'S. boreum': 'LaJeunesse, T. C., D. C. Wham, D. T. Pettay, J. E. Parkinson, S. Keshavmurthy and C. A. Chen '
+                     '(2014). "Ecologically differentiated stress-tolerant endosymbionts in the dinoflagellate genus'
+                     ' Symbiodinium (Dinophyceae) Clade D are different species." Phycologia 53(4): 305-319.',
+        'S. voratum': 'Jeong, H. J., S. Y. Lee, N. S. Kang, Y. D. Yoo, A. S. Lim, M. J. Lee, H. S. Kim, W. Yih, H. '
+                      'Yamashita and T. C. LaJeunesse (2014). Genetics and Morphology Characterize the Dinoflagellate'
+                      ' Symbiodinium voratum, n. sp., (Dinophyceae) as the Sole Representative of Symbiodinium Clade E'
+                      '. Journal of Eukaryotic Microbiology 61(1): 75-94.',
+        'S. kawagutii': 'Trench, R. (2000). Validation of some currently used invalid names of dinoflagellates. '
+                        'Journal of Phycology 36(5): 972-972.\tTrench, R. K. and R. J. Blank (1987). '
+                        'Symbiodinium microadriaticum Freudenthal, S. goreauii sp. nov., S. kawagutii sp. nov. and '
+                        'S. pilosum sp. nov.: Gymnodinioid dinoflagellate symbionts of marine invertebrates. '
+                        'Journal of Phycology 23(3): 469-481.'
+    }
 
 def output_type_count_tables(
         analysisobj, datasubstooutput, call_type,
