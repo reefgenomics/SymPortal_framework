@@ -36,11 +36,13 @@ class SPDataAnalysis:
         self.clade_footp_dicts_list = [{} for _ in self.clade_list]
         self.list_of_initial_types_after_collapse = None
         self.current_clade = None
+        self.list_of_data_set_uids = [
+                int(dss_id_str) for dss_id_str in self.data_analysis_obj.list_of_data_set_uids.split(',')]
         self.virtual_object_manager = virtual_objects.VirtualObjectManager(
             within_clade_cutoff=self.workflow_manager.within_clade_cutoff,
-            num_proc=self.workflow_manager.args.num_proc,
-            list_of_data_set_sample_uids=[
-                int(dss_id_str) for dss_id_str in self.data_analysis_obj.list_of_data_set_uids.split(',')])
+            num_proc=self.workflow_manager.args.num_proc)
+        self.virtual_object_manager.vcc_manager.populate_vcc_manager_from_db(self.list_of_data_set_uids)
+        self.virtual_object_manager.vdss_manager.populate_vdss_manager_from_db(self.list_of_data_set_uids)
 
     def analyse_data(self):
         print('Beginning profile discovery')
@@ -51,7 +53,7 @@ class SPDataAnalysis:
         self._associate_vats_to_vccs()
 
         # vcc_with_multiple_types_that_share_div = []
-        # for vcc in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.values():
+        # for vcc in self.virtual_object_manager.vcc_manager.vcc_dict.values():
         #     if len(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items()) > 1:
         #         vats_list = list(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.keys())
         #         shared_ref_seqs = vats_list[0].footprint_as_ref_seq_objs_set.intersection(*[vat.footprint_as_ref_seq_objs_set for vat in vats_list[1:]])
@@ -73,6 +75,8 @@ class SPDataAnalysis:
         self._del_and_remake_temp_wkd()
 
         print('DATA ANALYSIS COMPLETE')
+
+
 
     def _del_and_remake_temp_wkd(self):
         if os.path.exists(self.temp_wkd):
@@ -388,7 +392,7 @@ class SPDataAnalysis:
 
     def _profile_assignment(self):
         print('\nBeginning profile assignment')
-        for virtual_clade_collection in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.values():
+        for virtual_clade_collection in self.virtual_object_manager.vcc_manager.vcc_dict.values():
             profile_assigner = self.ProfileAssigner(virtual_clade_collection = virtual_clade_collection,
                 parent_sp_data_analysis = self)
             profile_assigner.assign_profiles()
@@ -530,7 +534,7 @@ class SPDataAnalysis:
                 clade_collection_to_type_tuple_list.append((cc, vat))
 
         for cc, vat in clade_collection_to_type_tuple_list:
-            virtual_cc = self.virtual_object_manager.vcc_manager.clade_collection_instances_dict[cc.id]
+            virtual_cc = self.virtual_object_manager.vcc_manager.vcc_dict[cc.id]
             current_type_seq_rel_abund_for_cc = []
             cc_ref_seq_abundance_dict = virtual_cc.ref_seq_id_to_rel_abund_dict
             for ref_seq in vat.footprint_as_ref_seq_objs_set:
@@ -581,7 +585,7 @@ class SPDataAnalysis:
         return clade_fp_dict
 
     def _populate_clade_fp_dicts_list(self):
-        for cc_id, vcc in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.items():
+        for cc_id, vcc in self.virtual_object_manager.vcc_manager.vcc_dict.items():
             clade_index = self.clade_list.index(vcc.clade)
             if vcc.above_cutoff_ref_seqs_obj_set in self.clade_footp_dicts_list[clade_index]:
                 self.clade_footp_dicts_list[clade_index][vcc.above_cutoff_ref_seqs_obj_set].cc_list.append(vcc)
@@ -596,7 +600,7 @@ class ArtefactAssessor:
     def __init__(self, parent_sp_data_analysis):
         self.sp_data_analysis = parent_sp_data_analysis
         self.list_of_vccs = list(self.sp_data_analysis.virtual_object_manager.\
-            vcc_manager.clade_collection_instances_dict.values())
+            vcc_manager.vcc_dict.values())
         # key:VirtualAnalysisType.id, value:VirtualAnalysisType
         self.virtual_analysis_type_dict = self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict
         self.analysis_types_of_analysis = list(self.virtual_analysis_type_dict.values())
