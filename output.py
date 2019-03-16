@@ -36,16 +36,19 @@ class OutputTypeCountTable:
     """
     def __init__(
             self, num_proc, within_clade_cutoff, call_type, symportal_root_directory, data_set_uids_to_output=None, data_set_sample_uid_set_to_output=None,
-            data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None):
-        self.data_analysis_obj = self._init_data_analysis_object(data_analysis_obj, data_analysis_uid)
+            data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None, date_time_str=None):
+
         self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output = self._init_dss_and_ds_uids(
             data_set_sample_uid_set_to_output, data_set_uids_to_output)
 
         # Need to pass in the passed attributes rather than the self. attributes so we know which one is None
         self.virtual_object_manager = self._init_virtual_object_manager(
-            virtual_object_manager, num_proc, within_clade_cutoff)
+            virtual_object_manager, data_set_uids_to_output, data_set_sample_uid_set_to_output,
+            num_proc, within_clade_cutoff)
 
         self.vcc_uids_to_output = self._set_vcc_uids_to_output()
+
+        self.data_analysis_obj = self._init_da_object(data_analysis_obj, data_analysis_uid)
 
         if call_type == 'analysis':
             self.date_time_str = self.data_analysis_obj.time_stamp
@@ -321,7 +324,7 @@ class OutputTypeCountTable:
     def _create_virtual_object_manager(self):
         foo = 'apples'
 
-    def _init_data_analysis_object(self, data_analysis_obj, data_analysis_uid):
+    def _init_da_object(self, data_analysis_obj, data_analysis_uid):
         if data_analysis_uid:
             self.data_analysis_obj = DataAnalysis.objects.get(id=data_analysis_uid)
         else:
@@ -338,34 +341,39 @@ class OutputTypeCountTable:
     def _init_dss_and_ds_uids(self, data_set_sample_uid_set_to_output, data_set_uids_to_output):
         if data_set_sample_uid_set_to_output:
             self.data_set_sample_uid_set_to_output = data_set_sample_uid_set_to_output
-            self.data_set_uid_set_to_output = [int(_) for _ in self.data_analysis_obj.list_of_data_set_uids.split(',')]
+            self.data_set_uid_set_to_output = [ds.id for ds in DataSet.objects.filter(
+                datasetsample__in=self.data_set_sample_uid_set_to_output).distinct()]
         else:
             self.data_set_uid_set_to_output = data_set_uids_to_output
             self.data_set_sample_uid_set_to_output = [
                 dss.id for dss in DataSetSample.objects.filter(
                     data_submission_from__in=self.data_set_uid_set_to_output)]
         return self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output
-
     def _init_virtual_object_manager(
-            self, virtual_object_manager, num_proc, within_clade_cutoff):
+            self, virtual_object_manager, data_set_uids_to_output, data_set_sample_uid_set_to_output,
+            num_proc, within_clade_cutoff):
         if virtual_object_manager:
             return virtual_object_manager
         else:
-            new_virtual_object_manager = virtual_objects.VirtualObjectManager(
-                num_proc=num_proc, within_clade_cutoff=within_clade_cutoff)
-            new_virtual_object_manager.vcc_manager.populate_vcc_manager_from_db(self.data_set_uid_set_to_output)
-            new_virtual_object_manager.vdss_manager.populate_vdss_manager_from_db(self.data_set_uid_set_to_output)
+            if data_set_uids_to_output:
+                virtual_object_manager = virtual_objects.VirtualObjectManager(
+                    num_proc=num_proc, within_clade_cutoff=within_clade_cutoff,
+                    list_of_data_set_uids=data_set_uids_to_output)
+            else:
+                virtual_object_manager = virtual_objects.VirtualObjectManager(
+                    num_proc=num_proc, within_clade_cutoff=within_clade_cutoff,
+                    list_of_data_set_sample_uids=data_set_sample_uid_set_to_output)
+
             for at in AnalysisType.objects.filter(
                     cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=
                     self.data_set_sample_uid_set_to_output).distinct():
-                new_virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
-            return new_virtual_object_manager
+                virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
 
 
 
     def _get_data_set_uids_of_data_sets(self):
         vds_uid_set = set()
-        for vdss in [vdss for vdss in self.virtual_object_manager.vdss_manager.vdss_dict.values() if vdss.uid in self.data_set_sample_uid_set_to_output]:
+        for vdss in [vdss for vdss in self.virtual_object_manager.vdss_manager.vdss_dict.values() if vdss.uid in self.data_set_sample_uid_set_to_output]
             vds_uid_set.add(vdss.data_set_id)
         return vds_uid_set
     def _set_sorted_list_of_vdss_to_output(self):
@@ -2787,7 +2795,6 @@ def populate_quality_control_data_of_failed_sample(dss, sample_row_data_counts, 
     else:
         sample_row_data_counts.append(0)
         sample_row_data_props.append(0)
-
 
 class SequenceCountTableCreator:
     """ This is essentially broken into two parts. The first part goes through all of the DataSetSamples from

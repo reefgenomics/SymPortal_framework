@@ -5,63 +5,40 @@ from dbApp.models import DataSetSampleSequence, DataSetSample, CladeCollection, 
 import pickle
 import os
 class VirtualObjectManager():
-    """This class will link together an instance of a VirtualCladeCollectionManger a VirtualAnalaysisTypeManger
-    and VirtualDataSetSampleManager.
-    I will therefore allow each of the virtual object managers to access each other. the VCCM and CDSSM are
-    populated from the db using a list of data_set_sample_uids. However, the VirtualObjectManager can be
-    instansiated using a data_set_uid or data_set_sample_uid_list.
-    """
-    def __init__(self, within_clade_cutoff, num_proc):
+    """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
+    I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.
+    #TODO initalise this from either a list of DataSetSample uids or a list of DataSet uids"""
+    def __init__(self, within_clade_cutoff, num_proc, list_of_data_set_sample_uids=None,
+                 list_of_data_set_uids=None):
+        if list_of_data_set_sample_uids:
+            self.list_of_data_set_sample_uids = list_of_data_set_sample_uids
+            data_set_samples = DataSetSample.objects.filter(id__in=self.list_of_data_set_sample_uids)
+            self.list_of_data_set_uids = [dss.data_submission_from.id for dss in data_set_samples]
+        else:
+            self.list_of_data_set_uids = list_of_data_set_uids
+            data_set_samples = DataSetSample.objects.filter(data_submission_from__in=self.list_of_data_set_uids)
+            self.list_of_data_set_sample_uids = [dss.id for dss in data_set_samples]
+        ccs_of_analysis = CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples)
         self.within_clade_cutoff = within_clade_cutoff
         self.num_proc = num_proc
-        self.vcc_manager = VirtualCladeCollectionManager(parent_virtual_object_manager=self)
+        self.vcc_manager = VirtualCladeCollectionManager(obj_manager=self, ccs_of_analysis=ccs_of_analysis)
         # with open(os.path.join(self.sp_data_analysis.workflow_manager.symportal_root_directory, 'tests', 'objects', 'vcc_manager.p'), 'rb') as f:
         #     self.vcc_manager = pickle.load(f)
-        self.vat_manager = VirtualAnalysisTypeManager(parent_virtual_object_manager=self)
+        self.vat_manager = VirtualAnalysisTypeManager(obj_manager=self)
         self.vdss_manager = VirtualDataSetSampleManager(parent_virtual_object_manager=self)
-        self.vds_manager = VirtualDataSetManager(parent_virtual_object_manager=self)
 
-class VirtualDataSetManager:
-    def __init__(self, parent_virtual_object_manager):
-        self.virtual_obj_manager = parent_virtual_object_manager
-        self.vds_dict = dict()
-        self.next_uid = 1
 
-    def make_new_vds(self, name, set_of_vdss_uids, uid=None):
-        if uid is None:
-            vds_uid = self.next_uid
-        else:
-            vds_uid = uid
-        new_vds = self.VirtualDataSet(uid=vds_uid, set_of_vdss_uids=set_of_vdss_uids, name=name)
-        self.next_uid += 1
-        self.vds_dict[vds_uid] = new_vds
-
-    class VirtualDataSet:
-        def __init__(self, uid, set_of_vdss_uids, name):
-            self.uid = uid
-            self.set_of_vdss_uids = set_of_vdss_uids
-            self.name = name
-
+    def _set_ccs_of_analysis(self):
+        return list(CladeCollection.objects.filter(data_set_sample_from__in=self.list_of_data_set_sample_uids))
 
 class VirtualDataSetSampleManager:
     def __init__(self, parent_virtual_object_manager):
         self.virtual_obj_manager = parent_virtual_object_manager
         self.vdss_dict = dict()
-        self.next_uid = 1
+        self._populate_virtual_dss_manager_from_db()
 
-    def make_new_vdss(self, data_set_id, name, list_of_cladal_abundances, uid=None, list_of_cc_uids=None, ):
-        if uid is None:
-            vdss_uid = self.next_uid
-        else:
-            vdss_uid = uid
-        new_vds = self.VirtualDataSetSample(
-            uid=vdss_uid, data_set_id=data_set_id, list_of_cc_uids=list_of_cc_uids,
-            name=name, list_of_cladal_abundances=list_of_cladal_abundances)
-        self.vdss_dict[vdss_uid] = new_vds
-        self.next_uid += 1
-
-    def populate_vdss_manager_from_db(self, list_of_data_set_sample_uids):
-        for dss in DataSetSample.objects.filter(id__in=list_of_data_set_sample_uids):
+    def _populate_virtual_dss_manager_from_db(self):
+        for dss in DataSetSample.objects.filter(id__in=self.virtual_obj_manager.list_of_data_set_sample_uids):
             new_vdss = self.VirtualDataSetSample(
                 uid=dss.id, data_set_id=dss.data_submission_from.id,
                 list_of_cc_uids=[cc.id for cc in CladeCollection.objects.filter(data_set_sample_from=dss)],
@@ -86,19 +63,24 @@ class VirtualDataSetSampleManager:
 class VirtualCladeCollectionManager():
     """Unlike the VirtualAnalysisType the VirtualCladeCollection will be a proxy for an object that already exists
     in the datbase already. As such we won't need to generate pks."""
-    def __init__(self, parent_virtual_object_manager):
-        self.obj_manager = parent_virtual_object_manager
-        self.vcc_dict = {}
+    def __init__(self, obj_manager, ccs_of_analysis):
+        self.obj_manager = obj_manager
+        self.clade_collection_instances_dict = {}
 
-    def populate_vcc_manager_from_db(self, list_of_data_set_sample_uids):
+        self._populate_virtual_vcc_manager_from_db(ccs_of_analysis)
+
+
+    def _populate_virtual_vcc_manager_from_db(self,ccs_of_analysis):
         """When first instantiated we should grab all of the CladeCollections from the database that are part of
         this DataAnalysis and make VirtualCladeCollectionsFrom them.
         We will need to populate the VirtualAnalysisTypeManager vat_dict before
         we can populate the analysis_type_obj_to_representative_rel_abund_in_cc_dicts for each of the
         VirtualCladeCollections so we will do this in a seperate method.
         """
-        ccs_of_analysis = CladeCollection.objects.filter(
-            data_set_sample_from__in=list_of_data_set_sample_uids)
+
+        self.clade_collection_instances_dict = self._create_cc_info_dict(ccs_of_analysis)
+
+    def _create_cc_info_dict(self, ccs_of_analysis):
         print('Instantiating VirtualCladeCollectionManager')
         cc_input_mp_queue = Queue()
         mp_manager = Manager()
@@ -119,7 +101,7 @@ class VirtualCladeCollectionManager():
         for p in all_processes:
             p.join()
 
-        self.vcc_dict = dict(cc_to_info_items_mp_dict)
+        return dict(cc_to_info_items_mp_dict)
 
     def _vcc_id_to_vcc_obj_worker(self, cc_input_mp_queue, cc_to_info_items_mp_dict):
         for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
@@ -152,7 +134,6 @@ class VirtualCladeCollectionManager():
                 ref_seq_id_to_abs_abund_dict[dss.id] = dss.abundance
 
             cc_to_info_items_mp_dict[clade_collection_object.id] = VirtualCladeCollection(
-                id=clade_collection_object.id,
                 clade=clade_collection_object.clade,
                 footprint_as_frozen_set_of_ref_seq_uids=ref_seq_frozen_set,
                 ref_seq_id_to_rel_abund_dict=ref_seq_id_to_rel_abund_dict,
@@ -168,13 +149,13 @@ class VirtualCladeCollectionManager():
 class VirtualCladeCollection:
     """A RAM stored representation of a CladeCollection object that already exists in the DB"""
     def __init__(
-            self, id, clade, footprint_as_frozen_set_of_ref_seq_uids, ref_seq_id_to_rel_abund_dict,
+            self, clade, footprint_as_frozen_set_of_ref_seq_uids, ref_seq_id_to_rel_abund_dict,
             ref_seq_id_to_abs_abund_dict, total_seq_abundance, cc_object, above_cutoff_ref_seqs_obj_set,
             ordered_dsss_objs, vdss_uid, sample_from_name=None):
 
         self.clade = clade
         self.cc_object = cc_object
-        self.id = id
+        self.id = self.cc_object.id
         # This is the ref seq uids for all dss found in the cc as oposed to just those above the
         # within_clade_cutoff. The above cutoff equivalents are stored below
         self.footprint_as_frozen_set_of_ref_seq_uids = footprint_as_frozen_set_of_ref_seq_uids
@@ -235,7 +216,7 @@ class VirutalAnalysisTypeInit:
         at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
                              columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
         for cc in self.vat.clade_collection_obj_set_profile_assignment:
-            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.vcc_dict[
+            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.clade_collection_instances_dict[
                 cc.id].ref_seq_id_to_rel_abund_dict
             at_df.loc[cc.id] = pd.Series(
                 {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
@@ -324,7 +305,7 @@ class VirutalAnalysisTypeInit:
         at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_discovery],
                              columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
         for cc in self.vat.clade_collection_obj_set_profile_discovery:
-            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.vcc_dict[
+            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.clade_collection_instances_dict[
                 cc.id].ref_seq_id_to_rel_abund_dict
             at_df.loc[cc.id] = pd.Series(
                 {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
@@ -394,8 +375,8 @@ class VirutalAnalysisTypeInit:
 class VirtualAnalysisTypeManager():
     """This is a class that will manage the collection of VirtualAnalysisType instances that exist in memory.
     It will be used to generate a new type (so that it can assign a uid) and it will be used to delete too."""
-    def __init__(self, parent_virtual_object_manager):
-        self.obj_manager = parent_virtual_object_manager
+    def __init__(self, obj_manager):
+        self.obj_manager = obj_manager
         self.next_uid = 1
         # key = uid of at, value = VirtualAnalysisType instance
         self.vat_dict = {}
