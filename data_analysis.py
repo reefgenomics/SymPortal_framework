@@ -36,11 +36,12 @@ class SPDataAnalysis:
         self.clade_footp_dicts_list = [{} for _ in self.clade_list]
         self.list_of_initial_types_after_collapse = None
         self.current_clade = None
+        self.list_of_data_set_uids = [
+                int(ds_id_str) for ds_id_str in self.data_analysis_obj.list_of_data_set_uids.split(',')]
         self.virtual_object_manager = virtual_objects.VirtualObjectManager(
             within_clade_cutoff=self.workflow_manager.within_clade_cutoff,
             num_proc=self.workflow_manager.args.num_proc,
-            list_of_data_set_sample_uids=[
-                int(dss_id_str) for dss_id_str in self.data_analysis_obj.list_of_data_set_uids.split(',')])
+            list_of_data_set_uids=self.list_of_data_set_uids)
 
     def analyse_data(self):
         print('Beginning profile discovery')
@@ -51,7 +52,7 @@ class SPDataAnalysis:
         self._associate_vats_to_vccs()
 
         # vcc_with_multiple_types_that_share_div = []
-        # for vcc in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.values():
+        # for vcc in self.virtual_object_manager.vcc_manager.vcc_dict.values():
         #     if len(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items()) > 1:
         #         vats_list = list(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.keys())
         #         shared_ref_seqs = vats_list[0].footprint_as_ref_seq_objs_set.intersection(*[vat.footprint_as_ref_seq_objs_set for vat in vats_list[1:]])
@@ -66,7 +67,13 @@ class SPDataAnalysis:
 
         self._profile_assignment()
 
+        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_profile_assignment.p'), 'wb') as f:
+             pickle.dump(self, f)
+
         self._name_divs()
+
+        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_div_naming.p'), 'wb') as f:
+             pickle.dump(self, f)
 
         self._associate_species_designations()
 
@@ -185,7 +192,7 @@ class SPDataAnalysis:
             print('Naming unamed DIVs')
             div_namer = self.DIVNamer(parent_sp_data_analysis=self)
             div_namer.name_unamed_div_seqs()
-            print('DIV naming complete')
+            print('\nDIV naming complete')
         else:
             print('Automatic sequence name generation is currently disabled for local instances of SymPortal.\n'
                   'This is to prevent naming conlifcts between the remote and the '
@@ -205,12 +212,13 @@ class SPDataAnalysis:
             self.blast_output_path = os.path.join(
                 self.sp_data_analysis.workflow_manager.symportal_root_directory,
                 'symbiodiniumDB', 'blast.out')
-            self.set_of_unamed_divs = set()
+
             self.blast_analysis_object = symportal_utils.BlastnAnalysis(
                 input_file_path=self.query_fasta_path, output_file_path=self.blast_output_path,
                 db_path=self.db_fasta_path, output_format_string='6 qseqid sseqid evalue pident qcovs', num_threads=20)
             self.blast_output_dict = None
             self.list_of_sequence_names_that_already_exist = self._set_exist_seq_names()
+            self.unamed_div_uid_to_div_obj = {}
 
         def _set_exist_seq_names(self):
             list_of_sequence_names_that_already_exist = [ref_seq.name for ref_seq in
@@ -224,9 +232,10 @@ class SPDataAnalysis:
             """
 
             for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
-                self.set_of_unamed_divs.update([rs for rs in vat.footprint_as_ref_seq_objs_set if not rs.has_name])
+                for unamed_div in [rs for rs in vat.footprint_as_ref_seq_objs_set if not rs.has_name]:
+                    self.unamed_div_uid_to_div_obj[unamed_div.id] = unamed_div
 
-            if self.set_of_unamed_divs:
+            if self.unamed_div_uid_to_div_obj:
 
                 self._create_and_write_query_fasta()
 
@@ -246,15 +255,17 @@ class SPDataAnalysis:
         def _regenerate_vat_names(self):
             """Some of the DIVs were not names and so their ID was being used in the vat name.
             Now that all DIVs have names, use these names."""
+            print('Regenerating VirtualAnalysisType names')
             for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
-                vat.generate_name(df=vat.multi_modal_detection_rel_abund_df)
+                vat.generate_name(at_df=vat.multi_modal_detection_rel_abund_df)
+                sys.stdout.write(f'\r{vat.name}')
 
         def _generate_and_assign_new_names(self):
             # Now assign names to those that aren't exact matches
             for no_name_ref_seq_id, output_items in self.blast_output_dict.items():
-                ref_seq_in_question = ReferenceSequence.objects.get(id=int(no_name_ref_seq_id))
+                ref_seq_in_question = self.unamed_div_uid_to_div_obj[int(no_name_ref_seq_id)]
                 if not ref_seq_in_question.has_name:
-                    new_name = self._create_new_reference_sequence_name(output_items[1])
+                    new_name = self._create_new_reference_sequence_name(output_items[0])
                     ref_seq_in_question.name = new_name
                     ref_seq_in_question.has_name = True
                     ref_seq_in_question.save()
@@ -276,12 +287,12 @@ class SPDataAnalysis:
             # create the fasta that will be the database to blast against
             for rs in ReferenceSequence.objects.filter(has_name=True):
                 self.db_fasta_as_list.extend(['>{}'.format(rs.name), rs.sequence])
-            general.write_list_to_destination(destination=self.db_fasta_as_list,
-                                              list_to_write=self.db_fasta_path)
+            general.write_list_to_destination(destination=self.db_fasta_path,
+                                              list_to_write=self.db_fasta_as_list)
 
         def _create_and_write_query_fasta(self):
             # create the fasta as a file that will be queried in the blast
-            for rs in self.set_of_unamed_divs:
+            for rs in self.unamed_div_uid_to_div_obj.values():
                 self.query_fasta_as_list.extend([f'>{rs.id}', rs.sequence])
             general.write_list_to_destination(
                 destination=self.query_fasta_path, list_to_write=self.query_fasta_as_list)
@@ -387,8 +398,8 @@ class SPDataAnalysis:
                     return False
 
     def _profile_assignment(self):
-        print('\nBeginning profile assignment')
-        for virtual_clade_collection in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.values():
+        print('\n\nBeginning profile assignment')
+        for virtual_clade_collection in self.virtual_object_manager.vcc_manager.vcc_dict.values():
             profile_assigner = self.ProfileAssigner(virtual_clade_collection = virtual_clade_collection,
                 parent_sp_data_analysis = self)
             profile_assigner.assign_profiles()
@@ -530,7 +541,7 @@ class SPDataAnalysis:
                 clade_collection_to_type_tuple_list.append((cc, vat))
 
         for cc, vat in clade_collection_to_type_tuple_list:
-            virtual_cc = self.virtual_object_manager.vcc_manager.clade_collection_instances_dict[cc.id]
+            virtual_cc = self.virtual_object_manager.vcc_manager.vcc_dict[cc.id]
             current_type_seq_rel_abund_for_cc = []
             cc_ref_seq_abundance_dict = virtual_cc.ref_seq_id_to_rel_abund_dict
             for ref_seq in vat.footprint_as_ref_seq_objs_set:
@@ -581,7 +592,7 @@ class SPDataAnalysis:
         return clade_fp_dict
 
     def _populate_clade_fp_dicts_list(self):
-        for cc_id, vcc in self.virtual_object_manager.vcc_manager.clade_collection_instances_dict.items():
+        for cc_id, vcc in self.virtual_object_manager.vcc_manager.vcc_dict.items():
             clade_index = self.clade_list.index(vcc.clade)
             if vcc.above_cutoff_ref_seqs_obj_set in self.clade_footp_dicts_list[clade_index]:
                 self.clade_footp_dicts_list[clade_index][vcc.above_cutoff_ref_seqs_obj_set].cc_list.append(vcc)
@@ -596,7 +607,7 @@ class ArtefactAssessor:
     def __init__(self, parent_sp_data_analysis):
         self.sp_data_analysis = parent_sp_data_analysis
         self.list_of_vccs = list(self.sp_data_analysis.virtual_object_manager.\
-            vcc_manager.clade_collection_instances_dict.values())
+            vcc_manager.vcc_dict.values())
         # key:VirtualAnalysisType.id, value:VirtualAnalysisType
         self.virtual_analysis_type_dict = self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict
         self.analysis_types_of_analysis = list(self.virtual_analysis_type_dict.values())

@@ -69,7 +69,7 @@ class OutputTypeCountTable:
         self.species_set = set()
         self.species_ref_dict = self._set_species_ref_dict()
         self.output_file_paths_list = []
-        self.output_dir = os.path.join(symportal_root_directory, 'outputs', 'analyses', self.data_analysis_obj.id)
+        self.output_dir = os.path.join(symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id))
         os.makedirs(self.output_dir, exist_ok=True)
         self.path_to_relative_count_table = os.path.join(
             self.output_dir, f'{self.data_analysis_obj.id}_'
@@ -186,7 +186,9 @@ class OutputTypeCountTable:
         return meta_info_string_items
 
     def _populate_main_body_of_dfs(self):
+        print('\nPopulating output dfs:')
         for vat in self.clade_sorted_list_of_vats_to_output:
+            sys.stdout.write(f'\r{vat.name}')
             tosp = self.TypeOutputSeriesPopulation(parent_output_type_count_table=self, vat=vat)
             data_relative_list, data_absolute_list = tosp.make_output_series()
             self.rel_abund_output_df[vat.id] = data_relative_list
@@ -225,7 +227,7 @@ class OutputTypeCountTable:
             self._pop_av_and_stdev_abund()
 
             return self.data_relative_list, self.data_absolute_list
-            # TODO you are here.
+
 
         def _pop_av_and_stdev_abund(self):
             average_abund_and_sd_string = ''
@@ -256,10 +258,10 @@ class OutputTypeCountTable:
 
         def _pop_vat_accession_name(self):
             vat_accession_name = self.vat.generate_name(
-                df=self.vat.multi_modal_detection_rel_abund_df,
+                at_df=self.vat.multi_modal_detection_rel_abund_df,
                 use_rs_ids_rather_than_names=True)
-            self.data_relative_list.append(self.vat_accession_name)
-            self.data_absolute_list.append(self.vat_accession_name)
+            self.data_relative_list.append(vat_accession_name)
+            self.data_absolute_list.append(vat_accession_name)
 
         def _pop_type_abundances(self):
             # type abundances
@@ -276,6 +278,7 @@ class OutputTypeCountTable:
 
                 if count == 0:  # type not found in vdss
                     temp_rel_abund_holder_list.append(0)
+                    temp_abs_abund_holder_list.append(0)
                 if count > 1:  # more than one vcc from vdss associated with type
                     raise RuntimeError('More than one vcc of vdss matched vat in output')
             self.data_relative_list.extend(temp_rel_abund_holder_list)
@@ -321,8 +324,6 @@ class OutputTypeCountTable:
             self.data_absolute_list.append(self.vat.id)
             self.data_relative_list.append(self.vat.id)
 
-    def _create_virtual_object_manager(self):
-        foo = 'apples'
 
     def _init_da_object(self, data_analysis_obj, data_analysis_uid):
         if data_analysis_uid:
@@ -349,6 +350,7 @@ class OutputTypeCountTable:
                 dss.id for dss in DataSetSample.objects.filter(
                     data_submission_from__in=self.data_set_uid_set_to_output)]
         return self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output
+
     def _init_virtual_object_manager(
             self, virtual_object_manager, data_set_uids_to_output, data_set_sample_uid_set_to_output,
             num_proc, within_clade_cutoff):
@@ -369,28 +371,31 @@ class OutputTypeCountTable:
                     self.data_set_sample_uid_set_to_output).distinct():
                 virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
 
-
-
     def _get_data_set_uids_of_data_sets(self):
         vds_uid_set = set()
-        for vdss in [vdss for vdss in self.virtual_object_manager.vdss_manager.vdss_dict.values() if vdss.uid in self.data_set_sample_uid_set_to_output]
+        for vdss in [vdss for vdss in self.virtual_object_manager.vdss_manager.vdss_dict.values() if
+                     vdss.uid in self.data_set_sample_uid_set_to_output]:
             vds_uid_set.add(vdss.data_set_id)
         return vds_uid_set
+
     def _set_sorted_list_of_vdss_to_output(self):
         """Generate the list of dss uids that will be the order that we will use for the index
         of the output dataframes. The order should be the samples of the most abundant VirtualAnalsysiTypes first
         and within this order sorted by the relative abundance of the VirtualAnalsysiTypes within the sample"""
         sorted_vdss_uid_list = []
+        vcc_dict = self.virtual_object_manager.vcc_manager.vcc_dict
         for vat in self.overall_sorted_list_of_vats:
-            sorted_vdss_uid_list.extend(
-                [vcc.vdss_uid for vcc in
-                list(vat.type_output_rel_abund_series.sorted(ascending=False)) if
-                vcc.vdss_uid in self.data_set_sample_uid_set_to_output])
+            for vcc_uid in vat.type_output_rel_abund_series.sort_values(ascending=False).index.tolist():
+                vdss_of_vcc = vcc_dict[vcc_uid].vdss_uid
+                if vdss_of_vcc in self.data_set_sample_uid_set_to_output:
+                    sorted_vdss_uid_list.append(vdss_of_vcc)
+
         # add the samples that didn't have a type associated to them
         sorted_vdss_uid_list.extend(
             [dss_uid for dss_uid in
              self.data_set_sample_uid_set_to_output if dss_uid not in sorted_vdss_uid_list])
 
+        return sorted_vdss_uid_list
     def _set_clade_sorted_list_of_vats_to_output(self):
         """Get list of analysis type sorted by clade, and then by
         len of the cladecollections associated to them from the output
@@ -408,7 +413,7 @@ class OutputTypeCountTable:
                               sorted(list_of_tup_vat_to_vccs_of_output, key=lambda x: x[1], reverse=True)]
 
         clade_ordered_type_order = []
-        for clade in self.clades_of_output:
+        for clade in list('ABCDEFGHI'):
             clade_ordered_type_order.extend([vat for vat in self.overall_sorted_list_of_vats if vat.clade == clade])
         return clade_ordered_type_order
 

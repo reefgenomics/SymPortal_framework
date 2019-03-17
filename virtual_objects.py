@@ -4,6 +4,7 @@ import sys
 from dbApp.models import DataSetSampleSequence, DataSetSample, CladeCollection, ReferenceSequence
 import pickle
 import os
+import json
 class VirtualObjectManager():
     """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
     I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.
@@ -31,6 +32,7 @@ class VirtualObjectManager():
     def _set_ccs_of_analysis(self):
         return list(CladeCollection.objects.filter(data_set_sample_from__in=self.list_of_data_set_sample_uids))
 
+
 class VirtualDataSetSampleManager:
     def __init__(self, parent_virtual_object_manager):
         self.virtual_obj_manager = parent_virtual_object_manager
@@ -38,11 +40,13 @@ class VirtualDataSetSampleManager:
         self._populate_virtual_dss_manager_from_db()
 
     def _populate_virtual_dss_manager_from_db(self):
+        print('\nInstantiating VirtualDataSetSamples')
         for dss in DataSetSample.objects.filter(id__in=self.virtual_obj_manager.list_of_data_set_sample_uids):
+            sys.stdout.write(f'\r{dss.name}')
             new_vdss = self.VirtualDataSetSample(
                 uid=dss.id, data_set_id=dss.data_submission_from.id,
                 list_of_cc_uids=[cc.id for cc in CladeCollection.objects.filter(data_set_sample_from=dss)],
-                name=dss.name,list_of_cladal_abundances=[int(_) for _ in dss.cladal_seq_totals.split(',')])
+                name=dss.name,list_of_cladal_abundances=[int(_) for _ in json.loads(dss.cladal_seq_totals)])
             self.vdss_dict[new_vdss.uid] = new_vdss
 
     class VirtualDataSetSample:
@@ -53,11 +57,13 @@ class VirtualDataSetSampleManager:
             self.name = name
             self.list_of_cladal_abundances = list_of_cladal_abundances
             self.total_seqs = sum(self.list_of_cladal_abundances)
-            self.cladal_abundances_dict = {
-                clade : abund/self.total_seqs for
-                clade, abund in
-                zip(list('ABCDEFGHI'), self.list_of_cladal_abundances)}
-
+            if self.total_seqs != 0:
+                self.cladal_abundances_dict = {
+                    clade : abund/self.total_seqs for
+                    clade, abund in
+                    zip(list('ABCDEFGHI'), self.list_of_cladal_abundances)}
+            else:
+                self.cladal_abundances_dict = {clade : 0 for clade in list('ABCDEFGHI')}
 
 
 class VirtualCladeCollectionManager():
@@ -65,7 +71,7 @@ class VirtualCladeCollectionManager():
     in the datbase already. As such we won't need to generate pks."""
     def __init__(self, obj_manager, ccs_of_analysis):
         self.obj_manager = obj_manager
-        self.clade_collection_instances_dict = {}
+        self.vcc_dict = {}
 
         self._populate_virtual_vcc_manager_from_db(ccs_of_analysis)
 
@@ -78,7 +84,7 @@ class VirtualCladeCollectionManager():
         VirtualCladeCollections so we will do this in a seperate method.
         """
 
-        self.clade_collection_instances_dict = self._create_cc_info_dict(ccs_of_analysis)
+        self.vcc_dict = self._create_cc_info_dict(ccs_of_analysis)
 
     def _create_cc_info_dict(self, ccs_of_analysis):
         print('Instantiating VirtualCladeCollectionManager')
@@ -131,7 +137,7 @@ class VirtualCladeCollectionManager():
 
             ref_seq_id_to_abs_abund_dict = {}
             for dss in dss_objects_of_cc_list:
-                ref_seq_id_to_abs_abund_dict[dss.id] = dss.abundance
+                ref_seq_id_to_abs_abund_dict[dss.reference_sequence_of.id] = dss.abundance
 
             cc_to_info_items_mp_dict[clade_collection_object.id] = VirtualCladeCollection(
                 clade=clade_collection_object.clade,
@@ -178,7 +184,6 @@ class VirtualCladeCollection:
             return f'VirtualCladeCollection uid: {self.id}'
 
 
-
 class VirutalAnalysisTypeInit:
     """Class for instantiasing VirtualAnalysisTypes
 
@@ -202,21 +207,21 @@ class VirutalAnalysisTypeInit:
 
     def _make_abs_and_rel_abund_output_series(self):
         index_for_series = [vcc.id for vcc in self.vat.clade_collection_obj_set_profile_discovery]
-        self.type_output_rel_abund_series = pd.Series(index=index_for_series)
-        self.type_output_abs_abund_series = pd.Series(index=index_for_series)
-        for vcc in self.vat.clade_collection_obj_set_profile_discovery:
+        self.vat.type_output_rel_abund_series = pd.Series(index=index_for_series)
+        self.vat.type_output_abs_abund_series = pd.Series(index=index_for_series)
+        for vcc in self.vat.clade_collection_obj_set_profile_assignment:
             vdss_of_vcc = self.vat_manager.obj_manager.vdss_manager.vdss_dict[vcc.vdss_uid]
             cladal_proportion_dict = vdss_of_vcc.cladal_abundances_dict
 
-            self.type_output_rel_abund_series.at[vcc.id] = sum([vcc.ref_seq_id_to_abs_abund_dict[ref_seq_id] for ref_seq_id in self.vat.ref_seq_uids_set]) * cladal_proportion_dict[vcc.clade]
+            self.vat.type_output_rel_abund_series.at[vcc.id] = (sum([vcc.ref_seq_id_to_abs_abund_dict[ref_seq_id] for ref_seq_id in self.vat.ref_seq_uids_set])/vcc.total_seq_abundance) * cladal_proportion_dict[vcc.clade]
 
-            self.type_output_abs_abund_series.at[vcc.id] = sum([vcc.ref_seq_id_to_abs_abund_dict[ref_seq_id] for ref_seq_id in self.vat.ref_seq_uids_set])
+            self.vat.type_output_abs_abund_series.at[vcc.id] = sum([vcc.ref_seq_id_to_abs_abund_dict[ref_seq_id] for ref_seq_id in self.vat.ref_seq_uids_set])
 
     def _make_multi_modal_rel_abund_df(self):
         at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
                              columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
         for cc in self.vat.clade_collection_obj_set_profile_assignment:
-            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.clade_collection_instances_dict[
+            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.vcc_dict[
                 cc.id].ref_seq_id_to_rel_abund_dict
             at_df.loc[cc.id] = pd.Series(
                 {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
@@ -276,7 +281,7 @@ class VirutalAnalysisTypeInit:
             self.vat.co_dominant = True
         else:
             self.vat.co_dominant = False
-        self.majority_reference_sequence_obj_set = set(
+        self.vat.majority_reference_sequence_obj_set = set(
             [rs for rs in self.vat.footprint_as_ref_seq_objs_set if
              rs.id in self.vat.majority_reference_sequence_uid_set])
 
@@ -305,7 +310,7 @@ class VirutalAnalysisTypeInit:
         at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_discovery],
                              columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
         for cc in self.vat.clade_collection_obj_set_profile_discovery:
-            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.clade_collection_instances_dict[
+            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.vcc_dict[
                 cc.id].ref_seq_id_to_rel_abund_dict
             at_df.loc[cc.id] = pd.Series(
                 {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
@@ -551,7 +556,7 @@ class VirtualAnalysisTypeManager():
                 if not use_rs_ids_rather_than_names:
                     co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
                 else:
-                    co_dom_name_part = '/'.join(rs.id for rs in ordered_list_of_co_dom_ref_seq_obj)
+                    co_dom_name_part = '/'.join(str(rs.id) for rs in ordered_list_of_co_dom_ref_seq_obj)
 
                 list_of_remaining_ref_seq_objs = []
                 for ref_seq_id in list(at_df):
@@ -565,7 +570,7 @@ class VirtualAnalysisTypeManager():
                         self.name = co_dom_name_part
                         return co_dom_name_part
                     else:
-                        co_dom_name_part += '-{}'.format('-'.join([rs.id for rs in list_of_remaining_ref_seq_objs]))
+                        co_dom_name_part += '-{}'.format('-'.join([str(rs.id) for rs in list_of_remaining_ref_seq_objs]))
                         return co_dom_name_part
 
             else:
@@ -578,7 +583,7 @@ class VirtualAnalysisTypeManager():
                     self.name = '-'.join(rs.name for rs in ordered_list_of_ref_seqs)
                     return self.name
                 else:
-                    return '-'.join(rs.id for rs in ordered_list_of_ref_seqs)
+                    return '-'.join(str(rs.id) for rs in ordered_list_of_ref_seqs)
 
 
         def __str__(self):

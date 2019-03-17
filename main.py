@@ -16,7 +16,12 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see
     https://github.com/didillysquat/SymPortal_framework/tree/master/LICENSE.txt.
+    TODO Integrate the VirtualObjectsManager and specifically VirtualDataSetSample and VirtualCladeCollections
+    into the DataLoading and then into the SequenceCountTableCreator.
+
     """
+
+
 
 # Django specific settings
 import os
@@ -40,6 +45,7 @@ import argparse
 import data_loading
 import sp_config
 import data_analysis
+import pickle
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
@@ -62,9 +68,11 @@ class SymPortalWorkFlowManager:
         # for data analysis
         self.within_clade_cutoff = 0.03
         self.data_analysis_object = None
-
+        self.sp_data_analysis = None
         # for dist and pcoa outputs
         self.pcoa_output_path_list = []
+
+
 
     def _define_args(self, custom_args_list=None):
         parser = argparse.ArgumentParser(
@@ -216,6 +224,24 @@ class SymPortalWorkFlowManager:
         self._verify_name_arg_given()
         self.create_new_data_analysis_obj()
         self.start_data_analysis()
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_analysis.p'), 'wb') as f:
+             pickle.dump(self, f)
+        # TODO we need to write to db and update the virtual types before we do the output as we need to know the
+        # uids of the databse objects
+        self._output_type_tables()
+
+        # Write out the DataSetSampleSequence count tables
+
+    def _output_type_tables(self):
+        # Write out the AnalysisType count table
+        atct = output.OutputTypeCountTable(
+            call_type='analysis', num_proc=self.args.num_proc,
+            symportal_root_directory=self.symportal_root_directory,
+            within_clade_cutoff=self.within_clade_cutoff,
+            data_set_uids_to_output=self.sp_data_analysis.list_of_data_set_uids,
+            virtual_object_manager=self.sp_data_analysis.virtual_object_manager,
+            data_analysis_obj=self.sp_data_analysis.data_analysis_obj)
+        atct.output_types()
 
     def create_new_data_analysis_obj(self):
         self.data_analysis_object = DataAnalysis(
@@ -226,9 +252,13 @@ class SymPortalWorkFlowManager:
         self.data_analysis_object.save()
 
     def start_data_analysis(self):
-        sp_data_analysis = data_analysis.SPDataAnalysis(
+        # Perform the analysis
+        self.sp_data_analysis = data_analysis.SPDataAnalysis(
             workflow_manager_parent=self, data_analysis_obj=self.data_analysis_object)
-        sp_data_analysis.analyse_data()
+        self.sp_data_analysis.analyse_data()
+
+
+
         # data_sub_collection_run.main(
         #     data_analysis_object=self.data_analysis_object, num_processors=self.args.num_proc,
         #     no_figures=self.args.no_figures, no_ordinations=self.args.no_ordinations,
@@ -300,7 +330,7 @@ class SymPortalWorkFlowManager:
             output_user=self.submitting_user)
 
     def get_data_analysis_by_uid(self):
-        return DataAnalysis.objects.get(id=self.args.data_analysis_id)
+        return DataAnalysis.objects.get(id=self.data_analysis_object.id)
 
     def verify_data_analysis_uid_provided(self):
         if not self.args.data_analysis_id:
