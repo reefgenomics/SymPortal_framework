@@ -17,6 +17,7 @@ import general
 import string
 import re
 import sp_config
+import json
 
 class SPDataAnalysis:
     def __init__(self, workflow_manager_parent, data_analysis_obj):
@@ -80,6 +81,51 @@ class SPDataAnalysis:
         self._del_and_remake_temp_wkd()
 
         print('DATA ANALYSIS COMPLETE')
+
+        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_del_tempdir.p'), 'wb') as f:
+             pickle.dump(self, f)
+
+        self._make_analysis_type_objects_from_vats()
+
+    def _make_analysis_type_objects_from_vats(self):
+        print('\nCovnerting VirtualAnalysisTypes to database AnalysisTypes')
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            sys.stdout.write(f'\r{vat.name}')
+            new_at = self._create_analysis_type_from_vat(vat)
+
+            self._update_uid_of_vat(new_at, vat)
+        self._update_keys_of_vat_dict()
+
+    def _update_keys_of_vat_dict(self):
+        # now update remake the vat dict so that the correct ids are used
+        new_dict = {}
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            new_dict[vat.id] = vat
+        self.virtual_object_manager.vat_manager.vat_dict = new_dict
+
+    def _update_uid_of_vat(self, new_at, vat):
+        # now update the id of the vat
+        self.virtual_object_manager.vat_manager.vat_dict[vat.id].id = new_at.id
+
+    def _create_analysis_type_from_vat(self, vat):
+        ordered_footprint_list = ','.join(str(rs_id) for rs_id in list(vat.multi_modal_detection_rel_abund_df))
+        majority_reference_sequence_set = ','.join([str(rs_id) for rs_id in vat.majority_reference_sequence_uid_set])
+        list_of_clade_collections = ','.join(
+            [str(cc_uid) for cc_uid in vat.clade_collection_obj_set_profile_assignment])
+        footprint_sequence_abundances = json.dumps(vat.abs_abund_of_ref_seqs_in_assigned_vccs_df.values.tolist())
+
+        artefact_intras = ','.join(str(rs_uid) for rs_uid in vat.artefact_ref_seq_uid_set)
+        new_at = AnalysisType(
+            data_analysis_from=self.data_analysis_obj,
+            ordered_footprint_list=ordered_footprint_list,
+            majority_reference_sequence_set=majority_reference_sequence_set,
+            list_of_clade_collections=list_of_clade_collections,
+            footprint_sequence_abundances=footprint_sequence_abundances,
+            clade=vat.clade, co_dominant=vat.co_dominant, name=vat.name,
+            species=vat.species, artefact_intras=artefact_intras
+        )
+        new_at.save()
+        return new_at
 
     def _del_and_remake_temp_wkd(self):
         if os.path.exists(self.temp_wkd):
@@ -490,6 +536,7 @@ class SPDataAnalysis:
 
         def _split_vat_into_two_new_vats(self):
             print(f'\n\nMultiModalDetection: Splitting {self.current_vat.name}')
+
             list_of_vcc_objs_one = [
                 vcc for vcc in self.current_vat.clade_collection_obj_set_profile_assignment if
                 vcc.id in self.list_of_vcc_uids_one]
@@ -498,14 +545,16 @@ class SPDataAnalysis:
                 clade_collection_obj_list=list_of_vcc_objs_one,
                 ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
             print(f'Created {resultant_type_one.name}')
+
             list_of_vcc_objs_two = [
                 vcc for vcc in self.current_vat.clade_collection_obj_set_profile_assignment if
-                vcc.id in self.list_of_vcc_uids_one]
+                vcc.id in self.list_of_vcc_uids_two]
             resultant_type_two = self.sp_data_analysis.virtual_object_manager.vat_manager. \
                 make_vat_post_profile_assignment(
                 clade_collection_obj_list=list_of_vcc_objs_two,
                 ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
             print(f'Created {resultant_type_two.name}')
+
             print(f'Destroyed {self.current_vat.name}\n')
             self.sp_data_analysis.virtual_object_manager.vat_manager. \
                 delete_virtual_analysis_type(self.current_vat)

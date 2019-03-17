@@ -64,6 +64,7 @@ class OutputTypeCountTable:
         self.sorted_list_of_vdss_uids_to_output = self._set_sorted_list_of_vdss_to_output()
         self.number_of_samples = None
         self.call_type = call_type
+        self.pre_headers = None
         self.rel_abund_output_df, self.abs_abund_output_df = self._init_dfs()
         # set of all of the species found in the vats
         self.species_set = set()
@@ -95,9 +96,34 @@ class OutputTypeCountTable:
 
         self._populate_main_body_of_dfs()
 
+        self._populate_sample_name_series()
+
         self._populate_meta_info_of_dfs()
 
         self._write_out_dfs()
+
+    def _populate_sample_name_series(self):
+        dss_name_ordered_list = [self.virtual_object_manager.vdss_manager.vdss_dict[vdss_uid].name for vdss_uid in self.sorted_list_of_vdss_uids_to_output]
+
+        sample_name_series_data = []
+
+        for _ in range(len(self.pre_headers)):
+            sample_name_series_data.append(np.nan)
+
+        for name in dss_name_ordered_list:
+            sample_name_series_data.append(name)
+
+        # add two nan for the remainder
+        for _ in range(len(self.abs_abund_output_df.index.tolist()) - (len(self.pre_headers) + len(dss_name_ordered_list))):
+            sample_name_series_data.append(np.nan)
+
+        sample_name_series = pd.Series(
+            name='sample_name',
+            data=sample_name_series_data,
+            index=self.abs_abund_output_df.index.tolist())
+
+        self.abs_abund_output_df.insert(loc=0, column='sample_name', value=sample_name_series)
+        self.rel_abund_output_df.insert(loc=0, column='sample_name', value=sample_name_series)
 
     def _populate_meta_info_of_dfs(self):
         self._append_species_header_to_dfs()
@@ -333,10 +359,10 @@ class OutputTypeCountTable:
         return self.data_analysis_obj
 
     def _init_dfs(self):
-        pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence',
+        self.pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence',
                        'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
         post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
-        self.df_index = pre_headers + self.sorted_list_of_vdss_uids_to_output + post_headers
+        self.df_index = self.pre_headers + self.sorted_list_of_vdss_uids_to_output + post_headers
         return pd.DataFrame(index=self.df_index), pd.DataFrame(index=self.df_index)
 
     def _init_dss_and_ds_uids(self, data_set_sample_uid_set_to_output, data_set_uids_to_output):
@@ -386,9 +412,11 @@ class OutputTypeCountTable:
         vcc_dict = self.virtual_object_manager.vcc_manager.vcc_dict
         for vat in self.overall_sorted_list_of_vats:
             for vcc_uid in vat.type_output_rel_abund_series.sort_values(ascending=False).index.tolist():
-                vdss_of_vcc = vcc_dict[vcc_uid].vdss_uid
-                if vdss_of_vcc in self.data_set_sample_uid_set_to_output:
-                    sorted_vdss_uid_list.append(vdss_of_vcc)
+                vdss_uid_of_vcc = vcc_dict[vcc_uid].vdss_uid
+                # Because several vccs can come from the same vdss we need to make sure that the vdss has
+                # not already been put into the sorted_vdss_uid_list
+                if vdss_uid_of_vcc in self.data_set_sample_uid_set_to_output and vdss_uid_of_vcc not in sorted_vdss_uid_list:
+                    sorted_vdss_uid_list.append(vdss_uid_of_vcc)
 
         # add the samples that didn't have a type associated to them
         sorted_vdss_uid_list.extend(

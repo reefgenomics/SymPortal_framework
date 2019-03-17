@@ -1015,28 +1015,31 @@ class SubPlotter:
     def _create_rect_patches_and_populate_colour_list(self):
         for sample in self.parent_plotter.output_count_table_as_df.index.values.tolist()[
                       self.index_of_this_subplot * self.parent_plotter.samples_per_subplot:self.end_slice]:
-            sys.stdout.write(f'\rPlotting sample: {sample}')
+            sys.stdout.write(f'\rPlotting sample: {self.parent_plotter.smp_uid_to_smp_name_dict[int(sample)]}')
             self._add_sample_names_to_tick_label_list(sample)
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
             # for each sequence, create a rect patch
             # the rect will be 1 in width and centered about the ind value.
-            for seq in list(self.parent_plotter.output_count_table_as_df):
+            for type_uid in list(self.parent_plotter.output_count_table_as_df):
                 # class matplotlib.patches.Rectangle(xy, width, height, angle=0.0, **kwargs)
-                rel_abund = self.parent_plotter.output_count_table_as_df.loc[sample, seq]
-                if rel_abund > 0:
-                    self.patches_list.append(Rectangle(
-                        (self.x_index_for_plot - 0.5, bottom),
-                        1,
-                        rel_abund, color=self.parent_plotter.colour_dict[seq]))
-                    self.colour_list.append(self.parent_plotter.colour_dict[seq])
-                    bottom += rel_abund
+                rel_abund = self.parent_plotter.output_count_table_as_df.loc[sample, type_uid]
+                try:
+                    if rel_abund > 0:
+                        self.patches_list.append(Rectangle(
+                            (self.x_index_for_plot - 0.5, bottom),
+                            1,
+                            rel_abund, color=self.parent_plotter.colour_dict[type_uid]))
+                        self.colour_list.append(self.parent_plotter.colour_dict[type_uid])
+                        bottom += rel_abund
+                except:
+                    apples = 'asdf'
             self.x_index_for_plot += 1
 
     def _add_sample_names_to_tick_label_list(self, sample):
-        sample_name = self.parent_plotter.smpl_id_to_smp_name_dict[int(sample)]
+        sample_name = self.parent_plotter.smp_uid_to_smp_name_dict[int(sample)]
         if len(sample_name) < 20:
-            self.x_tick_label_list.append(self.parent_plotter.smpl_id_to_smp_name_dict[int(sample)])
+            self.x_tick_label_list.append(sample_name)
         else:
             self.x_tick_label_list.append(f'uid_{int(sample)}')
 
@@ -1127,8 +1130,153 @@ class LegendPlotter:
             color=self.parent_plotter.colour_dict[self.parent_plotter.ordered_list_of_seqs_names[self.sequence_count]]))
         return leg_box_x, leg_box_y
 
+class TypeStackedBarPlotter:
+    """Class for plotting the type count table output"""
+    def __init__(self, type_relative_abund_count_table_path, output_directory, time_date_str=None):
+        self.type_rel_abund_count_table_path = type_relative_abund_count_table_path
+        self.output_directory = output_directory
+        if time_date_str:
+            self.time_date_str = time_date_str
+        else:
+            self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
+        self.max_n_cols = 5
+        self.max_n_rows = 10
+        self.num_leg_cells = self.max_n_cols * self.max_n_rows
+
+        self.sorted_type_prof_uids_by_local_abund = None
+        self.smp_uid_to_smp_name_dict = None
+        self.type_uid_to_type_name_dict = None
+        self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
+        self.colour_dict = self._set_colour_dict()
+
+        self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
+        self.samples_per_subplot = 50
+        self.number_of_subplots = self._infer_num_subplots()
+        self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
+        self.output_path_list = []
+
+    def plot_stacked_bar_seqs(self):
+        for sub_plot_index in range(self.number_of_subplots):
+            sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
+            sub_plotter.plot_seq_subplot()
+
+        self._plot_legend()
+
+        plt.tight_layout()
+
+        self._write_out_plot()
+
+
+    def _write_out_plot(self):
+        sys.stdout.write('\nFigure generation complete')
+        sys.stdout.write('\nFigures output to:')
+
+        svg_path = f'{self.fig_output_base}_type_abundance_stacked_bar_plot.svg'
+        self.output_path_list.append(svg_path)
+        sys.stdout.write(f'{svg_path}\n')
+        plt.savefig(svg_path)
+
+        png_path = f'{self.fig_output_base}_type_abundance_stacked_bar_plot.png'
+        self.output_path_list.append(png_path)
+        sys.stdout.write(f'{png_path}\n')
+        plt.savefig(png_path)
+
+    def _plot_legend(self):
+        legend_plotter = LegendPlotter(parent_plotter=self)
+        legend_plotter.plot_legend_seqs()
+
+    def _infer_num_subplots(self):
+        # number of subplots will be one per smp_per_plot
+        # and if tehre are remainers be sure to add an extra plot for this
+        if (self.num_samples % self.samples_per_subplot) != 0:
+            return int(self.num_samples / self.samples_per_subplot) + 1
+        else:
+            return int(self.num_samples / self.samples_per_subplot)
+
+    def _create_output_df_and_populate_smpl_id_to_smp_name_dict(self):
+        sp_output_df = pd.read_csv(
+            self.type_rel_abund_count_table_path, sep='\t', lineterminator='\n', skiprows=[1, 2, 3, 5], header=None)
+
+        # get a list of tups that are the seq names and the abundances zipped together
+        type_profile_to_abund_tup_list = [
+            (name, int(abund)) for name, abund in
+            zip(sp_output_df.iloc[0][2:].values.tolist(), sp_output_df.iloc[1][2:].values.tolist())]
+
+        # convert the names that are numbers into int strings rather than float strings.
+        int_temp_list = []
+        for name_abund_tup in type_profile_to_abund_tup_list:
+            try:
+                int_temp_list.append((str(int(name_abund_tup[0])), int(name_abund_tup[1])))
+            except:
+                int_temp_list.append((name_abund_tup[0], int(name_abund_tup[1])))
+        type_profile_to_abund_tup_list = int_temp_list
+
+        # need to drop the rows that contain the sequence accession and species descriptions
+        index_to_drop_from = None
+        for i, row_name in enumerate(sp_output_df.iloc[:, 0]):
+            if 'Sequence accession' in str(row_name):
+                # then we want to drop all rows from here until the end
+                index_to_drop_from = i
+                break
+
+        sp_output_df = sp_output_df.iloc[:index_to_drop_from]
+
+        # now make a dict of sample id to sample name so that we can work with uids
+        self.smp_uid_to_smp_name_dict = {int(smp_uid): smp_name for smp_uid, smp_name in zip(sp_output_df.iloc[3:, 0], sp_output_df.iloc[3:, 1])}
+
+        # now make a dict of of type id to type name so that we can also work eith uids for the types
+        # as there could be types with identical names
+        self.type_uid_to_type_name_dict = {int(type_uid): type_name for type_uid, type_name in zip(sp_output_df.iloc[0, 2:], sp_output_df.iloc[2, 2:])}
+
+        # now drop the sample name columns
+        sp_output_df.drop(columns=1, inplace=True)
+
+        # now drop the type name columns
+        sp_output_df.drop(index=2, inplace=True)
+
+        # now promote the its2_type_prof names to columns headers and drop the local abund row and .
+        sp_output_df.columns = ['sample_id'] + [int(a[0]) for a in type_profile_to_abund_tup_list]
+        sp_output_df.drop(index=[0, 1], inplace=True)
+
+        self.sorted_type_prof_uids_by_local_abund = [
+            int(a[0]) for a in sorted(type_profile_to_abund_tup_list, key=lambda x: x[1], reverse=True)]
+
+        # convert the sample_id col to numeric
+        sp_output_df['sample_id'] = pd.to_numeric(sp_output_df['sample_id'])
+
+        return sp_output_df.set_index(keys='sample_id', drop=True).astype('float')
+
+
+    def _set_colour_dict(self):
+        colour_palette_pas = ['#%02x%02x%02x' % rgb_tup for rgb_tup in
+                              create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=1000, num_cols=50,
+                                                 time_out_iterations=10000)]
+
+        grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
+
+        # We will use the col headers of the df as the its2 type profile order for plotting but we
+        # we should colour according to the abundance of the its2 type profiles
+        # as we don't want to run out of colours by the time we get to profiles that are very abundant.
+        # The sorted_type_prof_names_by_local_abund object has the names of the its2 type profile in order of abundance
+        # we will use the index order as the order of samples to plot
+
+        # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
+        # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
+
+        colour_dict = {}
+        for i in range(len(self.sorted_type_prof_uids_by_local_abund)):
+            if i < self.num_leg_cells:
+                colour_dict[self.sorted_type_prof_uids_by_local_abund[i]] = colour_palette_pas[i]
+            else:
+                grey_index = i % len(grey_palette)
+                colour_dict[self.sorted_type_prof_uids_by_local_abund[i]] = grey_palette[grey_index]
+        return  colour_dict
+
+
 
 class SeqStackedBarPlotter:
+    """Class for plotting the sequence count table output"""
     def __init__(
             self, seq_relative_abund_count_table_path, output_directory,
             time_date_str=None, ordered_sample_uid_list=None):

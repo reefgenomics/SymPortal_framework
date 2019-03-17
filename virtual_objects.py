@@ -218,19 +218,29 @@ class VirutalAnalysisTypeInit:
             self.vat.type_output_abs_abund_series.at[vcc.id] = sum([vcc.ref_seq_id_to_abs_abund_dict[ref_seq_id] for ref_seq_id in self.vat.ref_seq_uids_set])
 
     def _make_multi_modal_rel_abund_df(self):
-        at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
+        mm_at_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
                              columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
+        abs_abund_df = pd.DataFrame(index=[cc.id for cc in self.vat.clade_collection_obj_set_profile_assignment],
+                             columns=[rs.id for rs in self.vat.footprint_as_ref_seq_objs_set])
+
         for cc in self.vat.clade_collection_obj_set_profile_assignment:
-            ref_seq_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.vcc_dict[
+            ref_seq_rel_abund_dict_for_cc = self.vat_manager.obj_manager.vcc_manager.vcc_dict[
                 cc.id].ref_seq_id_to_rel_abund_dict
-            at_df.loc[cc.id] = pd.Series(
-                {rs_uid_key: rs_rel_abund_val for rs_uid_key, rs_rel_abund_val in ref_seq_abund_dict_for_cc.items()
-                 if
-                 rs_uid_key in list(at_df)})
-        at_df["sum"] = at_df.sum(axis=1)
-        at_df = at_df.iloc[:, 0:-1].div(at_df["sum"], axis=0)
-        self.vat.multi_modal_detection_rel_abund_df = at_df.reindex(
-            at_df.sum().sort_values(ascending=False).index, axis=1).astype('float')
+            ref_seq_abs_abund_dcit_for_cc = self.vat_manager.obj_manager.vcc_manager.vcc_dict[
+                cc.id].ref_seq_id_to_abs_abund_dict
+            abs_abund_df.loc[cc.id] = pd.Series(
+                {rs_uid_key: rs_abs_abund_val for
+                 rs_uid_key, rs_abs_abund_val in ref_seq_abs_abund_dcit_for_cc.items() if rs_uid_key in list(mm_at_df)})
+            mm_at_df.loc[cc.id] = pd.Series(
+                {rs_uid_key: rs_rel_abund_val for
+                 rs_uid_key, rs_rel_abund_val in ref_seq_rel_abund_dict_for_cc.items() if rs_uid_key in list(mm_at_df)})
+
+        mm_at_df["sum"] = mm_at_df.sum(axis=1)
+        mm_at_df = mm_at_df.iloc[:, 0:-1].div(mm_at_df["sum"], axis=0)
+        self.vat.abs_abund_of_ref_seqs_in_assigned_vccs_df = abs_abund_df.reindex(
+            mm_at_df.sum().sort_values(ascending=False).index, axis=1).astype('int')
+        self.vat.multi_modal_detection_rel_abund_df = mm_at_df.reindex(
+            mm_at_df.sum().sort_values(ascending=False).index, axis=1).astype('float')
 
     def init_vat_pre_profile_assignment(self):
         self._make_rel_abund_dfs()
@@ -527,6 +537,12 @@ class VirtualAnalysisTypeManager():
             # across all clades
             self.type_output_rel_abund_series = None
             self.type_output_abs_abund_series = None
+
+            # For conversion back to db object we will need to have a dataframe that holds the absolute abundances of
+            # vats refseqs in each of the clade collections that it was found in during type assignment
+            # this will have the ReferenceSequences in order of the self.multi_modal_detection_rel_abund_df and the
+            # vcc_uid series in order of self.clade_collection_obj_set_profile_assignment.
+            self.abs_abund_of_ref_seqs_in_assigned_vccs_df = None
 
             self.artefact_ref_seq_uid_set = set()
             self.non_artefact_ref_seq_uid_set = set()

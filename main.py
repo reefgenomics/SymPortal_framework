@@ -69,6 +69,7 @@ class SymPortalWorkFlowManager:
         self.within_clade_cutoff = 0.03
         self.data_analysis_object = None
         self.sp_data_analysis = None
+        self.output_type_count_table_obj = None
         # for dist and pcoa outputs
         self.pcoa_output_path_list = []
 
@@ -224,24 +225,34 @@ class SymPortalWorkFlowManager:
         self._verify_name_arg_given()
         self.create_new_data_analysis_obj()
         self.start_data_analysis()
-        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_analysis.p'), 'wb') as f:
+        # with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_analysis.p'), 'wb') as f:
+        #      pickle.dump(self, f)
+        self._perform_data_analysis_output_type_tables()
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_type_output.p'), 'wb') as f:
              pickle.dump(self, f)
-        # TODO we need to write to db and update the virtual types before we do the output as we need to know the
-        # uids of the databse objects
-        self._output_type_tables()
+        # TODO we also need to write out the seqs data
 
-        # Write out the DataSetSampleSequence count tables
+        # TODO do we need to now create the stacked bar plots for the types
+        self._perform_data_analysis_plot_type_bar()
+        # We then need to do the ordination outputs and plotting
 
-    def _output_type_tables(self):
+    def _perform_data_analysis_plot_type_bar(self):
+        tsbp = plotting.TypeStackedBarPlotter(
+            output_directory=self.output_type_count_table_obj.output_dir,
+            type_relative_abund_count_table_path=self.output_type_count_table_obj.path_to_relative_count_table,
+            time_date_str=self.output_type_count_table_obj.date_time_str)
+        tsbp.plot_stacked_bar_seqs()
+
+    def _perform_data_analysis_output_type_tables(self):
         # Write out the AnalysisType count table
-        atct = output.OutputTypeCountTable(
+        self.output_type_count_table_obj = output.OutputTypeCountTable(
             call_type='analysis', num_proc=self.args.num_proc,
             symportal_root_directory=self.symportal_root_directory,
             within_clade_cutoff=self.within_clade_cutoff,
             data_set_uids_to_output=self.sp_data_analysis.list_of_data_set_uids,
             virtual_object_manager=self.sp_data_analysis.virtual_object_manager,
             data_analysis_obj=self.sp_data_analysis.data_analysis_obj)
-        atct.output_types()
+        self.output_type_count_table_obj.output_types()
 
     def create_new_data_analysis_obj(self):
         self.data_analysis_object = DataAnalysis(
