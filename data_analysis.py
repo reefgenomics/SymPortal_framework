@@ -113,7 +113,7 @@ class SPDataAnalysis:
         list_of_clade_collections = ','.join(
             [str(cc_uid) for cc_uid in vat.clade_collection_obj_set_profile_assignment])
         footprint_sequence_abundances = json.dumps(vat.abs_abund_of_ref_seqs_in_assigned_vccs_df.values.tolist())
-
+        footprint_sequence_ratios = json.dumps(vat.multi_modal_detection_rel_abund_df.values.tolist())
         artefact_intras = ','.join(str(rs_uid) for rs_uid in vat.artefact_ref_seq_uid_set)
         new_at = AnalysisType(
             data_analysis_from=self.data_analysis_obj,
@@ -121,6 +121,7 @@ class SPDataAnalysis:
             majority_reference_sequence_set=majority_reference_sequence_set,
             list_of_clade_collections=list_of_clade_collections,
             footprint_sequence_abundances=footprint_sequence_abundances,
+            footprint_sequence_ratios = footprint_sequence_ratios,
             clade=vat.clade, co_dominant=vat.co_dominant, name=vat.name,
             species=vat.species, artefact_intras=artefact_intras
         )

@@ -64,12 +64,13 @@ class SymPortalWorkFlowManager:
         else:
             self.screen_sub_eval_bool = False
         self.reference_db = 'symClade.fa'
-
+        self.output_seq_count_table_obj = None
         # for data analysis
         self.within_clade_cutoff = 0.03
         self.data_analysis_object = None
         self.sp_data_analysis = None
         self.output_type_count_table_obj = None
+        self.type_stacked_bar_plotter = None
         # for dist and pcoa outputs
         self.pcoa_output_path_list = []
 
@@ -230,18 +231,38 @@ class SymPortalWorkFlowManager:
         self._perform_data_analysis_output_type_tables()
         with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_type_output.p'), 'wb') as f:
              pickle.dump(self, f)
+        self._perform_data_analysis_output_seq_tables()
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_type_output.p'), 'wb') as f:
+             pickle.dump(self, f)
         # TODO we also need to write out the seqs data
-
+        # self.SequenceCountTableCreator
         # TODO do we need to now create the stacked bar plots for the types
         self._perform_data_analysis_plot_type_bar()
         # We then need to do the ordination outputs and plotting
+        # self._perform_data_analysis_plot_seq_bar()
+
+    # def _perform_data_analysis_plot_seq_bar(self):
+    #     self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(output_directory=self.output_type_count_table_obj.output_dir, )
+    #     self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
+
+    def _perform_data_analysis_output_seq_tables(self):
+        self.output_seq_count_table_obj = output.SequenceCountTableCreator(
+            call_type='analysis',
+            num_proc=self.args.num_proc,
+            symportal_root_dir=self.symportal_root_directory,
+            ds_uids_output_str=self.sp_data_analysis.data_analysis_obj.list_of_data_set_uids,
+            output_dir=self.output_type_count_table_obj.output_dir,
+            sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
+            analysis_obj=self.sp_data_analysis.data_analysis_obj,
+            time_date_str=self.output_type_count_table_obj.date_time_str)
+        self.output_seq_count_table_obj.make_output_tables()
 
     def _perform_data_analysis_plot_type_bar(self):
-        tsbp = plotting.TypeStackedBarPlotter(
+        self.type_stacked_bar_plotter = plotting.TypeStackedBarPlotter(
             output_directory=self.output_type_count_table_obj.output_dir,
             type_relative_abund_count_table_path=self.output_type_count_table_obj.path_to_relative_count_table,
             time_date_str=self.output_type_count_table_obj.date_time_str)
-        tsbp.plot_stacked_bar_seqs()
+        self.type_stacked_bar_plotter.plot_stacked_bar_seqs()
 
     def _perform_data_analysis_output_type_tables(self):
         # Write out the AnalysisType count table
@@ -250,6 +271,7 @@ class SymPortalWorkFlowManager:
             symportal_root_directory=self.symportal_root_directory,
             within_clade_cutoff=self.within_clade_cutoff,
             data_set_uids_to_output=self.sp_data_analysis.list_of_data_set_uids,
+            # data_set_uids_to_output=[173],
             virtual_object_manager=self.sp_data_analysis.virtual_object_manager,
             data_analysis_obj=self.sp_data_analysis.data_analysis_obj)
         self.output_type_count_table_obj.output_types()

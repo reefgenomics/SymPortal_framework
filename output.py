@@ -16,6 +16,7 @@ import numpy as np
 import sp_config
 import plotting
 import virtual_objects
+import time
 
 
 class OutputTypeCountTable:
@@ -424,6 +425,7 @@ class OutputTypeCountTable:
              self.data_set_sample_uid_set_to_output if dss_uid not in sorted_vdss_uid_list])
 
         return sorted_vdss_uid_list
+
     def _set_clade_sorted_list_of_vats_to_output(self):
         """Get list of analysis type sorted by clade, and then by
         len of the cladecollections associated to them from the output
@@ -438,7 +440,7 @@ class OutputTypeCountTable:
             list_of_tup_vat_to_vccs_of_output.append((vat, len(vccs_of_output_of_vat)))
 
         self.overall_sorted_list_of_vats = [vat for vat, num_vcc_of_output in
-                              sorted(list_of_tup_vat_to_vccs_of_output, key=lambda x: x[1], reverse=True)]
+                              sorted(list_of_tup_vat_to_vccs_of_output, key=lambda x: x[1], reverse=True) if num_vcc_of_output != 0]
 
         clade_ordered_type_order = []
         for clade in list('ABCDEFGHI'):
@@ -2829,6 +2831,7 @@ def populate_quality_control_data_of_failed_sample(dss, sample_row_data_counts, 
         sample_row_data_counts.append(0)
         sample_row_data_props.append(0)
 
+
 class SequenceCountTableCreator:
     """ This is essentially broken into two parts. The first part goes through all of the DataSetSamples from
     the DataSets of the output and collects abundance information. The second part then puts this abundance
@@ -2840,16 +2843,16 @@ class SequenceCountTableCreator:
     """
     def __init__(
             self, symportal_root_dir, call_type, num_proc, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
-            sorted_sample_uid_list=None, analysis_obj_id=None, time_date_str=None, output_user=None):
+            sorted_sample_uid_list=None, analysis_obj=None, time_date_str=None):
         self._init_core_vars(
-            symportal_root_dir, analysis_obj_id, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
-            output_dir, output_user, sorted_sample_uid_list, time_date_str)
+            symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
+            output_dir, sorted_sample_uid_list, time_date_str)
         self._init_seq_abundance_collection_objects()
         self._init_vars_for_putting_together_the_dfs()
         self._init_output_paths()
 
-    def _init_core_vars(self, symportal_root_dir, analysis_obj_id, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
-                        output_dir, output_user, sorted_sample_uid_list, time_date_str):
+    def _init_core_vars(self, symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
+                        output_dir, sorted_sample_uid_list, time_date_str):
         self._check_either_dss_or_dsss_uids_provided(dss_uids_output_str, ds_uids_output_str)
         if dss_uids_output_str:
             self.list_of_dss_objects = DataSetSample.objects.filter(id__in=[int(a) for a in dss_uids_output_str.split(',')])
@@ -2866,13 +2869,13 @@ class SequenceCountTableCreator:
         self.num_proc = num_proc
         self._set_output_dir(call_type, ds_uids_output_str, output_dir, symportal_root_dir)
         self.sorted_sample_uid_list = sorted_sample_uid_list
-        self.analysis_obj_id = analysis_obj_id
+        self.analysis_obj = analysis_obj
         if time_date_str:
             self.time_date_str = time_date_str
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.call_type = call_type
-        self.output_user = output_user
+        self.output_user = sp_config.user_name
         self.clade_list = list('ABCDEFGHI')
 
 
@@ -2913,17 +2916,17 @@ class SequenceCountTableCreator:
 
     def _init_output_paths(self):
         self.output_paths_list = []
-        if self.analysis_obj_id:
-            data_analysis_obj = DataAnalysis.objects.get(id=self.analysis_obj_id)
+        if self.analysis_obj:
+
             self.path_to_seq_output_df_absolute = os.path.join(
                 self.output_dir,
-                f'{self.analysis_obj_id}_{data_analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
+                f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
             self.path_to_seq_output_df_relative = os.path.join(
                 self.output_dir,
-                f'{self.analysis_obj_id}_{data_analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
+                f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
 
             self.output_fasta_path = os.path.join(
-                self.output_dir, f'{self.analysis_obj_id}_{data_analysis_obj.name}_{self.time_date_str}.seqs.fasta')
+                self.output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
 
         else:
             self.path_to_seq_output_df_absolute = os.path.join(self.output_dir,
@@ -2986,8 +2989,8 @@ class SequenceCountTableCreator:
         self.output_df_relative = self.output_df_relative.append(temp_series)
 
     def _append_meta_info_to_df_analysis(self):
-        data_analysis_obj = DataAnalysis.objects.get(id=self.analysis_obj_id)
-        num_data_set_objects_as_part_of_analysis = len(data_analysis_obj.list_of_data_set_uids.split(','))
+
+        num_data_set_objects_as_part_of_analysis = len(self.analysis_obj.list_of_data_set_uids.split(','))
         meta_info_string_items = [
             f'Output as part of data_analysis ID: {data_analysis_obj.id}; '
             f'Number of data_set objects as part of analysis = {num_data_set_objects_as_part_of_analysis}; '
@@ -3291,6 +3294,7 @@ class SequenceCountTableCollectAbundanceHandler:
         self.clade_abundance_ordered_ref_seq_list = []
 
     def execute_sequence_count_table_ordered_seqs_worker(self):
+        time_start = time.time()
         all_processes = []
 
         # close all connections to the db so that they are automatically recreated for each process
@@ -3304,6 +3308,9 @@ class SequenceCountTableCollectAbundanceHandler:
 
         for p in all_processes:
             p.join()
+        time_stop = time.time()
+        mp_time = time_stop - time_start
+        print(f'MP time: {mp_time}')
 
         self._generate_clade_abundance_ordered_ref_seq_list_from_seq_name_abund_dict()
 

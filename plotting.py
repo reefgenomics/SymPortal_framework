@@ -2,7 +2,7 @@ from matplotlib.patches import Rectangle  # Rectangle is used despite it being g
 from matplotlib.collections import PatchCollection
 # https://stackoverflow.com/questions/21784641/installation-issue-with-matplotlib-python
 import matplotlib as mpl
-mpl.use('TkAgg')
+mpl.use('Agg')
 import matplotlib.pyplot as plt
 plt.ioff()
 import matplotlib.pyplot as plt
@@ -1024,16 +1024,16 @@ class SubPlotter:
             for type_uid in list(self.parent_plotter.output_count_table_as_df):
                 # class matplotlib.patches.Rectangle(xy, width, height, angle=0.0, **kwargs)
                 rel_abund = self.parent_plotter.output_count_table_as_df.loc[sample, type_uid]
-                try:
-                    if rel_abund > 0:
-                        self.patches_list.append(Rectangle(
-                            (self.x_index_for_plot - 0.5, bottom),
-                            1,
-                            rel_abund, color=self.parent_plotter.colour_dict[type_uid]))
-                        self.colour_list.append(self.parent_plotter.colour_dict[type_uid])
-                        bottom += rel_abund
-                except:
-                    apples = 'asdf'
+                sample_total = self.parent_plotter.output_count_table_as_df.loc[sample].sum()
+
+                if rel_abund > 0:
+                    self.patches_list.append(Rectangle(
+                        (self.x_index_for_plot - 0.5, bottom),
+                        1,
+                        rel_abund / sample_total, color=self.parent_plotter.colour_dict[type_uid]))
+                    self.colour_list.append(self.parent_plotter.colour_dict[type_uid])
+                    bottom += rel_abund / sample_total
+
             self.x_index_for_plot += 1
 
     def _add_sample_names_to_tick_label_list(self, sample):
@@ -1048,7 +1048,9 @@ class LegendPlotter:
     """This class can be used by the SeqStackedBarPlotter and the TypeStackedBarPlotter to handle
     the plotting of the legend subplot.
     """
-    def __init__(self, parent_plotter):
+    def __init__(self, parent_plotter, type_plotting=False):
+        # whether we are plotting types
+        self.type_plotting=type_plotting
         self.parent_plotter = parent_plotter
         self.ax_to_plot_on = self.parent_plotter.axarr[-1]
         # legend setup parameters
@@ -1058,7 +1060,7 @@ class LegendPlotter:
         self.x_coord_increments = 100 / self.parent_plotter.max_n_cols
         self.leg_box_width = self.x_coord_increments / 3
         self._set_n_rows_and_last_row_len()
-        self.sequence_count = 0
+        self.column_count = 0
 
     def plot_legend_seqs(self):
         self._set_ylim_and_x_lim_and_invert_y_axis()
@@ -1068,8 +1070,13 @@ class LegendPlotter:
         self._remove_frames_from_axis()
 
     def _plot_legend_rows(self):
-        sys.stdout.write(
-            f'\nGenerating figure legend for {str(self.parent_plotter.num_leg_cells)} most common sequences\n')
+        if not self.type_plotting:
+            sys.stdout.write(
+                f'\nGenerating figure legend for {str(self.parent_plotter.num_leg_cells)} most common sequences\n')
+        else:
+            sys.stdout.write(
+                f'\nGenerating figure legend for {str(self.parent_plotter.num_leg_cells)} most common ITS2 '
+                f'type profiles\n')
 
         for row_increment in range(min(self.n_rows, self.parent_plotter.max_n_rows)):
 
@@ -1077,12 +1084,12 @@ class LegendPlotter:
                 for col_increment in range(self.parent_plotter.max_n_cols):
                     self._plot_legend_row(row_increment=row_increment, col_increment=col_increment)
 
-                    self.sequence_count += 1
+                    self.column_count += 1
             else:
                 for col_increment in range(self.last_row_len):
                     self._plot_legend_row(row_increment=row_increment, col_increment=col_increment)
 
-                    self.sequence_count += 1
+                    self.column_count += 1
 
     def _set_ylim_and_x_lim_and_invert_y_axis(self):
         # Once we know the number of rows, we can also adjust the y axis limits
@@ -1091,13 +1098,16 @@ class LegendPlotter:
         self.ax_to_plot_on.invert_yaxis()
 
     def _set_n_rows_and_last_row_len(self):
-        if len(self.parent_plotter.ordered_list_of_seqs_names) < self.parent_plotter.num_leg_cells:
-            if len(self.parent_plotter.ordered_list_of_seqs_names) % self.parent_plotter.max_n_cols != 0:
-                self.n_rows = int(
-                    len(self.parent_plotter.ordered_list_of_seqs_names) / self.parent_plotter.max_n_cols) + 1
-                self.last_row_len = len(self.parent_plotter.ordered_list_of_seqs_names) % self.parent_plotter.max_n_cols
+        if not self.type_plotting:  # we are plotting sequences
+            col_elements_to_plot = len(self.parent_plotter.ordered_list_of_seqs_names)
+        else:  # we are plotting types
+            col_elements_to_plot = len(self.parent_plotter.sorted_type_prof_uids_by_local_abund)
+        if col_elements_to_plot < self.parent_plotter.num_leg_cells:
+            if col_elements_to_plot % self.parent_plotter.max_n_cols != 0:
+                self.n_rows = int(col_elements_to_plot / self.parent_plotter.max_n_cols) + 1
+                self.last_row_len = col_elements_to_plot % self.parent_plotter.max_n_cols
             else:
-                self.n_rows = int(len(self.parent_plotter.ordered_list_of_seqs_names) / self.parent_plotter.max_n_cols)
+                self.n_rows = int(col_elements_to_plot / self.parent_plotter.max_n_cols)
                 self.last_row_len = self.parent_plotter.max_n_cols
         else:
             self.n_rows = self.parent_plotter.max_n_rows
@@ -1118,16 +1128,33 @@ class LegendPlotter:
     def _add_legend_text(self, leg_box_x, leg_box_y):
         text_x = leg_box_x + self.leg_box_width + (0.2 * self.leg_box_width)
         text_y = leg_box_y + (0.5 * self.leg_box_depth)
-        self.ax_to_plot_on.text(
-            text_x, text_y, self.parent_plotter.ordered_list_of_seqs_names[self.sequence_count],
-            verticalalignment='center', fontsize=8)
+        if not self.type_plotting:
+            self.ax_to_plot_on.text(
+                text_x, text_y, self.parent_plotter.ordered_list_of_seqs_names[self.column_count],
+                verticalalignment='center', fontsize=8)
+        else:
+            type_name_to_print = self.parent_plotter.type_uid_to_type_name_dict[
+                self.parent_plotter.sorted_type_prof_uids_by_local_abund[self.column_count]]
+            if len(type_name_to_print) > 18:
+                type_name_to_print = f'{type_name_to_print[:14]}...'
+
+            self.ax_to_plot_on.text(
+                text_x, text_y, type_name_to_print,
+                verticalalignment='center', fontsize=8)
 
     def _add_legend_rect(self, col_increment, row_increment):
         leg_box_x = col_increment * self.x_coord_increments
         leg_box_y = row_increment * self.y_coord_increments
-        self.ax_to_plot_on.add_patch(Rectangle(
-            (leg_box_x, leg_box_y), width=self.leg_box_width, height=self.leg_box_depth,
-            color=self.parent_plotter.colour_dict[self.parent_plotter.ordered_list_of_seqs_names[self.sequence_count]]))
+        if not self.type_plotting:
+            self.ax_to_plot_on.add_patch(Rectangle(
+                (leg_box_x, leg_box_y), width=self.leg_box_width, height=self.leg_box_depth,
+                color=self.parent_plotter.colour_dict[
+                    self.parent_plotter.ordered_list_of_seqs_names[self.column_count]]))
+        else:
+            self.ax_to_plot_on.add_patch(Rectangle(
+                (leg_box_x, leg_box_y), width=self.leg_box_width, height=self.leg_box_depth,
+                color=self.parent_plotter.colour_dict[
+                    self.parent_plotter.sorted_type_prof_uids_by_local_abund[self.column_count]]))
         return leg_box_x, leg_box_y
 
 class TypeStackedBarPlotter:
@@ -1183,7 +1210,7 @@ class TypeStackedBarPlotter:
         plt.savefig(png_path)
 
     def _plot_legend(self):
-        legend_plotter = LegendPlotter(parent_plotter=self)
+        legend_plotter = LegendPlotter(parent_plotter=self, type_plotting=True)
         legend_plotter.plot_legend_seqs()
 
     def _infer_num_subplots(self):
