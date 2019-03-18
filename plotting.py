@@ -1021,18 +1021,18 @@ class SubPlotter:
             bottom = 0
             # for each sequence, create a rect patch
             # the rect will be 1 in width and centered about the ind value.
-            for type_uid in list(self.parent_plotter.output_count_table_as_df):
-                # class matplotlib.patches.Rectangle(xy, width, height, angle=0.0, **kwargs)
-                rel_abund = self.parent_plotter.output_count_table_as_df.loc[sample, type_uid]
-                sample_total = self.parent_plotter.output_count_table_as_df.loc[sample].sum()
+            non_zero_indices = self.parent_plotter.output_count_table_as_df.loc[sample].nonzero()[0]
+            current_sample_series = self.parent_plotter.output_count_table_as_df.loc[sample]
+            non_zero_sample_series = current_sample_series.iloc[non_zero_indices]
+            sample_total = non_zero_sample_series.sum()
+            for ser_index, rel_abund in non_zero_sample_series.iteritems():
 
-                if rel_abund > 0:
-                    self.patches_list.append(Rectangle(
-                        (self.x_index_for_plot - 0.5, bottom),
-                        1,
-                        rel_abund / sample_total, color=self.parent_plotter.colour_dict[type_uid]))
-                    self.colour_list.append(self.parent_plotter.colour_dict[type_uid])
-                    bottom += rel_abund / sample_total
+                self.patches_list.append(Rectangle(
+                    (self.x_index_for_plot - 0.5, bottom),
+                    1,
+                    rel_abund / sample_total, color=self.parent_plotter.colour_dict[ser_index]))
+                self.colour_list.append(self.parent_plotter.colour_dict[ser_index])
+                bottom += rel_abund / sample_total
 
             self.x_index_for_plot += 1
 
@@ -1314,7 +1314,7 @@ class SeqStackedBarPlotter:
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
-        self.smpl_id_to_smp_name_dict = None
+        self.smp_uid_to_smp_name_dict = None
         self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
         self.ordered_list_of_seqs_names = self._set_ordered_list_of_seqs_names()
         # legend parameters and vars
@@ -1372,9 +1372,9 @@ class SeqStackedBarPlotter:
         return end_slice
 
     def _add_sample_names_to_tick_label_list(self, sample, x_tick_label_list):
-        sample_name = self.smpl_id_to_smp_name_dict[int(sample)]
+        sample_name = self.smp_uid_to_smp_name_dict[int(sample)]
         if len(sample_name) < 20:
-            x_tick_label_list.append(self.smpl_id_to_smp_name_dict[int(sample)])
+            x_tick_label_list.append(self.smp_uid_to_smp_name_dict[int(sample)])
         else:
             x_tick_label_list.append(f'uid_{int(sample)}')
 
@@ -1522,7 +1522,7 @@ class SeqStackedBarPlotter:
         return sp_output_df
 
     def _populate_smpl_id_to_smp_name_dict(self, sp_output_df):
-        self.smpl_id_to_smp_name_dict = {
+        self.smp_uid_to_smp_name_dict = {
             int(uid): smp_name for uid, smp_name in
             zip(sp_output_df.index.values.tolist(), sp_output_df['sample_name'].values.tolist())}
 

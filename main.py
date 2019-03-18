@@ -229,21 +229,30 @@ class SymPortalWorkFlowManager:
         # with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_analysis.p'), 'wb') as f:
         #      pickle.dump(self, f)
         self._perform_data_analysis_output_type_tables()
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sample_uid_ordered.p'), 'wb') as f:
+             pickle.dump(self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output, f)
         with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_type_output.p'), 'wb') as f:
              pickle.dump(self, f)
         self._perform_data_analysis_output_seq_tables()
-        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_type_output.p'), 'wb') as f:
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_seq_output.p'), 'wb') as f:
              pickle.dump(self, f)
-        # TODO we also need to write out the seqs data
-        # self.SequenceCountTableCreator
-        # TODO do we need to now create the stacked bar plots for the types
         self._perform_data_analysis_plot_type_bar()
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_type_plot.p'), 'wb') as f:
+             pickle.dump(self, f)
+        self._perform_data_analysis_plot_seq_bar()
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_seq_plot.p'), 'wb') as f:
+             pickle.dump(self, f)
+
         # We then need to do the ordination outputs and plotting
         # self._perform_data_analysis_plot_seq_bar()
 
-    # def _perform_data_analysis_plot_seq_bar(self):
-    #     self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(output_directory=self.output_type_count_table_obj.output_dir, )
-    #     self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
+    def _perform_data_analysis_plot_seq_bar(self):
+        self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(
+            output_directory=self.output_type_count_table_obj.output_dir,
+            seq_relative_abund_count_table_path=self.output_seq_count_table_obj.path_to_seq_output_df_relative,
+            ordered_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
+            time_date_str=self.output_type_count_table_obj.date_time_str)
+        self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
     def _perform_data_analysis_output_seq_tables(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(

@@ -2992,9 +2992,9 @@ class SequenceCountTableCreator:
 
         num_data_set_objects_as_part_of_analysis = len(self.analysis_obj.list_of_data_set_uids.split(','))
         meta_info_string_items = [
-            f'Output as part of data_analysis ID: {data_analysis_obj.id}; '
+            f'Output as part of data_analysis ID: {self.analysis_obj.id}; '
             f'Number of data_set objects as part of analysis = {num_data_set_objects_as_part_of_analysis}; '
-            f'submitting_user: {data_analysis_obj.submitting_user}; time_stamp: {data_analysis_obj.time_stamp}']
+            f'submitting_user: {self.analysis_obj.submitting_user}; time_stamp: {self.analysis_obj.time_stamp}']
         temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute)[0]],
                                 name='meta_info_summary')
         self.output_df_absolute = self.output_df_absolute.append(temp_series)
@@ -3445,7 +3445,13 @@ class SeqOutputSeriesGeneratorHandler:
 
     def _output_df_contructor_worker(self):
         for dss in iter(self.dss_input_queue.get, 'STOP'):
-            seq_output_series_generator_worker = SeqOutputSeriesGeneratorWorker(parent=self, dss=dss)
+            seq_output_series_generator_worker = SeqOutputSeriesGeneratorWorker(
+                dss=dss,
+                list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs=self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict[dss.id],
+                list_of_abs_and_rel_abund_of_contained_dsss_dicts=self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict[dss.id],
+                clade_abundance_ordered_ref_seq_list=self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list,
+                dss_id_to_pandas_series_results_list_mp_dict=self.dss_id_to_pandas_series_results_list_mp_dict,
+                output_df_header=self.output_df_header)
             seq_output_series_generator_worker.make_series()
 
     def _populate_dss_input_queue(self):
@@ -3471,13 +3477,21 @@ class SeqOutputSeriesGeneratorHandler:
 
 
 class SeqOutputSeriesGeneratorWorker:
-    def __init__(self, parent, dss):
-        self.handler = parent
+    def __init__(
+            self, dss, list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs,
+            list_of_abs_and_rel_abund_of_contained_dsss_dicts,
+            dss_id_to_pandas_series_results_list_mp_dict, clade_abundance_ordered_ref_seq_list, output_df_header):
+
         self.dss = dss
         # dss.id : [{dsss:absolute abundance in dss}, {dsss:relative abundance in dss}]
         # dss.id : [{clade:total absolute abundance of no name seqs from that clade},
         #           {clade:total relative abundance of no name seqs from that clade}
         #          ]
+        self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs = list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs
+        self.list_of_abs_and_rel_abund_of_contained_dsss_dicts = list_of_abs_and_rel_abund_of_contained_dsss_dicts
+        self.dss_id_to_pandas_series_results_list_mp_dict = dss_id_to_pandas_series_results_list_mp_dict
+        self.clade_abundance_ordered_ref_seq_list = clade_abundance_ordered_ref_seq_list
+        self.output_df_header = output_df_header
         self.sample_row_data_absolute = []
         self.sample_row_data_relative = []
         self.sample_seq_tot = sum([int(a) for a in json.loads(dss.cladal_seq_totals)])
@@ -3498,9 +3512,9 @@ class SeqOutputSeriesGeneratorWorker:
         self._output_the_successful_sample_pandas_series()
 
     def _output_the_successful_sample_pandas_series(self):
-        sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.handler.output_df_header, name=self.dss.id)
-        sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.handler.output_df_header, name=self.dss.id)
-        self.handler.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [
+        sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.output_df_header, name=self.dss.id)
+        sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.output_df_header, name=self.dss.id)
+        self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [
             sample_series_absolute, sample_series_relative]
 
     def _populate_quality_control_data_of_successful_sample(self):
@@ -3562,27 +3576,23 @@ class SeqOutputSeriesGeneratorWorker:
         # now add the clade divided summaries of the clades
         for clade in list('ABCDEFGHI'):
             self.sample_row_data_absolute.append(
-                self.handler.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict[
-                    self.dss.id][0][clade])
+                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[0][clade])
             self.sample_row_data_relative.append(
-                self.handler.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict[
-                    self.dss.id][1][clade])
+                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[1][clade])
 
         # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
         # the sampleRowDataCounts and the sampleRowDataProps
-        for seq_name in self.handler.seq_count_table_creator.clade_abundance_ordered_ref_seq_list:
+        for seq_name in self.clade_abundance_ordered_ref_seq_list:
             sys.stdout.write('\rOutputting seq data for {}: sequence {}'.format(self.dss.name, seq_name))
             self.sample_row_data_absolute.append(
-                self.handler.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict[
-                    self.dss.id][0][seq_name])
+                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[0][seq_name])
             self.sample_row_data_relative.append(
-                self.handler.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict[
-                    self.dss.id][1][seq_name])
+                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[1][seq_name])
 
     def _output_the_failed_sample_pandas_series(self):
-        sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.handler.output_df_header, name=self.dss.id)
-        sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.handler.output_df_header, name=self.dss.id)
-        self.handler.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [sample_series_absolute,
+        sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.output_df_header, name=self.dss.id)
+        sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.output_df_header, name=self.dss.id)
+        self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [sample_series_absolute,
                                                                                   sample_series_relative]
 
     def _populate_quality_control_data_of_failed_sample(self):
@@ -3687,7 +3697,7 @@ class SeqOutputSeriesGeneratorWorker:
             self.sample_row_data_relative.append(0)
 
         # All sequences get 0s
-        for _ in self.handler.seq_count_table_creator.clade_abundance_ordered_ref_seq_list:
+        for _ in self.clade_abundance_ordered_ref_seq_list:
             self.sample_row_data_absolute.append(0)
             self.sample_row_data_relative.append(0)
 

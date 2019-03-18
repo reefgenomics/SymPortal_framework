@@ -45,7 +45,7 @@ class SPDataAnalysis:
             list_of_data_set_uids=self.list_of_data_set_uids)
 
     def analyse_data(self):
-        print('Beginning profile discovery')
+        print('\n\nBeginning profile discovery')
         self._populate_clade_fp_dicts_list()
 
         self._collapse_footprints_and_make_analysis_types()
