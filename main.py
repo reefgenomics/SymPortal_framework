@@ -226,8 +226,8 @@ class SymPortalWorkFlowManager:
         self._verify_name_arg_given()
         self.create_new_data_analysis_obj()
         self.start_data_analysis()
-        # with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_analysis.p'), 'wb') as f:
-        #      pickle.dump(self, f)
+        with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sp_workflow_post_analysis.p'), 'wb') as f:
+             pickle.dump(self, f)
         self._perform_data_analysis_output_type_tables()
         with open(os.path.join(self.symportal_root_directory, 'tests', 'objects', 'sample_uid_ordered.p'), 'wb') as f:
              pickle.dump(self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output, f)

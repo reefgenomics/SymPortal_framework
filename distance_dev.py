@@ -32,7 +32,7 @@ class FseqbootAlignmentGenerator:
         self.parent_unifrac_dist_creator = parent_unifrac_dist_creator
         self.clade = clade_in_question
         self.num_reps = num_reps
-        self.input_fasta_path = self.parent_unifrac_dist_creator.master_fasta_file_aligned_path
+        self.input_fasta_path = self.parent_unifrac_dist_creator.clade_master_fasta_file_aligned_path
         self.output_seqboot_file_path = self.input_fasta_path + '.fseqboot'
         self.fseqboot_local = None
         self._setup_fseqboot_plum_bum_local()
@@ -40,6 +40,7 @@ class FseqbootAlignmentGenerator:
         # this is the base of the path that will be used to build the path of each of the alignment replicates
         # to build the complete path a rep_count string (str(count)) will be appended to this base.
         self.fseqboot_clade_root_dir = os.path.join(self.output_dir, 'out_seq_boot_reps')
+        os.makedirs(self.fseqboot_clade_root_dir, exist_ok=True)
         self.fseqboot_base = os.path.join(self.fseqboot_clade_root_dir, 'fseqboot_rep_')
         self.fseqboot_file_as_list = None
         self.rep_count = 0
@@ -105,7 +106,7 @@ class UnifracSubcladeHandler:
         self._populate_input_queue()
         self.output_queue_of_paths_to_trees = Queue()
         self.output_dir = os.path.join(self.parent_unifrac_creator.output_dir, self.clade)
-        self.list_of_output_tree_paths = None
+        self.list_of_output_tree_paths = []
         self.concat_tree_file_path = os.path.join(self.output_dir, 'concatenated_tree_file')
         self.consensus_tree_file_path = os.path.join(self.output_dir, 'consensus_tree_sumtrees.newick')
         self.unifrac_dist_file_path = None
@@ -167,7 +168,7 @@ class UnifracSubcladeHandler:
     def _rename_tree_nodes_and_remove_meta_data(self):
         """This will use the name file to rename the tree nodes and also remove metadata from the treefile.
         """
-        name_file = read_defined_file_to_list(self.parent_unifrac_creator.master_names_file_path)
+        name_file = read_defined_file_to_list(self.parent_unifrac_creator.clade_master_names_file_path)
         name_file_reps = []
         for line in name_file:
             name_file_reps.append(line.split('\t')[0])
@@ -342,7 +343,7 @@ class GenericDistanceCreator:
         self.clade_pcoa_coord_file_path = None
         # path to the .dist file that holds the unifrac or braycurtis derived sample clade-separated paired distances
         self.clade_dist_file_path = None
-        self.clade_distance_file_as_list = None
+        self.clade_dist_file_as_list = None
 
     def _compute_pcoa_coords(self):
         # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
@@ -380,23 +381,7 @@ class GenericDistanceCreator:
 
         renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
 
-    def _add_sample_uids_to_dist_file_and_write(self):
-        # for the output version lets also append the sample name to each line so that we can see which sample it is
-        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
-        dist_with_sample_name = [self.clade_distance_file_as_list[0]]
-        list_of_cc_ids = [int(line.split('\t')[0]) for line in self.clade_distance_file_as_list[1:]]
-        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
-        dict_of_cc_id_to_sample_name = {cc.id: cc.data_set_sample_from.name for cc in cc_of_outputs}
-        for line in self.clade_distance_file_as_list[1:]:
-            temp_list = []
-            cc_id = int(line.split('\t')[0])
-            sample_name = dict_of_cc_id_to_sample_name[cc_id]
-            temp_list.append(sample_name)
-            temp_list.extend(line.split('\t'))
-            new_line = '\t'.join(temp_list)
-            dist_with_sample_name.append(new_line)
-        self.clade_distance_file_as_list = dist_with_sample_name
-        write_list_to_destination(self.clade_dist_file_path, self.clade_distance_file_as_list)
+
 
 
 # UniFrac classes
@@ -457,7 +442,7 @@ class SampleUnifracSeqAbundanceMPCollection:
                 clade_collection_found_in=self.analysis_type_or_clade_collection))
         total_seqs_of_cc = sum([dss.abundance for dss in list_of_dss_in_cc])
         normalisation_sequencing_depth = 10000
-        normalised_abund_dict = {dss.id:((dss.abundance/total_seqs_of_cc)*normalisation_sequencing_depth) for dss in list_of_dss_in_cc}
+        normalised_abund_dict = {dss.id :int((dss.abundance/total_seqs_of_cc)*normalisation_sequencing_depth) for dss in list_of_dss_in_cc}
         for data_set_sample_seq in list_of_dss_in_cc:
             ref_seq_id = data_set_sample_seq.reference_sequence_of.id
             self.ref_seq_id_list.append(ref_seq_id)
@@ -483,7 +468,8 @@ class BaseUnifracDistanceCreatorHandlerOne:
         self.parent_unifrac_dist_creator = parent_unifrac_dist_creator
         self.clade = clade_in_question
         self.output_dir = os.path.join(self.parent_unifrac_dist_creator.output_dir, self.clade)
-
+        os.makedirs(self.output_dir, exist_ok=True)
+        self.output_unifrac_seq_abund_mp_collection_queue = Queue()
         # variables for processing and consolidating the sequence collection outputs
         self.master_fasta_dict = {}
         self.master_unique_fasta_seq_list = []
@@ -641,11 +627,11 @@ class BtwnSampleUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandl
         super().__init__(
             parent_unifrac_dist_creator=parent_unifrac_dist_creator,
             clade_in_question=clade_in_question)
-        self.clade_collections_of_clade = self.parent_unifrac_dist_creator.clade_collections_from_data_sets.filter(
+        self.clade_collections_of_clade = self.parent_unifrac_dist_creator.clade_collections_from_data_set_samples.filter(
             clade=self.clade)
         self._raise_runtime_error_if_not_enough_clade_collections()
         self.input_clade_collection_queue = Queue()
-        self.output_unifrac_seq_abund_mp_collection_queue = Queue()
+
         self._populate_input_queue()
 
     def execute_unifrac_distance_creator_worker_one(self):
@@ -793,7 +779,7 @@ class BtwnTypeUnifracDistPCoACreator(GenericDistanceCreator, BaseUnifracDistPCoA
         self.data_analysis_obj = data_analysis_obj
         self.analysis_types_from_data_set_samples = AnalysisType.objects.filter(
             data_analysis_from=self.data_analysis_obj,
-            clade_collection_type__clade_collection_from__data_set_sample_from__in=self.data_set_sample_uid_list)
+            cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list)
         self.clades_for_dist_calcs = list(set([at.clade for at in self.analysis_types_from_data_set_samples]))
         self.output_dir = self._setup_output_dir(call_type, output_dir)
 
@@ -828,6 +814,23 @@ class BtwnTypeUnifracDistPCoACreator(GenericDistanceCreator, BaseUnifracDistPCoA
 
         self._write_output_paths_to_stdout()
 
+    def _add_sample_uids_to_dist_file_and_write(self):
+        # for the output version lets also append the sample name to each line so that we can see which sample it is
+        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
+        dist_with_sample_name = [self.clade_dist_file_as_list[0]]
+        list_of_at_ids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list[1:]]
+        at_of_outputs = list(AnalysisType.objects.filter(id__in=list_of_at_ids))
+        dict_of_at_id_to_analysis_type_name = {at.id: at.name for at in at_of_outputs}
+        for line in self.clade_dist_file_as_list[1:]:
+            temp_list = []
+            at_id = int(line.split('\t')[0])
+            sample_name = dict_of_at_id_to_analysis_type_name[at_id]
+            temp_list.append(sample_name)
+            temp_list.extend(line.split('\t'))
+            new_line = '\t'.join(temp_list)
+            dist_with_sample_name.append(new_line)
+        self.clade_dist_file_as_list = dist_with_sample_name
+        write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
         sys.stdout.write('Creating master .name and .fasta files for UniFrac')
@@ -836,7 +839,7 @@ class BtwnTypeUnifracDistPCoACreator(GenericDistanceCreator, BaseUnifracDistPCoA
                 clade_in_question=clade_in_question,
                 parent_unifrac_dist_creator=self)
         except RuntimeWarning as w:
-            if str(w) == 'insufficient objects of clade':
+            if w.args[0]['message'] == 'insufficient objects of clade':
                 raise RuntimeWarning('insufficient objects of clade')
             else:
                 raise RuntimeError(f'Unknown error in {BtwnSampleUnifracDistanceCreatorHandlerOne.__name__} init')
@@ -911,7 +914,7 @@ class BtwnSampleUnifracDistPCoACreator(GenericDistanceCreator, BaseUnifracDistPC
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list)
 
         self.clade_collections_from_data_set_samples = CladeCollection.objects.filter(
-            data_set_sample_from____in=self.data_set_sample_uid_list)
+            data_set_sample_from__in=self.data_set_sample_uid_list)
         self.clades_for_dist_calcs = list(set([a.clade for a in self.clade_collections_from_data_set_samples]))
         self.output_dir = self._setup_output_dir(call_type, output_dir)
 
@@ -949,6 +952,24 @@ class BtwnSampleUnifracDistPCoACreator(GenericDistanceCreator, BaseUnifracDistPC
 
         self._write_output_paths_to_stdout()
 
+    def _add_sample_uids_to_dist_file_and_write(self):
+        # for the output version lets also append the sample name to each line so that we can see which sample it is
+        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
+        dist_with_sample_name = [self.clade_dist_file_as_list[0]]
+        list_of_cc_ids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list[1:]]
+        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
+        dict_of_cc_id_to_sample_name = {cc.id: cc.data_set_sample_from.name for cc in cc_of_outputs}
+        for line in self.clade_dist_file_as_list[1:]:
+            temp_list = []
+            cc_id = int(line.split('\t')[0])
+            sample_name = dict_of_cc_id_to_sample_name[cc_id]
+            temp_list.append(sample_name)
+            temp_list.extend(line.split('\t'))
+            new_line = '\t'.join(temp_list)
+            dist_with_sample_name.append(new_line)
+        self.clade_dist_file_as_list = dist_with_sample_name
+        write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
+
     def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
         sys.stdout.write('Creating master .name and .fasta files for UniFrac')
         try:
@@ -956,7 +977,7 @@ class BtwnSampleUnifracDistPCoACreator(GenericDistanceCreator, BaseUnifracDistPC
                 clade_in_question=clade_in_question,
                 parent_unifrac_dist_creator=self)
         except RuntimeWarning as w:
-            if str(w) == 'insufficient objects of clade':
+            if w.args[0]['message'] == 'insufficient objects of clade':
                 raise RuntimeWarning('insufficient objects of clade')
             else:
                 raise RuntimeError(f'Unknown error in {BtwnSampleUnifracDistanceCreatorHandlerOne.__name__} init')
@@ -965,17 +986,11 @@ class BtwnSampleUnifracDistPCoACreator(GenericDistanceCreator, BaseUnifracDistPC
         self.clade_master_fasta_file_unaligned_path = unifrac_dist_creator_handler_one.master_fasta_file_path
         self.clade_master_group_file_path = unifrac_dist_creator_handler_one.master_group_file_path
 
-
-
-
-
-
-
     def _setup_output_dir(self, call_type, output_dir):
         if call_type == 'stand_alone':
             return os.path.abspath(
                 os.path.join(
-                    self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string, 'between_samples'))
+                    self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'), 'between_samples'))
         else:
             # call_type == 'submission':
             return os.path.join(output_dir, 'between_sample_distances')
@@ -1029,6 +1044,24 @@ class BrayCurtisDistPCoACreator(GenericDistanceCreator):
             self._compute_pcoa_coords()
             self._append_output_files_to_output_list()
         self._write_output_paths_to_stdout()
+
+    def _add_sample_uids_to_dist_file_and_write(self):
+        # for the output version lets also append the sample name to each line so that we can see which sample it is
+        # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
+        dist_with_sample_name = [self.clade_dist_file_as_list[0]]
+        list_of_cc_ids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list[1:]]
+        cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
+        dict_of_cc_id_to_sample_name = {cc.id: cc.data_set_sample_from.name for cc in cc_of_outputs}
+        for line in self.clade_dist_file_as_list[1:]:
+            temp_list = []
+            cc_id = int(line.split('\t')[0])
+            sample_name = dict_of_cc_id_to_sample_name[cc_id]
+            temp_list.append(sample_name)
+            temp_list.extend(line.split('\t'))
+            new_line = '\t'.join(temp_list)
+            dist_with_sample_name.append(new_line)
+        self.clade_dist_file_as_list = dist_with_sample_name
+        write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _write_output_paths_to_stdout(self):
         print('BrayCurtis distances and PCoA computation complete. Ouput files:')

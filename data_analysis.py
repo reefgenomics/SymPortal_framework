@@ -2,7 +2,7 @@ import os
 import shutil
 from multiprocessing import Queue, Manager, Process, current_process
 import sys
-from dbApp.models import AnalysisType, DataSetSampleSequence, CladeCollection, ReferenceSequence
+from dbApp.models import AnalysisType, DataSetSampleSequence, ReferenceSequence, CladeCollectionType, CladeCollection
 import itertools
 from collections import defaultdict
 import operator
@@ -95,6 +95,18 @@ class SPDataAnalysis:
 
             self._update_uid_of_vat(new_at, vat)
         self._update_keys_of_vat_dict()
+
+        # now create the clade_collection_types
+        # we will need a cct for each vat, vcc combination
+        clade_collection_type_list_for_bulk_create = []
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            for vcc in vat.clade_collection_obj_set_profile_assignment:
+                clade_collection_type_list_for_bulk_create.append(
+                    CladeCollectionType(
+                        analysis_type_of=AnalysisType.objects.get(id=vat.id),
+                        clade_collection_found_in=CladeCollection.objects.get(id=vcc.id)))
+
+        CladeCollectionType.objects.bulk_create(clade_collection_type_list_for_bulk_create)
 
     def _update_keys_of_vat_dict(self):
         # now update remake the vat dict so that the correct ids are used
