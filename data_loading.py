@@ -12,7 +12,7 @@ from django import db
 from multiprocessing import Queue, Manager, Process
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
 from datetime import datetime
-from distance import BrayCurtisDistPCoACreator, UnifracDistPCoACreator
+import distance
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
 from output import SequenceCountTableCreator
@@ -181,17 +181,17 @@ class DataLoading:
         return 'PCoA_coords' in output_path
 
     def _do_braycurtis_dist_pcoa(self):
-        bray_curtis_dist_pcoa_creator = BrayCurtisDistPCoACreator(
+        bray_curtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
             date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
-            data_set_string=str(self.dataset_object.id), call_type='submission',
+            data_set_uid_list=[self.dataset_object.id], call_type='submission',
             output_dir=self.output_directory)
         bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
 
     def _do_unifrac_dist_pcoa(self):
-        unifrac_dict_pcoa_creator = UnifracDistPCoACreator(
+        unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
             call_type='submission', date_time_string=self.date_time_string, output_dir=self.output_directory,
-            data_set_string=str(self.dataset_object.id), method='mothur', num_processors=self.num_proc,
+            data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
             symportal_root_directory=self.symportal_root_directory)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
@@ -207,8 +207,6 @@ class DataLoading:
                                                                seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path, time_date_str=self.date_time_string)
                 seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(seq_stacked_bar_plotter.output_path_list)
-                # TODO don't for get to add the output path for the non-sym and size violation output
-
 
     def _output_seqs_count_table(self):
         sys.stdout.write('\nGenerating count tables\n')

@@ -94,7 +94,7 @@ class OutputTypeCountTable:
         return vcc_uids_to_output
 
     def output_types(self):
-
+        print('\n\nOutputting ITS2 type profile abundance count tables\n')
         self._populate_main_body_of_dfs()
 
         self._populate_sample_name_series()
@@ -136,8 +136,12 @@ class OutputTypeCountTable:
             self._append_meta_info_for_stand_alone_call_type()
 
     def _write_out_dfs(self):
+        print('\n\nITS2 type profile count tables output to:')
         self.rel_abund_output_df.to_csv(self.path_to_relative_count_table, sep="\t", header=False)
+        print(self.path_to_relative_count_table)
         self.abs_abund_output_df.to_csv(self.path_to_absolute_count_table, sep="\t", header=False)
+        print(f'{self.path_to_absolute_count_table}\n\n')
+
 
     def _append_meta_info_for_stand_alone_call_type(self):
         data_sets_of_analysis = len(self.data_analysis_obj.list_of_data_set_uids.split(','))
@@ -393,9 +397,11 @@ class OutputTypeCountTable:
                     num_proc=num_proc, within_clade_cutoff=within_clade_cutoff,
                     list_of_data_set_sample_uids=data_set_sample_uid_set_to_output)
 
+            print('\nInstantiating VirtualAnalysisTypes')
             for at in AnalysisType.objects.filter(
                     cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=
                     self.data_set_sample_uid_set_to_output).distinct():
+                sys.stdout.write(f'\r{at.name}')
                 virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
 
     def _get_data_set_uids_of_data_sets(self):
@@ -2936,6 +2942,7 @@ class SequenceCountTableCreator:
             self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
 
     def make_output_tables(self):
+        print('\n\nOutputting sequence abundance count tables\n')
         self._collect_abundances_for_creating_the_output()
 
         self._generate_sample_output_series()

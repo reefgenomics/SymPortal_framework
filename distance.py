@@ -762,7 +762,7 @@ class BaseUnifracDistPCoACreator:
         renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
 
 
-class BtwnTypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
+class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     def __init__(
             self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None, bootstrap_value=100,
             output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None):
@@ -771,8 +771,7 @@ class BtwnTypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             num_proc=num_processors,bootstrap_val=bootstrap_value, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list, symportal_root_directory=symportal_root_directory, call_type=call_type,
             date_time_string=date_time_string, profiles_or_samples='profiles')
-        # TODO at the end of the day if we're going to work on either a dataset or dataset sample basis
-        # then we should be working with the data set sample
+
         self.data_analysis_obj = data_analysis_obj
         self.analysis_types_from_data_set_samples = AnalysisType.objects.filter(
             data_analysis_from=self.data_analysis_obj,
@@ -855,7 +854,7 @@ class BtwnTypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             return os.path.join(output_dir, 'between_profile_distances')
 
 
-class BtwnSampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
+class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """
     TODO I think this can easily be converted to work on a sample basis by simply getting the clade collections
     from the set of samples rather than data sets. Same for the bray curtis.
@@ -988,7 +987,7 @@ class BtwnSampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 os.path.join(
                     self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'), 'between_samples'))
         else:
-            # call_type == 'submission':
+            # call_type == 'submission' or 'analysis':
             return os.path.join(output_dir, 'between_sample_distances')
 
 
@@ -1139,7 +1138,7 @@ class BaseBrayCurtisDistPCoACreator:
         write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _write_output_paths_to_stdout(self):
-        print('BrayCurtis distances and PCoA computation complete. Ouput files:')
+        print('\n\nBrayCurtis distances and PCoA computation complete. Output files:')
         for output_path in self.output_file_paths:
             print(output_path)
 

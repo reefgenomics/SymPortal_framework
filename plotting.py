@@ -812,7 +812,7 @@ def plot_between_sample_distance_scatter(csv_path, date_time_str, labels=True):
     png_path = '{}.png'.format(fig_output_base)
     sys.stdout.write('\rsaving as .png')
     plt.savefig(png_path)
-    sys.stdout.write('\rDistance plots output to:')
+    sys.stdout.write('\r\nDistance plots output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
     return [svg_path, png_path]
@@ -860,7 +860,7 @@ def plot_between_its2_type_prof_dist_scatter(csv_path, date_time_str):
     png_path = '{}.png'.format(fig_output_base)
     sys.stdout.write('\rsaving as .png')
     plt.savefig(png_path)
-    sys.stdout.write('\rDistance plots output to:')
+    sys.stdout.write('\r\nDistance plots output to:')
     sys.stdout.write('\n{}'.format(svg_path))
     sys.stdout.write('\n{}\n'.format(png_path))
     return [svg_path, png_path]
@@ -896,7 +896,7 @@ class DistScatterPlotter:
         png_path = '{}.png'.format(self.fig_output_base)
         sys.stdout.write('\rsaving as .png')
         plt.savefig(png_path)
-        sys.stdout.write('\rDistance plots output to:')
+        sys.stdout.write('\r\nDistance plots output to:')
         sys.stdout.write('\n{}'.format(svg_path))
         sys.stdout.write('\n{}\n'.format(png_path))
         self.output_path_list.extend([svg_path, png_path])
@@ -1157,6 +1157,7 @@ class LegendPlotter:
                     self.parent_plotter.sorted_type_prof_uids_by_local_abund[self.column_count]]))
         return leg_box_x, leg_box_y
 
+
 class TypeStackedBarPlotter:
     """Class for plotting the type count table output"""
     def __init__(self, type_relative_abund_count_table_path, output_directory, time_date_str=None):
@@ -1184,6 +1185,7 @@ class TypeStackedBarPlotter:
         self.output_path_list = []
 
     def plot_stacked_bar_seqs(self):
+        print('\n\nPlotting ITS2 type profile abundances')
         for sub_plot_index in range(self.number_of_subplots):
             sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
             sub_plotter.plot_seq_subplot()
@@ -1197,7 +1199,7 @@ class TypeStackedBarPlotter:
 
     def _write_out_plot(self):
         sys.stdout.write('\nFigure generation complete')
-        sys.stdout.write('\nFigures output to:')
+        sys.stdout.write('\nFigures output to:\n')
 
         svg_path = f'{self.fig_output_base}_type_abundance_stacked_bar_plot.svg'
         self.output_path_list.append(svg_path)
@@ -1301,7 +1303,6 @@ class TypeStackedBarPlotter:
         return  colour_dict
 
 
-
 class SeqStackedBarPlotter:
     """Class for plotting the sequence count table output"""
     def __init__(
@@ -1332,6 +1333,7 @@ class SeqStackedBarPlotter:
         self.output_path_list = []
 
     def plot_stacked_bar_seqs(self):
+        print('\n\nPlotting sequence abundances')
         for sub_plot_index in range(self.number_of_subplots):
             sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
             sub_plotter.plot_seq_subplot()
@@ -1350,7 +1352,7 @@ class SeqStackedBarPlotter:
 
     def _write_out_plot(self):
         sys.stdout.write('\nFigure generation complete')
-        sys.stdout.write('\nFigures output to:')
+        sys.stdout.write('\nFigures output to:\n')
 
         svg_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.svg'
         sys.stdout.write(f'{svg_path}\n')
