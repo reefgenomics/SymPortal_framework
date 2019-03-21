@@ -50,7 +50,7 @@ class SymPortalTester:
 
     def delete_data_load_output_object_directories(self, data_set_uid):
         directory_to_delete = os.path.abspath(os.path.join(
-            self.symportal_root_dir, 'outputs', 'data_set_submissions', str(data_set_uid)))
+            self.symportal_root_dir, 'outputs', 'loaded_data_sets', str(data_set_uid)))
         if os.path.exists(directory_to_delete):
             print(f'Deleting {directory_to_delete}')
             shutil.rmtree(directory_to_delete)

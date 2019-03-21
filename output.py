@@ -583,7 +583,7 @@ class SequenceCountTableCreator:
     def _set_output_dir(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir):
         if call_type == 'submission':
             self.output_dir = os.path.abspath(os.path.join(
-                symportal_root_dir, 'outputs', 'data_set_submissions', data_set_uids_to_output_as_comma_sep_string))
+                symportal_root_dir, 'outputs', 'loaded_data_sets', data_set_uids_to_output_as_comma_sep_string))
         elif call_type == 'stand_alone':
             self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'non_analysis', self.time_date_str))
         else:  # call_type == 'analysis

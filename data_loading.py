@@ -844,7 +844,7 @@ class DataLoading:
 
     def _setup_output_directory(self):
         output_directory = os.path.join(self.symportal_root_directory,
-                                        'outputs', 'data_set_submissions', f'{self.dataset_object.id}')
+                                        'outputs', 'loaded_data_sets', f'{self.dataset_object.id}')
         os.makedirs(output_directory, exist_ok=True)
         return output_directory
 
