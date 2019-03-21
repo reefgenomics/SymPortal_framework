@@ -595,11 +595,7 @@ class SPDataAnalysis:
 
     def _check_for_artefacts(self):
         artefact_assessor = ArtefactAssessor(parent_sp_data_analysis=self)
-        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'artefact_assessor.p'), 'wb') as f:
-            pickle.dump(artefact_assessor, f)
         artefact_assessor.assess_within_clade_cutoff_artefacts()
-        # with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'artefact_assessor_reassess_support.p'), 'wb') as f:
-        #     pickle.dump(artefact_assessor, f)
         artefact_assessor.reassess_support_of_artefact_div_containing_types()
 
     def _collapse_footprints_and_make_analysis_types(self):
