@@ -1186,6 +1186,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         return new_output_dir
 
     def compute_braycurtis_dists_and_pcoa_coords(self):
+        print('\n\nComputing sample pairwise distances and PCoA coordinates using the BrayCurtis method\n')
         for clade_in_question in self.clades_of_ccs:
             self._init_clade_dirs_and_paths(clade_in_question)
 
@@ -1277,6 +1278,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
 
     def compute_braycurtis_dists_and_pcoa_coords(self):
+        print('\n\nComputing ITS2 type profile pairwise distances and PCoA coordinates using the BrayCurtis method\n')
         for clade_in_question in self.clades_of_ats:
             self._init_clade_dirs_and_paths(clade_in_question)
 

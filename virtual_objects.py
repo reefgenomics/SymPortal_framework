@@ -14,7 +14,7 @@ class VirtualObjectManager():
         if list_of_data_set_sample_uids:
             self.list_of_data_set_sample_uids = list_of_data_set_sample_uids
             data_set_samples = DataSetSample.objects.filter(id__in=self.list_of_data_set_sample_uids)
-            self.list_of_data_set_uids = [dss.data_submission_from.id for dss in data_set_samples]
+            self.list_of_data_set_uids = set([dss.data_submission_from.id for dss in data_set_samples])
         else:
             self.list_of_data_set_uids = list_of_data_set_uids
             data_set_samples = DataSetSample.objects.filter(data_submission_from__in=self.list_of_data_set_uids)
@@ -401,12 +401,17 @@ class VirtualAnalysisTypeManager():
             int(cc_id_str) for cc_id_str in db_analysis_type_object.list_of_clade_collections.split(',')]
         vcc_list = [vcc for vcc in self.obj_manager.vcc_manager.vcc_dict.values() if vcc.id in db_analysis_type_cc_uids]
         ref_seq_obj_list = ReferenceSequence.objects.filter(id__in=[int(rs_id_str) for rs_id_str in db_analysis_type_object.ordered_footprint_list.split(',')])
-        self.make_vat_post_profile_assignment(clade_collection_obj_list=vcc_list, ref_seq_obj_list=ref_seq_obj_list)
+        self.make_vat_post_profile_assignment(clade_collection_obj_list=vcc_list, ref_seq_obj_list=ref_seq_obj_list, species=db_analysis_type_object.species)
 
-    def make_vat_post_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list):
-        new_vat = self.VirtualAnalysisType(
-            clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
-            ref_seq_obj_list=ref_seq_obj_list, id=self.next_uid)
+    def make_vat_post_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list, species=None):
+        if species is not None:
+            new_vat = self.VirtualAnalysisType(
+                clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
+                ref_seq_obj_list=ref_seq_obj_list, id=self.next_uid, species=species)
+        else:
+            new_vat = self.VirtualAnalysisType(
+                clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
+                ref_seq_obj_list=ref_seq_obj_list, id=self.next_uid)
         vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=new_vat)
         vat_init.init_vat_post_profile_assignment()
 
@@ -495,7 +500,7 @@ class VirtualAnalysisTypeManager():
 
         def __init__(
                 self, ref_seq_obj_list, id, clade_collection_obj_list_pre_prof_assignment=None,
-                clade_collection_obj_list_post_prof_assignment=None):
+                clade_collection_obj_list_post_prof_assignment=None, species=None):
             self.id = id
             # There will be two different clade_collection_obj_sets. Firstly there is the set of CCs that are associated
             # to this VirtualAnalysisType during ProfileDiscovery. These CCs are used to define the max and min abundances
@@ -555,7 +560,10 @@ class VirtualAnalysisTypeManager():
             self.prof_assignment_required_rel_abund_dict = {}
 
             # will be used to hold the species information associated at the end of the analysis
-            self.species = None
+            if species is not None:
+                self.species = species
+            else:
+                self.species = None
 
         def generate_name(self, at_df, use_rs_ids_rather_than_names=False):
             if self.co_dominant:

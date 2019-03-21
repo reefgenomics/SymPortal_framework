@@ -58,6 +58,7 @@ class SymPortalWorkFlowManager:
         self.submitting_user_email = sp_config.user_email
 
         # for data_loading
+        self.data_loading_object = None
         self.data_set_object = None
         self.screen_sub_eval_bool = None
         if sp_config.system_type == 'remote':
@@ -261,7 +262,7 @@ class SymPortalWorkFlowManager:
 
     def _plot_type_distances_from_distance_object(self):
         """Search for the path of the .csv file that holds the PC coordinates and pass this into plotting"""
-        sys.stdout.write('\nPlotting ITS2 type profile distances\n')
+        sys.stdout.write('\n\nPlotting ITS2 type profile distances\n')
         for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
             local_plotter = plotting.DistScatterPlotterTypes(
                 csv_path=pcoa_path, date_time_str=self.data_analysis_object.time_stamp)
@@ -269,7 +270,7 @@ class SymPortalWorkFlowManager:
 
     def _plot_sample_distances_from_distance_object(self):
         """Search for the path of the .csv file that holds the PC coordinates and pass this into plotting"""
-        sys.stdout.write('\nPlotting sample distances\n')
+        sys.stdout.write('\n\nPlotting sample distances\n')
         for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
             local_plotter = plotting.DistScatterPlotterSamples(
                 csv_path=pcoa_path, date_time_str=self.data_analysis_object.time_stamp)
@@ -423,12 +424,12 @@ class SymPortalWorkFlowManager:
         self._execute_data_loading()
 
     def _execute_data_loading(self):
-        data_loading_object = data_loading.DataLoading(
+        self.data_loading_object = data_loading.DataLoading(
             data_set_object=self.data_set_object, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, distance_method=self.args.distance_method, debug=self.args.debug)
-        data_loading_object.load_data()
-        return data_loading_object
+        self.data_loading_object.load_data()
+
 
     def _verify_name_arg_given(self):
         if self.args.name == 'noName':
@@ -448,6 +449,7 @@ class SymPortalWorkFlowManager:
             self._stand_alone_sequence_output_data_set()
         self.number_of_samples = len(self.output_seq_count_table_obj.sorted_sample_uid_list)
         self._plot_if_not_too_many_samples(self._plot_sequence_stacked_bar_from_seq_output_table)
+        self._print_all_outputs_complete()
 
     def _stand_alone_sequence_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
@@ -480,6 +482,7 @@ class SymPortalWorkFlowManager:
             print('\nFigure plotting skipped at user\'s request')
         if not self.args.no_ordinations:
             self._do_data_analysis_ordinations()
+        self._print_all_outputs_complete()
 
     def _stand_alone_seq_output_from_type_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
@@ -531,6 +534,7 @@ class SymPortalWorkFlowManager:
         self._set_data_analysis_obj_from_arg_analysis_uid()
         self.run_type_distances_dependent_on_methods()
         self._plot_type_distances_from_distance_object()
+        self._print_all_outputs_complete()
 
     def run_type_distances_dependent_on_methods(self):
         """Start an instance of the correct distance class running."""
@@ -590,6 +594,7 @@ class SymPortalWorkFlowManager:
     def _perform_sample_distance_stand_alone(self):
         self._run_sample_distances_dependent_on_methods()
         self._plot_sample_distances_from_distance_object()
+        self._print_all_outputs_complete()
 
     def _run_sample_distances_dependent_on_methods(self):
         """Start an instance of the correct distance class running."""
@@ -603,6 +608,10 @@ class SymPortalWorkFlowManager:
                 self._start_sample_braycurtis_data_set_samples()
             else:
                 self._start_sample_braycurtis_data_sets()
+
+
+    def _print_all_outputs_complete(self):
+        print('\n\nALL OUTPUTS COMPLETE\n\n')
 
     def _start_sample_unifrac_data_set_samples(self):
         dss_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.between_sample_distances_sample_set.split(',')]

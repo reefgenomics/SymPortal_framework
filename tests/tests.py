@@ -11,11 +11,11 @@ from dbApp.models import DataAnalysis, DataSet
 
 class SymPortalTester:
     def __init__(self):
+        self.work_flow_manager = None
         self.symportal_testing_root_dir = os.path.abspath(os.path.dirname(__file__))
         self.symportal_root_dir = os.path.abspath(os.path.join(self.symportal_testing_root_dir, '..'))
         self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data', 'smith_subsampled_data')
         self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input.csv')
-        self.completed_data_loading_object = None
         self.num_proc=6
         self.name='testing'
 
@@ -28,14 +28,14 @@ class SymPortalTester:
     def _test_data_loading_work_flow(self):
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc), '--data_sheet',
              self.data_sheet_file_path]
-        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
-        self.completed_data_loading_object = test_spwfm.start_work_flow()
+        self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
+        self.work_flow_manager.start_work_flow()
 
     def _test_data_analysis_work_flow(self):
-        custom_args_list = ['--analyse', str(self.completed_data_loading_object.dataset_object.id), '--name', self.name,
+        custom_args_list = ['--analyse', str(self.work_flow_manager.data_set_object.id), '--name', self.name,
                             '--num_proc', str(self.num_proc)]
-        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
-        test_spwfm.start_work_flow()
+        self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
+        self.work_flow_manager.start_work_flow()
 
     def cleanup_after_previous_tests(self):
         self.cleanup_after_previously_run_data_analysis_tests()
@@ -52,6 +52,7 @@ class SymPortalTester:
         directory_to_delete = os.path.abspath(os.path.join(
             self.symportal_root_dir, 'outputs', 'data_set_submissions', str(data_set_uid)))
         if os.path.exists(directory_to_delete):
+            print(f'Deleting {directory_to_delete}')
             shutil.rmtree(directory_to_delete)
 
     def cleanup_after_previously_run_data_analysis_tests(self):
@@ -65,6 +66,7 @@ class SymPortalTester:
         directory_to_delete = os.path.abspath(os.path.join(
             self.symportal_root_dir, 'outputs', 'analyses', str(data_analysis_uid)))
         if os.path.exists(directory_to_delete):
+            print(f'Deleting {directory_to_delete}')
             shutil.rmtree(directory_to_delete)
 
 if __name__ == "__main__":

@@ -52,39 +52,18 @@ class SPDataAnalysis:
 
         self._associate_vats_to_vccs()
 
-        # vcc_with_multiple_types_that_share_div = []
-        # for vcc in self.virtual_object_manager.vcc_manager.vcc_dict.values():
-        #     if len(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items()) > 1:
-        #         vats_list = list(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.keys())
-        #         shared_ref_seqs = vats_list[0].footprint_as_ref_seq_objs_set.intersection(*[vat.footprint_as_ref_seq_objs_set for vat in vats_list[1:]])
-        #         if shared_ref_seqs:
-        #             vcc_with_multiple_types_that_share_div.append(vcc)
-
         self._check_for_artefacts()
-        print('Type discovery complete')
-
-        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_artefact_assess.p'), 'wb') as f:
-             pickle.dump(self, f)
+        print('TYPE DISCOVERY COMPLETE')
 
         self._profile_assignment()
 
-        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_profile_assignment.p'), 'wb') as f:
-             pickle.dump(self, f)
-
         self._name_divs()
-
-        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_div_naming.p'), 'wb') as f:
-             pickle.dump(self, f)
 
         self._associate_species_designations()
 
         self._del_and_remake_temp_wkd()
 
         print('DATA ANALYSIS COMPLETE')
-
-        with open(os.path.join(self.workflow_manager.symportal_root_directory, 'tests', 'objects', 'sp_data_analysis_post_del_tempdir.p'), 'wb') as f:
-             pickle.dump(self, f)
-
         self._make_analysis_type_objects_from_vats()
 
     def _make_analysis_type_objects_from_vats(self):
@@ -123,7 +102,7 @@ class SPDataAnalysis:
         ordered_footprint_list = ','.join(str(rs_id) for rs_id in list(vat.multi_modal_detection_rel_abund_df))
         majority_reference_sequence_set = ','.join([str(rs_id) for rs_id in vat.majority_reference_sequence_uid_set])
         list_of_clade_collections = ','.join(
-            [str(cc_uid) for cc_uid in vat.clade_collection_obj_set_profile_assignment])
+            [str(cc.id) for cc in vat.clade_collection_obj_set_profile_assignment])
         footprint_sequence_abundances = json.dumps(vat.abs_abund_of_ref_seqs_in_assigned_vccs_df.values.tolist())
         footprint_sequence_ratios = json.dumps(vat.multi_modal_detection_rel_abund_df.values.tolist())
         artefact_intras = ','.join(str(rs_uid) for rs_uid in vat.artefact_ref_seq_uid_set)

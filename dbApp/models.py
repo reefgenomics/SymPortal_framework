@@ -9,6 +9,7 @@ import json
 
 
 class SymportalFramework(models.Model):
+    objects = models.Manager()
     latest_reference_fasta = models.CharField(max_length=30, default='symClade_2_2.fa')
     # this will be fed to the screen_sub_e_value_sequences method when making the next database iteration
     next_reference_fasta_iteration = models.IntegerField(default=1)
@@ -25,6 +26,7 @@ class SymportalFramework(models.Model):
 
 
 class DataSet(models.Model):
+    objects = models.Manager()
     name = models.CharField(max_length=60, default='something')
     reference_fasta_database_used = models.CharField(max_length=60, default='None')
     submitting_user = models.CharField(max_length=100, default='no_user_defined')
@@ -65,6 +67,7 @@ class DataSet(models.Model):
 
 class DataSetSample(models.Model):
 
+    objects = models.Manager()
     data_submission_from = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=200, default='None')
     # This is the absolute number of sequences after make.contigs
@@ -124,6 +127,7 @@ class DataSetSample(models.Model):
 
 class DataAnalysis(models.Model):
     # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
+    objects = models.Manager()
     list_of_data_set_uids = models.CharField(max_length=500, null=True)
     within_clade_cutoff = models.FloatField(default=0.04)
     type_support = models.FloatField(default=0.01)
@@ -147,6 +151,7 @@ class DataAnalysis(models.Model):
 
 
 class CladeCollection(models.Model):
+    objects = models.Manager()
     data_set_sample_from = models.ForeignKey(DataSetSample, on_delete=models.CASCADE, null=True)
     clade = models.CharField(max_length=1)
     # the method below to get the footprint of the clade_collection_object is incredibly slow.
@@ -209,6 +214,7 @@ class CladeCollection(models.Model):
 
 
 class AnalysisGroup(models.Model):
+    objects = models.Manager()
     data_analysis_from = models.ForeignKey(DataAnalysis, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=100, null=True)
 
@@ -216,7 +222,9 @@ class AnalysisGroup(models.Model):
 
 
 class AnalysisType(models.Model):
+    objects = models.Manager()
     data_analysis_from = models.ForeignKey(DataAnalysis, on_delete=models.CASCADE, null=True)
+    # TODO get rid of this
     analysis_group_of = models.ForeignKey(AnalysisGroup, on_delete=models.SET_NULL, null=True)
     # This should be a frozen set of referenceSequences
     # As this is not possible in a django field or jsonable
@@ -231,20 +239,27 @@ class AnalysisType(models.Model):
     majority_reference_sequence_set = models.CharField(max_length=40, null=True)
     # Same for this
     # The list of cladeCollections in which the type was defined from
+    # TODO get rid of this
     list_of_clade_collections_found_in_initially = models.CharField(max_length=5000, null=True)
     # The list of cladeCollections that the type was associated with after one iteration of assigningTypes
+
     list_of_clade_collections = models.CharField(max_length=100000, null=True)
     # This is a 2D list, a list for each clade collection in order of the listofCladeCollections
     # Within each list the absolute abundances of the defining seqs in order of ordered_footprint_list
     footprint_sequence_abundances = models.CharField(max_length=100000, null=True)
-    # Same as above but the relative abundance of the
-    # seq in Q as a function of all of the sequences in the cladeCollection
+
+
+    # Same as above but the proportion of the seqs to each other in the cladecollection.
     footprint_sequence_ratios = models.CharField(max_length=100000, null=True)
+
     clade = models.CharField(max_length=1)
     co_dominant = models.BooleanField(default=False)
 
     name = models.CharField(max_length=1000, null=True)
-    # [(max,min) for refseq in ordered footprint list]
+    # TODO we will not keep track of this.
+    # These are the maximum and minimum allowed relative abundances
+    # (relative to the sum of the DIVs of the type in the CladeCollection in question)
+    # [(max,min) for refseq in ordered footprint list]. Ratios is perhaps a misleading term.
     max_min_ratios = models.CharField(max_length=100000, null=True)
     # The list of speceis that this type is associated with
     species = models.CharField(max_length=200, null=True)
@@ -258,8 +273,11 @@ class AnalysisType(models.Model):
     # This will only be set to true when running an analysis against a database version.
     is_locked_type = models.BooleanField(default=False)
 
+    # TODO delete this
     basal_seq = models.CharField(max_length=10, default=None, null=True)
 
+
+    # TODO the below logic is now undertaken in the VirtualCladeCollection class and can be delted from here.
     # This method will populate the following attributes
     #  self.list_of_clade_collections_found_in_initially
     # self.ordered_footprint_list
@@ -273,7 +291,7 @@ class AnalysisType(models.Model):
     # Once we have been through the initial round of type association we will
     # be using the updateTypeAttribute method in place of this so that we will start working from the
     # listofCladeCaoolections rather than the list_of_clade_collections_found_in_initially
-    # TODO because I am going to move away from this silly ratio business and work on relative abundance
+    # because I am going to move away from this silly ratio business and work on relative abundance
     # of defining intras.
     # These will simply be the relative proportion of any given intra (including the maj) with respect to the
     # total number of sequences the intras of the type make up.
@@ -515,9 +533,6 @@ class AnalysisType(models.Model):
         self.list_of_clade_collections = ','.join(list_of_uids_as_string)
         self.save()
 
-    # This is the relative abundance of each sequence in the type as a function of the total sequence found
-    # in the clade Collection THAT ARE ALSO in the type. SO proportion of type sequences in cladecollection
-
     def generate_ratio_list(self):
         new_ratio_list = []
         footprint_seq_abundances_loaded = json.loads(self.footprint_sequence_abundances)
@@ -647,7 +662,7 @@ class AnalysisType(models.Model):
                     max_val = maxmin_candidate
                     max_min_list[-1][0] = max_val  # Populate the tuple for this refseq with the new max
                 if maxmin_candidate < min_val:
-                    # If we find any of the intras at a rel abund of < 6% then we lower the lower limit to 0.01% (0.0001)
+                    # If we find any of the intras at a rel abund of < 5% then we lower the lower limit to 0.5% (0.005)
                     # This way we should hopefully mitigate any artefacts caused by the within cladeCutOff
                     # Additionally we need to note that our 0.03 within clade cutoff may be acting on this intra
                     # to cause an artefact. To do this we need to add the intra (ref_seq.id) to the types
@@ -704,6 +719,7 @@ class AnalysisType(models.Model):
 
 
 class CladeCollectionType(models.Model):
+    objects = models.Manager()
     analysis_type_of = models.ForeignKey(AnalysisType, on_delete=models.CASCADE, null=True)
     # analysis_type_of = models.IntegerField(null=True)
     clade_collection_found_in = models.ForeignKey(CladeCollection, on_delete=models.CASCADE, null=True)
@@ -714,11 +730,9 @@ class CladeCollectionType(models.Model):
         return self.analysis_type_of.name
 
 
-# TODO 08/12/17 Consider adding a basal seq of argument in this. This will improve our ability to separate basal
-# ITS2 types in type discovery. We would call something basal from a given sequence if it was an exact match
-# except for a one bp differentiation. Or I guess we could just go by the closest match. Need to consider I guess what
-# would happen to some of the biguns like C21 and C39. But this could be really good.
+
 class ReferenceSequence(models.Model):
+    objects = models.Manager()
     name = models.CharField(max_length=30, default='noName')
     has_name = models.BooleanField(default=False)
     clade = models.CharField(max_length=30)
@@ -733,6 +747,7 @@ class ReferenceSequence(models.Model):
 
 
 class DataSetSampleSequence(models.Model):
+    objects = models.Manager()
     clade_collection_found_in = models.ForeignKey(CladeCollection, on_delete=models.CASCADE, null=True)
     reference_sequence_of = models.ForeignKey(ReferenceSequence, on_delete=models.CASCADE, null=True)
     # reference_sequence_of = models.IntegerField(null=True)
