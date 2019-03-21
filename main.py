@@ -273,7 +273,7 @@ class SymPortalWorkFlowManager:
         sys.stdout.write('\n\nPlotting sample distances\n')
         for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
             local_plotter = plotting.DistScatterPlotterSamples(
-                csv_path=pcoa_path, date_time_str=self.data_analysis_object.time_stamp)
+                csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
             local_plotter.make_sample_dist_scatter_plot()
 
     # DATA ANALYSIS
