@@ -1053,8 +1053,8 @@ class InitialMothurWorker:
             if 'ERROR' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='error in inital QC')
                 raise RuntimeError({'sample_name':self.sample_name})
-            self.log_qc_error_and_continue(errorreason='error in inital QC')
-            raise RuntimeError({'sample_name': self.sample_name})
+        self.log_qc_error_and_continue(errorreason='error in inital QC')
+        raise RuntimeError({'sample_name': self.sample_name})
 
 
     def log_qc_error_and_continue(self, errorreason):
