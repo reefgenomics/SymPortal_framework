@@ -51,7 +51,7 @@ class BlastnAnalysis:
         blast_output_dict = defaultdict(list)
         for line in blast_output_file_as_list:
             blast_output_dict[line.split('\t')[0]].append('\t'.join(line.split('\t')[1:]))
-        return blast_output_file_as_list
+        return blast_output_dict
 
     def make_db(self, title_for_db):
         if self.pipe_stdout_sterr:
@@ -386,7 +386,7 @@ class MothurAnalysis:
         if self.latest_completed_process_command.returncode == 0:
             sys.stdout.write('\rUnifrac successful')
         else:
-            sys.stdout.write('\rERROR: {}'.format(self.latest_completed_process_command.sterr.decode('utf-8')))
+            sys.stdout.write('\rERROR: {}'.format(self.latest_completed_process_command.sterr.decode('ISO-8859-1')))
 
         self.dist_file_path = self._extract_output_path_second_line_command()
 

@@ -230,7 +230,7 @@ class UnifracSubcladeHandler:
             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         if completed_consensus.returncode != 0:
             try:
-                if 'recursion' in completed_consensus.stdout.decode('utf-8'):
+                if 'recursion' in completed_consensus.stdout.decode('ISO-8859-1'):
                     sys.exit('There has been a recursion depth error whilst trying to calculate a consensus tree\n'
                              'This occured whilst calculating between sample distances.\n'
                              'This problem occurs when trees are too big for sumtrees.py to process.\n'

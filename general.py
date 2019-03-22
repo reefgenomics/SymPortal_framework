@@ -178,7 +178,7 @@ def make_new_blast_db(
 
 
 def decode_utf8_binary_to_list(bin_to_decode):
-    return bin_to_decode.decode('utf-8').split('\n')
+    return bin_to_decode.decode('ISO-8859-1').split('\n')
 
 
 def mafft_align_fasta(input_path, output_path, method='auto', mafft_exec_string='mafft', num_proc=1, iterations=1000):
