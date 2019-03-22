@@ -981,24 +981,34 @@ class InitialMothurWorker:
         self.data_set_sample.save()
 
     def _do_fwd_and_rev_pcr(self):
-        self.mothur_analysis_object.execute_pcr(do_reverse_pcr_as_well=True)
-        self.check_for_no_seqs_after_pcr_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_pcr(do_reverse_pcr_as_well=True)
+        except RuntimeError:
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_split_abund(self):
-        self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
+        except:
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_unique_seqs(self):
-        self.mothur_analysis_object.execute_unique_seqs()
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_unique_seqs()
+        except:
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_screen_seqs(self):
-        self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig': 0, 'maxhomop': 5})
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig': 0, 'maxhomop': 5})
+        except RuntimeError:
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_make_contigs(self):
-        self.mothur_analysis_object.execute_make_contigs()
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_make_contigs()
+        except RuntimeError:
+            self.check_for_error_and_raise_runtime_error()
 
     def _set_absolute_num_seqs_after_make_contigs(self):
         number_of_contig_seqs_absolute = len(
@@ -1037,9 +1047,15 @@ class InitialMothurWorker:
             if '[WARNING]: Blank fasta name, ignoring read.' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='Blank fasta name')
                 raise RuntimeError({'sample_name':self.sample_name})
+            if 'do not match' in stdout_line:
+                self.log_qc_error_and_continue(errorreason='error in fastq file')
+                raise RuntimeError({'sample_name': self.sample_name})
             if 'ERROR' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='error in inital QC')
                 raise RuntimeError({'sample_name':self.sample_name})
+            self.log_qc_error_and_continue(errorreason='error in inital QC')
+            raise RuntimeError({'sample_name': self.sample_name})
+
 
     def log_qc_error_and_continue(self, errorreason):
         print('Error in processing sample: {}'.format(self.sample_name))

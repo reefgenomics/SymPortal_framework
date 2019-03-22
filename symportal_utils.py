@@ -268,6 +268,8 @@ class MothurAnalysis:
         self._screen_seqs_make_and_write_mothur_batch_file(argument_dictionary)
         self._run_mothur_batch_file_command()
         good_fasta_path = self._extract_output_path_first_line_command()
+        if good_fasta_path is None:
+            raise RuntimeError
         self.fasta_path = good_fasta_path
         self._update_sequence_collection_from_fasta_file()
         self.__execute_summary()
@@ -300,6 +302,8 @@ class MothurAnalysis:
             self._rev_comp_make_and_write_mothur_batch_file()
             self._run_mothur_batch_file_command()
             self.fasta_path = self._extract_output_path_first_line_command()
+            if self.fasta_path is None:
+                raise RuntimeError
             self._pcr_make_and_write_mothur_batch_file()
             self._run_mothur_batch_file_command()
             rev_output_good_fasta_path = self._pcr_extract_good_and_scrap_output_paths()[1]
@@ -338,6 +342,8 @@ class MothurAnalysis:
         self._run_mothur_batch_file_command()
 
         self.fasta_path = self._extract_output_path_first_line_command()
+        if self.fasta_path is None:
+            raise RuntimeError
 
         self._update_sequence_collection_from_fasta_file()
 
@@ -350,6 +356,8 @@ class MothurAnalysis:
         self._run_mothur_batch_file_command()
 
         self.name_file_path, self.fasta_path = self._extract_output_path_two_lines()
+        if self.name_file_path is None or self.fasta_path is None:
+            raise RuntimeError
 
         self._update_sequence_collection_from_fasta_name_pair()
 
@@ -362,6 +370,8 @@ class MothurAnalysis:
         self._run_mothur_batch_file_command()
 
         self.name_file_path, self.fasta_path = self._split_abund_extract_output_path_name_and_fasta()
+        if self.name_file_path is None or self.fasta_path is None:
+            raise RuntimeError
 
         self._update_sequence_collection_from_fasta_name_pair()
 
@@ -373,12 +383,18 @@ class MothurAnalysis:
         self._run_mothur_batch_file_command()
 
         self.dist_file_path = self._extract_output_path_first_line_command()
+        if self.dist_file_path is None:
+            raise RuntimeError('Dist file is None')
+
 
     def execute_clearcut(self):
         self._validate_dist_file()
         self._clearcut_make_and_write_mothur_batch()
         self._run_mothur_batch_file_command()
         self.tree_file_path = self._extract_output_path_first_line_command()
+        if self.tree_file_path is None:
+            raise RuntimeError('Tree file path is None')
+
 
     def execute_weighted_unifrac(self):
         self._weighted_unifrac_make_and_write_mothur_batch()
