@@ -61,7 +61,7 @@ class DataLoading:
         self.sample_meta_info_df = None
         self.list_of_samples_names = None
         self.list_of_fastq_file_names_in_wkd = None
-        self.list_of_fastq_files_in_wkd = None
+        self.list_of_fastq_files_in_wkd = []
         self.path_to_mothur_batch_file_for_dot_file_creation = None
         self.fastqs_are_gz_compressed = None
         self.path_to_latest_mothur_batch_file = None
