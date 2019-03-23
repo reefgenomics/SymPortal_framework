@@ -553,7 +553,9 @@ class DataLoading:
 
     def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self):
 
-        self.list_of_fastq_files_in_wkd = [a for a in os.listdir(self.temp_working_directory) if 'fastq' in a]
+        for file in os.listdir(self.temp_working_directory):
+            if file.endswith('fastq') or file.endswith('fq') or file.endswith('fastq.gz') or file.endswith('fq.gz'):
+                self.list_of_fastq_files_in_wkd.append(file)
 
         end_index = self._identify_sample_names_without_datasheet()
 
@@ -571,7 +573,7 @@ class DataLoading:
             fwd_file_path = None
             rev_file_path = None
             for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
-                if sample_name == ntpath.basename(file_path)[end_index:]:
+                if sample_name == ntpath.basename(file_path)[:-end_index]:
                     if 'R1' in file_path:
                         fwd_file_path = file_path
                     if 'R2' in file_path:
@@ -698,36 +700,6 @@ class DataLoading:
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
 
-    def _generate_and_write_new_stability_file_with_data_sheet(self):
-        # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
-        # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
-        self._read_in_mothur_dot_file_creation_output()
-
-        new_stability_file = self._generate_new_stability_file_with_data_sheet()
-
-        self.sample_fastq_pairs = new_stability_file
-        # write out the new stability file
-        write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), self.sample_fastq_pairs)
-
-    def _generate_new_stability_file_with_data_sheet(self):
-        new_stability_file = []
-        for stability_file_line in self.sample_fastq_pairs:
-            pair_components = stability_file_line.split('\t')
-            # I am going to use '[dS]' as a place holder for a dash in the sample names
-            # Each line of the stability file is a three column format with the first
-            # column being the sample name. The second and third are the full paths of the .fastq files
-            # the sample name at the moment is garbage, we will identify the sample name from the
-            # first fastq path using the fastq_file_to_sample_name_dict
-            new_stability_file.append(
-                '{}\t{}\t{}'.format(
-                    self.fastq_file_to_sample_name_dict[pair_components[1].split('/')[-1]].replace('-', '[dS]'),
-                    pair_components[1],
-                    pair_components[2]))
-        return new_stability_file
-
-    def _read_in_mothur_dot_file_creation_output(self):
-        self.sample_fastq_pairs = read_defined_file_to_list(os.path.join(self.temp_working_directory, 'stability.files'))
-
     def _create_fastq_file_to_sample_name_dict(self):
         fastq_file_to_sample_name_dict = {}
         for sample_index in self.sample_meta_info_df.index.values.tolist():
@@ -736,36 +708,6 @@ class DataLoading:
             fastq_file_to_sample_name_dict[
                 self.sample_meta_info_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
         self.fastq_file_to_sample_name_dict = fastq_file_to_sample_name_dict
-
-    def _generate_and_write_mothur_batch_file_for_dotfile_creation(self):
-        self._check_if_fastqs_are_gz_compressed()
-        mothur_batch_file_as_list = self._generate_mothur_batch_file_for_dotfile_creation_as_list()
-        self.path_to_latest_mothur_batch_file = os.path.join(self.temp_working_directory, 'mothur_batch_file_makeFile')
-        write_list_to_destination(self.path_to_latest_mothur_batch_file, mothur_batch_file_as_list)
-
-    def _generate_mothur_batch_file_for_dotfile_creation_as_list(self):
-        if self.fastqs_are_gz_compressed:
-            mothur_batch_file = [
-                r'set.dir(input={0})'.format(self.temp_working_directory),
-                r'set.dir(output={0})'.format(self.temp_working_directory),
-                r'make.file(inputdir={0}, type=gz, numcols=3)'.format(self.temp_working_directory)
-            ]
-        else:
-            mothur_batch_file = [
-                r'set.dir(input={0})'.format(self.temp_working_directory),
-                r'set.dir(output={0})'.format(self.temp_working_directory),
-                r'make.file(inputdir={0}, type=fastq, numcols=3)'.format(self.temp_working_directory)
-            ]
-        return mothur_batch_file
-
-    def _check_if_fastqs_are_gz_compressed(self):
-        if self.list_of_fastq_files_in_wkd[0].endswith('fastq.gz') or self.list_of_fastq_files_in_wkd[0].endswith('fq.gz'):
-            self.fastqs_are_gz_compressed = True
-        elif self.list_of_fastq_files_in_wkd[0].endswith('fastq') or self.list_of_fastq_files_in_wkd[0].endswith('fq'):
-            self.fastqs_are_gz_compressed = False
-        else:
-            warning_str = f'Unrecognised format of sequecing file: {self.list_of_fastq_files_in_wkd[0]}'
-            self._exit_and_del_data_set_sample(warning_str)
 
     def _check_all_fastqs_in_datasheet_exist(self):
         self.list_of_fastq_files_in_wkd = return_list_of_file_names_in_directory(self.temp_working_directory)
