@@ -925,7 +925,10 @@ class InitialMothurWorker:
     def _do_fwd_and_rev_pcr(self):
         try:
             self.mothur_analysis_object.execute_pcr(do_reverse_pcr_as_well=True)
-        except RuntimeError:
+        except RuntimeError as e:
+            if str(e) == 'PCR fasta file is blank':
+                self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
+                raise RuntimeError({'sample_name': self.sample_name})
             self.check_for_error_and_raise_runtime_error()
 
     def _do_split_abund(self):
