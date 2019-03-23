@@ -319,7 +319,7 @@ class MothurAnalysis:
             )
         else:
             self.fasta_path = fwd_output_good_fasta_path
-        if len(read_defined_file_to_list(self.fasta_path)):
+        if len(read_defined_file_to_list(self.fasta_path)) == 0:
             raise RuntimeError('PCR fasta file is blank')
         if self.name_file_path:
             self._update_sequence_collection_from_fasta_name_pair()
