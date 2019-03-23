@@ -952,7 +952,10 @@ class InitialMothurWorker:
     def _do_make_contigs(self):
         try:
             self.mothur_analysis_object.execute_make_contigs()
-        except RuntimeError:
+        except RuntimeError as e:
+            if str(e) == 'bad fastq, mothur stuck in loop':
+                self.log_qc_error_and_continue(errorreason='Bad fastq, mothur stuck in loop')
+                raise RuntimeError({'sample_name': self.sample_name})
             self.check_for_error_and_raise_runtime_error()
 
     def _set_absolute_num_seqs_after_make_contigs(self):

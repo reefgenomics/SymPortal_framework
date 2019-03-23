@@ -609,18 +609,31 @@ class MothurAnalysis:
                 return output_scrapped_fasta_path, output_good_fasta_path
 
     def _run_mothur_batch_file_command(self):
+        """Run the mothur batch file that does make.contigs. NB that with some dodgee fastq pairs, mothur gets stuck
+        in a loop printing out warnings. We will therefore read through the stdout and look for warnings and kill
+        the process if these warnings get too high."""
         if self.stdout_and_sterr_to_pipe:
-            self.latest_completed_process_command = subprocess.run(
-                [self.exec_path, self.mothur_batch_file_path],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
+            warning_count = 0
+            with subprocess.Popen([self.exec_path, self.mothur_batch_file_path],stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
+                for byte_line in proc.stdout:
+                    if 'WARNING' in byte_line.decode('ISO-8859-1'):
+                        warning_count += 1
+                        if warning_count > 100:
+                            proc.kill()
+                            raise RuntimeError('bad fastq, mothur stuck in loop')
+
         else:
-            self.latest_completed_process_command = subprocess.run(
-                [self.exec_path, self.mothur_batch_file_path],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE
-            )
-            for line in decode_utf8_binary_to_list(self.latest_completed_process_command.stdout):
-                print(line)
+            warning_count = 0
+            with subprocess.Popen([self.exec_path, self.mothur_batch_file_path], stdout=subprocess.PIPE,
+                                  stderr=subprocess.PIPE) as proc:
+                for byte_line in proc.stdout:
+                    line_str = byte_line.decode('ISO-8859-1')
+                    print(line_str)
+                    if 'WARNING' in line_str:
+                        warning_count += 1
+                        if warning_count > 100:
+                            proc.kill()
+                            raise RuntimeError('bad fastq, mothur stuck in loop')
 
     def _run_mothur_batch_file_summary(self):
         if self.stdout_and_sterr_to_pipe:
