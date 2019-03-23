@@ -555,14 +555,15 @@ class DataLoading:
 
         self.list_of_fastq_files_in_wkd = [a for a in os.listdir(self.temp_working_directory) if 'fastq' in a]
 
-        self._identify_sample_names_without_datasheet()
+        end_index = self._identify_sample_names_without_datasheet()
 
-        self.make_dot_stability_file_inferred()
+        self.make_dot_stability_file_inferred(end_index)
 
         self._create_data_set_sample_objects_in_bulk_without_datasheet()
 
-    def make_dot_stability_file_inferred(self):
-        # inferred
+    def make_dot_stability_file_inferred(self, end_index):
+        """Search for the fastq files that contain the inferred sample names. NB this is not so simple
+        as names that are subset of other names will match more than one set of fastq files. To avoid this happening"""
         sample_fastq_pairs = []
         for sample_name in self.list_of_samples_names:
             temp_list = []
@@ -570,14 +571,13 @@ class DataLoading:
             fwd_file_path = None
             rev_file_path = None
             for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
-                if sample_name in ntpath.basename(file_path):
+                if sample_name == ntpath.basename(file_path)[end_index:]:
                     if 'R1' in file_path:
                         fwd_file_path = file_path
                     if 'R2' in file_path:
                         rev_file_path = file_path
             temp_list.append(fwd_file_path)
             temp_list.append(rev_file_path)
-            assert (len(temp_list) == 3)
             sample_fastq_pairs.append('\t'.join(temp_list))
         write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
@@ -603,10 +603,10 @@ class DataLoading:
     def _get_num_chars_in_common_with_fastq_names(self):
         i = 1
         while 1:
-            list_of_endings = []
+            list_of_endings = set()
             for file in self.list_of_fastq_files_in_wkd:
-                list_of_endings.append(file[-i:])
-            if len(set(list_of_endings)) > 2:
+                list_of_endings.add(file[-i:])
+            if len(list_of_endings) > 2:
                 break
             else:
                 i += 1
