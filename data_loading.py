@@ -951,12 +951,17 @@ class InitialMothurWorker:
 
     def _do_make_contigs(self):
         try:
-            self.mothur_analysis_object.execute_make_contigs()
+            stdout_as_list = self.mothur_analysis_object.execute_make_contigs()
         except RuntimeError as e:
             if str(e) == 'bad fastq, mothur stuck in loop':
                 self.log_qc_error_and_continue(errorreason='Bad fastq, mothur stuck in loop')
                 raise RuntimeError({'sample_name': self.sample_name})
-            self.check_for_error_and_raise_runtime_error()
+            if str(e) == 'bad fastq':
+                self.log_qc_error_and_continue(errorreason='Bad fastq')
+                raise RuntimeError({'sample_name': self.sample_name})
+            if str(e) == 'error in make.contigs':
+                self.log_qc_error_and_continue(errorreason='Error in make.contigs')
+                raise RuntimeError({'sample_name': self.sample_name})
 
     def _set_absolute_num_seqs_after_make_contigs(self):
         number_of_contig_seqs_absolute = len(

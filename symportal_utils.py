@@ -341,9 +341,9 @@ class MothurAnalysis:
 
         self._make_contig_make_and_write_mothur_batch(dot_file_file_path)
 
-        self._run_mothur_batch_file_command()
+        stdout_as_list = self._run_mothur_batch_file_command_make_contigs()
 
-        self.fasta_path = self._extract_output_path_first_line_command()
+        self.fasta_path = self._extract_output_path_first_line_command(output_as_list=stdout_as_list)
         if self.fasta_path is None:
             raise RuntimeError
 
@@ -576,8 +576,11 @@ class MothurAnalysis:
         ]
         return mothur_batch_file
 
-    def _extract_output_path_first_line_command(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+    def _extract_output_path_first_line_command(self, output_as_list=None):
+        if output_as_list is None:
+            stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+        else:
+            stdout_string_as_list = output_as_list
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i+1]
@@ -609,31 +612,47 @@ class MothurAnalysis:
                 return output_scrapped_fasta_path, output_good_fasta_path
 
     def _run_mothur_batch_file_command(self):
+        if self.stdout_and_sterr_to_pipe:
+            self.latest_completed_process_command = subprocess.run(
+                [self.exec_path, self.mothur_batch_file_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+        else:
+            self.latest_completed_process_command = subprocess.run(
+                [self.exec_path, self.mothur_batch_file_path],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
+            for line in decode_utf8_binary_to_list(self.latest_completed_process_command.stdout):
+                print(line)
+
+    def _run_mothur_batch_file_command_make_contigs(self):
         """Run the mothur batch file that does make.contigs. NB that with some dodgee fastq pairs, mothur gets stuck
         in a loop printing out warnings. We will therefore read through the stdout and look for warnings and kill
         the process if these warnings get too high."""
-        if self.stdout_and_sterr_to_pipe:
-            warning_count = 0
-            with subprocess.Popen([self.exec_path, self.mothur_batch_file_path],stdout=subprocess.PIPE, stderr=subprocess.PIPE) as proc:
-                for byte_line in proc.stdout:
-                    if 'WARNING' in byte_line.decode('ISO-8859-1'):
-                        warning_count += 1
-                        if warning_count > 100:
-                            proc.kill()
-                            raise RuntimeError('bad fastq, mothur stuck in loop')
+        stdout_as_list = []
 
-        else:
-            warning_count = 0
-            with subprocess.Popen([self.exec_path, self.mothur_batch_file_path], stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE) as proc:
-                for byte_line in proc.stdout:
-                    line_str = byte_line.decode('ISO-8859-1')
-                    print(line_str)
-                    if 'WARNING' in line_str:
-                        warning_count += 1
-                        if warning_count > 100:
-                            proc.kill()
-                            raise RuntimeError('bad fastq, mothur stuck in loop')
+        warning_count = 0
+        self.latest_completed_process_command = subprocess.Popen([self.exec_path, self.mothur_batch_file_path],
+                                                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for byte_line in self.latest_completed_process_command.stdout:
+            byte_line_as_string = byte_line.decode('ISO-8859-1')
+            stdout_as_list.append(byte_line_as_string.rstrip())
+            if 'WARNING' in byte_line_as_string:
+                warning_count += 1
+                if warning_count > 100:
+                    self.latest_completed_process_command.kill()
+                    raise RuntimeError('bad fastq, mothur stuck in loop')
+            if 'ERROR' in byte_line_as_string:
+                self.latest_completed_process_command.kill()
+                raise RuntimeError('bad fastq')
+        self.latest_completed_process_command.wait()
+        if self.latest_completed_process_command.returncode == 1:
+            raise RuntimeError('error in make.contigs')
+
+        if not self.stdout_and_sterr_to_pipe:
+            for line in stdout_as_list:
+                print(line)
+        return stdout_as_list
 
     def _run_mothur_batch_file_summary(self):
         if self.stdout_and_sterr_to_pipe:
