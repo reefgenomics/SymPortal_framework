@@ -1,4 +1,6 @@
 tests/.DS_Store
+/lib/med_decompose/Oligotyping/__pycache__/*
+*.pyc
 tests/__pycache__/
 settings.py
 tests/.DS_Store
