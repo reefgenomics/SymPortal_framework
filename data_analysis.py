@@ -2203,25 +2203,8 @@ class FootprintCollapser:
                 intial_type_being_checked = self.supported_footprint_identifier.initial_types_list[p]
                 if self._extracted_long_initial_type_now_has_same_fp_as_another_initial_type(intial_type_being_checked):
                     self.match = True
-                    if self._matching_initial_type_in_initial_types_still_to_be_collapsed(intial_type_being_checked, p):
-                        self._absorb_long_initial_type_into_matching_intial_type(intial_type_being_checked)
-                        break
-                    else:
-                        self._absorb_matching_initial_type_into_long_intial_type(intial_type_being_checked)
-
-                        if self.long_initial_type.profile_length < self.supported_footprint_identifier.current_n:
-                            # If the left over type is less than n then we need to now remove it from the un
-                            # supported list as it will be collapsed on another iteration than this one.
-                            self.supported_footprint_identifier.unsupported_list.remove(self.long_initial_type)
-                        else:
-                            if self._long_initial_type_has_sufficient_support():
-                                self.supported_footprint_identifier.unsupported_list.remove(self.long_initial_type)
-                            else:
-                                # If insufficient support then leave it in the unsupportedlist
-                                # and it will go on to be seen if it can be collapsed into one of the insilico
-                                # types that are genearted.
-                                pass
-                        break
+                    self._absorb_long_initial_type_into_matching_intial_type(intial_type_being_checked)
+                    break
             if not self.match:
                 if self.long_initial_type.profile_length < self.supported_footprint_identifier.current_n:
                     self.supported_footprint_identifier.unsupported_list.remove(self.long_initial_type)
@@ -2248,9 +2231,6 @@ class FootprintCollapser:
         intial_type_being_checked.absorb_large_init_type(self.long_initial_type)
         self.supported_footprint_identifier.unsupported_list.remove(self.long_initial_type)
         self.supported_footprint_identifier.initial_types_list.remove(self.long_initial_type)
-
-    def _matching_initial_type_in_initial_types_still_to_be_collapsed(self, intial_type_being_checked, index):
-        return intial_type_being_checked in self.supported_footprint_identifier.large_fp_to_collapse_list[index + 1:]
 
     def _extracted_long_initial_type_now_has_same_fp_as_another_initial_type(self, intial_type_being_checked):
         """Check if the new profile created from the original footprintToCollapse that has now had the short
