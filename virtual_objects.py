@@ -5,6 +5,7 @@ from dbApp.models import DataSetSampleSequence, DataSetSample, CladeCollection, 
 import pickle
 import os
 import json
+from collections import defaultdict
 class VirtualObjectManager():
     """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
     I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.
@@ -87,69 +88,58 @@ class VirtualCladeCollectionManager():
         self.vcc_dict = self._create_cc_info_dict(ccs_of_analysis)
 
     def _create_cc_info_dict(self, ccs_of_analysis):
-        print('Instantiating VirtualCladeCollectionManager')
-        cc_input_mp_queue = Queue()
-        mp_manager = Manager()
-        cc_to_info_items_mp_dict = mp_manager.dict()
+        cc_uid_to_dsss_obj_list_default_dict = self._make_cc_uid_to_dss_obj_list_dict(ccs_of_analysis)
 
-        for cc in ccs_of_analysis:
-            cc_input_mp_queue.put(cc)
+        cc_to_info_items_dict = {}
 
-        for n in range(self.obj_manager.num_proc):
-            cc_input_mp_queue.put('STOP')
+        for clade_collection_object in ccs_of_analysis:
+            self._instantiate_vcc_from_db_cc(cc_to_info_items_dict, cc_uid_to_dsss_obj_list_default_dict,
+                                             clade_collection_object)
 
-        all_processes = []
-        for n in range(self.obj_manager.num_proc):
-            p = Process(target=self._vcc_id_to_vcc_obj_worker, args=(cc_input_mp_queue, cc_to_info_items_mp_dict))
-            all_processes.append(p)
-            p.start()
+        return dict(cc_to_info_items_dict)
 
-        for p in all_processes:
-            p.join()
-
-        return dict(cc_to_info_items_mp_dict)
-
-    def _vcc_id_to_vcc_obj_worker(self, cc_input_mp_queue, cc_to_info_items_mp_dict):
-        for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
-            sys.stdout.write(f'\r{clade_collection_object.data_set_sample_from.name} {current_process().name}')
-
-            dss_objects_of_cc_list = list(DataSetSampleSequence.objects.filter(
-                clade_collection_found_in=clade_collection_object))
-
-            sorted_dss_objects_of_cc_list = [dsss for dsss in sorted(dss_objects_of_cc_list, key=lambda x: x.abundance, reverse=True)]
-
-            list_of_ref_seq_uids_in_cc = [
-                dsss.reference_sequence_of.id for dsss in dss_objects_of_cc_list]
-
-            above_cutoff_ref_seqs_obj_set = clade_collection_object.cutoff_footprint(
-                self.obj_manager.within_clade_cutoff)
-
-            total_sequences_in_cladecollection = sum([dsss.abundance for dsss in dss_objects_of_cc_list])
-
-            list_of_rel_abundances = [dsss.abundance / total_sequences_in_cladecollection for dsss in
+    def _instantiate_vcc_from_db_cc(self, cc_to_info_items_dict, cc_uid_to_dsss_obj_list_default_dict,
+                                    clade_collection_object):
+        dss_objects_of_cc_list = cc_uid_to_dsss_obj_list_default_dict[clade_collection_object.id]
+        sys.stdout.write(f'\r{clade_collection_object.data_set_sample_from.name}')
+        sorted_dss_objects_of_cc_list = [dsss for dsss in
+                                         sorted(dss_objects_of_cc_list, key=lambda x: x.abundance, reverse=True)]
+        list_of_ref_seq_uids_in_cc = [
+            dsss.reference_sequence_of.id for dsss in dss_objects_of_cc_list]
+        above_cutoff_ref_seqs_obj_set = clade_collection_object.cutoff_footprint(
+            self.obj_manager.within_clade_cutoff)
+        total_sequences_in_cladecollection = sum([dsss.abundance for dsss in dss_objects_of_cc_list])
+        list_of_rel_abundances = [dsss.abundance / total_sequences_in_cladecollection for dsss in
                                   dss_objects_of_cc_list]
+        ref_seq_frozen_set = frozenset(dsss.reference_sequence_of.id for dsss in dss_objects_of_cc_list)
+        ref_seq_id_to_rel_abund_dict = {}
+        for i in range(len(dss_objects_of_cc_list)):
+            ref_seq_id_to_rel_abund_dict[list_of_ref_seq_uids_in_cc[i]] = list_of_rel_abundances[i]
+        ref_seq_id_to_abs_abund_dict = {}
+        for dss in dss_objects_of_cc_list:
+            ref_seq_id_to_abs_abund_dict[dss.reference_sequence_of.id] = dss.abundance
+        cc_to_info_items_dict[clade_collection_object.id] = VirtualCladeCollection(
+            clade=clade_collection_object.clade,
+            footprint_as_frozen_set_of_ref_seq_uids=ref_seq_frozen_set,
+            ref_seq_id_to_rel_abund_dict=ref_seq_id_to_rel_abund_dict,
+            ref_seq_id_to_abs_abund_dict=ref_seq_id_to_abs_abund_dict,
+            total_seq_abundance=total_sequences_in_cladecollection,
+            cc_object=clade_collection_object,
+            above_cutoff_ref_seqs_obj_set=above_cutoff_ref_seqs_obj_set,
+            ordered_dsss_objs=sorted_dss_objects_of_cc_list,
+            vdss_uid=clade_collection_object.data_set_sample_from.id,
+            sample_from_name=str(clade_collection_object))
 
-            ref_seq_frozen_set = frozenset(dsss.reference_sequence_of.id for dsss in dss_objects_of_cc_list)
-
-            ref_seq_id_to_rel_abund_dict = {}
-            for i in range(len(dss_objects_of_cc_list)):
-                ref_seq_id_to_rel_abund_dict[list_of_ref_seq_uids_in_cc[i]] = list_of_rel_abundances[i]
-
-            ref_seq_id_to_abs_abund_dict = {}
-            for dss in dss_objects_of_cc_list:
-                ref_seq_id_to_abs_abund_dict[dss.reference_sequence_of.id] = dss.abundance
-
-            cc_to_info_items_mp_dict[clade_collection_object.id] = VirtualCladeCollection(
-                clade=clade_collection_object.clade,
-                footprint_as_frozen_set_of_ref_seq_uids=ref_seq_frozen_set,
-                ref_seq_id_to_rel_abund_dict=ref_seq_id_to_rel_abund_dict,
-                ref_seq_id_to_abs_abund_dict=ref_seq_id_to_abs_abund_dict,
-                total_seq_abundance=total_sequences_in_cladecollection,
-                cc_object=clade_collection_object,
-                above_cutoff_ref_seqs_obj_set=above_cutoff_ref_seqs_obj_set,
-                ordered_dsss_objs=sorted_dss_objects_of_cc_list,
-                vdss_uid=clade_collection_object.data_set_sample_from.id,
-                sample_from_name=str(clade_collection_object))
+    def _make_cc_uid_to_dss_obj_list_dict(self, ccs_of_analysis):
+        # Create a cc to dsss of cc list to speed up processing
+        print('Instantiating VirtualCladeCollectionManager')
+        print('Collecting DataSetSampleSequence objects of CladeCollections')
+        data_set_sample_sequence_objects_of_analysis = DataSetSampleSequence.objects.filter(
+            clade_collection_found_in__in=ccs_of_analysis)
+        cc_uid_to_dsss_obj_list_default_dict = defaultdict(list)
+        for dsss in data_set_sample_sequence_objects_of_analysis:
+            cc_uid_to_dsss_obj_list_default_dict[dsss.clade_collection_found_in.id].append(dsss)
+        return cc_uid_to_dsss_obj_list_default_dict
 
 
 class VirtualCladeCollection:
