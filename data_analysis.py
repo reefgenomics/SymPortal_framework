@@ -67,7 +67,7 @@ class SPDataAnalysis:
         self._make_analysis_type_objects_from_vats()
 
     def _make_analysis_type_objects_from_vats(self):
-        print('\nCovnerting VirtualAnalysisTypes to database AnalysisTypes')
+        print('\nConverting VirtualAnalysisTypes to database AnalysisTypes')
         for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
             sys.stdout.write(f'\r{vat.name}')
             new_at = self._create_analysis_type_from_vat(vat)
@@ -611,19 +611,24 @@ class SPDataAnalysis:
 
         self._verify_all_ccs_associated_to_analysis_type()
 
+
     def _verify_all_ccs_associated_to_analysis_type(self):
         print('\nVerifying all CladeCollections have been associated to an AnalysisType...')
         clade_collections_represented_by_types = set()
         for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
-            clade_collections_represented_by_types.update(vat.clade_collection_obj_set_profile_discovery)
-        ccs_of_data_analysis = set(self.ccs_of_analysis)
-        if ccs_of_data_analysis.issuperset(clade_collections_represented_by_types):
-            set_of_unassociated_cc_uids = ccs_of_data_analysis.difference(clade_collections_represented_by_types)
+            clade_collections_represented_by_types.update([vcc.id for vcc in vat.clade_collection_obj_set_profile_discovery])
+        ccs_of_data_analysis_dict = {cc.id : cc for cc in self.ccs_of_analysis}
+        if set(ccs_of_data_analysis_dict.keys()).issuperset(clade_collections_represented_by_types):
+            set_of_unassociated_cc_uids = set(ccs_of_data_analysis_dict.keys()).difference(clade_collections_represented_by_types)
+            diff_list = []
+            for diff_uid in set_of_unassociated_cc_uids:
+                diff_list.append(ccs_of_data_analysis_dict[diff_uid])
             if len(set_of_unassociated_cc_uids) == 0:
                 print('All CladeCollections successfuly associated to at least one AnalysisType')
             else:
                 raise RuntimeError(
                     f'{len(set_of_unassociated_cc_uids)} CladeCollections are unassociated from an AnalysisType')
+
 
     def _there_are_footprints_of_this_clade(self, clade_fp_dict):
         return clade_fp_dict
@@ -1609,14 +1614,14 @@ class SupportedFootPrintIdentifier:
                     footprint_key, footprint_representative.cc_list, footprint_representative.maj_dss_seq_list))
 
     def _verify_that_all_cc_associated_to_an_initial_type(self):
-        set_of_ccs_of_clade = set([cc for cc in self.sp_data_analysis.ccs_of_analysis if cc.clade == self.sp_data_analysis.current_clade])
+        set_of_ccs_of_clade = set([cc.id for cc in self.sp_data_analysis.ccs_of_analysis if cc.clade == self.sp_data_analysis.current_clade])
         set_of_ccs_found_in_init_types = set()
         for init_type in self.initial_types_list:
-            set_of_ccs_found_in_init_types.update(init_type.clade_collection_list)
+            set_of_ccs_found_in_init_types.update([cc.id for cc in init_type.clade_collection_list])
 
         if set_of_ccs_of_clade.issuperset(set_of_ccs_found_in_init_types):
             if len(set_of_ccs_of_clade.difference(set_of_ccs_found_in_init_types)) == 0:
-                print("All CladeCollections successfuly associated to an InitialType")
+                print("\n\nAll CladeCollections successfuly associated to an InitialType\n")
             else:
                 raise RuntimeError(f'{len(set_of_ccs_of_clade.difference(set_of_ccs_found_in_init_types))} '
                                    f'CladeCollections were not associated to an InitialType')

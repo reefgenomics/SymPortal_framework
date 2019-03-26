@@ -987,7 +987,6 @@ class SequenceCountTableCollectAbundanceHandler:
         self.clade_abundance_ordered_ref_seq_list = []
 
     def execute_sequence_count_table_ordered_seqs_worker(self):
-        time_start = time.time()
         all_processes = []
 
         # close all connections to the db so that they are automatically recreated for each process
@@ -1001,9 +1000,6 @@ class SequenceCountTableCollectAbundanceHandler:
 
         for p in all_processes:
             p.join()
-        time_stop = time.time()
-        mp_time = time_stop - time_start
-        print(f'MP time: {mp_time}')
 
         self._generate_clade_abundance_ordered_ref_seq_list_from_seq_name_abund_dict()
 
