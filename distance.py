@@ -856,8 +856,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
 class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """
-    TODO I think this can easily be converted to work on a sample basis by simply getting the clade collections
-    from the set of samples rather than data sets. Same for the bray curtis.
+
     This method will generate a distance matrix between samples using the UniFrac method.
     One for each clade.
     It will also perform a PCoA for each distance matrix. a .dist file and a .csv with the pcoa coords will be output

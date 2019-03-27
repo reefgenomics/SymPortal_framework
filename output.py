@@ -407,18 +407,46 @@ class OutputTypeCountTable:
 
     def _set_sorted_list_of_vdss_to_output(self):
         """Generate the list of dss uids that will be the order that we will use for the index
-        of the output dataframes. The order should be the samples of the most abundant VirtualAnalsysiTypes first
-        and within this order sorted by the relative abundance of the VirtualAnalsysiTypes within the sample"""
+        of the output dataframes. The samples will be ordered by the most abundant type profiles first, and for
+        each type profile the samples that had this profile as their most abundant type profile should be listed,
+        within this, they should additionally be sorted by the relative abundance at which the profiles were found
+        within the samples."""
         sorted_vdss_uid_list = []
-        vcc_dict = self.virtual_object_manager.vcc_manager.vcc_dict
+        # a sanity checking set just to make sure we are not finding more vccs with more than one most abundant type
+        set_of_vcc_uids_already_added = set()
         for vat in self.overall_sorted_list_of_vats:
-            for vcc_uid in vat.type_output_rel_abund_series.sort_values(ascending=False).index.tolist():
-                vdss_uid_of_vcc = vcc_dict[vcc_uid].vdss_uid
-                # Because several vccs can come from the same vdss we need to make sure that the vdss has
-                # not already been put into the sorted_vdss_uid_list
-                if vdss_uid_of_vcc in self.data_set_sample_uid_set_to_output and vdss_uid_of_vcc not in sorted_vdss_uid_list:
-                    sorted_vdss_uid_list.append(vdss_uid_of_vcc)
+            temp_set_vcc_rel_abund_tups = set()
+            # For each vcc that had this profile found in it
+            for vcc in vat.clade_collection_obj_set_profile_assignment:
+                vdss_uid_of_vcc = vcc.vdss_uid
+                vdss_obj = self.virtual_object_manager.vdss_manager.vdss_dict[vdss_uid_of_vcc]
+                # if the clade of the vat is the most abundant clade in the vdss
+                sorted_clade_abundances_tups = [tup for tup in sorted(vdss_obj.cladal_abundances_dict.items(), key=lambda x:x[1], reverse=True)]
+                most_abund_clade, rel_abund_of_clade = sorted_clade_abundances_tups[0]
+                if not vat.clade == most_abund_clade:
+                    continue
+                # this vcc is not part of the output
+                if not vdss_uid_of_vcc in self.data_set_sample_uid_set_to_output:
+                    continue
+                # see if this vat was the most abundant vat of the vcc
+                # get sorted list of the vats
+                most_abundant_vat, within_clade_rel_abund = sorted(vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.items(), key=lambda x: x[1], reverse=True)[0]
+                rel_abund_in_sample = within_clade_rel_abund * rel_abund_of_clade
+                # if this type was most abundant type of the vcc, add it to the profile
+                if most_abundant_vat == vat:
+                    if vcc.id not in set_of_vcc_uids_already_added:
+                        set_of_vcc_uids_already_added.add(vcc.id)
+                    else:
+                        raise RuntimeError('The vcc was already added to the list_of_vcc_uids_already_added')
 
+                    if vdss_uid_of_vcc in self.data_set_sample_uid_set_to_output:
+                        if vdss_uid_of_vcc not in sorted_vdss_uid_list:
+                            temp_set_vcc_rel_abund_tups.add((vdss_uid_of_vcc, rel_abund_in_sample))
+                        else:
+                            pass
+                    else:
+                        raise RuntimeError('vdss associated with vcc seems to not be part of the output')
+            sorted_vdss_uid_list.extend([tup[0] for tup in sorted(temp_set_vcc_rel_abund_tups, key=lambda x:x[1], reverse=True)])
         # add the samples that didn't have a type associated to them
         sorted_vdss_uid_list.extend(
             [dss_uid for dss_uid in
@@ -970,7 +998,7 @@ class SequenceCountTableCollectAbundanceHandler:
         ref_seq.name if ref_seq.has_name else str(ref_seq.id) + '_{}'.format(ref_seq.clade) for
             ref_seq in self.seq_count_table_creator.ref_seqs_in_datasets]
 
-        # TODO we were previously creating an MP dictionary for every proc used. We were then collecting them afterwards
+        # We were previously creating an MP dictionary for every proc used. We were then collecting them afterwards
         # I'm not sure if there was a good reason for doing this, but I don't see any comments to the contrary.
         # it should not be necessary to have a dict for every proc. Instead we can just have on mp dict.
         # we should check that this is still working as expected.

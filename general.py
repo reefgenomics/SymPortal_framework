@@ -182,7 +182,6 @@ def decode_utf8_binary_to_list(bin_to_decode):
 
 
 def mafft_align_fasta(input_path, output_path, method='auto', mafft_exec_string='mafft', num_proc=1, iterations=1000):
-    # TODO add an algorythm argument so that the particular style of alignemtn can be chosen
     # http://plumbum.readthedocs.io/en/latest/local_commands.html#pipelining
     print(f'Aligning {input_path}')
     if method == 'auto':

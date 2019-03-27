@@ -55,6 +55,8 @@ class SPDataAnalysis:
         self._check_for_artefacts()
         print('TYPE DISCOVERY COMPLETE')
 
+        self._reset_vcc_vat_rep_abund_dicts()
+
         self._profile_assignment()
 
         self._name_divs()
@@ -65,6 +67,11 @@ class SPDataAnalysis:
 
         print('DATA ANALYSIS COMPLETE')
         self._make_analysis_type_objects_from_vats()
+
+    def _reset_vcc_vat_rep_abund_dicts(self):
+        for vcc_uid in self.virtual_object_manager.vcc_manager.vcc_dict.keys():
+            self.virtual_object_manager.vcc_manager.vcc_dict[
+                vcc_uid].analysis_type_obj_to_representative_rel_abund_in_cc_dict = {}
 
     def _make_analysis_type_objects_from_vats(self):
         print('\nConverting VirtualAnalysisTypes to database AnalysisTypes')
@@ -358,6 +365,8 @@ class SPDataAnalysis:
             for vat_match in self.vat_match_object_list:
                 print(f'Assigning {vat_match.at.name}')
                 vat_match.at.clade_collection_obj_set_profile_assignment.add(vat_match.cc)
+                vat_match.cc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[
+                    vat_match.at] = vat_match.rel_abund_of_at_in_cc
 
         def _find_vats_in_vcc(self, list_of_vats_to_search):
             for vat in list_of_vats_to_search:
@@ -526,6 +535,12 @@ class SPDataAnalysis:
         def _sufficient_support_of_each_mode(self):
             return len(self.list_of_vcc_uids_one) >= 3 and len(self.list_of_vcc_uids_two) >= 3
 
+        def _update_vccs_rep_abund_dict_for_split_type(self, list_of_vcc_objs, resultant_vat):
+            for vcc in list_of_vcc_objs:
+                del vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[self.current_vat]
+                rep_rel_abund_of_resultant_type = sum([vcc.ref_seq_id_to_rel_abund_dict[ref_seq_uid] for ref_seq_uid in resultant_vat.ref_seq_uids_set])
+                vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[resultant_vat] = rep_rel_abund_of_resultant_type
+
         def _split_vat_into_two_new_vats(self):
             print(f'\n\nMultiModalDetection: Splitting {self.current_vat.name}')
 
@@ -536,6 +551,8 @@ class SPDataAnalysis:
                 make_vat_post_profile_assignment(
                 clade_collection_obj_list=list_of_vcc_objs_one,
                 ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
+            self._update_vccs_rep_abund_dict_for_split_type(
+                list_of_vcc_objs=list_of_vcc_objs_one, resultant_vat=resultant_type_one)
             print(f'Created {resultant_type_one.name}')
 
             list_of_vcc_objs_two = [
@@ -545,6 +562,8 @@ class SPDataAnalysis:
                 make_vat_post_profile_assignment(
                 clade_collection_obj_list=list_of_vcc_objs_two,
                 ref_seq_obj_list=self.current_vat.footprint_as_ref_seq_objs_set)
+            self._update_vccs_rep_abund_dict_for_split_type(
+                list_of_vcc_objs=list_of_vcc_objs_two, resultant_vat=resultant_type_two)
             print(f'Created {resultant_type_two.name}')
 
             print(f'Destroyed {self.current_vat.name}\n')
@@ -956,8 +975,7 @@ class CheckVCCToVATAssociations:
 
     def _assess_support_of_pnt_or_vat(self, pnt_or_vat):
         for vcc in self.list_of_vcc_objs_to_check:
-            # TODO I think I want to try to add an additional control here which is to check that
-            # a potential new type does not already share a DIV with a current type.
+
             cpntsw = self.CheckPNTorVATSupportWorker(
                 virtual_clade_collection_object=vcc, parent_check_type_pairing=self, pnt_or_vat=pnt_or_vat)
             cpntsw.check_pnt_support()

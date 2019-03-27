@@ -16,8 +16,7 @@
     You should have received a copy of the GNU General Public License
     along with this program.  If not, see
     https://github.com/didillysquat/SymPortal_framework/tree/master/LICENSE.txt.
-    TODO Integrate the VirtualObjectsManager and specifically VirtualDataSetSample and VirtualCladeCollections
-    into the DataLoading and then into the SequenceCountTableCreator.
+
 
     """
 

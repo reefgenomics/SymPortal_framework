@@ -9,7 +9,7 @@ from collections import defaultdict
 class VirtualObjectManager():
     """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
     I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.
-    #TODO initalise this from either a list of DataSetSample uids or a list of DataSet uids"""
+    """
     def __init__(self, within_clade_cutoff, num_proc, list_of_data_set_sample_uids=None,
                  list_of_data_set_uids=None):
         if list_of_data_set_sample_uids:
@@ -165,6 +165,9 @@ class VirtualCladeCollection:
         self.ordered_dsss_objs = ordered_dsss_objs
 
         # key = AnalysisType object, value = the relative abundance of the cc that this AnalysisType represents
+        # NB this dictionary is reset just before type assignment (losing all of the information from type discovery)
+        # and then holds a dict of types assigned to the
+        # vcc and the relative abundance they represent within the vcc.
         self.analysis_type_obj_to_representative_rel_abund_in_cc_dict = {}
 
     def __str__(self):
@@ -196,7 +199,7 @@ class VirutalAnalysisTypeInit:
         self._generate_name(self.vat.multi_modal_detection_rel_abund_df)
 
     def _make_abs_and_rel_abund_output_series(self):
-        index_for_series = [vcc.id for vcc in self.vat.clade_collection_obj_set_profile_discovery]
+        index_for_series = [vcc.id for vcc in self.vat.clade_collection_obj_set_profile_assignment]
         self.vat.type_output_rel_abund_series = pd.Series(index=index_for_series)
         self.vat.type_output_abs_abund_series = pd.Series(index=index_for_series)
         for vcc in self.vat.clade_collection_obj_set_profile_assignment:

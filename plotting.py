@@ -427,7 +427,7 @@ class TypeStackedBarPlotter:
         sp_output_df = pd.read_csv(
             self.type_rel_abund_count_table_path, sep='\t', lineterminator='\n', skiprows=[1, 2, 3, 5], header=None)
 
-        # get a list of tups that are the seq names and the abundances zipped together
+        # get a list of tups that are the profile uid and the abundances zipped together
         type_profile_to_abund_tup_list = [
             (name, int(abund)) for name, abund in
             zip(sp_output_df.iloc[0][2:].values.tolist(), sp_output_df.iloc[1][2:].values.tolist())]

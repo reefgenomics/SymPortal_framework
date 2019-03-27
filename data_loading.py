@@ -1680,7 +1680,6 @@ class PerformMEDWorker:
         self.med_m_value = self._get_med_m_value()
 
     def do_decomposition(self):
-        # TODO check this business about how MED determines the sample name, i.e. whether the underscores matter.
         sys.stdout.write(f'{self.sample_name}: starting MED analysis\n')
         sys.stdout.write(f'{self.sample_name}: padding sequences\n')
         subprocess.run([
@@ -1730,7 +1729,7 @@ class DataSetSampleSequenceCreatorWorker:
         self.nodes_list_of_nucleotide_sequences = []
         self._populate_nodes_list_of_nucleotide_sequences()
         self.num_med_nodes = len(self.nodes_list_of_nucleotide_sequences)
-        self.node_sequence_name_to_ref_seq_id = {} # TODO pass in a self of the parent to get rid of these long names
+        self.node_sequence_name_to_ref_seq_id = {}
         self.ref_seq_sequence_to_ref_seq_id_dict = data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict
         self.ref_seq_uid_to_ref_seq_name_dict = data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict
         self.node_abundance_df = pd.read_csv(
