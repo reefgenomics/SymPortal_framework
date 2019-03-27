@@ -117,6 +117,9 @@ class CladeCollection(models.Model):
                 frset.add(dsss.reference_sequence_of)
         return frozenset(frset)
 
+    def __str__(self):
+        return self.data_set_sample_from.name
+
 
 class AnalysisType(models.Model):
     objects = models.Manager()
