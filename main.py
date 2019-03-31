@@ -230,7 +230,7 @@ class SymPortalWorkFlowManager:
         if num_samples < max_num_samples:
             plotting_function()
         else:
-            print('Too many samples (num_samples) to plot.')
+            print(f'Too many samples (num_samples) to plot.')
 
     def _set_data_analysis_obj_from_arg_analysis_uid(self):
         self.data_analysis_object = DataAnalysis.objects.get(id=self.args.data_analysis_id)

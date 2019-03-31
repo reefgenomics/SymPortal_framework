@@ -767,9 +767,13 @@ class DataLoading:
         that they could be .fq files rather than fastq. also need to take into account that it could be fastq.gz and
         fq.gz rather than fastq and fq."""
         list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
+        count = 0
         for file_path in list_of_files_in_user_input_dir:
             if 'fastq' in file_path or 'fq' in file_path:
+                    count += 1
                     shutil.copy(file_path, self.temp_working_directory)
+        if count < 2:
+            raise RuntimeError(f'{count} files to analyse found in the target directory')
 
     def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):

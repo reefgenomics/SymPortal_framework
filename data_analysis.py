@@ -464,7 +464,7 @@ class SPDataAnalysis:
     class MultiModalDetection:
         def __init__(self, parent_sp_data_analysis):
             self.sp_data_analysis = parent_sp_data_analysis
-            self.vat_uids_checked = []
+            self.vat_uids_checked_set = set()
             self.restart = True
             # attributes that will be updated with each vat checked
             self.current_vat = None
@@ -480,19 +480,19 @@ class SPDataAnalysis:
                 for vat_uid in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.keys():
                     self.current_vat = self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict[vat_uid]
                     sys.stdout.write(f'\rChecking {self.current_vat.name}')
-                    if self.current_vat.id in self.vat_uids_checked:
+                    if self.current_vat.id in self.vat_uids_checked_set:
                         continue
-                    else:
-                        self.vat_uids_checked.append(self.current_vat.id)
                     if len(self.current_vat.ref_seq_uids_set) == 1:
-                        self.vat_uids_checked.append(self.current_vat.id)
+                        self.vat_uids_checked_set.add(self.current_vat.id)
                         continue
-                    if len(self.current_vat.clade_collection_obj_set_profile_assignment) < 6:
-                        self.vat_uids_checked.append(self.current_vat.id)
+                    if len(self.current_vat.clade_collection_obj_set_profile_assignment) < 8:
+                        self.vat_uids_checked_set.add(self.current_vat.id)
                         continue
                     for ref_seq_uid_col in list(self.current_vat.multi_modal_detection_rel_abund_df):
                         if not self.restart:
                             self._assess_if_div_multimodal(ref_seq_uid_col)
+                            if not self.restart:
+                                self.vat_uids_checked_set.add(self.current_vat.id)
                     if self.restart:
                         break
 
@@ -524,6 +524,8 @@ class SPDataAnalysis:
 
         def _assign_vccs_to_modes(self, pdf, ref_seq_uid_col, x_grid):
             # Then we have found modes that are sufficiently separated.
+            self.list_of_vcc_uids_one = []
+            self.list_of_vcc_uids_two = []
             min_x = x_grid[list(((np.diff(np.sign(np.diff(pdf))) != 0).nonzero()[0] + 1))[1]]
             for vcc_uid in self.current_vat.multi_modal_detection_rel_abund_df.index.tolist():
                 if self.current_vat.multi_modal_detection_rel_abund_df.at[
@@ -533,7 +535,7 @@ class SPDataAnalysis:
                     self.list_of_vcc_uids_two.append(vcc_uid)
 
         def _sufficient_support_of_each_mode(self):
-            return len(self.list_of_vcc_uids_one) >= 3 and len(self.list_of_vcc_uids_two) >= 3
+            return len(self.list_of_vcc_uids_one) >= 4 and len(self.list_of_vcc_uids_two) >= 4
 
         def _update_vccs_rep_abund_dict_for_split_type(self, list_of_vcc_objs, resultant_vat):
             for vcc in list_of_vcc_objs:
