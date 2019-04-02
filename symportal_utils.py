@@ -195,7 +195,7 @@ class MothurAnalysis:
         if pcr_analysis_name:
             if pcr_analysis_name.lower() in ['symvar', 'sym_var']:
                 self.pcr_fwd_primer = 'GAATTGCAGAACTCCGTGAACC'
-                self.pcr_rev_primer = 'CGGGTTCWCTTGTYTGACTTCATGC',
+                self.pcr_rev_primer = 'CGGGTTCWCTTGTYTGACTTCATGC'
 
             elif pcr_analysis_name.lower() in ['laj', 'lajeunesse']:
                 self.pcr_fwd_primer = 'GAATTGCAGAACTCCGTG'
