@@ -396,7 +396,23 @@ class OutputTypeCountTable:
                     self.data_set_sample_uid_set_to_output).distinct():
                 sys.stdout.write(f'\r{at.name}')
                 self.virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
+
+            self._associate_vat_to_vcc()
+
         return self.virtual_object_manager
+
+    def _associate_vat_to_vcc(self):
+        """The CladeCollections held on disc have know info on which AnalysisTypes were found in them except
+        for by association with CladeCollectionTypes. As such we have to populate the
+        vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict manually from the vat."""
+        print('\nAssociating VirtualCladeCollections to VirtualAnalysisTypes')
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            for vcc in vat.clade_collection_obj_set_profile_assignment:
+                vcc_rel_abund_dict = vcc.ref_seq_id_to_rel_abund_dict
+                total_seq_rel_abund_for_cc = []
+                for rs_uid in vat.ref_seq_uids_set:
+                    total_seq_rel_abund_for_cc.append(vcc_rel_abund_dict[rs_uid])
+                vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict[vat] = sum(total_seq_rel_abund_for_cc)
 
     def _get_data_set_uids_of_data_sets(self):
         vds_uid_set = set()
