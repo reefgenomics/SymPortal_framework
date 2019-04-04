@@ -546,8 +546,8 @@ class SeqStackedBarPlotter:
 
         self.output_path_list.extend(
             [
-                f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.svg',
-                f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.png'
+                f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.svg',
+                f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.png'
             ])
 
     def _write_out_plot(self):
