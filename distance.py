@@ -1181,7 +1181,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
                 'between_samples')
         else:
             # call_type == 'submission':
-            new_output_dir = os.path.join(output_dir, 'between_profile_distances')
+            new_output_dir = os.path.join(output_dir, 'between_sample_distances')
         return new_output_dir
 
     def compute_braycurtis_dists_and_pcoa_coords(self):
