@@ -1178,7 +1178,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         if self.call_type == 'stand_alone':
             new_output_dir = os.path.join(
                 self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
-                'between_profiles')
+                'between_samples')
         else:
             # call_type == 'submission':
             new_output_dir = os.path.join(output_dir, 'between_profile_distances')
@@ -1268,7 +1268,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         if self.call_type == 'stand_alone':
             new_output_dir = os.path.join(
                 self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
-                'between_samples')
+                'between_profiles')
         else:
             # call_type == 'analysis':
             new_output_dir = os.path.join(output_dir, 'between_profile_distances')

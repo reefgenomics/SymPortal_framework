@@ -475,7 +475,7 @@ class SymPortalWorkFlowManager:
             self._stand_alone_seq_output_from_type_output_data_set()
         if not self.args.no_figures:
             self.number_of_samples = len(self.output_seq_count_table_obj.sorted_sample_uid_list)
-            self._plot_if_not_too_many_samples(self._plot_sequence_stacked_bar_from_seq_output_table)
+            self._plot_if_not_too_many_samples(self._plot_sequence_stacked_bar_with_ordered_dss_uids_from_type_output)
             self._plot_if_not_too_many_samples(self._plot_type_stacked_bar_from_type_output_table)
         else:
             print('\nFigure plotting skipped at user\'s request')
