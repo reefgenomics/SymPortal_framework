@@ -32,7 +32,7 @@ from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 # Your application specific imports
-from dbApp.models import DataSet, DataAnalysis
+from dbApp.models import DataSet, DataAnalysis, DataSetSample
 ############################################
 
 
@@ -509,6 +509,7 @@ class SymPortalWorkFlowManager:
 
     def _stand_alone_type_output_data_set(self):
         ds_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.print_output_types.split(',')]
+        self._check_ds_were_part_of_analysis(ds_uid_list)
         self.output_type_count_table_obj = output.OutputTypeCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', symportal_root_directory=self.symportal_root_directory,
@@ -516,14 +517,30 @@ class SymPortalWorkFlowManager:
             date_time_str=self.data_analysis_object.time_stamp)
         self.output_type_count_table_obj.output_types()
 
+    def _check_ds_were_part_of_analysis(self, ds_uid_list):
+        for ds_uid in ds_uid_list:
+            if ds_uid not in [int(uid_str) for uid_str in self.data_analysis_object.list_of_data_set_uids.split(',')]:
+                print(f'DataSet UID: {ds_uid} is not part of analysis: {self.data_analysis_object.name}')
+                raise RuntimeError
+
     def _stand_alone_type_output_data_set_sample(self):
         dss_uid_list = [int(dss_uid_str) for dss_uid_str in self.args.print_output_types_sample_set.split(',')]
+        self._check_dss_were_part_of_analysis(dss_uid_list)
         self.output_type_count_table_obj = output.OutputTypeCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', symportal_root_directory=self.symportal_root_directory,
             data_set_sample_uid_set_to_output=set(dss_uid_list), data_analysis_obj=self.data_analysis_object,
             date_time_str=self.data_analysis_object.time_stamp)
         self.output_type_count_table_obj.output_types()
+
+    def _check_dss_were_part_of_analysis(self, dss_uid_list):
+        ds_of_analysis = DataSet.objects.filter(
+            id__in=[int(a) for a in self.data_analysis_object.list_of_data_set_uids.split(',')])
+        dss_of_analysis = DataSetSample.objects.filter(data_submission_from__in=ds_of_analysis)
+        dss_uids_that_were_part_of_analysis = [dss.id for dss in dss_of_analysis]
+        for dss_uid in dss_uid_list:
+            if dss_uid not in dss_uids_that_were_part_of_analysis:
+                print(f'DataSetSample UID: {dss_uid} was not part of DataAnalysis: {self.data_analysis_object.name}')
 
     # ITS2 TYPE PROFILE STAND_ALONE DISTANCES
     def perform_type_distance_stand_alone(self):
