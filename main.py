@@ -541,6 +541,7 @@ class SymPortalWorkFlowManager:
         for dss_uid in dss_uid_list:
             if dss_uid not in dss_uids_that_were_part_of_analysis:
                 print(f'DataSetSample UID: {dss_uid} was not part of DataAnalysis: {self.data_analysis_object.name}')
+                raise RuntimeError
 
     # ITS2 TYPE PROFILE STAND_ALONE DISTANCES
     def perform_type_distance_stand_alone(self):

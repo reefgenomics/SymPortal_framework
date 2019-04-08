@@ -224,30 +224,6 @@ def combine_two_fasta_files(path_one, path_two, path_for_combined):
     write_list_to_destination(path_for_combined, one_file_one)
 
 
-def return_list_of_file_names_in_directory(directory_to_list):
-    """
-    return a list that contains the filenames found in the specified directory
-    :param directory_to_list: the directory that the file names should be returned from
-    :return: list of strings that are the file names found in the directory_to_list
-    """
-    list_of_file_names_in_directory = []
-    for (dirpath, dirnames, filenames) in os.walk(directory_to_list):
-        list_of_file_names_in_directory.extend(filenames)
-        return list_of_file_names_in_directory
-
-
-def return_list_of_file_paths_in_directory(directory_to_list):
-    """
-    return a list that contains the full paths of each of the files found in the specified directory
-    :param directory_to_list: the directory that the file paths should be returned from
-    :return: list of strings that are the file paths found in the directory_to_list
-    """
-    list_of_file_paths_in_directory = []
-    for (dirpath, dirnames, filenames) in os.walk(directory_to_list):
-        list_of_file_paths_in_directory.extend([os.path.join(directory_to_list, file_name) for file_name in filenames])
-        return list_of_file_paths_in_directory
-
-
 def return_list_of_directory_names_in_directory(directory_to_list):
     """
         return a list that contains the directory names found in the specified directory

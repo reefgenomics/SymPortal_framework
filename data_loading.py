@@ -17,6 +17,7 @@ from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
 from output import SequenceCountTableCreator
 import ntpath
+import re
 
 
 class DataLoading:
@@ -572,12 +573,22 @@ class DataLoading:
             temp_list.append(sample_name.replace('-', '[dS]'))
             fwd_file_path = None
             rev_file_path = None
+            # This is aimed at matching R1.fastq.gz, R2.fq.gz, 1.fq, 2.fastq, .../asdfads_R1_001.fastq.gz etc.
+            compiled_reg_ex = re.compile('\.([R12]+)\.f[ast]*q(\.gz)?')
             for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
                 if sample_name == ntpath.basename(file_path)[:-end_index]:
-                    if 'R1' in file_path:
-                        fwd_file_path = file_path
-                    if 'R2' in file_path:
-                        rev_file_path = file_path
+                    read_direction_match = re.search(compiled_reg_ex, file_path)
+                    if read_direction_match is not None:
+                        read_direction_str = read_direction_match.group(1)
+                        if read_direction_str == '1':
+                            fwd_file_path = file_path
+                        if read_direction_str == '2':
+                            rev_file_path = file_path
+                    else:
+                        if 'R1' in file_path:
+                            fwd_file_path = file_path
+                        if 'R2' in file_path:
+                            rev_file_path = file_path
             temp_list.append(fwd_file_path)
             temp_list.append(rev_file_path)
             sample_fastq_pairs.append('\t'.join(temp_list))
