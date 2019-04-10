@@ -38,6 +38,8 @@ class OutputTypeCountTable:
         self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output = self._init_dss_and_ds_uids(
             data_set_sample_uid_set_to_output, data_set_uids_to_output)
 
+        self.data_analysis_obj = self._init_da_object(data_analysis_obj, data_analysis_uid)
+
         # Need to pass in the passed attributes rather than the self. attributes so we know which one is None
         self.virtual_object_manager = self._init_virtual_object_manager(
             virtual_object_manager, data_set_uids_to_output, data_set_sample_uid_set_to_output,
@@ -45,7 +47,6 @@ class OutputTypeCountTable:
 
         self.vcc_uids_to_output = self._set_vcc_uids_to_output()
 
-        self.data_analysis_obj = self._init_da_object(data_analysis_obj, data_analysis_uid)
 
         if call_type == 'analysis':
             self.date_time_str = self.data_analysis_obj.time_stamp
