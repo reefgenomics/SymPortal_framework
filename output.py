@@ -393,7 +393,7 @@ class OutputTypeCountTable:
             print('\nInstantiating VirtualAnalysisTypes')
             for at in AnalysisType.objects.filter(
                     cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=
-                    self.data_set_sample_uid_set_to_output).distinct():
+                    self.data_set_sample_uid_set_to_output, data_analysis_from=self.data_analysis_obj).distinct():
                 sys.stdout.write(f'\r{at.name}')
                 self.virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
 

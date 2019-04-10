@@ -343,6 +343,16 @@ class TypeUnifracSeqAbundanceMPCollection:
         self.proc_id = proc_id
 
     def collect_seq_info(self):
+        """This function returns information used to build the master fasta and names files that are required to make
+        the unifrac. Currently, this information is collected on a type for type basis for every CladeCollection that
+        the type was found in regardless of wether the CladeCollections are part of the output or not.
+        For example, if a type was found in samples 1, 3, 4, and 7. and 1, 3, 4 are part of this output, the
+        average relative abundances of the type in question will still be calculated using the relative abundance
+        information from all four of the CladeCoolection.
+        TODO However, in some circumstances it will be useful to be
+        able to limit which instances of the type are used in defining the average relative abundances of the DIVs.
+        To do this we will provide a flag that is --local. In the above example, if --local was applied then the local
+        abundances would be calculated only from the datasetsamples in question."""
         sys.stdout.write('\rProcessing AnalysisType: {} with {}'.format(self.analysis_type_or_clade_collection, self.proc_id))
         ref_seq_uids_of_analysis_type = [int(b) for b in self.analysis_type_or_clade_collection.ordered_footprint_list.split(',')]
 
@@ -763,9 +773,15 @@ class BaseUnifracDistPCoACreator:
 
 
 class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
+    """Class for calculating the UniFrac distances between ITS2 type profiles, producing PCoA coordinates from
+    these distances and plotting the resultant PCoA coordinates. These are all done on a clade by clade basis.
+    TODO implement the --local flag. Also implement a --cct_uids flag which will allow users calculate distances
+     for specific sets of its2 type profiles where the distances are calculated using specific sets of CladeCollections
+     to work out the average relative abundances of the DIVs.
+    """
     def __init__(
-            self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None, bootstrap_value=100,
-            output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None):
+            self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None,
+            bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None):
 
         super().__init__(
             num_proc=num_processors,bootstrap_val=bootstrap_value, output_dir=output_dir,
