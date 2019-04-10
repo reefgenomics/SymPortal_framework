@@ -383,8 +383,11 @@ class SPDataAnalysis:
                 vat.ref_seq_uids_set.issubset(self.vcc.footprint_as_frozen_set_of_ref_seq_uids)]
 
         def _add_new_vat_to_list_if_highest_rel_abund_representative(self):
-            """Return True if the vat we are checking has a higher representative relative abundance than any
-            of the other vats that have returned a match so far. Else return False."""
+            """Iter through the current matches in the self.vat_match_object_list. If the match
+            has divs in common with the potential new match, only add the match that has the higherst representation
+            in the cc in question. If the two types being compared don't share divs in common then there is no conflict
+            and the current match can remain (i.e. add it to the new_match_list)
+            """
             new_match_list = []
             for match_obj in self.vat_match_object_list:
                 if self._vats_have_divs_in_common(vat_one=match_obj.at, vat_two=self.potential_match_object.at):
@@ -392,6 +395,8 @@ class SPDataAnalysis:
                         new_match_list.append(match_obj)
                     else:
                         new_match_list.append(self.potential_match_object)
+                else:
+                    new_match_list.append(match_obj)
             self.vat_match_object_list = new_match_list
 
         def _vats_have_divs_in_common(self, vat_one, vat_two):
@@ -399,8 +404,10 @@ class SPDataAnalysis:
 
         def _vat_has_divs_in_common_with_other_vats(self, vat):
             if self.vat_match_object_list:
-                divs_in_common_with_other_matched_vats = vat.ref_seq_uids_set.intersection(*[vat_match_obj.at.ref_seq_uids_set for vat_match_obj in self.vat_match_object_list])
-                return divs_in_common_with_other_matched_vats
+                for vat_match_obj in self.vat_match_object_list:
+                    if vat.ref_seq_uids_set.intersection(vat_match_obj.at.ref_seq_uids_set):
+                        return True
+                return False
             else:
                 return False
 
