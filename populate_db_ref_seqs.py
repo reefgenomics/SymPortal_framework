@@ -4,6 +4,7 @@
 import os
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.conf import settings
+import general
 # ####### Setup Django DB and Models ########
 # Ensure settings are read
 from django.core.wsgi import get_wsgi_application
@@ -13,44 +14,20 @@ from django.core.exceptions import ObjectDoesNotExist
 from dbApp.models import ReferenceSequence
 # ###########################################
 
-
-def read_defined_file_to_list(filename):
-    with open(filename, mode='r') as reader:
-        temp_list = [line.rstrip() for line in reader]
-    return temp_list
-
-
-def write_list_to_destination(destination, list_to_write):
-    try:
-        os.makedirs(os.path.dirname(destination))
-    except FileExistsError:
-        pass
-
-    with open(destination, mode='w') as writer:
-        i = 0
-        while i < len(list_to_write):
-            if i != len(list_to_write)-1:
-                writer.write(list_to_write[i] + '\n')
-            elif i == len(list_to_write)-1:
-                writer.write(list_to_write[i])
-            i += 1
-
-
 def populate_db_with_ref_seqs():
-    fasta_to_populate_from = read_defined_file_to_list(
-        os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa')))
-    for i in range(len(fasta_to_populate_from)):
-        if fasta_to_populate_from[i][0] == '>':
-            try:
-                existing_seq = ReferenceSequence.objects.get(name=fasta_to_populate_from[i][1:])
-                print(f'Sequence {existing_seq.name} already in db')
-            except ObjectDoesNotExist:
-                new_seq = ReferenceSequence(
-                    name=fasta_to_populate_from[i][1:], clade=fasta_to_populate_from[i][1],
-                    sequence=fasta_to_populate_from[i+1], has_name=True)
-                new_seq.save()
-                print(f'Sequence {new_seq.name} added to db')
-    return
+    fasta_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa'))
+    fasta_dict = general.create_dict_from_fasta(fasta_path=fasta_path)
+    current_ref_seq_names = [rs.name for rs in ReferenceSequence.objects.all()]
+    bulk_new_rs_list = []
+    created_name_list = []
+    for new_name, new_seq in fasta_dict.keys():
+        if new_name not in current_ref_seq_names:
+            bulk_new_rs_list.append(
+                ReferenceSequence(name=new_name, clade=new_name[0], sequence=new_seq, has_name=True))
+            created_name_list.append(new_name)
+    ReferenceSequence.objects.bulk_create(bulk_new_rs_list)
+    for name in created_name_list:
+        print(f'Sequence {name} added to db')
 
 
 populate_db_with_ref_seqs()

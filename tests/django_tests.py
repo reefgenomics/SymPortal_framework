@@ -8,7 +8,8 @@ from dbApp.models import DataSet, DataSetSample
 
 class SPIntegrativeTestingJSONOnly(TransactionTestCase):
     """This class of tests contains tests that can all be run without any pickled binary files.
-    The fixture that is loaded contains three datasets and one analysis..
+    The fixture that is loaded contains three datasets and one analysis.
+    The analysis is of all three datasets.
 
     The DataSet IDs are 173, 174 and 175.
     The DataAnalysis ID is 1.
