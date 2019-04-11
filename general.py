@@ -14,6 +14,7 @@ def return_list_of_file_names_in_directory(directory_to_list):
     list_of_file_names_in_directory = []
     for (dirpath, dirnames, filenames) in os.walk(directory_to_list):
         list_of_file_names_in_directory.extend(filenames)
+    return list_of_file_names_in_directory
 
 
 def return_list_of_file_paths_in_directory(directory_to_list):
