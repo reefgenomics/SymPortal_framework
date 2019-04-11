@@ -383,21 +383,25 @@ class SPDataAnalysis:
                 vat.ref_seq_uids_set.issubset(self.vcc.footprint_as_frozen_set_of_ref_seq_uids)]
 
         def _add_new_vat_to_list_if_highest_rel_abund_representative(self):
-            """Iter through the current matches in the self.vat_match_object_list. If the match
-            has divs in common with the potential new match, only add the match that has the higherst representation
-            in the cc in question. If the two types being compared don't share divs in common then there is no conflict
-            and the current match can remain (i.e. add it to the new_match_list)
+            """Get a list of the current matches that have refseqs in common with the potential match.
+            Iter through this list and compare the represented abundances of the current matches to potential match.
+            If the potential match has a lower abundance than any of them, do not accept. If it has a higher abundance
+            than all of then, accept and be sure to remove the current matches that shared a div with it from
+            the current matches of the VirtualCladeCollection.
             """
-            new_match_list = []
+            shared_div_match_list = []
             for match_obj in self.vat_match_object_list:
                 if self._vats_have_divs_in_common(vat_one=match_obj.at, vat_two=self.potential_match_object.at):
-                    if match_obj.rel_abund_of_at_in_cc > self.potential_match_object.rel_abund_of_at_in_cc:
-                        new_match_list.append(match_obj)
-                    else:
-                        new_match_list.append(self.potential_match_object)
-                else:
-                    new_match_list.append(match_obj)
-            self.vat_match_object_list = new_match_list
+                    shared_div_match_list.append(match_obj)
+            # if any one of the current matches reps a greater proportion then do not accept the potential match
+            for match_obj in shared_div_match_list:
+                if self.potential_match_object.rel_abund_of_at_in_cc < match_obj.rel_abund_of_at_in_cc:
+                    return
+            # if we reach here then we should delete all of the matches in the shared_div_match list and
+            # add the potential new type in their place.
+            for match_obj in shared_div_match_list:
+                self.vat_match_object_list.remove(match_obj)
+            self.vat_match_object_list.append(self.potential_match_object)
 
         def _vats_have_divs_in_common(self, vat_one, vat_two):
             return vat_one.ref_seq_uids_set.intersection(vat_two.ref_seq_uids_set)
