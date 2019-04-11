@@ -20,14 +20,17 @@ def populate_db_with_ref_seqs():
     current_ref_seq_names = [rs.name for rs in ReferenceSequence.objects.all()]
     bulk_new_rs_list = []
     created_name_list = []
-    for new_name, new_seq in fasta_dict.keys():
+    for new_name, new_seq in fasta_dict.items():
         if new_name not in current_ref_seq_names:
             bulk_new_rs_list.append(
                 ReferenceSequence(name=new_name, clade=new_name[0], sequence=new_seq, has_name=True))
             created_name_list.append(new_name)
     ReferenceSequence.objects.bulk_create(bulk_new_rs_list)
-    for name in created_name_list:
-        print(f'Sequence {name} added to db')
+    if created_name_list:
+        for name in created_name_list:
+            print(f'Sequence {name} added to db')
+    else:
+        print('All sequences already present in database.')
 
 
 populate_db_with_ref_seqs()
