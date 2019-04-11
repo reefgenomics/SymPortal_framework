@@ -12,11 +12,12 @@ from django import db
 from multiprocessing import Queue, Manager, Process
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
 from datetime import datetime
-from distance import BrayCurtisDistPCoACreator, UnifracDistPCoACreator
+import distance
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
 from output import SequenceCountTableCreator
 import ntpath
+import re
 
 
 class DataLoading:
@@ -61,7 +62,7 @@ class DataLoading:
         self.sample_meta_info_df = None
         self.list_of_samples_names = None
         self.list_of_fastq_file_names_in_wkd = None
-        self.list_of_fastq_files_in_wkd = None
+        self.list_of_fastq_files_in_wkd = []
         self.path_to_mothur_batch_file_for_dot_file_creation = None
         self.fastqs_are_gz_compressed = None
         self.path_to_latest_mothur_batch_file = None
@@ -181,17 +182,17 @@ class DataLoading:
         return 'PCoA_coords' in output_path
 
     def _do_braycurtis_dist_pcoa(self):
-        bray_curtis_dist_pcoa_creator = BrayCurtisDistPCoACreator(
+        bray_curtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
             date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
-            data_set_string=str(self.dataset_object.id), call_type='submission',
+            data_set_uid_list=[self.dataset_object.id], call_type='submission',
             output_dir=self.output_directory)
         bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
 
     def _do_unifrac_dist_pcoa(self):
-        unifrac_dict_pcoa_creator = UnifracDistPCoACreator(
+        unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
             call_type='submission', date_time_string=self.date_time_string, output_dir=self.output_directory,
-            data_set_string=str(self.dataset_object.id), method='mothur', num_processors=self.num_proc,
+            data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
             symportal_root_directory=self.symportal_root_directory)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
@@ -207,8 +208,6 @@ class DataLoading:
                                                                seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path, time_date_str=self.date_time_string)
                 seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(seq_stacked_bar_plotter.output_path_list)
-                # TODO don't for get to add the output path for the non-sym and size violation output
-
 
     def _output_seqs_count_table(self):
         sys.stdout.write('\nGenerating count tables\n')
@@ -555,31 +554,43 @@ class DataLoading:
 
     def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self):
 
-        self.list_of_fastq_files_in_wkd = [a for a in os.listdir(self.temp_working_directory) if 'fastq' in a]
+        for file in os.listdir(self.temp_working_directory):
+            if file.endswith('fastq') or file.endswith('fq') or file.endswith('fastq.gz') or file.endswith('fq.gz'):
+                self.list_of_fastq_files_in_wkd.append(file)
 
-        self._identify_sample_names_without_datasheet()
+        end_index = self._identify_sample_names_without_datasheet()
 
-        self.make_dot_stability_file_inferred()
+        self.make_dot_stability_file_inferred(end_index)
 
         self._create_data_set_sample_objects_in_bulk_without_datasheet()
 
-    def make_dot_stability_file_inferred(self):
-        # inferred
+    def make_dot_stability_file_inferred(self, end_index):
+        """Search for the fastq files that contain the inferred sample names. NB this is not so simple
+        as names that are subset of other names will match more than one set of fastq files. To avoid this happening"""
         sample_fastq_pairs = []
         for sample_name in self.list_of_samples_names:
             temp_list = []
             temp_list.append(sample_name.replace('-', '[dS]'))
             fwd_file_path = None
             rev_file_path = None
+            # This is aimed at matching R1.fastq.gz, R2.fq.gz, 1.fq, 2.fastq, .../asdfads_R1_001.fastq.gz etc.
+            compiled_reg_ex = re.compile('\.([R12]+)\.f[ast]*q(\.gz)?')
             for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
-                if sample_name in ntpath.basename(file_path):
-                    if 'R1' in file_path:
-                        fwd_file_path = file_path
-                    if 'R2' in file_path:
-                        rev_file_path = file_path
+                if sample_name == ntpath.basename(file_path)[:-end_index]:
+                    read_direction_match = re.search(compiled_reg_ex, file_path)
+                    if read_direction_match is not None:
+                        read_direction_str = read_direction_match.group(1)
+                        if read_direction_str == '1':
+                            fwd_file_path = file_path
+                        if read_direction_str == '2':
+                            rev_file_path = file_path
+                    else:
+                        if 'R1' in file_path:
+                            fwd_file_path = file_path
+                        if 'R2' in file_path:
+                            rev_file_path = file_path
             temp_list.append(fwd_file_path)
             temp_list.append(rev_file_path)
-            assert (len(temp_list) == 3)
             sample_fastq_pairs.append('\t'.join(temp_list))
         write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
@@ -605,10 +616,10 @@ class DataLoading:
     def _get_num_chars_in_common_with_fastq_names(self):
         i = 1
         while 1:
-            list_of_endings = []
+            list_of_endings = set()
             for file in self.list_of_fastq_files_in_wkd:
-                list_of_endings.append(file[-i:])
-            if len(set(list_of_endings)) > 2:
+                list_of_endings.add(file[-i:])
+            if len(list_of_endings) > 2:
                 break
             else:
                 i += 1
@@ -700,36 +711,6 @@ class DataLoading:
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
 
-    def _generate_and_write_new_stability_file_with_data_sheet(self):
-        # Convert the group names in the stability.files so that the dashes are converted to '[ds]',
-        # So for the mothur we have '[ds]'s. But for all else we convert these '[ds]'s to dashes
-        self._read_in_mothur_dot_file_creation_output()
-
-        new_stability_file = self._generate_new_stability_file_with_data_sheet()
-
-        self.sample_fastq_pairs = new_stability_file
-        # write out the new stability file
-        write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), self.sample_fastq_pairs)
-
-    def _generate_new_stability_file_with_data_sheet(self):
-        new_stability_file = []
-        for stability_file_line in self.sample_fastq_pairs:
-            pair_components = stability_file_line.split('\t')
-            # I am going to use '[dS]' as a place holder for a dash in the sample names
-            # Each line of the stability file is a three column format with the first
-            # column being the sample name. The second and third are the full paths of the .fastq files
-            # the sample name at the moment is garbage, we will identify the sample name from the
-            # first fastq path using the fastq_file_to_sample_name_dict
-            new_stability_file.append(
-                '{}\t{}\t{}'.format(
-                    self.fastq_file_to_sample_name_dict[pair_components[1].split('/')[-1]].replace('-', '[dS]'),
-                    pair_components[1],
-                    pair_components[2]))
-        return new_stability_file
-
-    def _read_in_mothur_dot_file_creation_output(self):
-        self.sample_fastq_pairs = read_defined_file_to_list(os.path.join(self.temp_working_directory, 'stability.files'))
-
     def _create_fastq_file_to_sample_name_dict(self):
         fastq_file_to_sample_name_dict = {}
         for sample_index in self.sample_meta_info_df.index.values.tolist():
@@ -738,36 +719,6 @@ class DataLoading:
             fastq_file_to_sample_name_dict[
                 self.sample_meta_info_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
         self.fastq_file_to_sample_name_dict = fastq_file_to_sample_name_dict
-
-    def _generate_and_write_mothur_batch_file_for_dotfile_creation(self):
-        self._check_if_fastqs_are_gz_compressed()
-        mothur_batch_file_as_list = self._generate_mothur_batch_file_for_dotfile_creation_as_list()
-        self.path_to_latest_mothur_batch_file = os.path.join(self.temp_working_directory, 'mothur_batch_file_makeFile')
-        write_list_to_destination(self.path_to_latest_mothur_batch_file, mothur_batch_file_as_list)
-
-    def _generate_mothur_batch_file_for_dotfile_creation_as_list(self):
-        if self.fastqs_are_gz_compressed:
-            mothur_batch_file = [
-                r'set.dir(input={0})'.format(self.temp_working_directory),
-                r'set.dir(output={0})'.format(self.temp_working_directory),
-                r'make.file(inputdir={0}, type=gz, numcols=3)'.format(self.temp_working_directory)
-            ]
-        else:
-            mothur_batch_file = [
-                r'set.dir(input={0})'.format(self.temp_working_directory),
-                r'set.dir(output={0})'.format(self.temp_working_directory),
-                r'make.file(inputdir={0}, type=fastq, numcols=3)'.format(self.temp_working_directory)
-            ]
-        return mothur_batch_file
-
-    def _check_if_fastqs_are_gz_compressed(self):
-        if self.list_of_fastq_files_in_wkd[0].endswith('fastq.gz') or self.list_of_fastq_files_in_wkd[0].endswith('fq.gz'):
-            self.fastqs_are_gz_compressed = True
-        elif self.list_of_fastq_files_in_wkd[0].endswith('fastq') or self.list_of_fastq_files_in_wkd[0].endswith('fq'):
-            self.fastqs_are_gz_compressed = False
-        else:
-            warning_str = f'Unrecognised format of sequecing file: {self.list_of_fastq_files_in_wkd[0]}'
-            self._exit_and_del_data_set_sample(warning_str)
 
     def _check_all_fastqs_in_datasheet_exist(self):
         self.list_of_fastq_files_in_wkd = return_list_of_file_names_in_directory(self.temp_working_directory)
@@ -827,9 +778,13 @@ class DataLoading:
         that they could be .fq files rather than fastq. also need to take into account that it could be fastq.gz and
         fq.gz rather than fastq and fq."""
         list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
+        count = 0
         for file_path in list_of_files_in_user_input_dir:
             if 'fastq' in file_path or 'fq' in file_path:
+                    count += 1
                     shutil.copy(file_path, self.temp_working_directory)
+        if count < 2:
+            raise RuntimeError(f'{count} files to analyse found in the target directory')
 
     def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):
@@ -846,7 +801,7 @@ class DataLoading:
 
     def _setup_output_directory(self):
         output_directory = os.path.join(self.symportal_root_directory,
-                                        'outputs', 'data_set_submissions', f'{self.dataset_object.id}')
+                                        'outputs', 'loaded_data_sets', f'{self.dataset_object.id}')
         os.makedirs(output_directory, exist_ok=True)
         return output_directory
 
@@ -983,24 +938,45 @@ class InitialMothurWorker:
         self.data_set_sample.save()
 
     def _do_fwd_and_rev_pcr(self):
-        self.mothur_analysis_object.execute_pcr(do_reverse_pcr_as_well=True)
-        self.check_for_no_seqs_after_pcr_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_pcr(do_reverse_pcr_as_well=True)
+        except RuntimeError as e:
+            if str(e) == 'PCR fasta file is blank':
+                self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
+                raise RuntimeError({'sample_name': self.sample_name})
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_split_abund(self):
-        self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
+        except:
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_unique_seqs(self):
-        self.mothur_analysis_object.execute_unique_seqs()
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_unique_seqs()
+        except:
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_screen_seqs(self):
-        self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig': 0, 'maxhomop': 5})
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig': 0, 'maxhomop': 5})
+        except RuntimeError:
+            self.check_for_error_and_raise_runtime_error()
 
     def _do_make_contigs(self):
-        self.mothur_analysis_object.execute_make_contigs()
-        self.check_for_error_and_raise_runtime_error()
+        try:
+            stdout_as_list = self.mothur_analysis_object.execute_make_contigs()
+        except RuntimeError as e:
+            if str(e) == 'bad fastq, mothur stuck in loop':
+                self.log_qc_error_and_continue(errorreason='Bad fastq, mothur stuck in loop')
+                raise RuntimeError({'sample_name': self.sample_name})
+            if str(e) == 'bad fastq':
+                self.log_qc_error_and_continue(errorreason='Bad fastq')
+                raise RuntimeError({'sample_name': self.sample_name})
+            if str(e) == 'error in make.contigs':
+                self.log_qc_error_and_continue(errorreason='Error in make.contigs')
+                raise RuntimeError({'sample_name': self.sample_name})
 
     def _set_absolute_num_seqs_after_make_contigs(self):
         number_of_contig_seqs_absolute = len(
@@ -1039,9 +1015,15 @@ class InitialMothurWorker:
             if '[WARNING]: Blank fasta name, ignoring read.' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='Blank fasta name')
                 raise RuntimeError({'sample_name':self.sample_name})
+            if 'do not match' in stdout_line:
+                self.log_qc_error_and_continue(errorreason='error in fastq file')
+                raise RuntimeError({'sample_name': self.sample_name})
             if 'ERROR' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='error in inital QC')
                 raise RuntimeError({'sample_name':self.sample_name})
+        self.log_qc_error_and_continue(errorreason='error in inital QC')
+        raise RuntimeError({'sample_name': self.sample_name})
+
 
     def log_qc_error_and_continue(self, errorreason):
         print('Error in processing sample: {}'.format(self.sample_name))
@@ -1713,7 +1695,6 @@ class PerformMEDWorker:
         self.med_m_value = self._get_med_m_value()
 
     def do_decomposition(self):
-        # TODO check this business about how MED determines the sample name, i.e. whether the underscores matter.
         sys.stdout.write(f'{self.sample_name}: starting MED analysis\n')
         sys.stdout.write(f'{self.sample_name}: padding sequences\n')
         subprocess.run([
@@ -1763,7 +1744,7 @@ class DataSetSampleSequenceCreatorWorker:
         self.nodes_list_of_nucleotide_sequences = []
         self._populate_nodes_list_of_nucleotide_sequences()
         self.num_med_nodes = len(self.nodes_list_of_nucleotide_sequences)
-        self.node_sequence_name_to_ref_seq_id = {} # TODO pass in a self of the parent to get rid of these long names
+        self.node_sequence_name_to_ref_seq_id = {}
         self.ref_seq_sequence_to_ref_seq_id_dict = data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict
         self.ref_seq_uid_to_ref_seq_name_dict = data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict
         self.node_abundance_df = pd.read_csv(

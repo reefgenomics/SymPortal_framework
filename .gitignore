@@ -1,4 +1,10 @@
+/lib/med_decompose/Oligotyping/lib/__pycache__
+/lib/med_decompose/Oligotyping/utils/__pycache__
+/lib/med_decompose/Oligotyping/visualization/__pycache__
+/__pycache__
 tests/.DS_Store
+/lib/med_decompose/Oligotyping/__pycache__/*
+*.pyc
 tests/__pycache__/
 settings.py
 tests/.DS_Store

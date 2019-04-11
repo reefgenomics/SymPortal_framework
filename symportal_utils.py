@@ -51,7 +51,17 @@ class BlastnAnalysis:
         blast_output_dict = defaultdict(list)
         for line in blast_output_file_as_list:
             blast_output_dict[line.split('\t')[0]].append('\t'.join(line.split('\t')[1:]))
-        return blast_output_file_as_list
+        return blast_output_dict
+
+    def make_db(self, title_for_db):
+        if self.pipe_stdout_sterr:
+            subprocess.run(
+                ['makeblastdb', '-in', self.db_path, '-dbtype', 'nucl', '-title',
+                 title_for_db], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        else:
+            subprocess.run(
+                ['makeblastdb', '-in', self.db_path, '-dbtype', 'nucl', '-title',
+                 title_for_db])
 
 
 class MothurAnalysis:
@@ -258,6 +268,8 @@ class MothurAnalysis:
         self._screen_seqs_make_and_write_mothur_batch_file(argument_dictionary)
         self._run_mothur_batch_file_command()
         good_fasta_path = self._extract_output_path_first_line_command()
+        if good_fasta_path is None:
+            raise RuntimeError
         self.fasta_path = good_fasta_path
         self._update_sequence_collection_from_fasta_file()
         self.__execute_summary()
@@ -290,6 +302,8 @@ class MothurAnalysis:
             self._rev_comp_make_and_write_mothur_batch_file()
             self._run_mothur_batch_file_command()
             self.fasta_path = self._extract_output_path_first_line_command()
+            if self.fasta_path is None:
+                raise RuntimeError
             self._pcr_make_and_write_mothur_batch_file()
             self._run_mothur_batch_file_command()
             rev_output_good_fasta_path = self._pcr_extract_good_and_scrap_output_paths()[1]
@@ -305,6 +319,8 @@ class MothurAnalysis:
             )
         else:
             self.fasta_path = fwd_output_good_fasta_path
+        if len(read_defined_file_to_list(self.fasta_path)) == 0:
+            raise RuntimeError('PCR fasta file is blank')
         if self.name_file_path:
             self._update_sequence_collection_from_fasta_name_pair()
         else:
@@ -325,9 +341,11 @@ class MothurAnalysis:
 
         self._make_contig_make_and_write_mothur_batch(dot_file_file_path)
 
-        self._run_mothur_batch_file_command()
+        stdout_as_list = self._run_mothur_batch_file_command_make_contigs()
 
-        self.fasta_path = self._extract_output_path_first_line_command()
+        self.fasta_path = self._extract_output_path_first_line_command(output_as_list=stdout_as_list)
+        if self.fasta_path is None:
+            raise RuntimeError
 
         self._update_sequence_collection_from_fasta_file()
 
@@ -339,8 +357,9 @@ class MothurAnalysis:
 
         self._run_mothur_batch_file_command()
 
-        if not self._extract_output_path_two_lines():
-            return False
+        self.name_file_path, self.fasta_path = self._extract_output_path_two_lines()
+        if self.name_file_path is None or self.fasta_path is None:
+            raise RuntimeError
 
         self._update_sequence_collection_from_fasta_name_pair()
 
@@ -353,6 +372,8 @@ class MothurAnalysis:
         self._run_mothur_batch_file_command()
 
         self.name_file_path, self.fasta_path = self._split_abund_extract_output_path_name_and_fasta()
+        if self.name_file_path is None or self.fasta_path is None:
+            raise RuntimeError
 
         self._update_sequence_collection_from_fasta_name_pair()
 
@@ -364,12 +385,18 @@ class MothurAnalysis:
         self._run_mothur_batch_file_command()
 
         self.dist_file_path = self._extract_output_path_first_line_command()
+        if self.dist_file_path is None:
+            raise RuntimeError('Dist file is None')
+
 
     def execute_clearcut(self):
         self._validate_dist_file()
         self._clearcut_make_and_write_mothur_batch()
         self._run_mothur_batch_file_command()
         self.tree_file_path = self._extract_output_path_first_line_command()
+        if self.tree_file_path is None:
+            raise RuntimeError('Tree file path is None')
+
 
     def execute_weighted_unifrac(self):
         self._weighted_unifrac_make_and_write_mothur_batch()
@@ -377,7 +404,7 @@ class MothurAnalysis:
         if self.latest_completed_process_command.returncode == 0:
             sys.stdout.write('\rUnifrac successful')
         else:
-            sys.stdout.write('\rERROR: {}'.format(self.latest_completed_process_command.sterr.decode('utf-8')))
+            sys.stdout.write('\rERROR: {}'.format(self.latest_completed_process_command.sterr.decode('ISO-8859-1')))
 
         self.dist_file_path = self._extract_output_path_second_line_command()
 
@@ -549,8 +576,11 @@ class MothurAnalysis:
         ]
         return mothur_batch_file
 
-    def _extract_output_path_first_line_command(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+    def _extract_output_path_first_line_command(self, output_as_list=None):
+        if output_as_list is None:
+            stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+        else:
+            stdout_string_as_list = output_as_list
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i+1]
@@ -571,10 +601,7 @@ class MothurAnalysis:
         stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
-                self.name_file_path = stdout_string_as_list[i + 1]
-                self.fasta_path = stdout_string_as_list[i + 2]
-                return True
-        return False
+                return stdout_string_as_list[i + 1], stdout_string_as_list[i + 2]
 
     def _pcr_extract_good_and_scrap_output_paths(self):
         stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
@@ -597,6 +624,35 @@ class MothurAnalysis:
             )
             for line in decode_utf8_binary_to_list(self.latest_completed_process_command.stdout):
                 print(line)
+
+    def _run_mothur_batch_file_command_make_contigs(self):
+        """Run the mothur batch file that does make.contigs. NB that with some dodgee fastq pairs, mothur gets stuck
+        in a loop printing out warnings. We will therefore read through the stdout and look for warnings and kill
+        the process if these warnings get too high."""
+        stdout_as_list = []
+
+        warning_count = 0
+        self.latest_completed_process_command = subprocess.Popen([self.exec_path, self.mothur_batch_file_path],
+                                                                 stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for byte_line in self.latest_completed_process_command.stdout:
+            byte_line_as_string = byte_line.decode('ISO-8859-1')
+            stdout_as_list.append(byte_line_as_string.rstrip())
+            if 'WARNING' in byte_line_as_string:
+                warning_count += 1
+                if warning_count > 100:
+                    self.latest_completed_process_command.kill()
+                    raise RuntimeError('bad fastq, mothur stuck in loop')
+            if 'ERROR' in byte_line_as_string:
+                self.latest_completed_process_command.kill()
+                raise RuntimeError('bad fastq')
+        self.latest_completed_process_command.wait()
+        if self.latest_completed_process_command.returncode == 1:
+            raise RuntimeError('error in make.contigs')
+
+        if not self.stdout_and_sterr_to_pipe:
+            for line in stdout_as_list:
+                print(line)
+        return stdout_as_list
 
     def _run_mothur_batch_file_summary(self):
         if self.stdout_and_sterr_to_pipe:
