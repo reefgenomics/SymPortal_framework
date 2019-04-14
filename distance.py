@@ -1141,9 +1141,17 @@ class BaseBrayCurtisDistPCoACreator:
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list):
         if data_set_sample_uid_list:
-            return data_set_sample_uid_list
+            data_set_samples_of_output = DataSetSample.objects.filter(id__in=data_set_sample_uid_list)
+            clade_col_uids_of_output = [
+                cc.id for cc in CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples_of_output)]
+            return data_set_sample_uid_list, clade_col_uids_of_output
         else:
-            return [dss.id for dss in DataSetSample.objects.filter(data_submission_from__in=data_set_uid_list)]
+            data_set_samples_of_output = DataSetSample.objects.filter(data_submission_from__in=data_set_uid_list)
+            clade_col_uids_of_output = [
+                cc.id for cc in CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples_of_output)]
+            data_set_sample_uid_of_output = [dss.id for dss in data_set_samples_of_output]
+
+            return data_set_sample_uid_of_output, clade_col_uids_of_output
 
     def _compute_braycurtis_btwn_obj_pairs(self):
         for obj_one, obj_two in itertools.combinations(list(self.objs_of_clade), 2):
@@ -1250,7 +1258,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         super().__init__(
             symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='samples')
 
-        self.data_set_sample_uid_list = self._set_data_set_sample_uid_list(
+        self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
             data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list)
 
         self.cc_list_for_output = CladeCollection.objects.filter(
@@ -1347,11 +1355,11 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def __init__(
             self, symportal_root_directory, data_analysis_obj, date_time_string=None, data_set_sample_uid_list=None,
-            data_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=False):
+            data_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=False, local_abunds_only=False):
         super().__init__(
             symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='profiles')
 
-        self.data_set_sample_uid_list = self._set_data_set_sample_uid_list(
+        self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
             data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list)
         self.data_analysis_obj = data_analysis_obj
         self.at_list_for_output = AnalysisType.objects.filter(
@@ -1360,7 +1368,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.clades_of_ats = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = self._set_output_dir(output_dir=output_dir)
         self.is_sqrt_transf = is_sqrt_transf
-
+        self.local = local_abunds_only
 
     def _set_output_dir(self, output_dir):
         if self.call_type == 'stand_alone':
@@ -1371,8 +1379,6 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             # call_type == 'analysis':
             new_output_dir = os.path.join(output_dir, 'between_profile_distances')
         return new_output_dir
-
-
 
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing ITS2 type profile pairwise distances and PCoA coordinates using the BrayCurtis method\n')
@@ -1410,9 +1416,25 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             if self.is_sqrt_transf:
                 df = general.sqrt_transform_abundance_df(df)
 
-            normalised_abundance_of_divs_dict = {
-                ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 100000) for
-                i in range(len(ref_seq_uids_of_analysis_type))}
+            if self.local:
+                # we want to limit the inference of the average relative abundance of the DIVs to only those
+                # div abundance values that were found in samples from the output in question
+                # as such we need to first get a list of the clade collections and see which of these
+                # clade collections were from self.data_set_sample_uid_list
+                clade_collection_uid_list_of_type = [
+                    int(a) for a in at.list_of_clade_collections.split(',')]
+                # the indices of the clade collections that are of this output
+                indices = []
+                for i in range(len(clade_collection_uid_list_of_type)):
+                    if clade_collection_uid_list_of_type[i] in self.clade_col_uid_list:
+                        indices.append(i)
+                normalised_abundance_of_divs_dict = {
+                    ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices, i].mean() * 10000) for
+                    i in range(len(ref_seq_uids_of_analysis_type))}
+            else:
+                normalised_abundance_of_divs_dict = {
+                    ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 100000) for
+                    i in range(len(ref_seq_uids_of_analysis_type))}
 
             self.clade_rs_uid_to_normalised_abund_clade_dict[at.id] = normalised_abundance_of_divs_dict
 
