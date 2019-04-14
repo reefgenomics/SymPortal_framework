@@ -430,13 +430,18 @@ class SampleUnifracSeqAbundanceMPCollection:
         return normalised_abund_dict
 
     def _make_norm_abund_dict_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth):
-        sqrt_abundances_dict = {
-            dsss.id: math.sqrt(dsss.abundance) for dsss in
-            list_of_dsss_in_cc}
-        total_seqs_of_cc = sum(sqrt_abundances_dict.values())
+        total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
+        rel_abund_dict = {dsss.id: (dsss.abundance / total_seqs_of_cc) for
+                                 dsss in list_of_dsss_in_cc}
+        dsss_uid_to_sqrt_rel_abund_dict = {
+            dsss_uid: math.sqrt(rel_abund) for dsss_uid, rel_abund in rel_abund_dict.items()}
+
+        sqr_total = sum(dsss_uid_to_sqrt_rel_abund_dict.values())
+
         normalised_abund_dict = {
-        dsss.id: int((sqrt_abundances_dict[dsss.id] / total_seqs_of_cc) * normalisation_sequencing_depth)
-        for dsss in list_of_dsss_in_cc}
+            dsss.id: int((dsss_uid_to_sqrt_rel_abund_dict[dsss.id] / sqr_total) * normalisation_sequencing_depth)
+            for dsss in list_of_dsss_in_cc}
+
         return normalised_abund_dict
 
 
@@ -1257,20 +1262,21 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         # we can then store these dict in a dict where the key is the sample ID.
         for clade_col in self.objs_of_clade:
             temp_dict = {}
-            list_of_dss_in_cc = list(DataSetSampleSequence.objects.filter(
+            list_of_dsss_in_cc = list(DataSetSampleSequence.objects.filter(
                 clade_collection_found_in=clade_col))
 
             if self.is_sqrt_transf:
-                sqrt_abundances_dict = {
-                    dsss.id: math.sqrt(dsss.abundance) for dsss in
-                    list_of_dss_in_cc}
-                total_seqs_ind_clade_col = sum(sqrt_abundances_dict.values())
-                for dsss in list_of_dss_in_cc:
-                    temp_dict[dsss.reference_sequence_of.id] = (sqrt_abundances_dict[dsss.id] /
-                                                                total_seqs_ind_clade_col) * 10000
+                total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dsss_in_cc])
+                rel_abund_dict = {dsss.id: dsss.abundance/total_seqs_ind_clade_col for dsss in list_of_dsss_in_cc}
+                dsss_uid_to_sqrt_rel_abund_dict = {
+                    dsss_uid: math.sqrt(rel_abund) for dsss_uid, rel_abund in rel_abund_dict.items()}
+                sqr_total = sum(dsss_uid_to_sqrt_rel_abund_dict.values())
+
+                for dsss in list_of_dsss_in_cc:
+                    temp_dict[dsss.reference_sequence_of.id] = (dsss_uid_to_sqrt_rel_abund_dict[dsss.id] / sqr_total) * 10000
             else:
-                total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dss_in_cc])
-                for dsss in list_of_dss_in_cc:
+                total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dsss_in_cc])
+                for dsss in list_of_dsss_in_cc:
                     temp_dict[dsss.reference_sequence_of.id] = (dsss.abundance / total_seqs_ind_clade_col)*10000
 
             self.clade_rs_uid_to_normalised_abund_clade_dict[clade_col.id] = temp_dict

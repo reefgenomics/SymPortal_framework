@@ -72,57 +72,65 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
 
     # TEST STAND_ALONE DISTANCES
     def test_stand_alone_unifrac_type_distances_data_set_uid_input(self):
+        print('\n\nTesting: stand_alone_unifrac_type_distances_data_set_uid_input\n\n')
         custom_args_list = ['--between_type_distances', '1', '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'unifrac', '--sqrt']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_unifrac_type_distances_data_set_sample_uid_input(self):
         # create a string for dss input that is all but the last 4 dss objects of the DataSet 1
+        print('\n\nTesting: stand_alone_unifrac_type_distances_data_set_sample_uid_input\n\n')
         data_set_1 = DataSet.objects.get(id=1)
         data_set_samples_from_1 = DataSetSample.objects.filter(data_submission_from=data_set_1)
         dss_uids_of_ds_str = ','.join([str(dss.id) for dss in data_set_samples_from_1][:-4])
-        custom_args_list = ['--between_type_distances_sample_set', dss_uids_of_ds_str, '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'unifrac', '--sqrt']
+        custom_args_list = ['--between_type_distances_sample_set', dss_uids_of_ds_str, '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'unifrac']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_braycurtis_type_distances_data_set_uid_input(self):
+        print('\n\nTesting: stand_alone_unifrac_type_distances_data_set_uid_input\n\n')
         custom_args_list = ['--between_type_distances', '1', '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis', '--sqrt']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_braycurtis_type_distances_data_set_sample_uid_input(self):
         # create a string for dss input that is all but the last 4 dss objects of the DataSet 1
+        print('\n\nTesting: stand_alone_braycurtis_type_distances_data_set_sample_uid_input\n\n')
         data_set_1 = DataSet.objects.get(id=1)
         data_set_samples_from_1 = DataSetSample.objects.filter(data_submission_from=data_set_1)
         dss_uids_of_ds_str = ','.join([str(dss.id) for dss in data_set_samples_from_1][:-4])
-        custom_args_list = ['--between_type_distances_sample_set', dss_uids_of_ds_str, '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis', '--sqrt']
+        custom_args_list = ['--between_type_distances_sample_set', dss_uids_of_ds_str, '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_unifrac_sample_distances_data_set_uid_input(self):
+        print('\n\nTesting: stand_alone_unifrac_sample_distances_data_set_uid_input\n\n')
         custom_args_list = ['--between_sample_distances', '1', '--num_proc', str(self.num_proc), '--distance_method', 'unifrac', '--sqrt']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_unifrac_sample_distances_data_set_sample_uid_input(self):
         # create a string for dss input that is all but the last 4 dss objects of the DataSet 1
+        print('\n\nTesting: stand_alone_unifrac_sample_distances_data_set_sample_uid_input\n\n')
         data_set_1 = DataSet.objects.get(id=1)
         data_set_samples_from_1 = DataSetSample.objects.filter(data_submission_from=data_set_1)
         dss_uids_of_ds_str = ','.join([str(dss.id) for dss in data_set_samples_from_1][:-4])
-        custom_args_list = ['--between_sample_distances_sample_set', dss_uids_of_ds_str, '--num_proc', str(self.num_proc), '--distance_method', 'unifrac', '--sqrt']
+        custom_args_list = ['--between_sample_distances_sample_set', dss_uids_of_ds_str, '--num_proc', str(self.num_proc), '--distance_method', 'unifrac']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_braycurtis_sample_distances_data_set_uid_input(self):
+        print('\n\nTesting: stand_alone_braycurtis_sample_distances_data_set_uid_input\n\n')
         custom_args_list = ['--between_sample_distances', '1', '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis', '--sqrt']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_braycurtis_sample_distances_data_set_sample_uid_input(self):
         # create a string for dss input that is all but the last 4 dss objects of the DataSet 1
+        print('\n\nTesting: stand_alone_braycurtis_sample_distances_data_set_sample_uid_input\n\n')
         data_set_1 = DataSet.objects.get(id=1)
         data_set_samples_from_1 = DataSetSample.objects.filter(data_submission_from=data_set_1)
         dss_uids_of_ds_str = ','.join([str(dss.id) for dss in data_set_samples_from_1][:-4])
-        custom_args_list = ['--between_sample_distances_sample_set', dss_uids_of_ds_str, '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis', '--sqrt']
+        custom_args_list = ['--between_sample_distances_sample_set', dss_uids_of_ds_str, '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
