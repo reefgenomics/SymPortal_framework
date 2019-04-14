@@ -127,7 +127,7 @@ class SymPortalWorkFlowManager:
                             help="When passed, sequence abunances will be square root transformed before "
                                  "distance metrics are calculated. This can be applied to either BrayCurtis- or"
                                  " UniFrac-based distance calculations.", action='store_true', default=False)
-        parser.add_arguments('--local',
+        parser.add_argument('--local',
                              help="When passed, only the DataSetSamples of the current output will be used"
                                              " in calculating ITS2 type profile similarities. If false, similarity"
                                              " matrices will be calculated using the DIV abundance info from all"

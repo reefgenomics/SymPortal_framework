@@ -73,7 +73,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
     # TEST STAND_ALONE DISTANCES
     def test_stand_alone_unifrac_type_distances_data_set_uid_input(self):
         print('\n\nTesting: stand_alone_unifrac_type_distances_data_set_uid_input\n\n')
-        custom_args_list = ['--between_type_distances', '1', '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'unifrac', '--sqrt']
+        custom_args_list = ['--between_type_distances', '1', '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'unifrac', '--sqrt', '--local']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
@@ -89,7 +89,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
 
     def test_stand_alone_braycurtis_type_distances_data_set_uid_input(self):
         print('\n\nTesting: stand_alone_unifrac_type_distances_data_set_uid_input\n\n')
-        custom_args_list = ['--between_type_distances', '1', '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis', '--sqrt']
+        custom_args_list = ['--between_type_distances', '1', '--data_analysis_id', '1', '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis', '--sqrt', '--local']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
