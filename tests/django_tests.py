@@ -115,9 +115,9 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
             analysis_type_of__data_analysis_from=data_analysis)]
         one_len = len(cct_one_uid_list)
         two_len = len(cct_two_uid_list)
-        cct_uid_list = cct_one_uid_list[:-one_len/2] + cct_two_uid_list[:-two_len/2]
+        cct_uid_list = cct_one_uid_list[:int(-1 * (one_len/2))] + cct_two_uid_list[:int(-1*(two_len/2))]
         print('\n\nTesting: stand_alone_braycurtis_type_distances_cct_uid_input\n\n')
-        cct_list_str = ','.join(cct_uid_list)
+        cct_list_str = ','.join([str(_) for _ in cct_uid_list])
         custom_args_list = ['--between_type_distances_cct_set', cct_list_str, '--data_analysis_id', '1',
                             '--num_proc', str(self.num_proc), '--distance_method', 'braycurtis']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
