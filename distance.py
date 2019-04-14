@@ -334,7 +334,7 @@ class TypeUnifracSeqAbundanceMPCollection:
     """The purpose of this class is to be used during the BtwnTypeUnifracDistanceCreator as a tidy holder for the
      sequences information that is collected from each AnalysisType that is part of the output."""
 
-    def __init__(self, analysis_type, proc_id, is_sqrt_transf):
+    def __init__(self, analysis_type, proc_id, is_sqrt_transf, clade_col_uid_list):
         self.fasta_dict = {}
         self.name_dict = {}
         self.group_list = []
@@ -342,6 +342,8 @@ class TypeUnifracSeqAbundanceMPCollection:
         self.analysis_type_or_clade_collection = analysis_type
         self.proc_id = proc_id
         self.is_sqrt_transf = is_sqrt_transf
+        self.local = True
+        self.clade_col_uid_list = clade_col_uid_list
 
     def collect_seq_info(self):
         """This function returns information used to build the master fasta and names files that are required to make
@@ -357,14 +359,32 @@ class TypeUnifracSeqAbundanceMPCollection:
         sys.stdout.write('\rProcessing AnalysisType: {} with {}'.format(self.analysis_type_or_clade_collection, self.proc_id))
         ref_seq_uids_of_analysis_type = [int(b) for b in self.analysis_type_or_clade_collection.ordered_footprint_list.split(',')]
 
+        # the order of rows in this df is the CladeCollections in list_of_clade_collections
+        # the columns is order of ordered_footprint_list (ref_seq_ids)
         df = pd.DataFrame(self.analysis_type_or_clade_collection.get_ratio_list())
 
         if self.is_sqrt_transf:
             df = general.sqrt_transform_abundance_df(df)
 
-        normalised_abundance_of_divs_dict = {
-            ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 10000) for
-            i in range(len(ref_seq_uids_of_analysis_type))}
+        if self.local:
+            # we want to limit the inference of the average relative abundance of the DIVs to only those
+            # div abundance values that were found in samples from the output in question
+            # as such we need to first get a list of the clade collections and see which of these
+            # clade collections were from self.data_set_sample_uid_list
+            clade_collection_uid_list_of_type = [
+                int(a) for a in self.analysis_type_or_clade_collection.list_of_clade_collections.split(',')]
+            # the indices of the clade collections that are of this output
+            indices = []
+            for i in range(len(clade_collection_uid_list_of_type)):
+                if clade_collection_uid_list_of_type[i] in self.clade_col_uid_list:
+                    indices.append(i)
+            normalised_abundance_of_divs_dict = {
+                ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices,i].mean() * 10000) for
+                i in range(len(ref_seq_uids_of_analysis_type))}
+        else:  # use all abund info to calculate av div rel abund
+            normalised_abundance_of_divs_dict = {
+                ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 10000) for
+                i in range(len(ref_seq_uids_of_analysis_type))}
 
         for ref_seq in ReferenceSequence.objects.filter(id__in=ref_seq_uids_of_analysis_type):
             self.ref_seq_id_list.append(ref_seq.id)
@@ -588,7 +608,9 @@ class BtwnTypeUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandler
     def _unifrac_distance_creator_worker_one(self):
         proc_id = current_process().name
         for at in iter(self.input_analysis_type_queue.get, 'STOP'):
-            unifrac_seq_abundance_mp_collection = TypeUnifracSeqAbundanceMPCollection(analysis_type=at, proc_id=proc_id, is_sqrt_transf=self.parent_unifrac_dist_creator.is_sqrt_transf)
+            unifrac_seq_abundance_mp_collection = TypeUnifracSeqAbundanceMPCollection(
+                analysis_type=at, proc_id=proc_id, is_sqrt_transf=self.parent_unifrac_dist_creator.is_sqrt_transf,
+                clade_col_uid_list=self.parent_unifrac_dist_creator.clade_col_uid_list)
             unifrac_seq_abundance_mp_collection.collect_seq_info()
             self.output_unifrac_seq_abund_mp_collection_queue.put(unifrac_seq_abundance_mp_collection)
         self.output_unifrac_seq_abund_mp_collection_queue.put('EXIT')
@@ -673,7 +695,8 @@ class BaseUnifracDistPCoACreator:
         self.num_proc = num_proc
         self.bootstrap_value = bootstrap_val
         self.output_dir = output_dir
-        self.data_set_sample_uid_list = self._set_data_set_sample_uid_list(data_set_sample_uid_list, data_set_uid_list)
+        self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
+            data_set_sample_uid_list, data_set_uid_list)
         self.output_file_paths = []
 
         # Clade based files
@@ -707,10 +730,19 @@ class BaseUnifracDistPCoACreator:
         self.is_sqrt_transf = is_sqrt_transf
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list):
+
         if data_set_sample_uid_list:
-            return data_set_sample_uid_list
+            data_set_samples_of_output = DataSetSample.objects.filter(id__in=data_set_sample_uid_list)
+            clade_col_uids_of_output = [
+                cc.id for cc in CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples_of_output)]
+            return data_set_sample_uid_list, clade_col_uids_of_output
         else:
-            return [dss.id for dss in DataSetSample.objects.filter(data_submission_from__in=data_set_uid_list)]
+            data_set_samples_of_output = DataSetSample.objects.filter(data_submission_from__in=data_set_uid_list)
+            clade_col_uids_of_output = [
+                cc.id for cc in CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples_of_output)]
+            data_set_sample_uid_of_output = [dss.id for dss in data_set_samples_of_output]
+
+            return data_set_sample_uid_of_output, clade_col_uids_of_output
 
     def _write_output_paths_to_stdout(self):
         print('UniFrac and PCoA computation complete. Ouput files:')
