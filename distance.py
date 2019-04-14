@@ -13,7 +13,7 @@ import re
 import numpy as np
 from skbio.stats.ordination import pcoa
 import general
-from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta_first_line_removal
+from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta_first_line_removal, sqrt_transform_abundance_df
 import itertools
 from scipy.spatial.distance import braycurtis
 from symportal_utils import MothurAnalysis, SequenceCollection
@@ -334,13 +334,14 @@ class TypeUnifracSeqAbundanceMPCollection:
     """The purpose of this class is to be used during the BtwnTypeUnifracDistanceCreator as a tidy holder for the
      sequences information that is collected from each AnalysisType that is part of the output."""
 
-    def __init__(self, analysis_type, proc_id):
+    def __init__(self, analysis_type, proc_id, is_sqrt_transf):
         self.fasta_dict = {}
         self.name_dict = {}
         self.group_list = []
         self.ref_seq_id_list = []
         self.analysis_type_or_clade_collection = analysis_type
         self.proc_id = proc_id
+        self.is_sqrt_transf = is_sqrt_transf
 
     def collect_seq_info(self):
         """This function returns information used to build the master fasta and names files that are required to make
@@ -356,10 +357,13 @@ class TypeUnifracSeqAbundanceMPCollection:
         sys.stdout.write('\rProcessing AnalysisType: {} with {}'.format(self.analysis_type_or_clade_collection, self.proc_id))
         ref_seq_uids_of_analysis_type = [int(b) for b in self.analysis_type_or_clade_collection.ordered_footprint_list.split(',')]
 
-        foot_print_ratio_array = pd.DataFrame(self.analysis_type_or_clade_collection.get_ratio_list())
+        df = pd.DataFrame(self.analysis_type_or_clade_collection.get_ratio_list())
+
+        if self.is_sqrt_transf:
+            df = general.sqrt_transform_abundance_df(df)
 
         normalised_abundance_of_divs_dict = {
-            ref_seq_uids_of_analysis_type[i]: math.ceil(foot_print_ratio_array[i].mean() * 10000) for
+            ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 10000) for
             i in range(len(ref_seq_uids_of_analysis_type))}
 
         for ref_seq in ReferenceSequence.objects.filter(id__in=ref_seq_uids_of_analysis_type):
@@ -383,22 +387,27 @@ class SampleUnifracSeqAbundanceMPCollection:
     """The purpose of this class is to be used during the BtwnSampleUnifracDistanceCreator as a tidy holder for the
      sequences information that is collected from each CladeCollection that is part of the output."""
 
-    def __init__(self, clade_collection, proc_id):
+    def __init__(self, clade_collection, proc_id, is_sqrt_transf):
         self.fasta_dict = {}
         self.name_dict = {}
         self.group_list = []
         self.ref_seq_id_list = []
         self.analysis_type_or_clade_collection = clade_collection
         self.proc_id = proc_id
+        self.is_sqrt_transf = is_sqrt_transf
 
     def collect_seq_info(self):
         sys.stdout.write('\rProcessing cc: {} with {}'.format(self.analysis_type_or_clade_collection, self.proc_id))
-        list_of_dss_in_cc = list(DataSetSampleSequence.objects.filter(
+        list_of_dsss_in_cc = list(DataSetSampleSequence.objects.filter(
                 clade_collection_found_in=self.analysis_type_or_clade_collection))
-        total_seqs_of_cc = sum([dss.abundance for dss in list_of_dss_in_cc])
         normalisation_sequencing_depth = 10000
-        normalised_abund_dict = {dss.id :int((dss.abundance/total_seqs_of_cc)*normalisation_sequencing_depth) for dss in list_of_dss_in_cc}
-        for data_set_sample_seq in list_of_dss_in_cc:
+        if self.is_sqrt_transf:
+            normalised_abund_dict = self._make_norm_abund_dict_sqrt(list_of_dsss_in_cc, normalisation_sequencing_depth)
+        else:
+            normalised_abund_dict = self._make_norm_abund_dict_no_sqrt(list_of_dsss_in_cc,
+                                                                       normalisation_sequencing_depth)
+
+        for data_set_sample_seq in list_of_dsss_in_cc:
             ref_seq_id = data_set_sample_seq.reference_sequence_of.id
             self.ref_seq_id_list.append(ref_seq_id)
             unique_seq_name_base = '{}_id{}'.format(ref_seq_id, self.analysis_type_or_clade_collection.id)
@@ -413,6 +422,22 @@ class SampleUnifracSeqAbundanceMPCollection:
                 self.group_list.append('{}\t{}'.format('{}_{}'.format(unique_seq_name_base, i), smp_name))
 
             self.name_dict['{}_{}'.format(unique_seq_name_base, 0)] = temp_name_list
+
+    def _make_norm_abund_dict_no_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth):
+        total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
+        normalised_abund_dict = {dsss.id: int((dsss.abundance / total_seqs_of_cc) * normalisation_sequencing_depth) for
+                                 dsss in list_of_dsss_in_cc}
+        return normalised_abund_dict
+
+    def _make_norm_abund_dict_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth):
+        sqrt_abundances_dict = {
+            dsss.id: math.sqrt(dsss.abundance) for dsss in
+            list_of_dsss_in_cc}
+        total_seqs_of_cc = sum(sqrt_abundances_dict.values())
+        normalised_abund_dict = {
+        dsss.id: int((sqrt_abundances_dict[dsss.id] / total_seqs_of_cc) * normalisation_sequencing_depth)
+        for dsss in list_of_dsss_in_cc}
+        return normalised_abund_dict
 
 
 class BaseUnifracDistanceCreatorHandlerOne:
@@ -558,7 +583,7 @@ class BtwnTypeUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandler
     def _unifrac_distance_creator_worker_one(self):
         proc_id = current_process().name
         for at in iter(self.input_analysis_type_queue.get, 'STOP'):
-            unifrac_seq_abundance_mp_collection = TypeUnifracSeqAbundanceMPCollection(analysis_type=at, proc_id=proc_id)
+            unifrac_seq_abundance_mp_collection = TypeUnifracSeqAbundanceMPCollection(analysis_type=at, proc_id=proc_id, is_sqrt_transf=self.parent_unifrac_dist_creator.is_sqrt_transf)
             unifrac_seq_abundance_mp_collection.collect_seq_info()
             self.output_unifrac_seq_abund_mp_collection_queue.put(unifrac_seq_abundance_mp_collection)
         self.output_unifrac_seq_abund_mp_collection_queue.put('EXIT')
@@ -603,7 +628,8 @@ class BtwnSampleUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandl
     def _unifrac_distance_creator_worker_one(self):
         proc_id = current_process().name
         for cc in iter(self.input_clade_collection_queue.get, 'STOP'):
-            unifrac_seq_abundance_mp_collection = SampleUnifracSeqAbundanceMPCollection(clade_collection=cc, proc_id=proc_id)
+            unifrac_seq_abundance_mp_collection = SampleUnifracSeqAbundanceMPCollection(
+                clade_collection=cc, proc_id=proc_id, is_sqrt_transf=self.parent_unifrac_dist_creator.is_sqrt_transf)
             unifrac_seq_abundance_mp_collection.collect_seq_info()
             self.output_unifrac_seq_abund_mp_collection_queue.put(unifrac_seq_abundance_mp_collection)
         self.output_unifrac_seq_abund_mp_collection_queue.put('EXIT')
@@ -636,7 +662,7 @@ class BaseUnifracDistPCoACreator:
     or Samples."""
     def __init__(
             self, num_proc, bootstrap_val, output_dir, data_set_uid_list, data_set_sample_uid_list,
-            symportal_root_directory, call_type, date_time_string, profiles_or_samples):
+            symportal_root_directory, call_type, date_time_string, profiles_or_samples, is_sqrt_transf):
         # 'profiles' or 'samples'
         self.profiles_or_samples = profiles_or_samples
         self.num_proc = num_proc
@@ -673,6 +699,7 @@ class BaseUnifracDistPCoACreator:
         # path to the .dist file that holds the unifrac or braycurtis derived sample clade-separated paired distances
         self.clade_dist_file_path = None
         self.clade_dist_file_as_list = None
+        self.is_sqrt_transf = is_sqrt_transf
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list):
         if data_set_sample_uid_list:
@@ -781,12 +808,12 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """
     def __init__(
             self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None,
-            bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None):
+            bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=False):
 
         super().__init__(
             num_proc=num_processors,bootstrap_val=bootstrap_value, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list, symportal_root_directory=symportal_root_directory, call_type=call_type,
-            date_time_string=date_time_string, profiles_or_samples='profiles')
+            date_time_string=date_time_string, profiles_or_samples='profiles', is_sqrt_transf=is_sqrt_transf)
 
         self.data_analysis_obj = data_analysis_obj
         self.analysis_types_from_data_set_samples = AnalysisType.objects.filter(
@@ -916,12 +943,12 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def __init__(
             self, symportal_root_directory, num_processors, call_type, date_time_string=None,
-            bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None):
+            bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=False):
         super().__init__(
             num_proc=num_processors, bootstrap_val=bootstrap_value, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
             symportal_root_directory=symportal_root_directory, call_type=call_type,
-            date_time_string=date_time_string, profiles_or_samples='samples')
+            date_time_string=date_time_string, profiles_or_samples='samples', is_sqrt_transf=is_sqrt_transf)
 
         self.clade_collections_from_data_set_samples = CladeCollection.objects.filter(
             data_set_sample_from__in=self.data_set_sample_uid_list)
@@ -1177,7 +1204,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def __init__(
             self, symportal_root_directory, date_time_string=None, data_set_sample_uid_list=None,
-            data_set_uid_list=None, call_type=None, output_dir=None):
+            data_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=False):
         super().__init__(
             symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='samples')
 
@@ -1188,6 +1215,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             data_set_sample_from__in=self.data_set_sample_uid_list)
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
         self.output_dir = self._set_output_dir(output_dir=output_dir)
+        self.is_sqrt_transf = is_sqrt_transf
 
 
     def _set_output_dir(self, output_dir):
@@ -1225,17 +1253,27 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self):
         # Go through each of the clade collections and create a dict
-        # that has key as the actual sequence and relative abundance of that sequence
+        # that has key as ref_seq_uid and relative abundance of that sequence
         # we can then store these dict in a dict where the key is the sample ID.
         for clade_col in self.objs_of_clade:
             temp_dict = {}
-            data_set_sample_sequences_of_clade_col = DataSetSampleSequence.objects.filter(
-                clade_collection_found_in=clade_col)
-            total_seqs_ind_clade_col = sum([dsss.abundance for dsss in data_set_sample_sequences_of_clade_col])
-            for dsss in data_set_sample_sequences_of_clade_col:
-                temp_dict[dsss.reference_sequence_of.id] = (dsss.abundance / total_seqs_ind_clade_col)*10000
-            self.clade_rs_uid_to_normalised_abund_clade_dict[clade_col.id] = temp_dict
+            list_of_dss_in_cc = list(DataSetSampleSequence.objects.filter(
+                clade_collection_found_in=clade_col))
 
+            if self.is_sqrt_transf:
+                sqrt_abundances_dict = {
+                    dsss.id: math.sqrt(dsss.abundance) for dsss in
+                    list_of_dss_in_cc}
+                total_seqs_ind_clade_col = sum(sqrt_abundances_dict.values())
+                for dsss in list_of_dss_in_cc:
+                    temp_dict[dsss.reference_sequence_of.id] = (sqrt_abundances_dict[dsss.id] /
+                                                                total_seqs_ind_clade_col) * 10000
+            else:
+                total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dss_in_cc])
+                for dsss in list_of_dss_in_cc:
+                    temp_dict[dsss.reference_sequence_of.id] = (dsss.abundance / total_seqs_ind_clade_col)*10000
+
+            self.clade_rs_uid_to_normalised_abund_clade_dict[clade_col.id] = temp_dict
 
     @staticmethod
     def _infer_is_dataset_of_datasetsample(smpl_id_list_str, data_set_string):
@@ -1266,7 +1304,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def __init__(
             self, symportal_root_directory, data_analysis_obj, date_time_string=None, data_set_sample_uid_list=None,
-            data_set_uid_list=None, call_type=None, output_dir=None):
+            data_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=False):
         super().__init__(
             symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='profiles')
 
@@ -1278,6 +1316,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list).distinct()
         self.clades_of_ats = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = self._set_output_dir(output_dir=output_dir)
+        self.is_sqrt_transf = is_sqrt_transf
 
 
     def _set_output_dir(self, output_dir):
@@ -1318,15 +1357,19 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_profiles(self):
         # Go through each of the clade collections and create a dict
-        # that has key as the actual sequence and relative abundance of that sequence
+        # that has key as ref_seq_uid and relative abundance of that sequence
         # we can then store these dict in a dict where the key is the sample ID.
         for at in self.objs_of_clade:
             ref_seq_uids_of_analysis_type = [int(b) for b in at.ordered_footprint_list.split(',')]
 
-            foot_print_ratio_array = pd.DataFrame(at.get_ratio_list())
+            df = pd.DataFrame(at.get_ratio_list())
+
+            if self.is_sqrt_transf:
+                df = general.sqrt_transform_abundance_df(df)
 
             normalised_abundance_of_divs_dict = {
-                ref_seq_uids_of_analysis_type[i]: math.ceil(foot_print_ratio_array[i].mean() * 100000) for
+                ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 100000) for
                 i in range(len(ref_seq_uids_of_analysis_type))}
 
             self.clade_rs_uid_to_normalised_abund_clade_dict[at.id] = normalised_abundance_of_divs_dict
+

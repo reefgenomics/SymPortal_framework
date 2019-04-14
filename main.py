@@ -123,6 +123,10 @@ class SymPortalWorkFlowManager:
             '--submitting_user_email',
             help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
                  'than the one listed in sp_config', default='not supplied')
+        parser.add_argument('--sqrt',
+                            help="When passed, sequence abunances will be square root transformed before "
+                                 "distance metrics are calculated. This can be applied to either BrayCurtis- or"
+                                 " UniFrac-based distance calculations.", action='store_true', default=False)
 
     def _define_mutually_exclusive_args(self, group):
         group.add_argument(
@@ -343,7 +347,8 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc, call_type='analysis',
             date_time_string=self.data_analysis_object.time_stamp,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir)
+            output_dir=self.output_type_count_table_obj.output_dir,
+            is_sqrt_transf=self.args.sqrt)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_analysis_braycurtis_sample_distances(self):
@@ -352,7 +357,8 @@ class SymPortalWorkFlowManager:
             call_type='analysis',
             date_time_string=self.data_analysis_object.time_stamp,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir)
+            output_dir=self.output_type_count_table_obj.output_dir,
+            is_sqrt_transf=self.args.sqrt)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _perform_data_analysis_type_distances(self):
@@ -371,7 +377,8 @@ class SymPortalWorkFlowManager:
             data_analysis_obj=self.data_analysis_object,
             date_time_string=self.data_analysis_object.time_stamp,
             data_set_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir)
+            output_dir=self.output_type_count_table_obj.output_dir,
+            is_sqrt_transf=self.args.sqrt)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_analysis_braycurtis_type_distances(self):
@@ -381,7 +388,8 @@ class SymPortalWorkFlowManager:
             data_analysis_obj=self.data_analysis_object,
             date_time_string=self.data_analysis_object.time_stamp,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir)
+            output_dir=self.output_type_count_table_obj.output_dir,
+            is_sqrt_transf=self.args.sqrt)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _make_data_analysis_output_seq_tables(self):
@@ -572,6 +580,7 @@ class SymPortalWorkFlowManager:
             date_time_string=self.data_analysis_object.time_stamp,
             symportal_root_directory=self.symportal_root_directory,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in self.args.between_type_distances.split(',')],
+            is_sqrt_transf=self.args.sqrt
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -582,6 +591,7 @@ class SymPortalWorkFlowManager:
             symportal_root_directory=self.symportal_root_directory,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
+            is_sqrt_transf=self.args.sqrt
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -592,7 +602,8 @@ class SymPortalWorkFlowManager:
             date_time_string=self.data_analysis_object.time_stamp,
             num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in
-                               self.args.between_type_distances.split(',')]
+                               self.args.between_type_distances.split(',')],
+            is_sqrt_transf=self.args.sqrt
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -603,7 +614,8 @@ class SymPortalWorkFlowManager:
             date_time_string=self.data_analysis_object.time_stamp,
             num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
-                                      self.args.between_type_distances_sample_set.split(',')]
+                                      self.args.between_type_distances_sample_set.split(',')],
+            is_sqrt_transf=self.args.sqrt
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -636,7 +648,8 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_sample_uid_list=dss_uid_list,
             num_processors=self.args.num_proc,
-            symportal_root_directory=self.symportal_root_directory)
+            symportal_root_directory=self.symportal_root_directory,
+            is_sqrt_transf=self.args.sqrt)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_sample_unifrac_data_sets(self):
@@ -645,7 +658,8 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_uid_list=ds_uid_list,
             num_processors=self.args.num_proc,
-            symportal_root_directory=self.symportal_root_directory)
+            symportal_root_directory=self.symportal_root_directory,
+            is_sqrt_transf=self.args.sqrt)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_sample_braycurtis_data_set_samples(self):
@@ -653,14 +667,16 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.SampleBrayCurtisDistPCoACreator(
             symportal_root_directory=self.symportal_root_directory, date_time_string=self.date_time_str,
             data_set_sample_uid_list=dss_uid_list,
-            call_type='stand_alone')
+            call_type='stand_alone',
+            is_sqrt_transf=self.args.sqrt)
 
     def _start_sample_braycurtis_data_sets(self):
         ds_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.between_sample_distances.split(',')]
         self.distance_object = distance.SampleBrayCurtisDistPCoACreator(
             symportal_root_directory=self.symportal_root_directory, date_time_string=self.date_time_str,
             data_set_uid_list=ds_uid_list,
-            call_type='stand_alone')
+            call_type='stand_alone',
+            is_sqrt_transf=self.args.sqrt)
 
     #VACUUM DB
     def perform_vacuum_database(self):

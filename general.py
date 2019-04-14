@@ -4,6 +4,7 @@ import subprocess
 import sys
 import pandas as pd
 from plumbum import local
+import numpy as np
 
 def return_list_of_file_names_in_directory(directory_to_list):
     """
@@ -248,3 +249,10 @@ def return_list_of_directory_paths_in_directory(directory_to_list):
         list_of_directory_paths_in_directory.extend([
             os.path.join(directory_to_list, dir_name) for dir_name in dirnames])
         return list_of_directory_paths_in_directory
+
+
+def sqrt_transform_abundance_df(df):
+    new_df = df.apply(np.sqrt)
+    new_df['sum'] = new_df.sum(axis=1)
+    new_df = new_df.iloc[:, :-1].div(new_df['sum'], axis=0)
+    return new_df
