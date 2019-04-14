@@ -126,12 +126,17 @@ class SymPortalWorkFlowManager:
         parser.add_argument('--sqrt',
                             help="When passed, sequence abunances will be square root transformed before "
                                  "distance metrics are calculated. This can be applied to either BrayCurtis- or"
-                                 " UniFrac-based distance calculations.", action='store_true', default=False)
+                                 " UniFrac-based distance calculations. This flag can be passed when calculating"
+                                 " either between sample or between ITS2 type profile distances. "
+                                 "[False]", action='store_true', default=False)
         parser.add_argument('--local',
                              help="When passed, only the DataSetSamples of the current output will be used"
                                              " in calculating ITS2 type profile similarities. If false, similarity"
                                              " matrices will be calculated using the DIV abundance info from all"
-                                             " DataSetSamples the ITS2 type profiles were found in. [False]",
+                                             " DataSetSamples the ITS2 type profiles were found in. "
+                                  " This flag will only have an effect when applied to between ITS2 type profile "
+                                  "distances. It will have no effect when calculating between sample distances. "
+                                  "[False]",
                              action='store_true', default=False)
 
     def _define_mutually_exclusive_args(self, group):
@@ -175,10 +180,11 @@ class SymPortalWorkFlowManager:
                  'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
                  '--no_figures flag.')
         group.add_argument(
-            '--print_output_types_sample_set', metavar='DataSet UIDs, DataAnalysis UID',
+            '--print_output_types_sample_set', metavar='DataSetSample UIDs, DataAnalysis UID',
             help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
                  'DataSetSample objects that have been run in a given DataAnalysis. Give the DataSetSample '
-                 'UIDs that you wish to make outputs from as arguments to the --print_output_types flag. To output for '
+                 'UIDs that you wish to make outputs from as arguments to the --print_output_types_sample_set flag. '
+                 'To output for '
                  'multiple DataSetSample objects, comma separate the UIDs of the DataSetSample objects, '
                  'e.g. 5644,5645,5646. Give the UID of the DataAnalysis you wish to output these from using the '
                  '--data_analysis_id flag.\nTo skip the generation of figures pass the '
@@ -191,6 +197,10 @@ class SymPortalWorkFlowManager:
             help='Use this function to output pairwise distances between ITS2 type profiles clade '
                  'separated from a given collection of DataSetSample objects')
         group.add_argument(
+            '--between_type_distances_cct_set', metavar='CladeCollectionType UIDs, DataAnalysis UID',
+            help='Use this function to output pairwise distances between a specific set of CladeCollection-AnalysisType'
+                 ' associations.')
+        group.add_argument(
             '--between_sample_distances', metavar='DataSetSample UIDs',
             help='Use this function to output pairwise distances between samples clade separated from a '
                  'given collection of DataSet objects')
@@ -198,6 +208,7 @@ class SymPortalWorkFlowManager:
             '--between_sample_distances_sample_set', metavar='DataSetSample UIDs',
             help='Use this function to output pairwise distances between samples clade '
                  'separated from a given collection of DataSetSample objects')
+
 
     def start_work_flow(self):
         if self.args.load:
@@ -219,6 +230,8 @@ class SymPortalWorkFlowManager:
         elif self.args.between_type_distances:
             self.perform_type_distance_stand_alone()
         elif self.args.between_type_distances_sample_set:
+            self.perform_type_distance_stand_alone()
+        elif self.args.between_type_distances_cct_set:
             self.perform_type_distance_stand_alone()
         elif self.args.between_sample_distances:
             self._perform_sample_distance_stand_alone()
@@ -572,13 +585,27 @@ class SymPortalWorkFlowManager:
         if self.args.distance_method == 'unifrac':
             if self.args.between_type_distances_sample_set:
                 self._start_type_unifrac_data_set_samples()
+            elif self.args.between_type_distances_cct_set:
+                self._start_type_unifrac_cct_set()
             else:
                 self._start_type_unifrac_data_sets()
         elif self.args.distance_method == 'braycurtis':
             if self.args.between_type_distances_sample_set:
                 self._start_type_braycurtis_data_set_samples()
+            elif self.args.between_type_distances_cct_set:
+                self._start_type_braycurtis_cct_set()
             else:
                 self._start_type_braycurtis_data_sets()
+
+    def _start_type_braycurtis_cct_set(self):
+        self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
+            call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
+            date_time_string=self.data_analysis_object.time_stamp,
+            symportal_root_directory=self.symportal_root_directory,
+            cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in self.args.between_type_distances_cct_set.split(',')],
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
+        )
+        self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _start_type_braycurtis_data_sets(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
@@ -600,6 +627,9 @@ class SymPortalWorkFlowManager:
             is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
+
+    def _start_type_unifrac_cct_set(self):
+        raise NotImplementedError
 
     def _start_type_unifrac_data_sets(self):
         self.distance_object = distance.TypeUnifracDistPCoACreator(
