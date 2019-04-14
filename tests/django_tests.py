@@ -123,6 +123,26 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
+    def test_stand_alone_unifrac_type_distances_cct_uid_input(self):
+        # create a string for cct input that is the first half of the ccts associated with dataset 1 and
+        # the first half from dataset 2
+        data_analysis = DataAnalysis.objects.get(id=1)
+        cct_one_uid_list = [cct.id for cct in CladeCollectionType.objects.filter(
+            clade_collection_found_in__data_set_sample_from__data_submission_from__id=1,
+            analysis_type_of__data_analysis_from=data_analysis)]
+        cct_two_uid_list = [cct.id for cct in CladeCollectionType.objects.filter(
+            clade_collection_found_in__data_set_sample_from__data_submission_from__id=2,
+            analysis_type_of__data_analysis_from=data_analysis)]
+        one_len = len(cct_one_uid_list)
+        two_len = len(cct_two_uid_list)
+        cct_uid_list = cct_one_uid_list[:int(-1 * (one_len/2))] + cct_two_uid_list[:int(-1*(two_len/2))]
+        print('\n\nTesting: stand_alone_braycurtis_type_distances_cct_uid_input\n\n')
+        cct_list_str = ','.join([str(_) for _ in cct_uid_list])
+        custom_args_list = ['--between_type_distances_cct_set', cct_list_str, '--data_analysis_id', '1',
+                            '--num_proc', str(self.num_proc), '--distance_method', 'unifrac']
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
     # def test_stand_alone_unifrac_sample_distances_data_set_uid_input(self):
     #     print('\n\nTesting: stand_alone_unifrac_sample_distances_data_set_uid_input\n\n')
     #     custom_args_list = ['--between_sample_distances', '1', '--num_proc', str(self.num_proc), '--distance_method', 'unifrac', '--sqrt']
