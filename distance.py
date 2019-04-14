@@ -614,13 +614,12 @@ class BtwnTypeUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandler
             parent_unifrac_dist_creator=parent_unifrac_dist_creator,
             clade_in_question=clade_in_question)
 
-        self.analysis_types_of_clade = self.parent_unifrac_dist_creator.analysis_types_from_data_set_samples.filter(
+        self.analysis_types_of_clade = self.parent_unifrac_dist_creator.at_list_for_output.filter(
             clade=self.clade)
         self._raise_runtime_error_if_not_enough_analysis_types()
         self.input_analysis_type_queue = Queue()
         self.output_unifrac_seq_abund_mp_collection_queue = Queue()
         self._populate_input_queue()
-
 
     def execute_unifrac_distance_creator_worker_one(self):
         all_processes = self._start_sequence_collection_running()
@@ -909,10 +908,10 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 cladecollectiontype__id__in=cct_set_uid_list).distinct()
         else:
             self.clade_col_type_objects = None
-            self.analysis_types_from_data_set_samples = AnalysisType.objects.filter(
+            self.at_list_for_output = AnalysisType.objects.filter(
                 data_analysis_from=self.data_analysis_obj,
                 cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list).distinct()
-        self.clades_for_dist_calcs = list(set([at.clade for at in self.analysis_types_from_data_set_samples]))
+        self.clades_for_dist_calcs = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = self._setup_output_dir(call_type, output_dir)
         # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only
         # i.e. rather than all instances of the type found in all samples (including samples outside of this output)
