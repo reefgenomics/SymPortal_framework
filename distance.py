@@ -334,7 +334,7 @@ class TypeUnifracSeqAbundanceMPCollection:
     """The purpose of this class is to be used during the BtwnTypeUnifracDistanceCreator as a tidy holder for the
      sequences information that is collected from each AnalysisType that is part of the output."""
 
-    def __init__(self, analysis_type, proc_id, is_sqrt_transf, clade_col_uid_list, local):
+    def __init__(self, analysis_type, proc_id, is_sqrt_transf, clade_col_uid_list, local, clade_col_type_objects):
         self.fasta_dict = {}
         self.name_dict = {}
         self.group_list = []
@@ -344,6 +344,8 @@ class TypeUnifracSeqAbundanceMPCollection:
         self.is_sqrt_transf = is_sqrt_transf
         self.local = local
         self.clade_col_uid_list = clade_col_uid_list
+        self.clade_col_type_objects = clade_col_type_objects
+
 
     def collect_seq_info(self):
         """This function returns information used to build the master fasta and names files that are required to make
@@ -367,24 +369,14 @@ class TypeUnifracSeqAbundanceMPCollection:
             df = general.sqrt_transform_abundance_df(df)
 
         if self.local:
-            # we want to limit the inference of the average relative abundance of the DIVs to only those
-            # div abundance values that were found in samples from the output in question
-            # as such we need to first get a list of the clade collections and see which of these
-            # clade collections were from self.data_set_sample_uid_list
-            clade_collection_uid_list_of_type = [
-                int(a) for a in self.analysis_type_or_clade_collection.list_of_clade_collections.split(',')]
-            # the indices of the clade collections that are of this output
-            indices = []
-            for i in range(len(clade_collection_uid_list_of_type)):
-                if clade_collection_uid_list_of_type[i] in self.clade_col_uid_list:
-                    indices.append(i)
-            normalised_abundance_of_divs_dict = {
-                ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices,i].mean() * 10000) for
-                i in range(len(ref_seq_uids_of_analysis_type))}
+            normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
+                df, ref_seq_uids_of_analysis_type)
+        elif self.clade_col_type_objects:
+            normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_cct_set_unifrac(
+                df, ref_seq_uids_of_analysis_type)
         else:  # use all abund info to calculate av div rel abund
-            normalised_abundance_of_divs_dict = {
-                ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 10000) for
-                i in range(len(ref_seq_uids_of_analysis_type))}
+            normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_all_clade_cols_unifrac(
+                df, ref_seq_uids_of_analysis_type)
 
         for ref_seq in ReferenceSequence.objects.filter(id__in=ref_seq_uids_of_analysis_type):
             self.ref_seq_id_list.append(ref_seq.id)
@@ -401,6 +393,52 @@ class TypeUnifracSeqAbundanceMPCollection:
                 self.group_list.append('{}\t{}'.format('{}_{}'.format(unique_seq_name_base, i), analysis_uid_str))
 
             self.name_dict['{}_{}'.format(unique_seq_name_base, 0)] = temp_name_list
+
+    def _create_norm_abund_dict_from_all_clade_cols_unifrac(self, df, ref_seq_uids_of_analysis_type):
+        normalised_abundance_of_divs_dict = {
+            ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 10000) for
+            i in range(len(ref_seq_uids_of_analysis_type))}
+        return normalised_abundance_of_divs_dict
+
+    def _create_norm_abund_dict_from_cct_set_unifrac(self, df, ref_seq_uids_of_analysis_type):
+        # Then we are working with a custom set of CladeCollection-AnalysisType associations. i.e. for every
+        # analysis type we are working with we will have to check exactly which CladeCollections we should
+        # be infering the average DIV abundances from.
+        # Because the list of AnalysisTypes that we are looking through are defined by the CladeCollectionTypes
+        # that we're working with, we know that there are no types in which we aren't looking at at least
+        # one CladeCollection from.
+        clade_collection_uid_list_of_type = [
+            int(a) for a in self.analysis_type_or_clade_collection.list_of_clade_collections.split(',')]
+        clade_collection_uids_to_output_for_this_type = []
+        for cct_obj in self.clade_col_type_objects:
+            if cct_obj.analysis_type_of.id == self.analysis_type_or_clade_collection.id:
+                # then this is a CladeCollectionType of the at
+                clade_collection_uids_to_output_for_this_type.append(cct_obj.clade_collection_found_in.id)
+        indices = []
+        for i in range(len(clade_collection_uid_list_of_type)):
+            if clade_collection_uid_list_of_type[i] in clade_collection_uids_to_output_for_this_type:
+                indices.append(i)
+        normalised_abundance_of_divs_dict = {
+            ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices, i].mean() * 10000) for
+            i in range(len(ref_seq_uids_of_analysis_type))}
+        return normalised_abundance_of_divs_dict
+
+    def _create_norm_abund_dict_from_local_clade_cols_unifrac(self, df, ref_seq_uids_of_analysis_type):
+        # we want to limit the inference of the average relative abundance of the DIVs to only those
+        # div abundance values that were found in samples from the output in question
+        # as such we need to first get a list of the clade collections and see which of these
+        # clade collections were from self.data_set_sample_uid_list
+        clade_collection_uid_list_of_type = [
+            int(a) for a in self.analysis_type_or_clade_collection.list_of_clade_collections.split(',')]
+        # the indices of the clade collections that are of this output
+        indices = []
+        for i in range(len(clade_collection_uid_list_of_type)):
+            if clade_collection_uid_list_of_type[i] in self.clade_col_uid_list:
+                indices.append(i)
+        normalised_abundance_of_divs_dict = {
+            ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices, i].mean() * 10000) for
+            i in range(len(ref_seq_uids_of_analysis_type))}
+        return normalised_abundance_of_divs_dict
 
 
 class SampleUnifracSeqAbundanceMPCollection:
@@ -611,7 +649,8 @@ class BtwnTypeUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandler
             unifrac_seq_abundance_mp_collection = TypeUnifracSeqAbundanceMPCollection(
                 analysis_type=at, proc_id=proc_id, is_sqrt_transf=self.parent_unifrac_dist_creator.is_sqrt_transf,
                 clade_col_uid_list=self.parent_unifrac_dist_creator.clade_col_uid_list,
-                local=self.parent_unifrac_dist_creator.local_abunds_only)
+                local=self.parent_unifrac_dist_creator.local_abunds_only,
+                clade_col_type_objects=self.parent_unifrac_dist_creator.clade_col_type_objects)
             unifrac_seq_abundance_mp_collection.collect_seq_info()
             self.output_unifrac_seq_abund_mp_collection_queue.put(unifrac_seq_abundance_mp_collection)
         self.output_unifrac_seq_abund_mp_collection_queue.put('EXIT')
@@ -689,7 +728,7 @@ class BaseUnifracDistPCoACreator:
     These classes are used for generating UniFrac distances between either ITS2 type profiles
     or Samples."""
     def __init__(
-            self, num_proc, bootstrap_val, output_dir, data_set_uid_list, data_set_sample_uid_list,
+            self, num_proc, bootstrap_val, output_dir, data_set_uid_list, data_set_sample_uid_list, cct_set_uid_list,
             symportal_root_directory, call_type, date_time_string, profiles_or_samples, is_sqrt_transf):
         # 'profiles' or 'samples'
         self.profiles_or_samples = profiles_or_samples
@@ -697,7 +736,8 @@ class BaseUnifracDistPCoACreator:
         self.bootstrap_value = bootstrap_val
         self.output_dir = output_dir
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
-            data_set_sample_uid_list, data_set_uid_list)
+            data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list,
+            cct_set_uid_list=cct_set_uid_list)
         self.output_file_paths = []
 
         # Clade based files
@@ -730,13 +770,19 @@ class BaseUnifracDistPCoACreator:
         self.clade_dist_file_as_list = None
         self.is_sqrt_transf = is_sqrt_transf
 
-    def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list):
-
+    def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list, cct_set_uid_list):
         if data_set_sample_uid_list:
             data_set_samples_of_output = DataSetSample.objects.filter(id__in=data_set_sample_uid_list)
             clade_col_uids_of_output = [
                 cc.id for cc in CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples_of_output)]
             return data_set_sample_uid_list, clade_col_uids_of_output
+        elif cct_set_uid_list:
+            clade_cols_of_output = CladeCollection.objects.filter(cladecollectiontype__id__in=cct_set_uid_list)
+            clade_col_uids_of_output = [
+                cc.id for cc in clade_cols_of_output]
+            data_set_sample_uid_of_output = [
+                dss.id for dss in DataSetSample.objects.filter(cladecollection__in=clade_cols_of_output)]
+            return data_set_sample_uid_of_output, clade_col_uids_of_output
         else:
             data_set_samples_of_output = DataSetSample.objects.filter(data_submission_from__in=data_set_uid_list)
             clade_col_uids_of_output = [
@@ -847,17 +893,25 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     def __init__(
             self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None,
             bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None,
-            is_sqrt_transf=False, local_abunds_only=False):
+            cct_set_uid_list=None, is_sqrt_transf=False, local_abunds_only=False):
 
         super().__init__(
             num_proc=num_processors,bootstrap_val=bootstrap_value, output_dir=output_dir,
-            data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list, symportal_root_directory=symportal_root_directory, call_type=call_type,
+            data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list, cct_set_uid_list=cct_set_uid_list, symportal_root_directory=symportal_root_directory, call_type=call_type,
             date_time_string=date_time_string, profiles_or_samples='profiles', is_sqrt_transf=is_sqrt_transf)
 
         self.data_analysis_obj = data_analysis_obj
-        self.analysis_types_from_data_set_samples = AnalysisType.objects.filter(
-            data_analysis_from=self.data_analysis_obj,
-            cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list)
+        self.cct_set_uid_list = cct_set_uid_list
+        if self.cct_set_uid_list is not None:
+            # if working with specific profile/sample sets
+            self.clade_col_type_objects = CladeCollectionType.objects.filter(id__in=self.cct_set_uid_list)
+            self.at_list_for_output = AnalysisType.objects.filter(
+                cladecollectiontype__id__in=cct_set_uid_list).distinct()
+        else:
+            self.clade_col_type_objects = None
+            self.analysis_types_from_data_set_samples = AnalysisType.objects.filter(
+                data_analysis_from=self.data_analysis_obj,
+                cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list).distinct()
         self.clades_for_dist_calcs = list(set([at.clade for at in self.analysis_types_from_data_set_samples]))
         self.output_dir = self._setup_output_dir(call_type, output_dir)
         # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only

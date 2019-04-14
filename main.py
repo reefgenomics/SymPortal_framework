@@ -603,7 +603,7 @@ class SymPortalWorkFlowManager:
             date_time_string=self.data_analysis_object.time_stamp,
             symportal_root_directory=self.symportal_root_directory,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in self.args.between_type_distances_cct_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=False
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -629,7 +629,16 @@ class SymPortalWorkFlowManager:
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _start_type_unifrac_cct_set(self):
-        raise NotImplementedError
+        self.distance_object = distance.TypeUnifracDistPCoACreator(
+            call_type='stand_alone',
+            data_analysis_obj=self.data_analysis_object,
+            date_time_string=self.data_analysis_object.time_stamp,
+            num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
+            cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in
+                               self.args.between_type_distances_cct_set.split(',')],
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=False
+        )
+        self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_type_unifrac_data_sets(self):
         self.distance_object = distance.TypeUnifracDistPCoACreator(
