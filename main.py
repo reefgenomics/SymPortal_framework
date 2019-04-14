@@ -127,6 +127,12 @@ class SymPortalWorkFlowManager:
                             help="When passed, sequence abunances will be square root transformed before "
                                  "distance metrics are calculated. This can be applied to either BrayCurtis- or"
                                  " UniFrac-based distance calculations.", action='store_true', default=False)
+        parser.add_arguments('--local',
+                             help="When passed, only the DataSetSamples of the current output will be used"
+                                             " in calculating ITS2 type profile similarities. If false, similarity"
+                                             " matrices will be calculated using the DIV abundance info from all"
+                                             " DataSetSamples the ITS2 type profiles were found in. [False]",
+                             action='store_true', default=False)
 
     def _define_mutually_exclusive_args(self, group):
         group.add_argument(
@@ -378,7 +384,7 @@ class SymPortalWorkFlowManager:
             date_time_string=self.data_analysis_object.time_stamp,
             data_set_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_type_count_table_obj.output_dir,
-            is_sqrt_transf=self.args.sqrt)
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_analysis_braycurtis_type_distances(self):
@@ -603,7 +609,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in
                                self.args.between_type_distances.split(',')],
-            is_sqrt_transf=self.args.sqrt
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -615,7 +621,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
-            is_sqrt_transf=self.args.sqrt
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 

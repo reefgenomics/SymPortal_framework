@@ -334,7 +334,7 @@ class TypeUnifracSeqAbundanceMPCollection:
     """The purpose of this class is to be used during the BtwnTypeUnifracDistanceCreator as a tidy holder for the
      sequences information that is collected from each AnalysisType that is part of the output."""
 
-    def __init__(self, analysis_type, proc_id, is_sqrt_transf, clade_col_uid_list):
+    def __init__(self, analysis_type, proc_id, is_sqrt_transf, clade_col_uid_list, local):
         self.fasta_dict = {}
         self.name_dict = {}
         self.group_list = []
@@ -342,7 +342,7 @@ class TypeUnifracSeqAbundanceMPCollection:
         self.analysis_type_or_clade_collection = analysis_type
         self.proc_id = proc_id
         self.is_sqrt_transf = is_sqrt_transf
-        self.local = True
+        self.local = local
         self.clade_col_uid_list = clade_col_uid_list
 
     def collect_seq_info(self):
@@ -610,7 +610,8 @@ class BtwnTypeUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandler
         for at in iter(self.input_analysis_type_queue.get, 'STOP'):
             unifrac_seq_abundance_mp_collection = TypeUnifracSeqAbundanceMPCollection(
                 analysis_type=at, proc_id=proc_id, is_sqrt_transf=self.parent_unifrac_dist_creator.is_sqrt_transf,
-                clade_col_uid_list=self.parent_unifrac_dist_creator.clade_col_uid_list)
+                clade_col_uid_list=self.parent_unifrac_dist_creator.clade_col_uid_list,
+                local=self.parent_unifrac_dist_creator.local_abunds_only)
             unifrac_seq_abundance_mp_collection.collect_seq_info()
             self.output_unifrac_seq_abund_mp_collection_queue.put(unifrac_seq_abundance_mp_collection)
         self.output_unifrac_seq_abund_mp_collection_queue.put('EXIT')
@@ -845,7 +846,8 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """
     def __init__(
             self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None,
-            bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=False):
+            bootstrap_value=100, output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None,
+            is_sqrt_transf=False, local_abunds_only=False):
 
         super().__init__(
             num_proc=num_processors,bootstrap_val=bootstrap_value, output_dir=output_dir,
@@ -858,6 +860,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list)
         self.clades_for_dist_calcs = list(set([at.clade for at in self.analysis_types_from_data_set_samples]))
         self.output_dir = self._setup_output_dir(call_type, output_dir)
+        # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only
+        # i.e. rather than all instances of the type found in all samples (including samples outside of this output)
+        self.local_abunds_only = local_abunds_only
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_for_dist_calcs:
