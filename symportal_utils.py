@@ -436,7 +436,7 @@ class MothurAnalysis:
     def _make_new_fasta_no_multi_match_lines(self, scrapped_fasta_as_list):
         new_scrapped_fasta = []
         for i in range(0, len(scrapped_fasta_as_list), 2):
-            if not 'multipleMatches' in scrapped_fasta_as_list[i]:
+            if not 'multipleMatches' in scrapped_fasta_as_list[i] and len(scrapped_fasta_as_list[i + 1]) > 1:
                 new_scrapped_fasta.extend([scrapped_fasta_as_list[i], scrapped_fasta_as_list[i + 1]])
         return new_scrapped_fasta
 
