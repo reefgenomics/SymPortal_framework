@@ -1043,7 +1043,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             num_proc=num_processors, bootstrap_val=bootstrap_value, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
             symportal_root_directory=symportal_root_directory, call_type=call_type,
-            date_time_string=date_time_string, profiles_or_samples='samples', is_sqrt_transf=is_sqrt_transf)
+            date_time_string=date_time_string, profiles_or_samples='samples', is_sqrt_transf=is_sqrt_transf, cct_set_uid_list=None)
 
         self.clade_collections_from_data_set_samples = CladeCollection.objects.filter(
             data_set_sample_from__in=self.data_set_sample_uid_list)

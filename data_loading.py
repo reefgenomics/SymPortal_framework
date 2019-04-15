@@ -580,9 +580,9 @@ class DataLoading:
                     read_direction_match = re.search(compiled_reg_ex, file_path)
                     if read_direction_match is not None:
                         read_direction_str = read_direction_match.group(1)
-                        if read_direction_str == '1':
+                        if read_direction_str in ['1', 'R1']:
                             fwd_file_path = file_path
-                        if read_direction_str == '2':
+                        if read_direction_str in ['2', 'R2']:
                             rev_file_path = file_path
                     else:
                         if 'R1' in file_path:
