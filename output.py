@@ -6,13 +6,14 @@ from django import db
 from datetime import datetime
 import os
 import json
-from general import write_list_to_destination
 from collections import defaultdict
 import pandas as pd
 import numpy as np
 import sp_config
 import virtual_objects
 import time
+import django.db.utils
+import general
 
 
 class OutputTypeCountTable:
@@ -167,7 +168,8 @@ class OutputTypeCountTable:
         self.abs_abund_output_df = self.abs_abund_output_df.append(temp_blank_series_with_name)
 
     def _append_data_set_info_to_dfs(self):
-        for data_set_object in DataSet.objects.filter(id__in=self.data_set_uid_set_to_output):
+        ds_obj_list = self._chunk_query_ds_objs_from_ds_uids()
+        for data_set_object in ds_obj_list:
             data_set_meta_list = [
                 f'Data_set ID: {data_set_object.id}; '
                 f'Data_set name: {data_set_object.name}; '
@@ -178,6 +180,16 @@ class OutputTypeCountTable:
                 data_set_meta_list, index=[list(self.rel_abund_output_df)[0]], name='data_set_info')
             self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
             self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+
+    def _chunk_query_ds_objs_from_ds_uids(self):
+        try:
+            ds_obj_list = list(DataSet.objects.filter(id__in=self.data_set_uid_set_to_output))
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            ds_obj_list = []
+            for uid_list in general.chunks(self.data_set_uid_set_to_output, 100):
+                ds_obj_list.extend(list(DataSet.objects.filter(id__in=uid_list)))
+        return ds_obj_list
 
     def _make_analysis_meta_info_string(self):
         meta_info_string_items = [
@@ -367,14 +379,38 @@ class OutputTypeCountTable:
     def _init_dss_and_ds_uids(self, data_set_sample_uid_set_to_output, data_set_uids_to_output):
         if data_set_sample_uid_set_to_output:
             self.data_set_sample_uid_set_to_output = data_set_sample_uid_set_to_output
-            self.data_set_uid_set_to_output = [ds.id for ds in DataSet.objects.filter(
-                datasetsample__in=self.data_set_sample_uid_set_to_output).distinct()]
+
+            temp_data_set_obj_list = self._chunk_query_distinct_dss_objs_from_dss_uids()
+            self.data_set_uid_set_to_output = [ds.id for ds in temp_data_set_obj_list]
         else:
             self.data_set_uid_set_to_output = data_set_uids_to_output
-            self.data_set_sample_uid_set_to_output = [
-                dss.id for dss in DataSetSample.objects.filter(
-                    data_submission_from__in=self.data_set_uid_set_to_output)]
+            temp_data_set_sample_obj_list = self._chunk_query_dss_objs_from_ds_uids()
+
+            self.data_set_sample_uid_set_to_output = [dss.id for dss in temp_data_set_sample_obj_list]
         return self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output
+
+    def _chunk_query_dss_objs_from_ds_uids(self):
+        try:
+            temp_data_set_sample_obj_list = list(
+                DataSetSample.objects.filter(data_submission_from__in=self.data_set_uid_set_to_output))
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_data_set_sample_obj_list = []
+            for uid_list in general.chunks(self.data_set_uid_set_to_output, 100):
+                temp_data_set_sample_obj_list.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
+        return temp_data_set_sample_obj_list
+
+    def _chunk_query_distinct_dss_objs_from_dss_uids(self):
+        try:
+            temp_data_set_obj_list = list(
+                DataSet.objects.filter(datasetsample__in=self.data_set_sample_uid_set_to_output).distinct())
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_data_set_obj_set = set()
+            for uid_list in general.chunks(self.data_set_sample_uid_set_to_output, 100):
+                temp_data_set_obj_set.update(list(DataSet.objects.filter(datasetsample__in=uid_list)))
+            temp_data_set_obj_list = list(temp_data_set_obj_set)
+        return temp_data_set_obj_list
 
     def _init_virtual_object_manager(
             self, virtual_object_manager, data_set_uids_to_output, data_set_sample_uid_set_to_output,
@@ -392,15 +428,31 @@ class OutputTypeCountTable:
                     list_of_data_set_sample_uids=data_set_sample_uid_set_to_output)
 
             print('\nInstantiating VirtualAnalysisTypes')
-            for at in AnalysisType.objects.filter(
-                    cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=
-                    self.data_set_sample_uid_set_to_output, data_analysis_from=self.data_analysis_obj).distinct():
+
+            temp_analysis_type_obj_list = self._chunk_query_distinct_at_obj_from_dss_uids()
+
+            for at in temp_analysis_type_obj_list:
                 sys.stdout.write(f'\r{at.name}')
                 self.virtual_object_manager.vat_manager.make_vat_post_profile_assignment_from_analysis_type(at)
 
             self._associate_vat_to_vcc()
 
         return self.virtual_object_manager
+
+    def _chunk_query_distinct_at_obj_from_dss_uids(self):
+        try:
+            temp_analysis_type_obj_list = list(AnalysisType.objects.filter(
+                cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=
+                self.data_set_sample_uid_set_to_output, data_analysis_from=self.data_analysis_obj).distinct())
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_analysis_type_obj_set = set()
+            for uid_list in general.chunks(self.data_set_sample_uid_set_to_output, 100):
+                temp_analysis_type_obj_set.update(list(AnalysisType.objects.filter(
+                    cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list,
+                    data_analysis_from=self.data_analysis_obj)))
+            temp_analysis_type_obj_list = list(temp_analysis_type_obj_set)
+        return temp_analysis_type_obj_list
 
     def _associate_vat_to_vcc(self):
         """The CladeCollections held on disc have know info on which AnalysisTypes were found in them except
@@ -594,16 +646,19 @@ class SequenceCountTableCreator:
                         output_dir, sorted_sample_uid_list, time_date_str):
         self._check_either_dss_or_dsss_uids_provided(dss_uids_output_str, ds_uids_output_str)
         if dss_uids_output_str:
-            self.list_of_dss_objects = DataSetSample.objects.filter(id__in=[int(a) for a in dss_uids_output_str.split(',')])
-            self.ds_objs_to_output = DataSet.objects.filter(datasetsample__in=self.list_of_dss_objects).distinct()
+            dss_uids_for_query = [int(a) for a in dss_uids_output_str.split(',')]
+            self.list_of_dss_objects = self._chunk_query_set_dss_objs_from_dss_uids(dss_uids_for_query)
+
+            self.ds_objs_to_output = self._chunk_query_set_distinct_ds_objs_from_dss_objs()
+
         elif ds_uids_output_str:
             uids_of_data_sets_to_output = [int(a) for a in ds_uids_output_str.split(',')]
-            self.ds_objs_to_output = DataSet.objects.filter(id__in=uids_of_data_sets_to_output)
-            self.list_of_dss_objects = DataSetSample.objects.filter(data_submission_from__in=self.ds_objs_to_output)
 
-        self.ref_seqs_in_datasets = ReferenceSequence.objects.filter(
-            datasetsamplesequence__data_set_sample_from__in=
-            self.list_of_dss_objects).distinct()
+            self.ds_objs_to_output = self._chunk_query_set_ds_objs_from_ds_uids(uids_of_data_sets_to_output)
+
+            self.list_of_dss_objects = self._chunk_query_set_dss_objs_from_ds_objs()
+
+        self.ref_seqs_in_datasets = self._chunk_query_set_rs_objs_from_dss_objs()
 
         self.num_proc = num_proc
         if time_date_str:
@@ -619,6 +674,58 @@ class SequenceCountTableCreator:
         set_of_clades_found = {ref_seq.clade for ref_seq in self.ref_seqs_in_datasets}
         self.ordered_list_of_clades_found = [clade for clade in self.clade_list if clade in set_of_clades_found]
 
+    def _chunk_query_set_rs_objs_from_dss_objs(self):
+        try:
+            return list(ReferenceSequence.objects.filter(
+                datasetsamplesequence__data_set_sample_from__in=self.list_of_dss_objects).distinct())
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_ref_seqs_in_datasets_set = set()
+            for uid_list in general.chunks(self.list_of_dss_objects, 100):
+                temp_ref_seqs_in_datasets_set.update(
+                    list(ReferenceSequence.objects.filter(datasetsamplesequence__data_set_sample_from__in=uid_list)))
+            return list(temp_ref_seqs_in_datasets_set)
+
+    def _chunk_query_set_dss_objs_from_ds_objs(self):
+        try:
+            return list(
+                DataSetSample.objects.filter(data_submission_from__in=self.ds_objs_to_output))
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_list_of_dss_objects = []
+            for uid_list in general.chunks(self.ds_objs_to_output, 100):
+                temp_list_of_dss_objects.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
+            return temp_list_of_dss_objects
+
+    def _chunk_query_set_ds_objs_from_ds_uids(self, uids_of_data_sets_to_output):
+        try:
+            return list(DataSet.objects.filter(id__in=uids_of_data_sets_to_output))
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_ds_objs_to_output = []
+            for uid_list in general.chunks(uids_of_data_sets_to_output, 100):
+                temp_ds_objs_to_output.extend(list(DataSet.objects.filter(id__in=uid_list)))
+            return temp_ds_objs_to_output
+
+    def _chunk_query_set_distinct_ds_objs_from_dss_objs(self):
+        try:
+            return list(DataSet.objects.filter(datasetsample__in=self.list_of_dss_objects).distinct())
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_ds_objs_to_output_set = set()
+            for uid_list in general.chunks(self.list_of_dss_objects, 100):
+                temp_ds_objs_to_output_set.update(list(DataSet.objects.filter(datasetsample__in=uid_list)))
+            return list(temp_ds_objs_to_output_set)
+
+    def _chunk_query_set_dss_objs_from_dss_uids(self, dss_uids_for_query):
+        try:
+            return list(DataSetSample.objects.filter(id__in=dss_uids_for_query))
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            temp_list_of_dss_objects = []
+            for uid_list in general.chunks(dss_uids_for_query, 100):
+                temp_list_of_dss_objects.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
+            return temp_list_of_dss_objects
 
     @staticmethod
     def _check_either_dss_or_dsss_uids_provided(data_set_sample_ids_to_output_string, data_set_uids_to_output_as_comma_sep_string):
@@ -692,7 +799,7 @@ class SequenceCountTableCreator:
         self.output_df_relative.to_csv(self.path_to_seq_output_df_relative, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_df_relative)
         # we created the fasta above.
-        write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
+        general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
         self.output_paths_list.append(self.output_fasta_path)
         print('\n\nITS2 sequence output files:')
         for path_item in self.output_paths_list:
@@ -769,12 +876,9 @@ class SequenceCountTableCreator:
     def _add_uids_for_seqs_to_dfs(self):
         """Now add the UID for each of the sequences"""
         sys.stdout.write('\nGenerating accession and fasta\n')
-        reference_sequences_in_data_sets_no_name = ReferenceSequence.objects.filter(
-            datasetsamplesequence__data_set_sample_from__in=self.list_of_dss_objects,
-            has_name=False).distinct()
-        reference_sequences_in_data_sets_has_name = ReferenceSequence.objects.filter(
-            datasetsamplesequence__data_set_sample_from__in=self.list_of_dss_objects,
-            has_name=True).distinct()
+        reference_sequences_in_data_sets_no_name = self._chunk_query_rs_objs_no_name_from_dss_objs()
+        reference_sequences_in_data_sets_has_name = self._chunk_query_rs_objs_with_name_from_dss_objs()
+
         no_name_dict = {rs.id: rs.sequence for rs in reference_sequences_in_data_sets_no_name}
         has_name_dict = {rs.name: (rs.id, rs.sequence) for rs in reference_sequences_in_data_sets_has_name}
         accession_list = []
@@ -797,6 +901,36 @@ class SequenceCountTableCreator:
         temp_series = pd.Series(accession_list, name='seq_accession', index=list(self.output_df_relative))
         self.output_df_absolute = self.output_df_absolute.append(temp_series)
         self.output_df_relative = self.output_df_relative.append(temp_series)
+
+    def _chunk_query_rs_objs_with_name_from_dss_objs(self):
+        try:
+            reference_sequences_in_data_sets_no_name = list(ReferenceSequence.objects.filter(
+                datasetsamplesequence__data_set_sample_from__in=self.list_of_dss_objects,
+                has_name=True).distinct())
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            reference_sequences_in_data_sets_no_name_set = set()
+            for uid_list in general.chunks(self.list_of_dss_objects, 100):
+                reference_sequences_in_data_sets_no_name_set.update(list(
+                    ReferenceSequence.objects.filter(datasetsamplesequence__data_set_sample_from__in=uid_list,
+                                                     has_name=True)))
+            reference_sequences_in_data_sets_no_name = list(reference_sequences_in_data_sets_no_name_set)
+        return reference_sequences_in_data_sets_no_name
+
+    def _chunk_query_rs_objs_no_name_from_dss_objs(self):
+        try:
+            reference_sequences_in_data_sets_no_name = list(ReferenceSequence.objects.filter(
+                datasetsamplesequence__data_set_sample_from__in=self.list_of_dss_objects,
+                has_name=False).distinct())
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            reference_sequences_in_data_sets_no_name_set = set()
+            for uid_list in general.chunks(self.list_of_dss_objects, 100):
+                reference_sequences_in_data_sets_no_name_set.update(list(
+                    ReferenceSequence.objects.filter(datasetsamplesequence__data_set_sample_from__in=uid_list,
+                                                     has_name=False)))
+            reference_sequences_in_data_sets_no_name = list(reference_sequences_in_data_sets_no_name_set)
+        return reference_sequences_in_data_sets_no_name
 
     def _create_ordered_output_dfs_from_series(self):
         """Put together the pandas series that hold sequences abundance outputs for each sample in order of the samples

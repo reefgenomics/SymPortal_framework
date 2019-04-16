@@ -259,6 +259,8 @@ def sqrt_transform_abundance_df(df):
 
 
 def chunks(l, n):
-    """Yield successive n-sized chunks from l."""
-    for i in range(0, len(l), n):
-        yield l[i:i + n]
+    """Yield successive n-sized chunks from l.
+    Modified to explicitly cast to list to cover the case that a set is passed in."""
+    in_list = list(l)
+    for i in range(0, len(in_list), n):
+        yield in_list[i:i + n]
