@@ -13,12 +13,11 @@ import re
 import numpy as np
 from skbio.stats.ordination import pcoa
 import general
-from general import write_list_to_destination, read_defined_file_to_list, convert_interleaved_to_sequencial_fasta_first_line_removal, sqrt_transform_abundance_df
 import itertools
 from scipy.spatial.distance import braycurtis
 from symportal_utils import MothurAnalysis, SequenceCollection
 from datetime import datetime
-
+import django.db.utils
 # General methods
 class SequenceCollectionComplete(Exception):
     pass
@@ -49,7 +48,7 @@ class FseqbootAlignmentGenerator:
     def do_fseqboot_alignment_generation(self):
         self._execute_fseqboot()
 
-        self.fseqboot_file_as_list = read_defined_file_to_list(self.output_seqboot_file_path)
+        self.fseqboot_file_as_list = general.read_defined_file_to_list(self.output_seqboot_file_path)
 
         self._divide_fseqboot_file_into_indi_alignments_and_write_out()
 
@@ -64,13 +63,13 @@ class FseqbootAlignmentGenerator:
         for line in self.fseqboot_file_as_list[1:]:
             reg_ex_matches_list = reg_ex.findall(line)
             if len(reg_ex_matches_list) == 1:
-                write_list_to_destination('{}{}'.format(self.fseqboot_base, self.rep_count),
+                general.write_list_to_destination('{}{}'.format(self.fseqboot_base, self.rep_count),
                                           self.fseqboot_individual_alignment_as_list)
                 self.fseqboot_individual_alignment_as_list = [line]
                 self.rep_count += 1
             else:
                 self.fseqboot_individual_alignment_as_list.append(line)
-        write_list_to_destination(f'{self.fseqboot_base}{self.rep_count}', self.fseqboot_individual_alignment_as_list)
+                general.write_list_to_destination(f'{self.fseqboot_base}{self.rep_count}', self.fseqboot_individual_alignment_as_list)
 
     def _execute_fseqboot(self):
         sys.stdout.write('\rGenerating multiple fseqboot alignments')
@@ -168,14 +167,14 @@ class UnifracSubcladeHandler:
     def _rename_tree_nodes_and_remove_meta_data(self):
         """This will use the name file to rename the tree nodes and also remove metadata from the treefile.
         """
-        name_file = read_defined_file_to_list(self.parent_unifrac_creator.clade_master_names_file_path)
+        name_file = general.read_defined_file_to_list(self.parent_unifrac_creator.clade_master_names_file_path)
         name_file_reps = []
         for line in name_file:
             name_file_reps.append(line.split('\t')[0])
 
         seq_re = re.compile('\d+[_ ]id[\d_]+')
         sys.stdout.write('\rrenaming tree nodes')
-        tree_file = read_defined_file_to_list(self.consensus_tree_file_path)
+        tree_file = general.read_defined_file_to_list(self.consensus_tree_file_path)
 
         new_tree_file = []
         for line in tree_file:
@@ -218,7 +217,7 @@ class UnifracSubcladeHandler:
 
         # here all of the tree_file names should have been replaced. Now write back out.
         sys.stdout.write('\rwriting out tree')
-        write_list_to_destination(self.consensus_tree_file_path, new_tree_file)
+        general.write_list_to_destination(self.consensus_tree_file_path, new_tree_file)
 
     def _create_consensus_tree_with_meta_data_to_be_removed(self):
         """run sumtrees.py on the concatenated tree file to create a
@@ -271,10 +270,10 @@ class UnifracSubcladeHandler:
     def _concatenate_trees(self):
         master_tree_file = []
         for i in range(len(self.list_of_output_tree_paths)):
-            temp_tree_file = read_defined_file_to_list(self.list_of_output_tree_paths[i])
+            temp_tree_file = general.read_defined_file_to_list(self.list_of_output_tree_paths[i])
             for line in temp_tree_file:
                 master_tree_file.append(line)
-        write_list_to_destination(self.concat_tree_file_path, master_tree_file)
+        general.write_list_to_destination(self.concat_tree_file_path, master_tree_file)
 
 
 class UnifracMothurWorker:
@@ -299,9 +298,9 @@ class UnifracMothurWorker:
         self.output_tree_path = mothur_analysis.tree_file_path
 
     def _convert_interleaved_fasta_to_sequential_and_write_out(self):
-        self.fasta_as_list = read_defined_file_to_list('{}{}'.format(self.fseqbootbase, self.rep_num))
+        self.fasta_as_list = general.read_defined_file_to_list('{}{}'.format(self.fseqbootbase, self.rep_num))
         self.fasta_as_list = self._convert_interleaved_to_sequencial_fasta_first_line_removal()
-        write_list_to_destination(self.sequential_fasta_path, self.fasta_as_list)
+        general.write_list_to_destination(self.sequential_fasta_path, self.fasta_as_list)
 
     def _convert_interleaved_to_sequencial_fasta_first_line_removal(self):
         list_seq_names = []
@@ -595,9 +594,9 @@ class BaseUnifracDistanceCreatorHandlerOne:
             self.master_fasta_file_as_list.extend([f'>{k}', v])
 
     def _write_out_master_fasta_names_and_group_files(self):
-        write_list_to_destination(self.master_fasta_file_path, self.master_fasta_file_as_list)
-        write_list_to_destination(self.master_names_file_path, self.master_names_file_as_list)
-        write_list_to_destination(self.master_group_file_path, self.master_group_file_as_list)
+        general.write_list_to_destination(self.master_fasta_file_path, self.master_fasta_file_as_list)
+        general.write_list_to_destination(self.master_names_file_path, self.master_names_file_as_list)
+        general.write_list_to_destination(self.master_group_file_path, self.master_group_file_as_list)
 
     @staticmethod
     def _once_complete_wait_for_processes_to_complete(all_processes):
@@ -819,7 +818,7 @@ class BaseUnifracDistPCoACreator:
         self.clade_dist_file_path = unifrac_subclade_handler.unifrac_dist_file_path
         self._append_date_time_string_to_unifrac_dist_path(clade_in_question)
         self.clade_dist_file_as_list = [line.replace(' ', '') for line in
-                                        read_defined_file_to_list(self.clade_dist_file_path)]
+                                        general.read_defined_file_to_list(self.clade_dist_file_path)]
 
     def _make_fseqboot_replicate_alignments(self, clade_in_question):
         fseqboot_alignment_generator = FseqbootAlignmentGenerator(clade_in_question=clade_in_question,
@@ -850,7 +849,7 @@ class BaseUnifracDistPCoACreator:
         # a twoD list and then convert to a numpy array
         self.clade_pcoa_coord_file_path = os.path.join(
             self.clade_output_dir, f'{self.date_time_string}.unifrac_{profiles_or_samples_string}_PCoA_coords_{clade}.csv')
-        raw_dist_file = read_defined_file_to_list(self.clade_dist_file_path)
+        raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path)
 
         temp_two_d_list = []
         sample_names_from_dist_matrix = []
@@ -964,7 +963,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             new_line = '\t'.join(temp_list)
             dist_with_sample_name.append(new_line)
         self.clade_dist_file_as_list = dist_with_sample_name
-        write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
+        general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
         sys.stdout.write('Creating master .name and .fasta files for UniFrac')
@@ -1100,7 +1099,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             new_line = '\t'.join(temp_list)
             dist_with_sample_name.append(new_line)
         self.clade_dist_file_as_list = dist_with_sample_name
-        write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
+        general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
         sys.stdout.write('Creating master .name and .fasta files for UniFrac')
@@ -1157,7 +1156,7 @@ class BaseBrayCurtisDistPCoACreator:
         # a twoD list and then convert to a numpy array
         self.clade_pcoa_coord_file_path = os.path.join(
             self.clade_output_dir, f'{self.date_time_string}.bray_curtis_{self.profiles_or_samples}_PCoA_coords_{clade}.csv')
-        raw_dist_file = read_defined_file_to_list(self.clade_dist_file_path)
+        raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path)
 
         temp_two_d_list = []
         object_names_from_dist_matrix = []
@@ -1284,10 +1283,10 @@ class BaseBrayCurtisDistPCoACreator:
             new_line = '\t'.join(temp_list)
             dist_with_obj_name.append(new_line)
         self.clade_dist_file_as_list = dist_with_obj_name
-        write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
+        general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _write_out_dist_file(self):
-        write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
+        general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _write_output_paths_to_stdout(self):
         print('\n\nBrayCurtis distances and PCoA computation complete. Output files:')
