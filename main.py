@@ -45,6 +45,8 @@ import data_loading
 import sp_config
 import data_analysis
 import pickle
+import django.db.utils
+import general
 
 class SymPortalWorkFlowManager:
     # INIT
@@ -561,14 +563,34 @@ class SymPortalWorkFlowManager:
         self.output_type_count_table_obj.output_types()
 
     def _check_dss_were_part_of_analysis(self, dss_uid_list):
-        ds_of_analysis = DataSet.objects.filter(
-            id__in=[int(a) for a in self.data_analysis_object.list_of_data_set_uids.split(',')])
-        dss_of_analysis = DataSetSample.objects.filter(data_submission_from__in=ds_of_analysis)
+        ds_uid_list_for_query = [int(a) for a in self.data_analysis_object.list_of_data_set_uids.split(',')]
+        ds_of_analysis = self._chunk_query_ds_objs_from_ds_uids(ds_uid_list_for_query)
+        dss_of_analysis = self._chunk_query_dss_objs_from_ds_uids(ds_of_analysis)
         dss_uids_that_were_part_of_analysis = [dss.id for dss in dss_of_analysis]
         for dss_uid in dss_uid_list:
             if dss_uid not in dss_uids_that_were_part_of_analysis:
                 print(f'DataSetSample UID: {dss_uid} was not part of DataAnalysis: {self.data_analysis_object.name}')
                 raise RuntimeError
+
+    def _chunk_query_dss_objs_from_ds_uids(self, ds_of_analysis):
+        try:
+            dss_of_analysis = list(DataSetSample.objects.filter(data_submission_from__in=ds_of_analysis))
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            dss_of_analysis = []
+            for uid_list in general.chunks(ds_of_analysis, 100):
+                dss_of_analysis.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
+        return dss_of_analysis
+
+    def _chunk_query_ds_objs_from_ds_uids(self, ds_uid_list_for_query):
+        try:
+            ds_of_analysis = list(DataSet.objects.filter(id__in=ds_uid_list_for_query))
+        except django.db.utils.OperationalError:
+            print('Chunking query')
+            ds_of_analysis = []
+            for uid_list in general.chunks(ds_uid_list_for_query, 100):
+                ds_of_analysis.extend(list(DataSet.objects.filter(id__in=uid_list)))
+        return ds_of_analysis
 
     # ITS2 TYPE PROFILE STAND_ALONE DISTANCES
     def perform_type_distance_stand_alone(self):
