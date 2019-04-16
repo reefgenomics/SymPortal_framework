@@ -31,6 +31,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
 
     # TEST DATA LOADING
     def test_data_loading_work_flow(self):
+        print('\n\nTesting: data_loading_work_flow\n\n')
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc),
                             '--data_sheet', self.data_sheet_file_path]
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
@@ -38,6 +39,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
 
     # TEST DATA ANALYSIS
     def test_data_analysis_work_flow(self):
+        print('\n\nTesting: data_analysis_work_flow\n\n')
         custom_args_list = ['--analyse', '1', '--name', self.name,
                             '--num_proc', str(self.num_proc)]
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
@@ -45,11 +47,13 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
 
     # TEST STAND_ALONE OUTPUTS
     def test_stand_alone_sequence_outputs_data_set_input(self):
+        print('\n\nTesting: stand_alone_sequence_outputs_data_set_input\n\n')
         custom_args_list = ['--print_output_seqs', '1,2', '--num_proc', str(self.num_proc)]
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_sequence_outputs_data_set_sample_input(self):
+        print('\n\nTesting: stand_alone_sequence_outputs_data_set_sample_input\n\n')
         data_set_samples_1_2 = DataSet.objects.filter(id__in=[1,2])
         data_set_samples_in_1_2 = DataSetSample.objects.filter(data_submission_from__in=data_set_samples_1_2)
         data_set_sample_uids_str = ','.join([str(dss.id) for dss in data_set_samples_in_1_2][2:-2])
@@ -58,11 +62,13 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         test_spwfm.start_work_flow()
 
     def test_stand_alone_profile_outputs_data_set_input(self):
+        print('\n\nTesting: stand_alone_profile_outputs_data_set_input\n\n')
         custom_args_list = ['--print_output_types', '1', '--data_analysis_id', '1', '--num_proc', str(self.num_proc)]
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_stand_alone_profile_outputs_data_set_sample_input(self):
+        print('\n\nTesting: stand_alone_profile_outputs_data_set_sample_input\n\n')
         data_set_sample_1 = DataSet.objects.get(id=1)
         data_set_samples_in_1 = DataSetSample.objects.filter(data_submission_from=data_set_sample_1)
         data_set_sample_uids_str = ','.join([str(dss.id) for dss in data_set_samples_in_1][2:-2])
@@ -106,6 +112,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
     def test_stand_alone_braycurtis_type_distances_cct_uid_input(self):
         # create a string for cct input that is the first half of the ccts associated with dataset 1 and
         # the first half from dataset 2
+        print('\n\nTesting: stand_alone_braycurtis_type_distances_cct_uid_input\n\n')
         data_analysis = DataAnalysis.objects.get(id=1)
         cct_one_uid_list = [cct.id for cct in CladeCollectionType.objects.filter(
             clade_collection_found_in__data_set_sample_from__data_submission_from__id=1,
@@ -126,6 +133,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
     def test_stand_alone_unifrac_type_distances_cct_uid_input(self):
         # create a string for cct input that is the first half of the ccts associated with dataset 1 and
         # the first half from dataset 2
+        print('\n\nTesting: stand_alone_unifrac_type_distances_cct_uid_input\n\n')
         data_analysis = DataAnalysis.objects.get(id=1)
         cct_one_uid_list = [cct.id for cct in CladeCollectionType.objects.filter(
             clade_collection_found_in__data_set_sample_from__data_submission_from__id=1,
