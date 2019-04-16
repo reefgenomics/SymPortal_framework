@@ -736,6 +736,7 @@ class SymPortalWorkFlowManager:
             data_set_sample_uid_list=dss_uid_list,
             call_type='stand_alone',
             is_sqrt_transf=self.args.sqrt)
+        self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _start_sample_braycurtis_data_sets(self):
         ds_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.between_sample_distances.split(',')]
@@ -744,6 +745,7 @@ class SymPortalWorkFlowManager:
             data_set_uid_list=ds_uid_list,
             call_type='stand_alone',
             is_sqrt_transf=self.args.sqrt)
+        self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     #VACUUM DB
     def perform_vacuum_database(self):
