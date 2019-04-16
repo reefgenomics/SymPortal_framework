@@ -33,12 +33,12 @@ class VirtualObjectManager():
 
     def _chunked_query_dss_from_ds_uids(self):
         try:
-            data_set_samples = list(DataSetSample.objects.filter(id__in=self.list_of_data_set_uids))
+            data_set_samples = list(DataSetSample.objects.filter(data_submission_from__in=self.list_of_data_set_uids))
         except django.db.utils.OperationalError:
             print('Chunking query')
             data_set_samples = []
             for uid_list in general.chunks(self.list_of_data_set_uids, 100):
-                data_set_samples.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
+                data_set_samples.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return data_set_samples
 
     def _chunked_query_dss_from_dss_uids(self):

@@ -625,8 +625,7 @@ class BtwnTypeUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandler
             parent_unifrac_dist_creator=parent_unifrac_dist_creator,
             clade_in_question=clade_in_question)
 
-        self.analysis_types_of_clade = self.parent_unifrac_dist_creator.at_list_for_output.filter(
-            clade=self.clade)
+        self.analysis_types_of_clade = [at for at in self.parent_unifrac_dist_creator.at_list_for_output if at.clade==self.clade]
         self._raise_runtime_error_if_not_enough_analysis_types()
         self.input_analysis_type_queue = Queue()
         self.output_unifrac_seq_abund_mp_collection_queue = Queue()
@@ -684,8 +683,9 @@ class BtwnSampleUnifracDistanceCreatorHandlerOne(BaseUnifracDistanceCreatorHandl
         super().__init__(
             parent_unifrac_dist_creator=parent_unifrac_dist_creator,
             clade_in_question=clade_in_question)
-        self.clade_collections_of_clade = self.parent_unifrac_dist_creator.clade_collections_from_data_set_samples.filter(
-            clade=self.clade)
+        self.clade_collections_of_clade = [
+            cc for cc in self.parent_unifrac_dist_creator.clade_collections_from_data_set_samples if
+            cc.clade == self.clade]
         self._raise_runtime_error_if_not_enough_clade_collections()
         self.input_clade_collection_queue = Queue()
 
