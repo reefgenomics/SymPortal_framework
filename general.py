@@ -256,3 +256,9 @@ def sqrt_transform_abundance_df(df):
     new_df['sum'] = new_df.sum(axis=1)
     new_df = new_df.iloc[:, :-1].div(new_df['sum'], axis=0)
     return new_df
+
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in range(0, len(l), n):
+        yield l[i:i + n]
