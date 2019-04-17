@@ -1,7 +1,6 @@
 from django.db import models
 from django.db.models import Max
 import json
-
 import general
 
 # python3 manage.py graph_models -a -g -o my_project.svg
