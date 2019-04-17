@@ -11,8 +11,6 @@ import pandas as pd
 import numpy as np
 import sp_config
 import virtual_objects
-import time
-import django.db.utils
 import general
 
 
