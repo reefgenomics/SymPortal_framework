@@ -7,7 +7,6 @@ import os
 import json
 from collections import defaultdict
 import general
-import django.db.utils
 class VirtualObjectManager():
     """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
     I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.

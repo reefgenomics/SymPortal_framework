@@ -17,7 +17,6 @@ import itertools
 from scipy.spatial.distance import braycurtis
 from symportal_utils import MothurAnalysis, SequenceCollection
 from datetime import datetime
-import django.db.utils
 # General methods
 class SequenceCollectionComplete(Exception):
     pass

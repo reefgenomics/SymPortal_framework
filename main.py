@@ -573,23 +573,15 @@ class SymPortalWorkFlowManager:
                 raise RuntimeError
 
     def _chunk_query_dss_objs_from_ds_uids(self, ds_of_analysis):
-        try:
-            dss_of_analysis = list(DataSetSample.objects.filter(data_submission_from__in=ds_of_analysis))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            dss_of_analysis = []
-            for uid_list in general.chunks(ds_of_analysis, 100):
-                dss_of_analysis.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
+        dss_of_analysis = []
+        for uid_list in general.chunks(ds_of_analysis, 100):
+            dss_of_analysis.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return dss_of_analysis
 
     def _chunk_query_ds_objs_from_ds_uids(self, ds_uid_list_for_query):
-        try:
-            ds_of_analysis = list(DataSet.objects.filter(id__in=ds_uid_list_for_query))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            ds_of_analysis = []
-            for uid_list in general.chunks(ds_uid_list_for_query, 100):
-                ds_of_analysis.extend(list(DataSet.objects.filter(id__in=uid_list)))
+        ds_of_analysis = []
+        for uid_list in general.chunks(ds_uid_list_for_query, 100):
+            ds_of_analysis.extend(list(DataSet.objects.filter(id__in=uid_list)))
         return ds_of_analysis
 
     # ITS2 TYPE PROFILE STAND_ALONE DISTANCES
