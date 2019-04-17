@@ -16,11 +16,11 @@ class VirtualObjectManager():
                  list_of_data_set_uids=None):
         if list_of_data_set_sample_uids:
             self.list_of_data_set_sample_uids = list_of_data_set_sample_uids
-            data_set_samples = self._chunked_query_dss_from_dss_uids()
+            data_set_samples = self._chunk_query_dss_from_dss_uids()
             self.list_of_data_set_uids = set([dss.data_submission_from.id for dss in data_set_samples])
         else:
             self.list_of_data_set_uids = list_of_data_set_uids
-            data_set_samples = self._chunked_query_dss_from_ds_uids()
+            data_set_samples = self._chunk_query_dss_from_ds_uids()
             self.list_of_data_set_sample_uids = [dss.id for dss in data_set_samples]
         ccs_of_analysis = self._set_ccs_of_analysis(data_set_samples=data_set_samples)
         self.within_clade_cutoff = within_clade_cutoff
@@ -31,35 +31,25 @@ class VirtualObjectManager():
         self.vat_manager = VirtualAnalysisTypeManager(obj_manager=self)
         self.vdss_manager = VirtualDataSetSampleManager(parent_virtual_object_manager=self)
 
-    def _chunked_query_dss_from_ds_uids(self):
-        try:
-            data_set_samples = list(DataSetSample.objects.filter(data_submission_from__in=self.list_of_data_set_uids))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples = []
-            for uid_list in general.chunks(self.list_of_data_set_uids, 100):
-                data_set_samples.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
+    def _chunk_query_dss_from_ds_uids(self):
+        data_set_samples = []
+        for uid_list in general.chunks(self.list_of_data_set_uids):
+            data_set_samples.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return data_set_samples
 
-    def _chunked_query_dss_from_dss_uids(self):
-        try:
-            data_set_samples = list(DataSetSample.objects.filter(id__in=self.list_of_data_set_sample_uids))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples = []
-            for uid_list in general.chunks(self.list_of_data_set_sample_uids, 100):
-                data_set_samples.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
+    def _chunk_query_dss_from_dss_uids(self):
+        print('Chunking query')
+        data_set_samples = []
+        for uid_list in general.chunks(self.list_of_data_set_sample_uids):
+            data_set_samples.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return data_set_samples
 
     def _set_ccs_of_analysis(self, data_set_samples):
-        try:
-            return list(CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            clade_collection_obj_list = []
-            for uid_list in general.chunks(data_set_samples, 100):
-                clade_collection_obj_list.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
-            return clade_collection_obj_list
+        print('Chunking query')
+        clade_collection_obj_list = []
+        for uid_list in general.chunks(data_set_samples):
+            clade_collection_obj_list.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
+        return clade_collection_obj_list
 
 
 class VirtualDataSetSampleManager:
@@ -70,17 +60,8 @@ class VirtualDataSetSampleManager:
 
     def _populate_virtual_dss_manager_from_db(self):
         print('\nInstantiating VirtualDataSetSamples')
-        try:
-            list_of_data_set_samples_of_analysis = list(DataSetSample.objects.filter(id__in=self.virtual_obj_manager.list_of_data_set_sample_uids))
-        except django.db.utils.OperationalError as e:
-            # then the self.virtual_obj_manager.list_of_data_set_sample_uids is too large for a single query
-            # on the sqlite db and we should split this up into smaller chunks
-            # something like this should work
-            # https://stackoverflow.com/a/18181477/5516420
-            print('Chunking query')
-            list_of_data_set_samples_of_analysis = []
-            for uid_list in general.chunks(self.virtual_obj_manager.list_of_data_set_sample_uids, 100):
-                list_of_data_set_samples_of_analysis.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
+        list_of_data_set_samples_of_analysis = self._chunk_query_dss_objs_from_dss_uids()
+
         for dss in list_of_data_set_samples_of_analysis:
             sys.stdout.write(f'\r{dss.name}')
             new_vdss = self.VirtualDataSetSample(
@@ -88,6 +69,12 @@ class VirtualDataSetSampleManager:
                 list_of_cc_uids=[cc.id for cc in CladeCollection.objects.filter(data_set_sample_from=dss)],
                 name=dss.name,list_of_cladal_abundances=[int(_) for _ in json.loads(dss.cladal_seq_totals)])
             self.vdss_dict[new_vdss.uid] = new_vdss
+
+    def _chunk_query_dss_objs_from_dss_uids(self):
+        list_of_data_set_samples_of_analysis = []
+        for uid_list in general.chunks(self.virtual_obj_manager.list_of_data_set_sample_uids):
+            list_of_data_set_samples_of_analysis.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
+        return list_of_data_set_samples_of_analysis
 
     class VirtualDataSetSample:
         def __init__(self, uid, data_set_id, list_of_cc_uids, name, list_of_cladal_abundances):
@@ -174,22 +161,17 @@ class VirtualCladeCollectionManager():
         print('Instantiating VirtualCladeCollectionManager')
         print('Collecting DataSetSampleSequence objects of CladeCollections')
 
-        data_set_sample_sequence_objects_of_analysis = self._chunked_query_dsss_from_cc_objs(ccs_of_analysis)
+        data_set_sample_sequence_objects_of_analysis = self._chunk_query_dsss_from_cc_objs(ccs_of_analysis)
         cc_uid_to_dsss_obj_list_default_dict = defaultdict(list)
         for dsss in data_set_sample_sequence_objects_of_analysis:
             cc_uid_to_dsss_obj_list_default_dict[dsss.clade_collection_found_in.id].append(dsss)
         return cc_uid_to_dsss_obj_list_default_dict
 
-    def _chunked_query_dsss_from_cc_objs(self, ccs_of_analysis):
-        try:
-            data_set_sample_sequence_objects_of_analysis = list(DataSetSampleSequence.objects.filter(
-                clade_collection_found_in__in=ccs_of_analysis))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_sample_sequence_objects_of_analysis = []
-            for uid_list in general.chunks(ccs_of_analysis, 100):
-                data_set_sample_sequence_objects_of_analysis.extend(
-                    list(DataSetSampleSequence.objects.filter(clade_collection_found_in__in=uid_list)))
+    def _chunk_query_dsss_from_cc_objs(self, ccs_of_analysis):
+        data_set_sample_sequence_objects_of_analysis = []
+        for uid_list in general.chunks(ccs_of_analysis):
+            data_set_sample_sequence_objects_of_analysis.extend(
+                list(DataSetSampleSequence.objects.filter(clade_collection_found_in__in=uid_list)))
         return data_set_sample_sequence_objects_of_analysis
 
 
@@ -449,19 +431,15 @@ class VirtualAnalysisTypeManager():
         vcc_list = [vcc for vcc in self.obj_manager.vcc_manager.vcc_dict.values() if vcc.id in db_analysis_type_cc_uids]
         rs_uid_list_to_query = [int(rs_id_str) for rs_id_str in db_analysis_type_object.ordered_footprint_list.split(',')]
 
-        ref_seq_obj_list = self._chunked_query_ref_seq_obj_from_rs_uids(rs_uid_list_to_query)
+        ref_seq_obj_list = self._chunk_query_ref_seq_obj_from_rs_uids(rs_uid_list_to_query)
         self.make_vat_post_profile_assignment(clade_collection_obj_list=vcc_list, ref_seq_obj_list=ref_seq_obj_list, species=db_analysis_type_object.species)
 
-    def _chunked_query_ref_seq_obj_from_rs_uids(self, rs_uid_list_to_query):
-        try:
-            return list(ReferenceSequence.objects.filter(id__in=rs_uid_list_to_query))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            ref_seq_objs = []
-            for uid_list in general.chunks(rs_uid_list_to_query, 100):
-                ref_seq_objs.extend(
-                    list(ReferenceSequence.objects.filter(id__in=uid_list)))
-            return ref_seq_objs
+    def _chunk_query_ref_seq_obj_from_rs_uids(self, rs_uid_list_to_query):
+        ref_seq_objs = []
+        for uid_list in general.chunks(rs_uid_list_to_query):
+            ref_seq_objs.extend(
+                list(ReferenceSequence.objects.filter(id__in=uid_list)))
+        return ref_seq_objs
 
     def make_vat_post_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list, species=None):
         if species is not None:
