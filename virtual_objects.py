@@ -469,6 +469,7 @@ class VirtualAnalysisTypeManager():
                 ref_seq_obj_list=ref_seq_obj_list, id=db_at.id)
         vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=new_vat)
         vat_init.init_vat_post_profile_assignment()
+        self.vat_dict[new_vat.id] = new_vat
         return new_vat
 
     def make_vat_pre_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list):
