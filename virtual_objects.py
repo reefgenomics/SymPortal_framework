@@ -431,7 +431,7 @@ class VirtualAnalysisTypeManager():
         rs_uid_list_to_query = [int(rs_id_str) for rs_id_str in db_analysis_type_object.ordered_footprint_list.split(',')]
 
         ref_seq_obj_list = self._chunk_query_ref_seq_obj_from_rs_uids(rs_uid_list_to_query)
-        self.make_vat_post_profile_assignment(clade_collection_obj_list=vcc_list, ref_seq_obj_list=ref_seq_obj_list, species=db_analysis_type_object.species)
+        self._init_vat_from_db_at(clade_collection_obj_list=vcc_list, ref_seq_obj_list=ref_seq_obj_list, db_at=db_analysis_type_object)
 
     def _chunk_query_ref_seq_obj_from_rs_uids(self, rs_uid_list_to_query):
         ref_seq_objs = []
@@ -456,6 +456,19 @@ class VirtualAnalysisTypeManager():
 
         self.next_uid += 1
 
+        return new_vat
+
+    def _init_vat_from_db_at(self, clade_collection_obj_list, ref_seq_obj_list, db_at):
+        if db_at.species is not None:
+            new_vat = self.VirtualAnalysisType(
+                clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
+                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, species=db_at.species)
+        else:
+            new_vat = self.VirtualAnalysisType(
+                clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
+                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id)
+        vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=new_vat)
+        vat_init.init_vat_post_profile_assignment()
         return new_vat
 
     def make_vat_pre_profile_assignment(self, clade_collection_obj_list, ref_seq_obj_list):
