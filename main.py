@@ -365,7 +365,7 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.SampleUnifracDistPCoACreator(
             symportal_root_directory=self.symportal_root_directory,
             num_processors=self.args.num_proc, call_type='analysis',
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=self.output_type_count_table_obj.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_type_count_table_obj.output_dir,
             is_sqrt_transf=self.args.sqrt)
@@ -375,7 +375,7 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.SampleBrayCurtisDistPCoACreator(
             symportal_root_directory=self.symportal_root_directory,
             call_type='analysis',
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=self.output_type_count_table_obj.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_type_count_table_obj.output_dir,
             is_sqrt_transf=self.args.sqrt)
