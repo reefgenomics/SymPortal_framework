@@ -396,13 +396,9 @@ class TypeUnifracSeqAbundanceMPCollection:
             self.name_dict['{}_{}'.format(unique_seq_name_base, 0)] = temp_name_list
 
     def _chunk_query_rs_obj_from_rs_uid(self, ref_seq_uids_of_analysis_type):
-        try:
-            temp_rs_obj_list = list(ReferenceSequence.objects.filter(id__in=ref_seq_uids_of_analysis_type))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_rs_obj_list = []
-            for uid_list in general.chunks(ref_seq_uids_of_analysis_type, 100):
-                temp_rs_obj_list.extend(list(ReferenceSequence.objects.filter(id__in=uid_list)))
+        temp_rs_obj_list = []
+        for uid_list in general.chunks(ref_seq_uids_of_analysis_type):
+            temp_rs_obj_list.extend(list(ReferenceSequence.objects.filter(id__in=uid_list)))
         return temp_rs_obj_list
 
     def _create_norm_abund_dict_from_all_clade_cols_unifrac(self, df, ref_seq_uids_of_analysis_type):
@@ -814,24 +810,16 @@ class BaseUnifracDistPCoACreator:
         return clade_col_uids_of_output, clade_cols_of_output
 
     def _chunk_query_dss_objs_from_cc_objs(self, clade_cols_of_output):
-        try:
-            data_set_samples_of_output = list(DataSetSample.objects.filter(cladecollection__in=clade_cols_of_output))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples_of_output = []
-            for uid_list in general.chunks(clade_cols_of_output, 100):
-                data_set_samples_of_output.extend(
-                    list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
+        data_set_samples_of_output = []
+        for uid_list in general.chunks(clade_cols_of_output):
+            data_set_samples_of_output.extend(
+                list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
         return data_set_samples_of_output
 
     def _chunk_query_cc_objs_from_cct_uids(self, cct_set_uid_list):
-        try:
-            clade_cols_of_output = list(CladeCollection.objects.filter(cladecollectiontype__id__in=cct_set_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            clade_cols_of_output = []
-            for uid_list in general.chunks(cct_set_uid_list, 100):
-                clade_cols_of_output.extend(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
+        clade_cols_of_output = []
+        for uid_list in general.chunks(cct_set_uid_list):
+            clade_cols_of_output.extend(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
         return clade_cols_of_output
 
     def _get_cc_uids_of_output_from_dss_objs(self, data_set_samples_of_output):
@@ -841,34 +829,21 @@ class BaseUnifracDistPCoACreator:
         return clade_col_uids_of_output
 
     def _chunk_query_cc_objs_from_dss_objs(self, data_set_samples_of_output):
-        try:
-            clade_cols_of_output = list(
-                CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples_of_output))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            clade_cols_of_output = []
-            for uid_list in general.chunks(data_set_samples_of_output, 100):
-                clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
+        clade_cols_of_output = []
+        for uid_list in general.chunks(data_set_samples_of_output):
+            clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return clade_cols_of_output
 
     def _chunk_query_dss_objs_from_dss_uids(self, data_set_sample_uid_list):
-        try:
-            data_set_samples_of_output = list(DataSetSample.objects.filter(id__in=data_set_sample_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples_of_output = []
-            for uid_list in general.chunks(data_set_sample_uid_list, 100):
-                data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
+        data_set_samples_of_output = []
+        for uid_list in general.chunks(data_set_sample_uid_list):
+            data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return data_set_samples_of_output
 
     def _chunk_query_dss_objs_from_ds_uids(self, data_set_uid_list):
-        try:
-            data_set_samples_of_output = list(DataSetSample.objects.filter(data_submission_from__in=data_set_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples_of_output = []
-            for uid_list in general.chunks(data_set_uid_list, 100):
-                data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
+        data_set_samples_of_output = []
+        for uid_list in general.chunks(data_set_uid_list):
+            data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return data_set_samples_of_output
 
     def _write_output_paths_to_stdout(self):
@@ -996,38 +971,23 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self.local_abunds_only = local_abunds_only
 
     def _chunk_query_set_at_list_for_output_from_dss_uids(self):
-        try:
-            self.at_list_for_output = list(AnalysisType.objects.filter(
-                data_analysis_from=self.data_analysis_obj,
-                cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list).distinct())
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_at_set = set()
-            for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
-                temp_at_set.update(list(AnalysisType.objects.filter(
-                    data_analysis_from=self.data_analysis_obj, cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
-            self.at_list_for_output = list(temp_at_set)
+        temp_at_set = set()
+        for uid_list in general.chunks(self.data_set_sample_uid_list):
+            temp_at_set.update(list(AnalysisType.objects.filter(
+                data_analysis_from=self.data_analysis_obj, cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
+        self.at_list_for_output = list(temp_at_set)
 
     def _chunk_query_set_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
-        try:
-            self.at_list_for_output = list(
-                AnalysisType.objects.filter(cladecollectiontype__id__in=cct_set_uid_list).distinct())
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_at_set = set()
-            for uid_list in general.chunks(cct_set_uid_list, 100):
-                temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
-            self.at_list_for_output = list(temp_at_set)
+        temp_at_set = set()
+        for uid_list in general.chunks(cct_set_uid_list):
+            temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
+        self.at_list_for_output = list(temp_at_set)
 
     def _chunk_query_set_clade_col_type_objs_from_cct_uids(self):
-        try:
-            self.clade_col_type_objects = list(CladeCollectionType.objects.filter(id__in=self.cct_set_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_clade_col_type_objs_list = []
-            for uid_list in general.chunks(self.cct_set_uid_list, 100):
-                temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
-            self.clade_col_type_objects = temp_clade_col_type_objs_list
+        temp_clade_col_type_objs_list = []
+        for uid_list in general.chunks(self.cct_set_uid_list):
+            temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
+        self.clade_col_type_objects = temp_clade_col_type_objs_list
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_for_dist_calcs:
@@ -1079,13 +1039,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _chunk_query_at_objs_from_at_uids(self, list_of_at_ids):
-        try:
-            at_of_outputs = list(AnalysisType.objects.filter(id__in=list_of_at_ids))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            at_of_outputs = []
-            for uid_list in general.chunks(list_of_at_ids, 100):
-                at_of_outputs.extend(list(AnalysisType.objects.filter(id__in=uid_list)))
+        at_of_outputs = []
+        for uid_list in general.chunks(list_of_at_ids):
+            at_of_outputs.extend(list(AnalysisType.objects.filter(id__in=uid_list)))
         return at_of_outputs
 
     def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
@@ -1173,15 +1129,10 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self.output_dir = self._setup_output_dir(call_type, output_dir)
 
     def _chunk_query_set_cc_obj_from_dss_uids(self):
-        try:
-            self.clade_collections_from_data_set_samples = list(CladeCollection.objects.filter(
-                data_set_sample_from__in=self.data_set_sample_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_clade_col_objs = []
-            for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
-                temp_clade_col_objs.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
-            self.clade_collections_from_data_set_samples = temp_clade_col_objs
+        temp_clade_col_objs = []
+        for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
+            temp_clade_col_objs.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
+        self.clade_collections_from_data_set_samples = temp_clade_col_objs
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_for_dist_calcs:
@@ -1237,13 +1188,9 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _chunk_query_cc_objs_from_cc_uids(self, list_of_cc_ids):
-        try:
-            cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            cc_of_outputs = []
-            for uid_list in general.chunks(list_of_cc_ids, 100):
-                cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
+        cc_of_outputs = []
+        for uid_list in general.chunks(list_of_cc_ids):
+            cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
         return cc_of_outputs
 
     def _create_and_write_out_master_fasta_names_and_group_files(self, clade_in_question):
@@ -1370,24 +1317,16 @@ class BaseBrayCurtisDistPCoACreator:
         return clade_col_uids_of_output, clade_cols_of_output
 
     def _chunk_query_dss_objs_from_cc_objs(self, clade_cols_of_output):
-        try:
-            data_set_samples_of_output = list(DataSetSample.objects.filter(cladecollection__in=clade_cols_of_output))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples_of_output = []
-            for uid_list in general.chunks(clade_cols_of_output, 100):
-                data_set_samples_of_output.extend(
-                    list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
+        data_set_samples_of_output = []
+        for uid_list in general.chunks(clade_cols_of_output):
+            data_set_samples_of_output.extend(
+                list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
         return data_set_samples_of_output
 
     def _chunk_query_cc_objs_from_cct_uids(self, cct_set_uid_list):
-        try:
-            clade_cols_of_output = list(CladeCollection.objects.filter(cladecollectiontype__id__in=cct_set_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            clade_cols_of_output = []
-            for uid_list in general.chunks(cct_set_uid_list, 100):
-                clade_cols_of_output.extend(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
+        clade_cols_of_output = []
+        for uid_list in general.chunks(cct_set_uid_list):
+            clade_cols_of_output.extend(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
         return clade_cols_of_output
 
     def _get_cc_uids_of_output_from_dss_objs(self, data_set_samples_of_output):
@@ -1397,34 +1336,21 @@ class BaseBrayCurtisDistPCoACreator:
         return clade_col_uids_of_output
 
     def _chunk_query_cc_objs_from_dss_objs(self, data_set_samples_of_output):
-        try:
-            clade_cols_of_output = list(
-                CladeCollection.objects.filter(data_set_sample_from__in=data_set_samples_of_output))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            clade_cols_of_output = []
-            for uid_list in general.chunks(data_set_samples_of_output, 100):
-                clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
+        clade_cols_of_output = []
+        for uid_list in general.chunks(data_set_samples_of_output):
+            clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return clade_cols_of_output
 
     def _chunk_query_dss_objs_from_dss_uids(self, data_set_sample_uid_list):
-        try:
-            data_set_samples_of_output = list(DataSetSample.objects.filter(id__in=data_set_sample_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples_of_output = []
-            for uid_list in general.chunks(data_set_sample_uid_list, 100):
-                data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
+        data_set_samples_of_output = []
+        for uid_list in general.chunks(data_set_sample_uid_list):
+            data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return data_set_samples_of_output
 
     def _chunk_query_dss_objs_from_ds_uids(self, data_set_uid_list):
-        try:
-            data_set_samples_of_output = list(DataSetSample.objects.filter(data_submission_from__in=data_set_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            data_set_samples_of_output = []
-            for uid_list in general.chunks(data_set_uid_list, 100):
-                data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
+        data_set_samples_of_output = []
+        for uid_list in general.chunks(data_set_uid_list):
+            data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return data_set_samples_of_output
 
     def _compute_braycurtis_btwn_obj_pairs(self):
@@ -1501,23 +1427,15 @@ class BaseBrayCurtisDistPCoACreator:
         general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
 
     def _chunk_query_at_obj_from_at_uids(self, list_of_obj_uids):
-        try:
-            objs_of_outputs = list(AnalysisType.objects.filter(id__in=list_of_obj_uids))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            objs_of_outputs = []
-            for uid_list in general.chunks(list_of_obj_uids, 100):
-                objs_of_outputs.extend(list(AnalysisType.objects.filter(id__in=uid_list)))
+        objs_of_outputs = []
+        for uid_list in general.chunks(list_of_obj_uids):
+            objs_of_outputs.extend(list(AnalysisType.objects.filter(id__in=uid_list)))
         return objs_of_outputs
 
     def _chunk_query_cc_objs_from_cc_uids(self, list_of_cc_ids):
-        try:
-            cc_of_outputs = list(CladeCollection.objects.filter(id__in=list_of_cc_ids))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            cc_of_outputs = []
-            for uid_list in general.chunks(list_of_cc_ids, 100):
-                cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
+        cc_of_outputs = []
+        for uid_list in general.chunks(list_of_cc_ids):
+            cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
         return cc_of_outputs
 
 
@@ -1563,14 +1481,10 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.is_sqrt_transf = is_sqrt_transf
 
     def _chunk_query_set_cc_list_from_dss_uids(self):
-        try:
-            return list(CladeCollection.objects.filter(data_set_sample_from__in=self.data_set_sample_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_cc_list_for_output = []
-            for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
-                temp_cc_list_for_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
-            return temp_cc_list_for_output
+        temp_cc_list_for_output = []
+        for uid_list in general.chunks(self.data_set_sample_uid_list):
+            temp_cc_list_for_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
+        return temp_cc_list_for_output
 
     def _set_output_dir(self, output_dir):
         if self.call_type == 'stand_alone':
@@ -1682,39 +1596,24 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
 
     def _chunk_query_set_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
-        try:
-            return list(
-                AnalysisType.objects.filter(cladecollectiontype__id__in=cct_set_uid_list).distinct())
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_at_set = set()
-            for uid_list in general.chunks(cct_set_uid_list, 100):
-                temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
-            return list(temp_at_set)
+        temp_at_set = set()
+        for uid_list in general.chunks(cct_set_uid_list):
+            temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
+        return list(temp_at_set)
 
     def _chunk_query_set_clade_col_type_objs_from_cct_uids(self):
-        try:
-            return list(CladeCollectionType.objects.filter(id__in=self.cct_set_uid_list))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_clade_col_type_objs_list = []
-            for uid_list in general.chunks(self.cct_set_uid_list, 100):
-                temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
-            return temp_clade_col_type_objs_list
+        temp_clade_col_type_objs_list = []
+        for uid_list in general.chunks(self.cct_set_uid_list, 100):
+            temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
+        return temp_clade_col_type_objs_list
 
     def _chunk_query_set_at_list_for_output_from_dss_uids(self):
-        try:
-            return list(AnalysisType.objects.filter(
+        temp_at_set = set()
+        for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
+            temp_at_set.update(list(AnalysisType.objects.filter(
                 data_analysis_from=self.data_analysis_obj,
-                cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=self.data_set_sample_uid_list).distinct())
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            temp_at_set = set()
-            for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
-                temp_at_set.update(list(AnalysisType.objects.filter(
-                    data_analysis_from=self.data_analysis_obj,
-                    cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
-            return list(temp_at_set)
+                cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
+        return list(temp_at_set)
 
     def _set_output_dir(self, output_dir):
         if self.call_type == 'stand_alone':
