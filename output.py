@@ -32,7 +32,7 @@ class OutputTypeCountTable:
     """
     def __init__(
             self, num_proc, within_clade_cutoff, call_type, symportal_root_directory, data_set_uids_to_output=None, data_set_sample_uid_set_to_output=None,
-            data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None, date_time_str=None):
+            data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None):
 
         self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output = self._init_dss_and_ds_uids(
             data_set_sample_uid_set_to_output, data_set_uids_to_output)

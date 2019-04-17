@@ -288,7 +288,7 @@ class SymPortalWorkFlowManager:
         sys.stdout.write('\n\nPlotting ITS2 type profile distances\n')
         for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
             local_plotter = plotting.DistScatterPlotterTypes(
-                csv_path=pcoa_path, date_time_str=self.data_analysis_object.time_stamp)
+                csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
             local_plotter.make_type_dist_scatter_plot()
 
     def _plot_sample_distances_from_distance_object(self):
@@ -395,7 +395,7 @@ class SymPortalWorkFlowManager:
             symportal_root_directory=self.symportal_root_directory,
             num_processors=self.args.num_proc, call_type='analysis',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=self.output_type_count_table_obj.date_time_str,
             data_set_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_type_count_table_obj.output_dir,
             is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local)
@@ -406,7 +406,7 @@ class SymPortalWorkFlowManager:
             symportal_root_directory=self.symportal_root_directory,
             call_type='analysis',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=self.output_type_count_table_obj.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_type_count_table_obj.output_dir,
             is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local)
@@ -541,8 +541,7 @@ class SymPortalWorkFlowManager:
         self.output_type_count_table_obj = output.OutputTypeCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', symportal_root_directory=self.symportal_root_directory,
-            data_set_uids_to_output=set(ds_uid_list), data_analysis_obj=self.data_analysis_object,
-            date_time_str=self.data_analysis_object.time_stamp)
+            data_set_uids_to_output=set(ds_uid_list), data_analysis_obj=self.data_analysis_object)
         self.output_type_count_table_obj.output_types()
 
     def _check_ds_were_part_of_analysis(self, ds_uid_list):
@@ -557,8 +556,7 @@ class SymPortalWorkFlowManager:
         self.output_type_count_table_obj = output.OutputTypeCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', symportal_root_directory=self.symportal_root_directory,
-            data_set_sample_uid_set_to_output=set(dss_uid_list), data_analysis_obj=self.data_analysis_object,
-            date_time_str=self.data_analysis_object.time_stamp)
+            data_set_sample_uid_set_to_output=set(dss_uid_list), data_analysis_obj=self.data_analysis_object)
         self.output_type_count_table_obj.output_types()
 
     def _check_dss_were_part_of_analysis(self, dss_uid_list):
