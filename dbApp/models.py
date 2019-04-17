@@ -93,7 +93,7 @@ class DataAnalysis(models.Model):
     def get_clade_collections(self):
         list_of_uids = [int(x) for x in self.list_of_data_set_uids.split(',')]
         clade_collections = []
-        for uid_list in general.chunks(list_of_uids, 100):
+        for uid_list in general.chunks(list_of_uids):
             clade_collections.extend(list(CladeCollection.objects.filter(data_set_sample_from__data_submission_from__in=uid_list)))
         return clade_collections
 
@@ -168,7 +168,7 @@ class AnalysisType(models.Model):
     def get_clade_collections(self):
         uids_for_query = [int(x) for x in self.list_of_clade_collections.split(',')]
         cc_objs_list = []
-        for uid_list in general.chunks(uids_for_query, 100):
+        for uid_list in general.chunks(uids_for_query):
             cc_objs_list.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
         return cc_objs_list
 

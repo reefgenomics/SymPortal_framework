@@ -573,13 +573,13 @@ class SymPortalWorkFlowManager:
 
     def _chunk_query_dss_objs_from_ds_uids(self, ds_of_analysis):
         dss_of_analysis = []
-        for uid_list in general.chunks(ds_of_analysis, 100):
+        for uid_list in general.chunks(ds_of_analysis):
             dss_of_analysis.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return dss_of_analysis
 
     def _chunk_query_ds_objs_from_ds_uids(self, ds_uid_list_for_query):
         ds_of_analysis = []
-        for uid_list in general.chunks(ds_uid_list_for_query, 100):
+        for uid_list in general.chunks(ds_uid_list_for_query):
             ds_of_analysis.extend(list(DataSet.objects.filter(id__in=uid_list)))
         return ds_of_analysis
 
