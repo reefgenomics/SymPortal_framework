@@ -1,7 +1,7 @@
 from django.db import models
 from django.db.models import Max
 import json
-import django.db.utils
+
 import general
 
 # python3 manage.py graph_models -a -g -o my_project.svg
@@ -92,13 +92,9 @@ class DataAnalysis(models.Model):
 
     def get_clade_collections(self):
         list_of_uids = [int(x) for x in self.list_of_data_set_uids.split(',')]
-        try:
-            clade_collections = list(CladeCollection.objects.filter(data_set_sample_from__data_submission_from__in=list_of_uids))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            clade_collections = []
-            for uid_list in general.chunks(list_of_uids, 100):
-                clade_collections.extend(list(CladeCollection.objects.filter(data_set_sample_from__data_submission_from__in=uid_list)))
+        clade_collections = []
+        for uid_list in general.chunks(list_of_uids, 100):
+            clade_collections.extend(list(CladeCollection.objects.filter(data_set_sample_from__data_submission_from__in=uid_list)))
         return clade_collections
 
 
@@ -171,13 +167,9 @@ class AnalysisType(models.Model):
 
     def get_clade_collections(self):
         uids_for_query = [int(x) for x in self.list_of_clade_collections.split(',')]
-        try:
-            cc_objs_list = list(CladeCollection.objects.filter(id__in=uids_for_query))
-        except django.db.utils.OperationalError:
-            print('Chunking query')
-            cc_objs_list = []
-            for uid_list in general.chunks(uids_for_query, 100):
-                cc_objs_list.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
+        cc_objs_list = []
+        for uid_list in general.chunks(uids_for_query, 100):
+            cc_objs_list.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
         return cc_objs_list
 
     def __str__(self):

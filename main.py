@@ -45,7 +45,6 @@ import data_loading
 import sp_config
 import data_analysis
 import pickle
-import django.db.utils
 import general
 
 class SymPortalWorkFlowManager:
