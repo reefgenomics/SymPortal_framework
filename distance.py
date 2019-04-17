@@ -783,9 +783,9 @@ class BaseUnifracDistPCoACreator:
 
             return data_set_sample_uid_list, clade_col_uids_of_output
         elif cct_set_uid_list:
-            clade_col_uids_of_output, clade_cols_of_output = self._get_cc_uids_of_output_from_cct_uids(cct_set_uid_list)
+            clade_col_uids_of_output, clade_cols_of_output = self._get_distinct_cc_uids_of_output_from_cct_uids(cct_set_uid_list)
 
-            data_set_sample_uid_of_output = self._get_dss_objs_uids_of_output_from_cc_objs(clade_cols_of_output)
+            data_set_sample_uid_of_output = self._get_distinct_dss_objs_uids_of_output_from_cc_objs(clade_cols_of_output)
 
             return data_set_sample_uid_of_output, clade_col_uids_of_output
         else:
@@ -797,29 +797,29 @@ class BaseUnifracDistPCoACreator:
 
             return data_set_sample_uid_of_output, clade_col_uids_of_output
 
-    def _get_dss_objs_uids_of_output_from_cc_objs(self, clade_cols_of_output):
-        data_set_samples_of_output = self._chunk_query_dss_objs_from_cc_objs(clade_cols_of_output)
+    def _get_distinct_dss_objs_uids_of_output_from_cc_objs(self, clade_cols_of_output):
+        data_set_samples_of_output = self._chunk_query_distinct_dss_objs_from_cc_objs(clade_cols_of_output)
         data_set_sample_uid_of_output = [dss.id for dss in data_set_samples_of_output]
         return data_set_sample_uid_of_output
 
-    def _get_cc_uids_of_output_from_cct_uids(self, cct_set_uid_list):
-        clade_cols_of_output = self._chunk_query_cc_objs_from_cct_uids(cct_set_uid_list)
+    def _get_distinct_cc_uids_of_output_from_cct_uids(self, cct_set_uid_list):
+        clade_cols_of_output = self._chunk_query_distinct_cc_objs_from_cct_uids(cct_set_uid_list)
         clade_col_uids_of_output = [
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output, clade_cols_of_output
 
-    def _chunk_query_dss_objs_from_cc_objs(self, clade_cols_of_output):
-        data_set_samples_of_output = []
+    def _chunk_query_distinct_dss_objs_from_cc_objs(self, clade_cols_of_output):
+        data_set_samples_of_output_set = set()
         for uid_list in general.chunks(clade_cols_of_output):
-            data_set_samples_of_output.extend(
+            data_set_samples_of_output_set.update(
                 list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
-        return data_set_samples_of_output
+        return list(data_set_samples_of_output_set)
 
-    def _chunk_query_cc_objs_from_cct_uids(self, cct_set_uid_list):
-        clade_cols_of_output = []
+    def _chunk_query_distinct_cc_objs_from_cct_uids(self, cct_set_uid_list):
+        clade_cols_of_output_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
-            clade_cols_of_output.extend(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
-        return clade_cols_of_output
+            clade_cols_of_output_set.update(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
+        return list(clade_cols_of_output_set)
 
     def _get_cc_uids_of_output_from_dss_objs(self, data_set_samples_of_output):
         clade_cols_of_output = self._chunk_query_cc_objs_from_dss_objs(data_set_samples_of_output)
@@ -958,35 +958,35 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self.cct_set_uid_list = cct_set_uid_list
         if self.cct_set_uid_list is not None:
             # if working with specific profile/sample sets
-            self._chunk_query_set_clade_col_type_objs_from_cct_uids()
-            self._chunk_query_set_at_list_for_output_from_cct_uids(cct_set_uid_list)
+            self.clade_col_type_objects = self._chunk_query_set_cct_objs_from_cct_uids()
+            self.at_list_for_output = self._chunk_query_set_distinct_at_list_for_output_from_cct_uids(cct_set_uid_list)
         else:
             self.clade_col_type_objects = None
-            self._chunk_query_set_at_list_for_output_from_dss_uids()
+            self.at_list_for_output = self._chunk_query_set_distinct_at_list_for_output_from_dss_uids()
         self.clades_for_dist_calcs = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = self._setup_output_dir(call_type, output_dir)
         # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only
         # i.e. rather than all instances of the type found in all samples (including samples outside of this output)
         self.local_abunds_only = local_abunds_only
 
-    def _chunk_query_set_at_list_for_output_from_dss_uids(self):
+    def _chunk_query_set_distinct_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
         for uid_list in general.chunks(self.data_set_sample_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(
                 data_analysis_from=self.data_analysis_obj, cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
-        self.at_list_for_output = list(temp_at_set)
+        return list(temp_at_set)
 
-    def _chunk_query_set_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
+    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
-        self.at_list_for_output = list(temp_at_set)
+        return list(temp_at_set)
 
-    def _chunk_query_set_clade_col_type_objs_from_cct_uids(self):
+    def _chunk_query_set_cct_objs_from_cct_uids(self):
         temp_clade_col_type_objs_list = []
         for uid_list in general.chunks(self.cct_set_uid_list):
             temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
-        self.clade_col_type_objects = temp_clade_col_type_objs_list
+        return temp_clade_col_type_objs_list
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_for_dist_calcs:
@@ -1290,9 +1290,9 @@ class BaseBrayCurtisDistPCoACreator:
 
             return data_set_sample_uid_list, clade_col_uids_of_output
         elif cct_set_uid_list:
-            clade_col_uids_of_output, clade_cols_of_output = self._get_cc_uids_of_output_from_cct_uids(cct_set_uid_list)
+            clade_col_uids_of_output, clade_cols_of_output = self._get_distinct_cc_uids_of_output_from_cct_uids(cct_set_uid_list)
 
-            data_set_sample_uid_of_output = self._get_dss_objs_uids_of_output_from_cc_objs(clade_cols_of_output)
+            data_set_sample_uid_of_output = self._get_distinct_dss_objs_uids_of_output_from_cc_objs(clade_cols_of_output)
 
             return data_set_sample_uid_of_output, clade_col_uids_of_output
         else:
@@ -1304,29 +1304,29 @@ class BaseBrayCurtisDistPCoACreator:
 
             return data_set_sample_uid_of_output, clade_col_uids_of_output
 
-    def _get_dss_objs_uids_of_output_from_cc_objs(self, clade_cols_of_output):
-        data_set_samples_of_output = self._chunk_query_dss_objs_from_cc_objs(clade_cols_of_output)
+    def _get_distinct_dss_objs_uids_of_output_from_cc_objs(self, clade_cols_of_output):
+        data_set_samples_of_output = self._chunk_query_distinct_dss_objs_from_cc_objs(clade_cols_of_output)
         data_set_sample_uid_of_output = [dss.id for dss in data_set_samples_of_output]
         return data_set_sample_uid_of_output
 
-    def _get_cc_uids_of_output_from_cct_uids(self, cct_set_uid_list):
-        clade_cols_of_output = self._chunk_query_cc_objs_from_cct_uids(cct_set_uid_list)
+    def _get_distinct_cc_uids_of_output_from_cct_uids(self, cct_set_uid_list):
+        clade_cols_of_output = self._chunk_query_distinct_cc_objs_from_cct_uids(cct_set_uid_list)
         clade_col_uids_of_output = [
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output, clade_cols_of_output
 
-    def _chunk_query_dss_objs_from_cc_objs(self, clade_cols_of_output):
-        data_set_samples_of_output = []
+    def _chunk_query_distinct_dss_objs_from_cc_objs(self, clade_cols_of_output):
+        data_set_samples_of_output_set = set()
         for uid_list in general.chunks(clade_cols_of_output):
-            data_set_samples_of_output.extend(
+            data_set_samples_of_output_set.update(
                 list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
-        return data_set_samples_of_output
+        return list(data_set_samples_of_output_set)
 
-    def _chunk_query_cc_objs_from_cct_uids(self, cct_set_uid_list):
-        clade_cols_of_output = []
+    def _chunk_query_distinct_cc_objs_from_cct_uids(self, cct_set_uid_list):
+        clade_cols_of_output_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
-            clade_cols_of_output.extend(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
-        return clade_cols_of_output
+            clade_cols_of_output_set.update(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
+        return list(clade_cols_of_output_set)
 
     def _get_cc_uids_of_output_from_dss_objs(self, data_set_samples_of_output):
         clade_cols_of_output = self._chunk_query_cc_objs_from_dss_objs(data_set_samples_of_output)
@@ -1584,7 +1584,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         if self.cct_set_uid_list is not None:
             # if working with specific profile/sample sets
             self.clade_col_type_objects = self._chunk_query_set_clade_col_type_objs_from_cct_uids()
-            self.at_list_for_output = self._chunk_query_set_at_list_for_output_from_cct_uids(cct_set_uid_list)
+            self.at_list_for_output = self._chunk_query_set_distinct_at_list_for_output_from_cct_uids(cct_set_uid_list)
         else:
             self.clade_col_type_objects = None
             self.at_list_for_output = self._chunk_query_set_at_list_for_output_from_dss_uids()
@@ -1594,7 +1594,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.local = local_abunds_only
 
 
-    def _chunk_query_set_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
+    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
@@ -1602,13 +1602,13 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def _chunk_query_set_clade_col_type_objs_from_cct_uids(self):
         temp_clade_col_type_objs_list = []
-        for uid_list in general.chunks(self.cct_set_uid_list, 100):
+        for uid_list in general.chunks(self.cct_set_uid_list):
             temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
         return temp_clade_col_type_objs_list
 
     def _chunk_query_set_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
-        for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
+        for uid_list in general.chunks(self.data_set_sample_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(
                 data_analysis_from=self.data_analysis_obj,
                 cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
