@@ -18,6 +18,7 @@ from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
 from output import SequenceCountTableCreator
 import ntpath
 import re
+import math
 
 
 class DataLoading:
@@ -693,19 +694,53 @@ class DataLoading:
             # included in cladeCollections
             empty_cladal_seq_totals = json.dumps([0 for _ in self.clade_list])
 
+            try:
+                sample_type = str(self.sample_meta_info_df.loc[sampleName, 'sample_type'])
+                host_phylum = str(self.sample_meta_info_df.loc[sampleName, 'host_phylum'])
+                host_class = str(self.sample_meta_info_df.loc[sampleName, 'host_class'])
+                host_order = str(self.sample_meta_info_df.loc[sampleName, 'host_order'])
+                host_family = str(self.sample_meta_info_df.loc[sampleName, 'host_family'])
+                host_genus = str(self.sample_meta_info_df.loc[sampleName, 'host_genus'])
+                host_species = str(self.sample_meta_info_df.loc[sampleName, 'host_species'])
+                collection_depth = str(self.sample_meta_info_df.loc[sampleName, 'collection_depth'])
+                collection_date = str(self.sample_meta_info_df.loc[sampleName, 'collection_date'])
+            except:
+                sample_type = 'NoData'
+                host_phylum ='NoData'
+                host_class ='NoData'
+                host_order ='NoData'
+                host_family ='NoData'
+                host_genus ='NoData'
+                host_species ='NoData'
+                collection_depth ='NoData'
+                collection_date = 'NoData'
+            try:
+                collection_latitude = float(self.sample_meta_info_df.loc[sampleName, 'collection_latitude'])
+                collection_longitude = float(self.sample_meta_info_df.loc[sampleName, 'collection_longitude'])
+                if math.isnan(collection_latitude) or math.isnan(collection_longitude):
+                    collection_latitude = 999
+                    print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
+                    collection_longitude = 999
+
+            except:
+                print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
+                collection_latitude = 999.99999999
+                collection_longitude = 999.99999999
+
+
             dss = DataSetSample(name=sampleName, data_submission_from=self.dataset_object,
                                 cladal_seq_totals=empty_cladal_seq_totals,
-                                sample_type=self.sample_meta_info_df.loc[sampleName, 'sample_type'],
-                                host_phylum=self.sample_meta_info_df.loc[sampleName, 'host_phylum'],
-                                host_class=self.sample_meta_info_df.loc[sampleName, 'host_class'],
-                                host_order=self.sample_meta_info_df.loc[sampleName, 'host_order'],
-                                host_family=self.sample_meta_info_df.loc[sampleName, 'host_family'],
-                                host_genus=self.sample_meta_info_df.loc[sampleName, 'host_genus'],
-                                host_species=self.sample_meta_info_df.loc[sampleName, 'host_species'],
-                                collection_latitude=self.sample_meta_info_df.loc[sampleName, 'collection_latitude'],
-                                collection_longitude=self.sample_meta_info_df.loc[sampleName, 'collection_longitude'],
-                                collection_date=self.sample_meta_info_df.loc[sampleName, 'collection_date'],
-                                collection_depth=self.sample_meta_info_df.loc[sampleName, 'collection_depth']
+                                sample_type=sample_type,
+                                host_phylum=host_phylum,
+                                host_class=host_class,
+                                host_order=host_order,
+                                host_family=host_family,
+                                host_genus=host_genus,
+                                host_species=host_species,
+                                collection_latitude=collection_latitude,
+                                collection_longitude=collection_longitude,
+                                collection_date=collection_date,
+                                collection_depth=collection_depth
                                 )
             list_of_data_set_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
