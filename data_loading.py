@@ -671,8 +671,10 @@ class DataLoading:
         for sample_name in self.sample_meta_info_df.index.values.tolist():
             temp_list = []
             temp_list.append(sample_name.replace('-', '[dS]'))
-            temp_list.append(self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name'])
-            temp_list.append(self.sample_meta_info_df.loc[sample_name, 'fastq_rev_file_name'])
+            temp_list.append(os.path.join(self.temp_working_directory,
+                                          self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name']))
+            temp_list.append(os.path.join(self.temp_working_directory,
+                                          self.sample_meta_info_df.loc[sample_name, 'fastq_rev_file_name']))
             sample_fastq_pairs.append('\t'.join(temp_list))
         write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
