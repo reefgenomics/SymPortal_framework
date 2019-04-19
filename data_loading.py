@@ -661,10 +661,6 @@ class DataLoading:
         # are indeed found in the directory that we've been given
         self._check_all_fastqs_in_datasheet_exist()
 
-        # we will also need to know how to relate the sample names to the fastq files
-        # for this we will make a dict of fastq file name to sample
-        self._create_fastq_file_to_sample_name_dict()
-
         self.make_dot_stability_file_datasheet()
 
         self._create_data_set_sample_objects_in_bulk_with_datasheet()
@@ -672,13 +668,11 @@ class DataLoading:
     def make_dot_stability_file_datasheet(self):
         # from data_sheet
         sample_fastq_pairs = []
-        for sample_name in self.list_of_samples_names:
+        for sample_name in self.sample_meta_info_df.index.values.tolist():
             temp_list = []
             temp_list.append(sample_name.replace('-', '[dS]'))
-            for k, v in self.fastq_file_to_sample_name_dict.items():
-                if v == sample_name:
-                    temp_list.append(os.path.join(self.temp_working_directory, k))
-            assert (len(temp_list) == 3)
+            temp_list.append(self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name'])
+            temp_list.append(self.sample_meta_info_df.loc[sample_name, 'fastq_rev_file_name'])
             sample_fastq_pairs.append('\t'.join(temp_list))
         write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
@@ -746,14 +740,7 @@ class DataLoading:
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
 
-    def _create_fastq_file_to_sample_name_dict(self):
-        fastq_file_to_sample_name_dict = {}
-        for sample_index in self.sample_meta_info_df.index.values.tolist():
-            fastq_file_to_sample_name_dict[
-                self.sample_meta_info_df.loc[sample_index, 'fastq_fwd_file_name']] = sample_index
-            fastq_file_to_sample_name_dict[
-                self.sample_meta_info_df.loc[sample_index, 'fastq_rev_file_name']] = sample_index
-        self.fastq_file_to_sample_name_dict = fastq_file_to_sample_name_dict
+
 
     def _check_all_fastqs_in_datasheet_exist(self):
         self.list_of_fastq_files_in_wkd = return_list_of_file_names_in_directory(self.temp_working_directory)
