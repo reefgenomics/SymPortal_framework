@@ -1408,8 +1408,8 @@ class BaseBrayCurtisDistPCoACreator:
         dist_with_obj_name = [self.clade_dist_file_as_list[0]]
         list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list[1:]]
         if self.profiles_or_samples == 'samples':
-            objs_of_outputs = self._chunk_query_cc_objs_from_cc_uids(list_of_obj_uids)
-            dict_of_obj_id_to_obj_name = {obj.id: obj.data_set_sample_from.name for obj in objs_of_outputs}
+            objs_of_outputs = self._chunk_query_dss_objs_from_dss_uids(list_of_obj_uids)
+            dict_of_obj_id_to_obj_name = {obj.id: obj.name for obj in objs_of_outputs}
         else:  # 'profiles'
             objs_of_outputs = self._chunk_query_at_obj_from_at_uids(list_of_obj_uids)
             dict_of_obj_id_to_obj_name = {obj.id: obj.name for obj in objs_of_outputs}
@@ -1436,7 +1436,6 @@ class BaseBrayCurtisDistPCoACreator:
         for uid_list in general.chunks(list_of_cc_ids):
             cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
         return cc_of_outputs
-
 
     def _write_out_dist_file(self):
         general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
@@ -1500,10 +1499,11 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         for clade_in_question in self.clades_of_ccs:
             self._init_clade_dirs_and_paths(clade_in_question)
 
-            self.objs_of_clade = [cc_obj for cc_obj in self.cc_list_for_output if cc_obj.clade == clade_in_question]
+            dss_obj_to_cct_obj_dict = {cc_obj.data_set_sample_from : cc_obj for cc_obj in self.cc_list_for_output if cc_obj.clade == clade_in_question}
+            self.objs_of_clade = list(dss_obj_to_cct_obj_dict.keys())
             if len(self.objs_of_clade) < 2:
                 continue
-            self._create_rs_uid_to_normalised_abund_dict_for_each_obj_samples()
+            self._create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(dss_obj_to_cct_obj_dict)
             self._compute_braycurtis_btwn_obj_pairs()
             self._generate_distance_file()
             self._add_obj_uids_to_dist_file_and_write()
@@ -1518,11 +1518,11 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self.clade_output_dir, f'{self.date_time_string}.bray_curtis_sample_distances_{clade_in_question}.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
-    def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self):
+    def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self, dss_obj_to_cct_obj_dict):
         # Go through each of the clade collections and create a dict
         # that has key as ref_seq_uid and relative abundance of that sequence
         # we can then store these dict in a dict where the key is the sample ID.
-        for clade_col in self.objs_of_clade:
+        for dss_obj, clade_col in dss_obj_to_cct_obj_dict.items():
             temp_dict = {}
             list_of_dsss_in_cc = list(DataSetSampleSequence.objects.filter(
                 clade_collection_found_in=clade_col))
@@ -1541,7 +1541,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
                 for dsss in list_of_dsss_in_cc:
                     temp_dict[dsss.reference_sequence_of.id] = (dsss.abundance / total_seqs_ind_clade_col)*10000
 
-            self.clade_rs_uid_to_normalised_abund_clade_dict[clade_col.id] = temp_dict
+            self.clade_rs_uid_to_normalised_abund_clade_dict[dss_obj.id] = temp_dict
 
     @staticmethod
     def _infer_is_dataset_of_datasetsample(smpl_id_list_str, data_set_string):
