@@ -1477,17 +1477,31 @@ class SymNonSymTaxScreeningWorker:
         self._write_out_no_size_violation_names_file_to_pre_med_dir()
 
     def _write_out_no_size_violation_names_file_to_pre_med_dir(self):
-        with open(self.pre_med_names_file_path, 'w') as f:
-            for sequence_name in list(self.sym_no_size_violation_sequence_name_set_for_sample):
-                f.write(f'{self.name_dict[sequence_name]}\n')
-                self.absolute_number_of_sym_no_size_violation_sequences += len(
-                    self.name_dict[sequence_name].split('\t')[1].split(','))
+        for clade_value in set(self.sequence_name_to_clade_dict.values()):
+            pre_med_names_path_clade_specific = self.pre_med_names_file_path.replace(
+                f'_{self.sample_name}', f'_{clade_value}_{self.sample_name}')
+
+            with open(pre_med_names_path_clade_specific, 'w') as f:
+                for sequence_name in [
+                    seq_name for seq_name, clade_val in self.sequence_name_to_clade_dict.items() if
+                    clade_val == clade_value and seq_name in self.sym_no_size_violation_sequence_name_set_for_sample]:
+                    f.write(f'{self.name_dict[sequence_name]}\n')
+                    self.absolute_number_of_sym_no_size_violation_sequences += len(
+                        self.name_dict[sequence_name].split('\t')[1].split(','))
 
     def _write_out_no_size_violation_fasta_to_pre_med_dir(self):
-        with open(self.pre_med_fasta_path, 'w') as f:
-            for sequence_name in list(self.sym_no_size_violation_sequence_name_set_for_sample):
-                f.write(f'>{sequence_name}\n')
-                f.write(f'{self.fasta_dict[sequence_name]}\n')
+        """ Write out the pre-med seqs into clade separated .fasta and .name pairs"""
+        for clade_value in set(self.sequence_name_to_clade_dict.values()):
+            pre_med_fasta_path_clade_specific = self.pre_med_fasta_path.replace(
+                f'_{self.sample_name}', f'_{clade_value}_{self.sample_name}')
+
+            with open(pre_med_fasta_path_clade_specific, 'w') as f:
+                for sequence_name in [
+                    seq_name for seq_name, clade_val in self.sequence_name_to_clade_dict.items() if
+                    clade_val == clade_value and seq_name in self.sym_no_size_violation_sequence_name_set_for_sample]:
+
+                    f.write(f'>{sequence_name}\n')
+                    f.write(f'{self.fasta_dict[sequence_name]}\n')
 
     def _write_out_size_violation_seqs(self):
         if self.sym_size_violation_sequence_name_set_for_sample:
