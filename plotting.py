@@ -674,6 +674,9 @@ class PreMedSeqOutput:
         self._write_out_dfs_as_csv()
 
     def _write_out_dfs_as_csv(self):
+        print('\nWriting out pre-med sequence count tables: \n')
+        print(self.rel_count_df_output_path)
+        print(self.abs_count_df_output_path)
         self.rel_count_df.to_csv(self.rel_count_df_output_path)
         self.abs_count_df.to_csv(self.abs_count_df_output_path)
 
@@ -690,7 +693,7 @@ class PreMedSeqOutput:
         return ordered_sample_uid_list
 
     def _populate_dfs_with_arbitrary_sample_order(self):
-        print('\nPopulating dfs\n')
+        print('\nPopulating pre-MED dfs\n')
         ordered_seq_names = [self.sequence_to_name_dict[tup[0]] for tup in
                              sorted(self.sequence_count_dict.items(), key=lambda x: x[1], reverse=True)]
 
@@ -720,7 +723,6 @@ class PreMedSeqOutput:
         print('\nNaming pre-MED sequences\n')
         reference_sequence_list = list(ReferenceSequence.objects.all())
         for sequence, abund in sorted(self.sequence_count_dict.items(), key=lambda x: x[1], reverse=True):
-            sys.stdout.write(f'\rNaming sequence {sequence}')
             clade_of_seq = self.sequence_to_clade_dict[sequence]
             match_list = []
             for rs_obj in [rs for rs in reference_sequence_list if rs.clade == clade_of_seq]:
@@ -799,7 +801,6 @@ class PreMedSeqOutput:
         # a list to hold the names of samples in which there was no most abundant sequence identified
         no_maj_samps = []
         for sample_to_sort_uid in sequence_only_df_relative.index.values.tolist():
-            sys.stdout.write(f'\r{self.sample_uid_to_name_dict[sample_to_sort_uid]}: Getting maj seq for sample')
             sample_series_as_float = sequence_only_df_relative.loc[sample_to_sort_uid][1:].astype('float')
             max_rel_abund = sample_series_as_float.max()
             if not max_rel_abund > 0:
@@ -818,7 +819,6 @@ class PreMedSeqOutput:
         # and generate the sample order
         ordered_sample_list_by_uid = []
         for seq_to_order_samples_by in ordered_seq_names:
-            sys.stdout.write('\r{}'.format(seq_to_order_samples_by))
             tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_ddict[seq_to_order_samples_by]
             ordered_list_of_samples_for_seq_ordered = \
                 [x[0] for x in

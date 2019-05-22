@@ -13,7 +13,7 @@ from multiprocessing import Queue, Manager, Process
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
 from datetime import datetime
 import distance
-from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
+from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter, PreMedSeqOutput
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
 from output import SequenceCountTableCreator
 import ntpath
@@ -138,9 +138,17 @@ class DataLoading:
 
         self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
 
+        self._output_and_plot_pre_med_seqs_count_table()
+
         self._output_seqs_stacked_bar_plot()
 
         self._do_sample_ordination()
+
+    def _output_and_plot_pre_med_seqs_count_table(self):
+        pre_med_output = PreMedSeqOutput(
+            pre_med_dir=self.pre_med_sequence_output_directory_path,
+            output_directory=self.pre_med_sequence_output_directory_path)
+        pre_med_output.make_pre_med_counts_and_plots()
 
     def _write_sym_non_sym_and_size_violation_dirs_to_stdout(self):
         print(f'\nPre-MED Symbiodiniaceae sequences written out to:\n'
