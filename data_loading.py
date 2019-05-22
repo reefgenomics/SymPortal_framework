@@ -1362,7 +1362,7 @@ class SymNonSymTaxScreeningWorker:
 
     def _init_sym_non_size_violation_output_paths(self, data_loading_pre_med_sequence_output_directory_path):
         pre_med_sequence_output_directory_for_sample_path = os.path.join(
-            data_loading_pre_med_sequence_output_directory_path, self.sample_name)
+            data_loading_pre_med_sequence_output_directory_path, f'{self.datasetsample_object.id}_{self.sample_name}')
         os.makedirs(pre_med_sequence_output_directory_for_sample_path, exist_ok=True)
         self.pre_med_fasta_path = os.path.join(
             pre_med_sequence_output_directory_for_sample_path, f'pre_med_seqs_{self.sample_name}.fasta'
@@ -1407,7 +1407,7 @@ class SymNonSymTaxScreeningWorker:
             self, data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug):
         self.sample_name = sample_name
         self.cwd = os.path.join(data_loading_temp_working_directory, sample_name)
-        self.dataset_object = DataSetSample.objects.get(
+        self.datasetsample_object = DataSetSample.objects.get(
             name=sample_name, data_submission_from=data_loading_dataset_object
         )
         self.debug = data_loading_debug
@@ -1503,7 +1503,7 @@ class SymNonSymTaxScreeningWorker:
     def _write_out_no_size_violation_names_file_to_pre_med_dir(self):
         for clade_value in set(self.sequence_name_to_clade_dict.values()):
             pre_med_names_path_clade_specific = self.pre_med_names_file_path.replace(
-                f'_{self.sample_name}', f'_{clade_value}_{self.sample_name}')
+                f'pre_med_seqs_{self.sample_name}', f'pre_med_seqs_{clade_value}_{self.sample_name}')
 
             with open(pre_med_names_path_clade_specific, 'w') as f:
                 for sequence_name in [
@@ -1517,7 +1517,7 @@ class SymNonSymTaxScreeningWorker:
         """ Write out the pre-med seqs into clade separated .fasta and .name pairs"""
         for clade_value in set(self.sequence_name_to_clade_dict.values()):
             pre_med_fasta_path_clade_specific = self.pre_med_fasta_path.replace(
-                f'_{self.sample_name}', f'_{clade_value}_{self.sample_name}')
+                f'pre_med_seqs_{self.sample_name}', f'pre_med_seqs_{clade_value}_{self.sample_name}')
 
             with open(pre_med_fasta_path_clade_specific, 'w') as f:
                 for sequence_name in [
@@ -1558,49 +1558,49 @@ class SymNonSymTaxScreeningWorker:
         self._associate_non_sym_seq_attributes_to_dataset()
         self._associate_sym_seq_no_size_violation_attributes_to_dataset()
         self._associate_sym_seq_size_violation_attributes_to_dataset()
-        self.dataset_object.initial_processing_complete = True
-        self.dataset_object.save()
+        self.datasetsample_object.initial_processing_complete = True
+        self.datasetsample_object.save()
         print(f'{self.sample_name}: pre-med QC complete')
 
     def _associate_sym_seq_size_violation_attributes_to_dataset(self):
-        self.dataset_object.size_violation_absolute = (
-                self.dataset_object.post_qc_absolute_num_seqs -
-                self.dataset_object.absolute_num_sym_seqs -
-                self.dataset_object.non_sym_absolute_num_seqs
+        self.datasetsample_object.size_violation_absolute = (
+                self.datasetsample_object.post_qc_absolute_num_seqs -
+                self.datasetsample_object.absolute_num_sym_seqs -
+                self.datasetsample_object.non_sym_absolute_num_seqs
         )
-        print(f'{self.sample_name}: size_violation_absolute = {self.dataset_object.size_violation_absolute}')
-        self.dataset_object.size_violation_unique = (
-                self.dataset_object.post_qc_unique_num_seqs -
-                self.dataset_object.unique_num_sym_seqs -
-                self.dataset_object.non_sym_unique_num_seqs
+        print(f'{self.sample_name}: size_violation_absolute = {self.datasetsample_object.size_violation_absolute}')
+        self.datasetsample_object.size_violation_unique = (
+                self.datasetsample_object.post_qc_unique_num_seqs -
+                self.datasetsample_object.unique_num_sym_seqs -
+                self.datasetsample_object.non_sym_unique_num_seqs
         )
-        print(f'{self.sample_name}: size_violation_unique = {self.dataset_object.size_violation_unique}')
+        print(f'{self.sample_name}: size_violation_unique = {self.datasetsample_object.size_violation_unique}')
 
     def _associate_sym_seq_no_size_violation_attributes_to_dataset(self):
-        self.dataset_object.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
-        self.dataset_object.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
-        print(f'{self.sample_name}: unique_num_sym_seqs = {self.dataset_object.unique_num_sym_seqs}')
+        self.datasetsample_object.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
+        self.datasetsample_object.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
+        print(f'{self.sample_name}: unique_num_sym_seqs = {self.datasetsample_object.unique_num_sym_seqs}')
         print(f'{self.sample_name}: absolute_num_sym_seqs = {self.absolute_number_of_sym_no_size_violation_sequences}')
 
     def _associate_non_sym_seq_attributes_to_dataset(self):
-        self.dataset_object.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.dataset_object.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        print(f'{self.sample_name}: non_sym_unique_num_seqs = {self.dataset_object.non_sym_unique_num_seqs}')
+        self.datasetsample_object.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.datasetsample_object.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        print(f'{self.sample_name}: non_sym_unique_num_seqs = {self.datasetsample_object.non_sym_unique_num_seqs}')
         print(f'{self.sample_name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
 
     def _log_dataset_attr_and_raise_runtime_error(self):
         # if there are no symbiodiniaceae sequenes then log error and associate meta info
         print(f'{self.sample_name}: QC error.\n No symbiodiniaceae sequences left in sample after pre-med QC.')
-        self.dataset_object.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.dataset_object.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        self.dataset_object.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
-        self.dataset_object.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
-        self.dataset_object.unique_num_sym_seqs = 0
-        self.dataset_object.absolute_num_sym_seqs = 0
-        self.dataset_object.initial_processing_complete = True
-        self.dataset_object.error_in_processing = True
-        self.dataset_object.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
-        self.dataset_object.save()
+        self.datasetsample_object.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.datasetsample_object.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        self.datasetsample_object.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
+        self.datasetsample_object.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
+        self.datasetsample_object.unique_num_sym_seqs = 0
+        self.datasetsample_object.absolute_num_sym_seqs = 0
+        self.datasetsample_object.initial_processing_complete = True
+        self.datasetsample_object.error_in_processing = True
+        self.datasetsample_object.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
+        self.datasetsample_object.save()
         raise RuntimeError({'sample_name':self.sample_name})
 
     def _identify_and_write_non_sym_seqs_in_sample(self):
