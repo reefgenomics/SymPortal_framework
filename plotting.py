@@ -15,6 +15,8 @@ import os
 import numpy as np
 import sys
 from datetime import datetime
+import general
+from dbApp.models import ReferenceSequence
 
 plt.ioff()
 
@@ -95,7 +97,7 @@ class DistScatterPlotter:
         plt.savefig(svg_path)
         png_path = '{}.png'.format(self.fig_output_base)
         sys.stdout.write('\rsaving as .png')
-        plt.savefig(png_path)
+        plt.savefig(png_path, dpi=600)
         sys.stdout.write('\r\nDistance plots output to:')
         sys.stdout.write('\n{}'.format(svg_path))
         sys.stdout.write('\n{}\n'.format(png_path))
@@ -213,16 +215,18 @@ class SubPlotter:
         return end_slice
 
     def _create_rect_patches_and_populate_colour_list(self):
-        for sample in self.parent_plotter.output_count_table_as_df.index.values.tolist()[
+        for sample_uid in self.parent_plotter.output_count_table_as_df.index.values.tolist()[
                       self.index_of_this_subplot * self.parent_plotter.samples_per_subplot:self.end_slice]:
-            sys.stdout.write(f'\rPlotting sample: {self.parent_plotter.smp_uid_to_smp_name_dict[int(sample)]}')
-            self._add_sample_names_to_tick_label_list(sample)
+
+            sys.stdout.write(f'\rPlotting sample: {self.parent_plotter.smp_uid_to_smp_name_dict[int(sample_uid)]}')
+
+            self._add_sample_names_to_tick_label_list(sample_uid)
             # for each sample we will start at 0 for the y and then add the height of each bar to this
             bottom = 0
             # for each sequence, create a rect patch
             # the rect will be 1 in width and centered about the ind value.
-            non_zero_indices = self.parent_plotter.output_count_table_as_df.loc[sample].nonzero()[0]
-            current_sample_series = self.parent_plotter.output_count_table_as_df.loc[sample]
+            non_zero_indices = self.parent_plotter.output_count_table_as_df.loc[sample_uid].nonzero()[0]
+            current_sample_series = self.parent_plotter.output_count_table_as_df.loc[sample_uid]
             non_zero_sample_series = current_sample_series.iloc[non_zero_indices]
             sample_total = non_zero_sample_series.sum()
             for ser_index, rel_abund in non_zero_sample_series.iteritems():
@@ -236,12 +240,12 @@ class SubPlotter:
 
             self.x_index_for_plot += 1
 
-    def _add_sample_names_to_tick_label_list(self, sample):
-        sample_name = self.parent_plotter.smp_uid_to_smp_name_dict[int(sample)]
+    def _add_sample_names_to_tick_label_list(self, sample_uid):
+        sample_name = self.parent_plotter.smp_uid_to_smp_name_dict[int(sample_uid)]
         if len(sample_name) < 20:
             self.x_tick_label_list.append(sample_name)
         else:
-            self.x_tick_label_list.append(f'uid_{int(sample)}')
+            self.x_tick_label_list.append(f'uid_{int(sample_uid)}')
 
 
 class LegendPlotter:
@@ -409,7 +413,7 @@ class TypeStackedBarPlotter:
         png_path = f'{self.fig_output_base}_type_abundance_stacked_bar_plot.png'
         self.output_path_list.append(png_path)
         sys.stdout.write(f'{png_path}\n')
-        plt.savefig(png_path)
+        plt.savefig(png_path, dpi=600)
 
     def _plot_legend(self):
         legend_plotter = LegendPlotter(parent_plotter=self, type_plotting=True)
@@ -503,6 +507,328 @@ class TypeStackedBarPlotter:
         return  colour_dict
 
 
+class PreMedSeqOutput:
+    def __init__(self, pre_med_dir, output_directory, use_cache=False):
+        self.pre_med_dir = pre_med_dir
+        self.output_dir = output_directory
+        self.sample_uid_to_sample_dir_path_dict = {}
+        self.sample_uid_to_name_dict = self._make_sample_uid_to_name_dict()
+        self.sample_dirs = general.return_list_of_directory_paths_in_directory(self.pre_med_dir)
+        # dict that will identify the clade for every given sequence
+        self.master_sample_uid_to_abund_dict = {}
+        self.sequence_to_clade_dict = {}
+        self.sequence_count_dict = defaultdict(float)
+        self.sequence_to_name_dict = {}
+        self.abs_count_df = None
+        self.rel_count_df = None
+        self.unk_seq_clade_name_counter_dict = {clade:0 for clade in list('ABCDEFGHI')}
+        self.rel_count_df_output_path = os.path.join(self.pre_med_dir, 'pre_med_relative_abundance_df.csv')
+        self.abs_count_df_output_path = os.path.join(self.pre_med_dir, 'pre_med_absolute_abundance_df.csv')
+        self.use_cache = use_cache
+
+
+
+    class PreMedSeqPlotter:
+        def __init__(
+                self, rel_abund_df, output_directory,
+                time_date_str=None,):
+            self.output_directory = output_directory
+            if time_date_str:
+                self.time_date_str = time_date_str
+            else:
+                self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+            self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
+            self.smp_uid_to_smp_name_dict = None
+            self.output_count_table_as_df = self._curate_output_count_table(rel_abund_df)
+            self.ordered_list_of_seqs_names = list(self.output_count_table_as_df)
+            # legend parameters and vars
+            self.max_n_cols = 8
+            self.max_n_rows = 7
+            self.num_leg_cells = self.max_n_rows * self.max_n_cols
+            self.colour_dict = self._set_colour_dict()
+            # plotting vars
+            self.ordered_sample_name_list = self.output_count_table_as_df.index.values.tolist()
+            self.num_samples = len(self.ordered_sample_name_list)
+            self.samples_per_subplot = 50
+            self.number_of_subplots = self._infer_number_of_subplots()
+            # we add  1 to the n_subplots here for the legend at the bottom
+            self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
+            self.output_path_list = []
+
+        def _curate_output_count_table(self, rel_abund_df):
+            self.smp_uid_to_smp_name_dict = {
+                uid:name for uid, name in
+                zip(rel_abund_df.index.values.tolist(), rel_abund_df['sample_name'].values.tolist())}
+            df = rel_abund_df.drop(columns='sample_name')
+            return df.astype('float')
+
+        def plot_stacked_bar_seqs(self):
+            print('\n\nPlotting sequence abundances')
+            for sub_plot_index in range(self.number_of_subplots):
+                sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
+                sub_plotter.plot_seq_subplot()
+
+            self._plot_legend()
+
+            plt.tight_layout()
+
+            self._write_out_plot()
+
+            self.output_path_list.extend(
+                [
+                    f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.svg',
+                    f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.png'
+                ])
+
+        def _write_out_plot(self):
+            sys.stdout.write('\nFigure generation complete')
+            sys.stdout.write('\nFigures output to:\n')
+
+            svg_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.svg'
+            sys.stdout.write(f'{svg_path}\n')
+            plt.savefig(svg_path)
+
+            png_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.png'
+            sys.stdout.write(f'{png_path}\n')
+            plt.savefig(png_path, dpi=600)
+
+        def _plot_legend(self):
+            legend_plotter = LegendPlotter(parent_plotter=self)
+            legend_plotter.plot_legend_seqs()
+
+        def _infer_number_of_subplots(self):
+            if (self.num_samples % self.samples_per_subplot) != 0:
+                number_of_subplots = int(self.num_samples / self.samples_per_subplot) + 1
+            else:
+                number_of_subplots = int(self.num_samples / self.samples_per_subplot)
+            return number_of_subplots
+
+        def _set_colour_dict(self):
+            """Create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
+            to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
+            If we are only going to have a legend that is cols x rows as shown below, then we should only use
+            that many colours in the plotting."""
+            colour_palette, grey_palette = self._get_colour_lists()
+
+            temp_colour_dict = {}
+            for i in range(len(self.ordered_list_of_seqs_names)):
+                if i < self.num_leg_cells:
+                    temp_colour_dict[self.ordered_list_of_seqs_names[i]] = colour_palette[i]
+                else:
+                    grey_index = i % len(grey_palette)
+                    temp_colour_dict[self.ordered_list_of_seqs_names[i]] = grey_palette[grey_index]
+            return temp_colour_dict
+
+        def _get_colour_lists(self):
+            colour_palette = general.get_colour_list()
+            grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
+            return colour_palette, grey_palette
+
+    def _make_sample_uid_to_name_dict(self):
+        list_of_dir_name = general.return_list_of_directory_names_in_directory(self.pre_med_dir)
+        sample_uid_to_name_dict = {}
+        for dir_name in list_of_dir_name:
+            dir_name_split_list = dir_name.split('_')
+            sample_uid = int(dir_name_split_list[0])
+            sample_name = '_'.join(dir_name_split_list[1:])
+            sample_uid_to_name_dict[sample_uid] = sample_name
+            self.sample_uid_to_sample_dir_path_dict[sample_uid] = os.path.join(self.pre_med_dir, dir_name)
+        return sample_uid_to_name_dict
+
+    def make_pre_med_counts_and_plots(self):
+        # If use_cache we will look into the pre_med_dir to see if the count table already exist and if
+        # they do we willl use them rather than producing from scratch
+        if self.use_cache:
+            if os.path.isfile(self.rel_count_df_output_path) and os.path.isfile(self.abs_count_df_output_path):
+                self.rel_count_df = pd.read_csv(self.rel_count_df_output_path, index_col=0)
+            else:
+                self._create_dfs()
+        else:
+            self._create_dfs()
+
+        # now plot
+        med_plotter = self.PreMedSeqPlotter(output_directory=self.output_dir, rel_abund_df=self.rel_count_df)
+        med_plotter.plot_stacked_bar_seqs()
+
+
+    def _create_dfs(self):
+        # for each sample
+        self._count_sequences_in_each_sample()
+        # here we have the count info for each clade
+        # we also have the info for most abundant sequences
+        # we also have the clades for each sequence
+        # the only thing we need now before making the df and doing the plotting is to see if the sequences
+        # match sequences already in the symportal database
+        self._name_pre_med_seqs_by_exact_match_to_rs()
+        # now we can populate the df
+        # We will firstly do this using an arbitrary sample order in the index
+        # We will then use this df to calculate the sample order and reindex the df accordingly
+        # We will do the sequences only by order as there are going to be potentially a very large number of sequences
+        # and it would not be helpful to have them in clade order.
+        ordered_seq_names = self._populate_dfs_with_arbitrary_sample_order()
+        # here we have the dfs populated
+        # now we need to generate the ordered sample list and reindex the dfs
+        ordered_sample_uid_list = self._get_ordered_sample_list(ordered_seq_names)
+        self._reorder_dfs_by_sorted_samples(ordered_sample_uid_list)
+        # we should now write out these dfs to the directory that has the pre-MED sequences in them
+        self._write_out_dfs_as_csv()
+
+    def _write_out_dfs_as_csv(self):
+        self.rel_count_df.to_csv(self.rel_count_df_output_path)
+        self.abs_count_df.to_csv(self.abs_count_df_output_path)
+
+    def _reorder_dfs_by_sorted_samples(self, ordered_sample_uid_list):
+        # now reorder the samples for the dfs
+        self.rel_count_df = self.rel_count_df.reindex(ordered_sample_uid_list)
+        self.abs_count_df = self.abs_count_df.reindex(ordered_sample_uid_list)
+
+    def _get_ordered_sample_list(self, ordered_seq_names):
+        max_seq_ddict, no_maj_samps, seq_to_samp_ddict = self._generate_most_abundant_sequence_dictionaries(
+            self.rel_count_df)
+        ordered_sample_uid_list = self._generate_ordered_sample_list_from_most_abund_seq_dicts(
+            ordered_seq_names=ordered_seq_names, no_maj_samps=no_maj_samps, seq_to_samp_ddict=seq_to_samp_ddict)
+        return ordered_sample_uid_list
+
+    def _populate_dfs_with_arbitrary_sample_order(self):
+        print('\nPopulating dfs\n')
+        ordered_seq_names = [self.sequence_to_name_dict[tup[0]] for tup in
+                             sorted(self.sequence_count_dict.items(), key=lambda x: x[1], reverse=True)]
+
+        # fastest way to create the df from the dictionaries is to create a list of dictionaries and then
+        # fill in the nan values and rearrange the columns
+        list_of_dicts = []
+        for sample_uid, abund_dict in self.master_sample_uid_to_abund_dict.items():
+            temp_dict = {self.sequence_to_name_dict[seq]: abund for seq, abund in abund_dict.items()}
+            temp_dict['sample_uid'] = sample_uid
+            list_of_dicts.append(temp_dict)
+
+        self.abs_count_df = pd.DataFrame(list_of_dicts)
+        self.abs_count_df.set_index('sample_uid', inplace=True, drop=True)
+        self.abs_count_df = self.abs_count_df.reindex(ordered_seq_names, axis=1).fillna(0)
+
+        self.rel_count_df = self.abs_count_df.div(self.abs_count_df.sum(axis=1), axis=0)
+        sample_names_list = [self.sample_uid_to_name_dict[sample_uid] for sample_uid in self.abs_count_df.index.values.tolist()]
+        self.abs_count_df['sample_name'] = sample_names_list
+        self.rel_count_df['sample_name'] = sample_names_list
+        # reorder the columns of the df
+        self.abs_count_df = self.abs_count_df.reindex(['sample_name'] + list(self.abs_count_df)[:-1], axis=1)
+        self.rel_count_df = self.rel_count_df.reindex(['sample_name'] + list(self.rel_count_df)[:-1], axis=1)
+
+        return ordered_seq_names
+
+    def _name_pre_med_seqs_by_exact_match_to_rs(self):
+        print('\nNaming pre-MED sequences\n')
+        reference_sequence_list = list(ReferenceSequence.objects.all())
+        for sequence, abund in sorted(self.sequence_count_dict.items(), key=lambda x: x[1], reverse=True):
+            sys.stdout.write(f'\rNaming sequence {sequence}')
+            clade_of_seq = self.sequence_to_clade_dict[sequence]
+            match_list = []
+            for rs_obj in [rs for rs in reference_sequence_list if rs.clade == clade_of_seq]:
+                if sequence == rs_obj.sequence:
+                    if rs_obj.has_name:
+                        match_list.append(rs_obj.name)
+                    else:
+                        match_list.append(f'{rs_obj.id}_{rs_obj.clade}')
+            if match_list:
+                if len(match_list) == 1 and match_list[0] not in self.sequence_to_name_dict.values():
+                    self.sequence_to_name_dict[sequence] = match_list[0]
+                else:
+                    self.sequence_to_name_dict[
+                        sequence] = f'unk_{clade_of_seq}_{self.unk_seq_clade_name_counter_dict[clade_of_seq]}'
+                    self.unk_seq_clade_name_counter_dict[clade_of_seq] += 1
+            else:
+                self.sequence_to_name_dict[
+                    sequence] = f'unk_{clade_of_seq}_{self.unk_seq_clade_name_counter_dict[clade_of_seq]}'
+                self.unk_seq_clade_name_counter_dict[clade_of_seq] += 1
+        self.name_to_sequence_dict = {name: sequence for sequence, name in self.sequence_to_name_dict.items()}
+
+    def _count_sequences_in_each_sample(self):
+        """We will count the sequences in each of the samples using the paired fasta and name files
+        In parallel we will keep track of which clade a sequence belongs to and the overall counts of the sequences
+        acorss all samples."""
+        for sample_uid, sample_dir in self.sample_uid_to_sample_dir_path_dict.items():
+            # We need count the sequences that are found in each of the samples
+            files_in_dir = general.return_list_of_file_names_in_directory(sample_dir)
+            fasta_files_in_dir = [file_name for file_name in files_in_dir if 'fasta' in file_name]
+            clades_of_sample = [file_name.split('_')[3] for file_name in fasta_files_in_dir]
+            # now go clade by clade
+            total_seqs = self._get_total_seqs_in_sample(clades_of_sample, fasta_files_in_dir, sample_dir)
+            sample_abund_dict = {}
+            for clade in clades_of_sample:
+                fasta_file_name = None
+                for fasta_file in fasta_files_in_dir:
+                    if f'_{clade}_' in fasta_file:
+                        fasta_file_name = fasta_file
+                if fasta_file_name is None:
+                    raise RuntimeError('Fasta file for clade not found while processing output of pre-MED seqs')
+                clade_fasta_path = os.path.join(sample_dir, fasta_file_name)
+                # at this point we have both the fasta and name dict for the sample
+                clade_fasta_dict = general.create_dict_from_fasta(fasta_path=clade_fasta_path)
+                clade_name_dict = general.create_seq_name_to_abundance_dict_from_name_file(
+                    name_file_path=clade_fasta_path.replace('.fasta', '.names'))
+
+                for seq_name, seq_seq in clade_fasta_dict.items():
+                    seq_abund = clade_name_dict[seq_name]
+                    sample_abund_dict[seq_seq] = seq_abund
+                    self.sequence_to_clade_dict[seq_seq] = clade
+                    self.sequence_count_dict[seq_seq] += seq_abund / total_seqs
+            self.master_sample_uid_to_abund_dict[int(sample_dir.split('/')[-1].split('_')[0])] = sample_abund_dict
+
+    def _get_total_seqs_in_sample(self, clades_of_sample, fasta_files_in_dir, sample_dir):
+        total_seqs = 0
+        for clade in clades_of_sample:
+            fasta_file_name = None
+            for fasta_file in fasta_files_in_dir:
+                if f'_{clade}_' in fasta_file:
+                    fasta_file_name = fasta_file
+            if fasta_file_name is None:
+                raise RuntimeError('Fasta file for clade not found while processing output of pre-MED seqs')
+            clade_fasta_path = os.path.join(sample_dir, fasta_file_name)
+            # at this point we have both the fasta and name dict for the sample
+            clade_name_dict = general.create_seq_name_to_abundance_dict_from_name_file(
+                name_file_path=clade_fasta_path.replace('.fasta', '.names'))
+            total_seqs += sum(clade_name_dict.values())
+        return total_seqs
+    # we will put the sequence in the df in order of clade, then abund
+    # we will put the samples in an arbitrary order
+    def _generate_most_abundant_sequence_dictionaries(self, sequence_only_df_relative):
+        # {sequence_name_found_to_be_most_abund_in_sample: num_samples_it_was_found_to_be_most_abund_in}
+        max_seq_ddict = defaultdict(int)
+        # {most_abundant_seq_name: [(dss.id, rel_abund_of_most_abund_seq) for samples with that seq as most abund]}
+        seq_to_samp_ddict = defaultdict(list)
+        # a list to hold the names of samples in which there was no most abundant sequence identified
+        no_maj_samps = []
+        for sample_to_sort_uid in sequence_only_df_relative.index.values.tolist():
+            sys.stdout.write(f'\r{self.sample_uid_to_name_dict[sample_to_sort_uid]}: Getting maj seq for sample')
+            sample_series_as_float = sequence_only_df_relative.loc[sample_to_sort_uid][1:].astype('float')
+            max_rel_abund = sample_series_as_float.max()
+            if not max_rel_abund > 0:
+                no_maj_samps.append(sample_to_sort_uid)
+            else:
+                max_abund_seq = sample_series_as_float.idxmax()
+                # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
+                seq_to_samp_ddict[max_abund_seq].append((sample_to_sort_uid, max_rel_abund))
+                # add this to the ddict count
+                max_seq_ddict[max_abund_seq] += 1
+        return max_seq_ddict, no_maj_samps, seq_to_samp_ddict
+
+    @staticmethod
+    def _generate_ordered_sample_list_from_most_abund_seq_dicts(ordered_seq_names, no_maj_samps, seq_to_samp_ddict):
+        # then once we have compelted this for all sequences go clade by clade
+        # and generate the sample order
+        ordered_sample_list_by_uid = []
+        for seq_to_order_samples_by in ordered_seq_names:
+            sys.stdout.write('\r{}'.format(seq_to_order_samples_by))
+            tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_ddict[seq_to_order_samples_by]
+            ordered_list_of_samples_for_seq_ordered = \
+                [x[0] for x in
+                 sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
+            ordered_sample_list_by_uid.extend(ordered_list_of_samples_for_seq_ordered)
+        # finally add in the samples that didn't have a maj sequence
+        ordered_sample_list_by_uid.extend(no_maj_samps)
+        return ordered_sample_list_by_uid
+
+
 class SeqStackedBarPlotter:
     """Class for plotting the sequence count table output"""
     def __init__(
@@ -560,7 +886,7 @@ class SeqStackedBarPlotter:
 
         png_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.png'
         sys.stdout.write(f'{png_path}\n')
-        plt.savefig(png_path)
+        plt.savefig(png_path, dpi=600)
 
     def _plot_legend(self):
         legend_plotter = LegendPlotter(parent_plotter=self)
@@ -672,7 +998,7 @@ class SeqStackedBarPlotter:
         return temp_colour_dict
 
     def _get_colour_lists(self):
-        colour_palette = self._get_colour_list()
+        colour_palette = general.get_colour_list()
         grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
         return colour_palette, grey_palette
 
