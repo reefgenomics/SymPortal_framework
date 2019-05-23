@@ -48,7 +48,6 @@ import pickle
 import general
 
 class SymPortalWorkFlowManager:
-    # INIT
     def __init__(self, custom_args_list=None):
         self.args = self._define_args(custom_args_list)
         # general attributes
@@ -444,15 +443,13 @@ class SymPortalWorkFlowManager:
         self.data_analysis_object.save()
 
     # DATA LOADING
-    # TODO push the creation of data set sample object back until the submission has been verified
     def perform_data_loading(self):
         self._verify_name_arg_given()
-        self.make_new_dataset_object()
         self._execute_data_loading()
 
     def _execute_data_loading(self):
         self.data_loading_object = data_loading.DataLoading(
-            data_set_object=self.data_set_object, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
+            parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, distance_method=self.args.distance_method, debug=self.args.debug)
         self.data_loading_object.load_data()
@@ -462,11 +459,6 @@ class SymPortalWorkFlowManager:
         if self.args.name == 'noName':
             sys.exit('Please provide a name using the --name flag. e.g. --name informative_name')
 
-    def make_new_dataset_object(self):
-        self.data_set_object = DataSet(
-            name=self.args.name, time_stamp=self.date_time_str, reference_fasta_database_used=self.reference_db,
-            submitting_user=self.submitting_user, submitting_user_email=self.submitting_user_email)
-        self.data_set_object.save()
 
     # STAND_ALONE SEQUENCE OUTPUT
     def perform_stand_alone_sequence_output(self):

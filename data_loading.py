@@ -27,15 +27,22 @@ class DataLoading:
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
     def __init__(
-            self, data_set_object, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord,
+            self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord,
             distance_method, debug=False):
+        self.parent = parent_work_flow_obj
+        # check and generate the sample_meta_info_df first before creating the DataSet object
+        self.sample_meta_info_df = None
+        self.user_input_path = user_input_path
+        self.datasheet_path = datasheet_path
+        if self.datasheet_path:
+            self._create_and_check_datasheet()
+        self.dataset_object = None
+        self._make_new_dataset_object()
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
         self.distance_method = distance_method
-        self.dataset_object = data_set_object
-        self.user_input_path = user_input_path
         self.output_directory = self._setup_output_directory()
         self.temp_working_directory = self._setup_temp_working_directory()
         self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
@@ -56,11 +63,9 @@ class DataLoading:
         # data can be loaded either as paired fastq or fastq.gz files or as a single compressed file containing
         # the afore mentioned paired files.
         self.is_single_file_or_paired_input = self._determine_if_single_file_or_paired_input()
-        self.datasheet_path = datasheet_path
         self.debug = debug
         self.symclade_db_directory_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB'))
         self.symclade_db_full_path = os.path.join(self.symclade_db_directory_path, 'symClade.fa')
-        self.sample_meta_info_df = None
         self.list_of_samples_names = None
         self.list_of_fastq_file_names_in_wkd = None
         self.list_of_fastq_files_in_wkd = []
@@ -143,6 +148,12 @@ class DataLoading:
         self._output_seqs_stacked_bar_plot()
 
         self._do_sample_ordination()
+
+    def _make_new_dataset_object(self):
+        self.dataset_object = DataSet(
+            name=self.parent.args.name, time_stamp=self.parent.date_time_str, reference_fasta_database_used=self.parent.reference_db,
+            submitting_user=self.parent.submitting_user, submitting_user_email=self.parent.submitting_user_email)
+        self.dataset_object.save()
 
     def _output_and_plot_pre_med_seqs_count_table(self):
         pre_med_output = PreMedSeqOutput(
@@ -655,19 +666,8 @@ class DataLoading:
         return end_index
 
     def _generate_stability_file_and_data_set_sample_objects_with_datasheet(self):
-        # Create a pandas df from the data_sheet if it was provided
-        # allow the data_sheet to be in a .csv format or .xlsx format. This is so that we can store a datasheet
-        # in the github repo in a non-binary format
-        # The sample_meta_df that is created from the data_sheet should be identical irrespective of whether a .csv
-        # or a .xlsx is submitted.
-        self._create_sample_meta_info_dataframe_from_datasheet_path()
-
         # if we are given a data_sheet then use the sample names given as the DataSetSample object names
         self.list_of_samples_names = self.sample_meta_info_df.index.values.tolist()
-
-        # we should verify that all of the fastq files listed in the sample_meta_df
-        # are indeed found in the directory that we've been given
-        self._check_all_fastqs_in_datasheet_exist()
 
         self.make_dot_stability_file_datasheet()
 
@@ -688,6 +688,11 @@ class DataLoading:
         self.sample_fastq_pairs = sample_fastq_pairs
 
     def _create_data_set_sample_objects_in_bulk_with_datasheet(self):
+        """
+        The proper formatting of the values in the df should already have been taken care of. However, I will
+        leave the code in below as a safe guard to make sure that the DataSetSample objects can still be successfuly
+        created.
+        """
         list_of_data_set_sample_objects = []
         sys.stdout.write('\nCreating data_set_sample objects\n')
         for sampleName in self.list_of_samples_names:
@@ -722,15 +727,14 @@ class DataLoading:
                 collection_latitude = float(self.sample_meta_info_df.loc[sampleName, 'collection_latitude'])
                 collection_longitude = float(self.sample_meta_info_df.loc[sampleName, 'collection_longitude'])
                 if math.isnan(collection_latitude) or math.isnan(collection_longitude):
-                    collection_latitude = 999
+                    collection_latitude = float(999)
                     print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
-                    collection_longitude = 999
+                    collection_longitude = float(999)
 
             except:
                 print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
-                collection_latitude = 999.99999999
-                collection_longitude = 999.99999999
-
+                collection_latitude = float(999)
+                collection_longitude = float(999)
 
             dss = DataSetSample(name=sampleName, data_submission_from=self.dataset_object,
                                 cladal_seq_totals=empty_cladal_seq_totals,
@@ -749,8 +753,6 @@ class DataLoading:
             list_of_data_set_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
-
-
 
     def _check_all_fastqs_in_datasheet_exist(self):
         self.list_of_fastq_files_in_wkd = return_list_of_file_names_in_directory(self.temp_working_directory)
@@ -773,17 +775,188 @@ class DataLoading:
         list_of_meta_gz_files.extend(self.sample_meta_info_df['fastq_rev_file_name'].values.tolist())
         return list_of_meta_gz_files
 
-    def _create_sample_meta_info_dataframe_from_datasheet_path(self):
+    def _create_and_check_datasheet(self):
+        # Create a pandas df from the data_sheet if it was provided
+        # allow the data_sheet to be in a .csv format or .xlsx format. This is so that we can store a datasheet
+        # in the github repo in a non-binary format
+        # The sample_meta_df that is created from the data_sheet should be identical irrespective of whether a .csv
+        # or a .xlsx is submitted.
+        # 1 - Things to check: Check that each of the sample names are unique.
+        # 2 - Check that each of the seq files are unique and exist
+        # 3 - Check that the lat lon file exists and is in a format that can be used. If not convert to 999.
+        # 4 - check that each of the other values can be converted to str
+
+        # Datasheet to pandas df
         if self.datasheet_path.endswith('.xlsx'):
             self.sample_meta_info_df = pd.read_excel(
-                io=self.datasheet_path, header=0, index_col=0, usecols='A:N', skiprows=[0])
+                io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
         elif self.datasheet_path.endswith('.csv'):
             self.sample_meta_info_df = pd.read_csv(
-                filepath_or_buffer=self.datasheet_path, header=0, index_col=0, skiprows=[0])
+                filepath_or_buffer=self.datasheet_path, index_col=0, skiprows=[0])
         else:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
+
+        self._check_datasheet_df_vals_unique()
+
+        self.sample_meta_info_df.set_index('sample_name', inplace=True, drop=True)
+
         self.sample_meta_info_df.index = self.sample_meta_info_df.index.map(str)
+
+        self._check_seq_files_exist()
+
+        self._check_lat_long()
+
+        self._check_vars_can_be_string()
+
+    def _check_vars_can_be_string(self):
+        """First convert each of the columns to type string.
+        Then make sure that all of the vals are genuine vals of NoData
+        """
+        for col in ['sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus',
+                        'host_species', 'collection_depth', 'collection_date']:
+            self.sample_meta_info_df[col] = self.sample_meta_info_df[col].astype(str)
+        for i, sample_name in enumerate(self.sample_meta_info_df.index.values.tolist()):
+            for col in ['sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus',
+                        'host_species', 'collection_depth', 'collection_date']:
+                try:
+                    value = str(self.sample_meta_info_df.at[sample_name, col])
+                    if value == 'nan':
+                        self.sample_meta_info_df.at[sample_name, col] = 'NoData'
+                except:
+                    self.sample_meta_info_df.at[sample_name, col] = 'NoData'
+
+    def _check_lat_long(self):
+        # check the lat long value for each sample listed
+        self.sample_meta_info_df['collection_latitude'] = self.sample_meta_info_df['collection_latitude'].astype(str)
+        self.sample_meta_info_df['collection_longitude'] = self.sample_meta_info_df['collection_longitude'].astype(str)
+        for i, sample_name in enumerate(self.sample_meta_info_df.index.values.tolist()):
+            lat = self.sample_meta_info_df.at[sample_name, 'collection_latitude']
+            lon = self.sample_meta_info_df.at[sample_name, 'collection_longitude']
+
+            # 1 - Check to see if we are dealing with nan values
+            # This may causie issue if the column is in str format already
+            if lat == 'nan' or lon == 'nan':
+                print(f'Lat and long are currently nan for {sample_name}. Values will be set to 999')
+                lat_float = float(999)
+                lon_float = float(999)
+            else:
+                # try to see if they are compatable floats
+                try:
+                    lat_float = float(lat)
+                    lon_float = float(lon)
+                except:
+                    # see if they are decimal degrees only with the hemisphere anotation of degree sign
+                    try:
+                        if 'N' in lat:
+                            lat_float = float(lat.replace('N', '').replace(chr(176), ''))
+                            # lat_float should be positive
+                            if lat_float < 0:
+                                lat_float = lat_float * -1
+                        else:
+                            lat_float = float(lat.replace('S', '').replace(chr(176), ''))
+                            # lat_float should be negative
+                            if lat_float > 0:
+                                lat_float = lat_float * -1
+                        if 'E' in lon:
+                            lon_float = float(lon.replace('E', '').replace(chr(176), ''))
+                            # lon_float should be positive
+                            if lon_float < 0:
+                                lon_float = lon_float * -1
+                        else:
+                            lon_float = float(lon.replace('W', '').replace(chr(176), ''))
+                            # lon_float should be negative
+                            if lon_float > 0:
+                                lon_float = lon_float * -1
+                    except:
+                        # see if they are in proper dms format
+                        try:
+                            lat_float = self.dms2dec(lat)
+                            lon_float = self.dms2dec(lon)
+                        # if all this fails, convert to 999
+                        except Exception:
+                            print(f'Unable to convert the Lat Lon values of {sample_name} to float. Values will be set to 999')
+                            lat_float = float(999)
+                            lon_float = float(999)
+            # final check to make sure that the values are in a sensible range
+            if (-90 <= lat_float <= 90) and (-180 <= lon_float <= 180):
+                self.sample_meta_info_df.at[sample_name, 'collection_latitude'] = lat_float
+                self.sample_meta_info_df.at[sample_name, 'collection_longitude'] = lon_float
+            else:
+                self.sample_meta_info_df.at[sample_name, 'collection_latitude'] = float(999)
+                self.sample_meta_info_df.at[sample_name, 'collection_longitude'] = float(999)
+        # finally make sure that the lat and long cols are typed as float
+        self.sample_meta_info_df['collection_latitude'] = self.sample_meta_info_df['collection_latitude'].astype(float)
+        self.sample_meta_info_df['collection_longitude'] = self.sample_meta_info_df['collection_longitude'].astype(float)
+
+    @staticmethod
+    def dms2dec(dms_str):
+        """Return decimal representation of DMS
+
+            dms2dec(utf8(48°53'10.18"N))
+            48.8866111111F
+
+            dms2dec(utf8(2°20'35.09"E))
+            2.34330555556F
+
+            dms2dec(utf8(48°53'10.18"S))
+            -48.8866111111F
+
+            dms2dec(utf8(2°20'35.09"W))
+            -2.34330555556F
+
+            """
+
+        dms_str = re.sub(r'\s', '', dms_str)
+
+        sign = -1 if re.search('[swSW]', dms_str) else 1
+
+        numbers = [*filter(len, re.split('\D+', dms_str, maxsplit=4))]
+
+        degree = numbers[0]
+        minute = numbers[1] if len(numbers) >= 2 else '0'
+        second = numbers[2] if len(numbers) >= 3 else '0'
+        frac_seconds = numbers[3] if len(numbers) >= 4 else '0'
+
+        second += "." + frac_seconds
+        return sign * (int(degree) + float(minute) / 60 + float(second) / 3600)
+
+    def _check_seq_files_exist(self):
+        # check that files exist
+        file_not_found_list = []
+        for fwd_file in self.sample_meta_info_df['fastq_fwd_file_name'].values.tolist():
+            if not os.path.exists(os.path.join(self.user_input_path, fwd_file)):
+                file_not_found_list.append(fwd_file)
+        for rev_file in self.sample_meta_info_df['fastq_rev_file_name'].values.tolist():
+            if not os.path.exists(os.path.join(self.user_input_path, rev_file)):
+                file_not_found_list.append(rev_file)
+        if file_not_found_list:
+            print('Some of the sequencing files listed in your datasheet cannot be found:')
+            for file_name in file_not_found_list:
+                print(f'{file_name}')
+            sys.exit()
+
+    def _check_datasheet_df_vals_unique(self):
+        # check sample names
+        self._check_vals_of_col_unique(column_name='sample_name')
+        # check fastq_fwd_file_name
+        self._check_vals_of_col_unique(column_name='fastq_fwd_file_name')
+        # check fastq_rev_file_name
+        self._check_vals_of_col_unique(column_name='fastq_rev_file_name')
+
+    def _check_vals_of_col_unique(self, column_name):
+        # check to see that the values held in a column are unique
+        sample_name_counter = Counter(self.sample_meta_info_df[column_name].values.tolist())
+        non_unique_name_list = []
+        for col_val, count in sample_name_counter.items():
+            if count != 1:
+                non_unique_name_list.append(col_val)
+        if non_unique_name_list:
+            print(f'There appear to be non unique {column_name}s in your datasheet:')
+            for col_val in non_unique_name_list:
+                print(f'\t{col_val}')
+            print('Please rectify this in your datasheet and reattempt loading')
+            sys.exit()
 
     def _copy_and_decompress_input_files_to_temp_wkd(self):
         if not self.is_single_file_or_paired_input:
