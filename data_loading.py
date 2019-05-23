@@ -754,11 +754,6 @@ class DataLoading:
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
         DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
 
-    def _check_all_fastqs_in_datasheet_exist(self):
-        self.list_of_fastq_files_in_wkd = return_list_of_file_names_in_directory(self.temp_working_directory)
-        list_of_meta_gz_files = self._get_list_of_fastq_file_names_that_should_be_in_directory()
-        self._if_fastq_files_missing_sys_exit(list_of_meta_gz_files)
-
     def _if_fastq_files_missing_sys_exit(self, list_of_meta_gz_files):
         for fastq in list_of_meta_gz_files:
             if fastq not in self.list_of_fastq_files_in_wkd:
