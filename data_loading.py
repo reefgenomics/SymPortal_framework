@@ -154,6 +154,7 @@ class DataLoading:
             name=self.parent.args.name, time_stamp=self.parent.date_time_str, reference_fasta_database_used=self.parent.reference_db,
             submitting_user=self.parent.submitting_user, submitting_user_email=self.parent.submitting_user_email)
         self.dataset_object.save()
+        self.parent.data_set_object = self.dataset_object
 
     def _output_and_plot_pre_med_seqs_count_table(self):
         pre_med_output = PreMedSeqOutput(
@@ -788,7 +789,7 @@ class DataLoading:
                 io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
         elif self.datasheet_path.endswith('.csv'):
             self.sample_meta_info_df = pd.read_csv(
-                filepath_or_buffer=self.datasheet_path, index_col=0, skiprows=[0])
+                filepath_or_buffer=self.datasheet_path, skiprows=[0])
         else:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
