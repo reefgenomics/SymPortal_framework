@@ -267,16 +267,52 @@ def chunks(l, n=500):
     for i in range(0, len(in_list), n):
         yield in_list[i:i + n]
 
+
+def set_seq_colour_dict(ordered_list_of_seqs):
+    """Create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
+    to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
+    If we are only going to have a legend that is cols x rows as shown below, then we should only use
+    that many colours in the plotting."""
+    temp_colour_dict = {}
+    predefined_colour_dict = get_pre_def_colour_dict()
+
+    for seq_name, color_hash in predefined_colour_dict.items():
+        if seq_name in ordered_list_of_seqs:
+            temp_colour_dict[seq_name] = color_hash
+
+    colour_palette, grey_palette = get_colour_lists()
+
+    remaining_seqs = [seq for seq in ordered_list_of_seqs if seq not in predefined_colour_dict.keys()]
+
+    for i, seq_name in enumerate(remaining_seqs):
+        if i < len(colour_palette):
+            temp_colour_dict[seq_name] = colour_palette[i]
+        else:
+            grey_index = i % len(grey_palette)
+            temp_colour_dict[seq_name] = grey_palette[grey_index]
+
+    return temp_colour_dict
+
+def get_colour_lists():
+    colour_palette = get_colour_list()
+    grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
+    return colour_palette, grey_palette
+
+def get_pre_def_colour_dict():
+    """These are the top 40 most abundnant named sequences. I have hardcoded their color."""
+    return {
+        'A1'   :"#FFFF00", 'C3'  :"#1CE6FF", 'C15'  :"#FF34FF", 'A1bo':"#FF4A46", 'D1'   :"#008941",
+        'C1'   :"#006FA6", 'C27' :"#A30059", 'D4'   :"#FFDBE5", 'C3u' :"#7A4900", 'C42.2':"#0000A6",
+        'A1bp' :"#63FFAC", 'C115':"#B79762", 'C1b'  :"#004D43", 'C1d' :"#8FB0FF", 'A1c'  :"#997D87",
+        'C66'  :"#5A0007", 'A1j' :"#809693", 'B1'   :"#FEFFE6", 'A1k' :"#1B4400", 'A4'   :"#4FC601",
+        'A1h'  :"#3B5DFF", 'C50a':"#4A3B53", 'C39'  :"#FF2F80", 'C3dc':"#61615A", 'D4c'  :"#BA0900",
+        'C3z'  :"#6B7900", 'C21' :"#00C2A0", 'C116' :"#FFAA92", 'A1cc':"#FF90C9", 'C72'  :"#B903AA",
+        'C15cl':"#D16100", 'C31' :"#DDEFFF", 'C15cw':"#000035", 'A1bv':"#7B4F4B", 'D6'   :"#A1C299",
+        'A4m'  :"#300018", 'C42a':"#0AA6D8", 'C15cr':"#013349", 'C50l':"#00846F", 'C42g' :"#372101" }
+
+
 def get_colour_list():
     colour_list = [
-        "#FFFF00", "#1CE6FF", "#FF34FF", "#FF4A46", "#008941", "#006FA6", "#A30059", "#FFDBE5", "#7A4900",
-        "#0000A6",
-        "#63FFAC", "#B79762", "#004D43", "#8FB0FF", "#997D87", "#5A0007", "#809693", "#FEFFE6", "#1B4400",
-        "#4FC601",
-        "#3B5DFF", "#4A3B53", "#FF2F80", "#61615A", "#BA0900", "#6B7900", "#00C2A0", "#FFAA92", "#FF90C9",
-        "#B903AA",
-        "#D16100", "#DDEFFF", "#000035", "#7B4F4B", "#A1C299", "#300018", "#0AA6D8", "#013349", "#00846F",
-        "#372101",
         "#FFB500", "#C2FFED", "#A079BF", "#CC0744", "#C0B9B2", "#C2FF99", "#001E09", "#00489C", "#6F0062",
         "#0CBD66",
         "#EEC3FF", "#456D75", "#B77B68", "#7A87A1", "#788D66", "#885578", "#FAD09F", "#FF8A9A", "#D157A0",

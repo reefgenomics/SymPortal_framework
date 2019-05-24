@@ -545,7 +545,7 @@ class PreMedSeqOutput:
             self.max_n_cols = 8
             self.max_n_rows = 7
             self.num_leg_cells = self.max_n_rows * self.max_n_cols
-            self.colour_dict = self._set_colour_dict()
+            self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
             # plotting vars
             self.ordered_sample_name_list = self.output_count_table_as_df.index.values.tolist()
             self.num_samples = len(self.ordered_sample_name_list)
@@ -602,27 +602,6 @@ class PreMedSeqOutput:
             else:
                 number_of_subplots = int(self.num_samples / self.samples_per_subplot)
             return number_of_subplots
-
-        def _set_colour_dict(self):
-            """Create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
-            to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
-            If we are only going to have a legend that is cols x rows as shown below, then we should only use
-            that many colours in the plotting."""
-            colour_palette, grey_palette = self._get_colour_lists()
-
-            temp_colour_dict = {}
-            for i in range(len(self.ordered_list_of_seqs_names)):
-                if i < self.num_leg_cells:
-                    temp_colour_dict[self.ordered_list_of_seqs_names[i]] = colour_palette[i]
-                else:
-                    grey_index = i % len(grey_palette)
-                    temp_colour_dict[self.ordered_list_of_seqs_names[i]] = grey_palette[grey_index]
-            return temp_colour_dict
-
-        def _get_colour_lists(self):
-            colour_palette = general.get_colour_list()
-            grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
-            return colour_palette, grey_palette
 
     def _make_sample_uid_to_name_dict(self):
         list_of_dir_name = general.return_list_of_directory_names_in_directory(self.pre_med_dir)
@@ -848,7 +827,7 @@ class SeqStackedBarPlotter:
         self.max_n_cols = 8
         self.max_n_rows = 7
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
-        self.colour_dict = self._set_colour_dict()
+        self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
         # plotting vars
         self.ordered_sample_uid_list = self._set_ordered_sample_uid_list_and_reorder_df(ordered_sample_uid_list)
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
@@ -980,27 +959,6 @@ class SeqStackedBarPlotter:
         ordered_sample_list.extend(no_maj_seq)
 
         return ordered_sample_list
-
-    def _set_colour_dict(self):
-        """Create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
-        to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
-        If we are only going to have a legend that is cols x rows as shown below, then we should only use
-        that many colours in the plotting."""
-        colour_palette, grey_palette = self._get_colour_lists()
-
-        temp_colour_dict = {}
-        for i in range(len(self.ordered_list_of_seqs_names)):
-            if i < self.num_leg_cells:
-                temp_colour_dict[self.ordered_list_of_seqs_names[i]] = colour_palette[i]
-            else:
-                grey_index = i % len(grey_palette)
-                temp_colour_dict[self.ordered_list_of_seqs_names[i]] = grey_palette[grey_index]
-        return temp_colour_dict
-
-    def _get_colour_lists(self):
-        colour_palette = general.get_colour_list()
-        grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
-        return colour_palette, grey_palette
 
     def _set_ordered_list_of_seqs_names(self):
         """Get a list of the sequences in order of their abundance and use this list to create the colour dict
