@@ -13,9 +13,9 @@ from multiprocessing import Queue, Manager, Process
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
 from datetime import datetime
 import distance
-from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter, PreMedSeqOutput
+from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
-from output import SequenceCountTableCreator
+from output import SequenceCountTableCreator, PreMedSeqOutput
 import ntpath
 import re
 import math
