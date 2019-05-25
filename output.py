@@ -1572,6 +1572,10 @@ class PreMedSeqOutput:
         # the only thing we need now before making the df and doing the plotting is to see if the sequences
         # match sequences already in the symportal database
         self._name_pre_med_seqs_by_exact_match_to_rs()
+
+        # output a fasta corresponding to the sequences in the ouput count tables
+        self._output_pre_med_master_fasta()
+
         # now we can populate the df
         # We will firstly do this using an arbitrary sample order in the index
         # We will then use this df to calculate the sample order and reindex the df accordingly
@@ -1584,6 +1588,15 @@ class PreMedSeqOutput:
         self._reorder_dfs_by_sorted_samples(ordered_sample_uid_list)
         # we should now write out these dfs to the directory that has the pre-MED sequences in them
         self._write_out_dfs_as_csv()
+
+    def _output_pre_med_master_fasta(self):
+        fasta_out_path = os.path.join(self.output_dir, 'pre_med_master_seqs.fasta')
+        fasta_out = []
+        for seq_name, seq in self.name_to_sequence_dict.items():
+            fasta_out.append(f'>{seq_name}')
+            fasta_out.append(f'{seq}')
+
+        general.write_list_to_destination(fasta_out_path, fasta_out)
 
     def _write_out_dfs_as_csv(self):
         print('\nWriting out pre-med sequence count tables: \n')
