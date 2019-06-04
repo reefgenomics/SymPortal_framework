@@ -111,6 +111,12 @@ class DataLoading:
         self.data_set_sample_creator_handler_instance = None
         # plotting sequence output
         self.seq_abundance_relative_output_path = None
+        # we will use this sequence count table creator when outputting the pre_MED seqs so that the df
+        # can be put in the same order
+        self.sequence_count_table_creator = None
+        # we will use this sequence stacked bar plotter when plotting the pre_MED seqs so that the plotting
+        # can be put in the same order
+        self.seq_stacked_bar_plotter = None
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
@@ -143,9 +149,9 @@ class DataLoading:
 
         self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
 
-        self._output_and_plot_pre_med_seqs_count_table()
-
         self._output_seqs_stacked_bar_plot()
+
+        self._output_and_plot_pre_med_seqs_count_table()
 
         self._do_sample_ordination()
 
@@ -159,7 +165,9 @@ class DataLoading:
     def _output_and_plot_pre_med_seqs_count_table(self):
         pre_med_output = PreMedSeqOutput(
             pre_med_dir=self.pre_med_sequence_output_directory_path,
-            output_directory=self.pre_med_sequence_output_directory_path)
+            output_directory=self.pre_med_sequence_output_directory_path,
+            df_sample_uid_order=self.sequence_count_table_creator.sorted_sample_uid_list,
+            plotting_sample_uid_order=self.seq_stacked_bar_plotter.ordered_sample_uid_list)
         pre_med_output.make_pre_med_counts_and_plots()
 
     def _write_sym_non_sym_and_size_violation_dirs_to_stdout(self):
@@ -225,21 +233,23 @@ class DataLoading:
             else:
                 sys.stdout.write('\nGenerating sequence count table figures\n')
 
-                seq_stacked_bar_plotter = SeqStackedBarPlotter(output_directory=self.output_directory,
-                                                               seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path, time_date_str=self.date_time_string)
-                seq_stacked_bar_plotter.plot_stacked_bar_seqs()
-                self.output_path_list.extend(seq_stacked_bar_plotter.output_path_list)
+                self.seq_stacked_bar_plotter = SeqStackedBarPlotter(
+                    output_directory=self.output_directory,
+                    seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path,
+                    time_date_str=self.date_time_string)
+                self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
+                self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
 
     def _output_seqs_count_table(self):
         sys.stdout.write('\nGenerating count tables\n')
-        sequence_count_table_creator = SequenceCountTableCreator(
+        self.sequence_count_table_creator = SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='submission',
             ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
-        sequence_count_table_creator.make_output_tables()
+        self.sequence_count_table_creator.make_output_tables()
         # TODO don't for get to write out where the non-sym and size violation seqs were output
-        self.output_path_list.extend(sequence_count_table_creator.output_paths_list)
-        self._set_seq_abundance_relative_output_path(sequence_count_table_creator)
+        self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
+        self._set_seq_abundance_relative_output_path(self.sequence_count_table_creator)
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
         for path in sequence_count_table_creator.output_paths_list:

@@ -1519,7 +1519,11 @@ class SeqOutputSeriesGeneratorWorker:
 
 
 class PreMedSeqOutput:
-    def __init__(self, pre_med_dir, output_directory, use_cache=False):
+    def __init__(
+            self, pre_med_dir, output_directory, use_cache=False, df_sample_uid_order=None,
+            plotting_sample_uid_order=None):
+        self.plotting_sample_uid_order = plotting_sample_uid_order
+        self.df_sample_uid_order = df_sample_uid_order
         self.pre_med_dir = pre_med_dir
         self.output_dir = output_directory
         self.sample_uid_to_sample_dir_path_dict = {}
@@ -1560,8 +1564,14 @@ class PreMedSeqOutput:
             self._create_dfs()
 
         # now plot
-        med_plotter = plotting.PreMedSeqPlotter(output_directory=self.output_dir, rel_abund_df=self.rel_count_df)
-        med_plotter.plot_stacked_bar_seqs()
+        num_samples = len(self.rel_count_df.index.values.tolist())
+        if num_samples > 1000:
+            print('Too many samples ({num_samples}) to plot pre-MED data.')
+        else:
+            med_plotter = plotting.PreMedSeqPlotter(
+                output_directory=self.output_dir, rel_abund_df=self.rel_count_df,
+                plotting_sample_uid_order=self.plotting_sample_uid_order)
+            med_plotter.plot_stacked_bar_seqs()
 
     def _create_dfs(self):
         # for each sample
@@ -1584,8 +1594,11 @@ class PreMedSeqOutput:
         ordered_seq_names = self._populate_dfs_with_arbitrary_sample_order()
         # here we have the dfs populated
         # now we need to generate the ordered sample list and reindex the dfs
-        ordered_sample_uid_list = self._get_ordered_sample_list(ordered_seq_names)
-        self._reorder_dfs_by_sorted_samples(ordered_sample_uid_list)
+        if self.df_sample_uid_order is None:
+            ordered_sample_uid_list = self._get_ordered_sample_list(ordered_seq_names)
+            self._reorder_dfs_by_sorted_samples(ordered_sample_uid_list)
+        else:
+            self._reorder_dfs_by_sorted_samples(self.df_sample_uid_order)
         # we should now write out these dfs to the directory that has the pre-MED sequences in them
         self._write_out_dfs_as_csv()
 

@@ -510,8 +510,7 @@ class TypeStackedBarPlotter:
 
 class PreMedSeqPlotter:
     def __init__(
-            self, rel_abund_df, output_directory,
-            time_date_str=None,):
+            self, rel_abund_df, output_directory, plotting_sample_uid_order, time_date_str=None):
         self.output_directory = output_directory
         if time_date_str:
             self.time_date_str = time_date_str
@@ -520,6 +519,9 @@ class PreMedSeqPlotter:
         self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
         self.smp_uid_to_smp_name_dict = None
         self.output_count_table_as_df = self._curate_output_count_table(rel_abund_df)
+        if plotting_sample_uid_order is not None:
+            self.output_count_table_as_df = self.output_count_table_as_df.reindex(
+                [int(a) for a in plotting_sample_uid_order])
         self.ordered_list_of_seqs_names = list(self.output_count_table_as_df)
         # legend parameters and vars
         self.max_n_cols = 8
@@ -527,8 +529,7 @@ class PreMedSeqPlotter:
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
         # plotting vars
-        self.ordered_sample_name_list = self.output_count_table_as_df.index.values.tolist()
-        self.num_samples = len(self.ordered_sample_name_list)
+        self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
         self.samples_per_subplot = 50
         self.number_of_subplots = self._infer_number_of_subplots()
         # we add  1 to the n_subplots here for the legend at the bottom
