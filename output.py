@@ -1521,7 +1521,8 @@ class SeqOutputSeriesGeneratorWorker:
 class PreMedSeqOutput:
     def __init__(
             self, pre_med_dir, output_directory, use_cache=False, df_sample_uid_order=None,
-            plotting_sample_uid_order=None):
+            plotting_sample_uid_order=None, time_date_str=None):
+        self.time_date_str = time_date_str
         self.plotting_sample_uid_order = plotting_sample_uid_order
         self.df_sample_uid_order = df_sample_uid_order
         self.pre_med_dir = pre_med_dir
@@ -1570,7 +1571,7 @@ class PreMedSeqOutput:
         else:
             med_plotter = plotting.PreMedSeqPlotter(
                 output_directory=self.output_dir, rel_abund_df=self.rel_count_df,
-                plotting_sample_uid_order=self.plotting_sample_uid_order)
+                plotting_sample_uid_order=self.plotting_sample_uid_order, time_date_str=self.time_date_str)
             med_plotter.plot_stacked_bar_seqs()
 
     def _create_dfs(self):

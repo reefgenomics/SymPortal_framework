@@ -167,7 +167,7 @@ class DataLoading:
             pre_med_dir=self.pre_med_sequence_output_directory_path,
             output_directory=self.pre_med_sequence_output_directory_path,
             df_sample_uid_order=self.sequence_count_table_creator.sorted_sample_uid_list,
-            plotting_sample_uid_order=self.seq_stacked_bar_plotter.ordered_sample_uid_list)
+            plotting_sample_uid_order=self.seq_stacked_bar_plotter.ordered_sample_uid_list, time_date_str=self.seq_stacked_bar_plotter.time_date_str)
         pre_med_output.make_pre_med_counts_and_plots()
 
     def _write_sym_non_sym_and_size_violation_dirs_to_stdout(self):
