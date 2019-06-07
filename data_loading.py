@@ -788,6 +788,7 @@ class DataLoading:
         # The sample_meta_df that is created from the data_sheet should be identical irrespective of whether a .csv
         # or a .xlsx is submitted.
         # 1 - Things to check: Check that each of the sample names are unique.
+        # 1c - remove any spaces and replace with '_'
         # 1b - Check that there are no white spaces either side of the sample names.
         # 2 - Check that each of the seq files are unique and exist
         # 3 - Check that the lat lon file exists and is in a format that can be used. If not convert to 999.
@@ -807,7 +808,7 @@ class DataLoading:
         self._check_datasheet_df_vals_unique()
 
         self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].astype(str)
-        self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].str.rstrip().str.lstrip()
+        self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].str.rstrip().str.lstrip().str.replace(' ', '_')
 
         self.sample_meta_info_df.set_index('sample_name', inplace=True, drop=True)
 
