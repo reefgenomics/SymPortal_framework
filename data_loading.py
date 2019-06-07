@@ -808,7 +808,7 @@ class DataLoading:
         self._check_datasheet_df_vals_unique()
 
         self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].astype(str)
-        self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].str.rstrip().str.lstrip().str.replace(' ', '_')
+        self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].str.rstrip().str.lstrip().str.replace(' ', '_').replace('/', '_')
 
         self.sample_meta_info_df.set_index('sample_name', inplace=True, drop=True)
 
