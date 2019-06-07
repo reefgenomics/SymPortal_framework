@@ -538,7 +538,7 @@ class PreMedSeqPlotter:
 
     def _curate_output_count_table(self, rel_abund_df):
         self.smp_uid_to_smp_name_dict = {
-            uid:name for uid, name in
+            uid:str(name) for uid, name in
             zip(rel_abund_df.index.values.tolist(), rel_abund_df['sample_name'].values.tolist())}
         df = rel_abund_df.drop(columns='sample_name')
         return df.astype('float')
