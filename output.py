@@ -1524,6 +1524,9 @@ class PreMedSeqOutput:
             plotting_sample_uid_order=None, time_date_str=None):
         self.time_date_str = time_date_str
         self.plotting_sample_uid_order = plotting_sample_uid_order
+
+        if df_sample_uid_order is not None:
+            self.main_output_uid_to_dss_name_dict = self._get_dss_objects_and_relate_to_df_sample_uids()
         self.df_sample_uid_order = df_sample_uid_order
         self.pre_med_dir = pre_med_dir
         self.output_dir = output_directory
@@ -1542,6 +1545,14 @@ class PreMedSeqOutput:
         self.abs_count_df_output_path = os.path.join(self.pre_med_dir, 'pre_med_absolute_abundance_df.csv')
         self.use_cache = use_cache
 
+    def _get_dss_objects_and_relate_to_df_sample_uids(self):
+        """Because this pre-MED code looks to see which directories are present (one per sample) in the
+        main pre-MED directory to assertain which samples it should be making a count table for and plotting,
+        it misses any samples that failed in the initial QC. However, failed sample UIDs may still be passed in
+        from the main output in the df_sample_uid_order. As such, we need to be able to match all the passed sample
+        uids to their names."""
+        list_of_dss = list(DataSetSample.objects.filter(id__in=self.df_sample_uid_order))
+        return {dss.id: dss.name for dss in list_of_dss}
     def _make_sample_uid_to_name_dict(self):
         list_of_dir_name = general.return_list_of_directory_names_in_directory(self.pre_med_dir)
         sample_uid_to_name_dict = {}
@@ -1621,8 +1632,26 @@ class PreMedSeqOutput:
 
     def _reorder_dfs_by_sorted_samples(self, ordered_sample_uid_list):
         # now reorder the samples for the dfs
+        self._add_qc_failed_sample_info(ordered_sample_uid_list)
         self.rel_count_df = self.rel_count_df.reindex(ordered_sample_uid_list)
         self.abs_count_df = self.abs_count_df.reindex(ordered_sample_uid_list)
+
+    def _add_qc_failed_sample_info(self, ordered_sample_uid_list):
+        """Because this pre-MED code looks to see which directories are present (one per sample) in the
+        main pre-MED directory to assertain which samples it should be making a count table for and plotting,
+        it misses any samples that failed in the initial QC. However, failed sample UIDs may still be passed in
+        from the main output in the df_sample_uid_order. As such, we need to be able to match all the passed sample
+        uids to their names."""
+        for uid in ordered_sample_uid_list:
+            # if the uid is not found in the current index then we need to add it to the dataframes before doing
+            # any reordering
+            if uid not in self.rel_count_df.index.values.tolist():
+                # create a series and add this to both dfs
+                sample_name = self.main_output_uid_to_dss_name_dict[uid]
+                data = [sample_name] + [0 for _ in range(len(list(self.rel_count_df)) - 1)]
+                temp_ser_to_add = pd.Series(data=data, name=uid, index=list(self.rel_count_df))
+                self.rel_count_df = self.rel_count_df.append(temp_ser_to_add)
+                self.abs_count_df = self.abs_count_df.append(temp_ser_to_add)
 
     def _get_ordered_sample_list(self, ordered_seq_names):
         max_seq_ddict, no_maj_samps, seq_to_samp_ddict = self._generate_most_abundant_sequence_dictionaries(
