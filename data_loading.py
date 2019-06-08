@@ -1120,15 +1120,17 @@ class InitialMothurWorker:
 
         self._set_absolute_num_seqs_after_make_contigs()
 
+        self._do_unique_seqs()
+
+        self._do_fwd_and_rev_pcr()
+
+        self._do_unique_seqs()
+
         self._do_screen_seqs()
 
         self._do_unique_seqs()
 
         self._do_split_abund()
-
-        self._do_unique_seqs()
-
-        self._do_fwd_and_rev_pcr()
 
         self._do_unique_seqs()
 

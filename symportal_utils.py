@@ -267,11 +267,20 @@ class MothurAnalysis:
         """
         self._screen_seqs_make_and_write_mothur_batch_file(argument_dictionary)
         self._run_mothur_batch_file_command()
-        good_fasta_path = self._extract_output_path_first_line_command()
-        if good_fasta_path is None:
-            raise RuntimeError
-        self.fasta_path = good_fasta_path
-        self._update_sequence_collection_from_fasta_file()
+        if self.name_file_path:
+            good_fasta_path, good_name_path = self._extract_output_paths_screen_seqs_with_name_file_command()
+            if '.fasta' not in good_fasta_path or '.names' not in good_name_path or good_fasta_path is None:
+                raise RuntimeError
+            self.fasta_path = good_fasta_path
+            self.name_file_path = good_name_path
+            self._update_sequence_collection_from_fasta_name_pair()
+        else:
+            good_fasta_path = self._extract_output_path_first_line_command()
+            if good_fasta_path is None:
+                raise RuntimeError
+            self.fasta_path = good_fasta_path
+
+            self._update_sequence_collection_from_fasta_file()
         self.__execute_summary()
 
     def execute_pcr(self, do_reverse_pcr_as_well=False):
@@ -575,6 +584,15 @@ class MothurAnalysis:
             f'reverse.seqs(fasta={self.fasta_path})'
         ]
         return mothur_batch_file
+
+    def _extract_output_paths_screen_seqs_with_name_file_command(self, output_as_list=None):
+        if output_as_list is None:
+            stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+        else:
+            stdout_string_as_list = output_as_list
+        for i in range(len(stdout_string_as_list)):
+            if 'Output File Names' in stdout_string_as_list[i]:
+                return stdout_string_as_list[i+1], stdout_string_as_list[i+3]
 
     def _extract_output_path_first_line_command(self, output_as_list=None):
         if output_as_list is None:
