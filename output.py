@@ -1524,10 +1524,10 @@ class PreMedSeqOutput:
             plotting_sample_uid_order=None, time_date_str=None):
         self.time_date_str = time_date_str
         self.plotting_sample_uid_order = plotting_sample_uid_order
-
+        self.df_sample_uid_order = df_sample_uid_order
         if df_sample_uid_order is not None:
             self.main_output_uid_to_dss_name_dict = self._get_dss_objects_and_relate_to_df_sample_uids()
-        self.df_sample_uid_order = df_sample_uid_order
+
         self.pre_med_dir = pre_med_dir
         self.output_dir = output_directory
         self.sample_uid_to_sample_dir_path_dict = {}
