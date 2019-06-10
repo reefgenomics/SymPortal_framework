@@ -618,7 +618,7 @@ class VirtualAnalysisTypeManager():
             self.co_dominant = None
             self.majority_reference_sequence_uid_set = set()
             self.majority_reference_sequence_obj_set = set()
-            self.name = None
+            self.name = name
 
             # key = ref seq id, val=RefSeqReqAbund object
             self.prof_assignment_required_rel_abund_dict = {}
