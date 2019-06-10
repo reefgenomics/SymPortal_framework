@@ -230,6 +230,13 @@ class VirutalAnalysisTypeInit:
 
         self._generate_name(self.vat.multi_modal_detection_rel_abund_df)
 
+    def init_vat_post_profile_assignment_from_db_at(self):
+        self._make_multi_modal_rel_abund_df()
+
+        self._make_abs_and_rel_abund_output_series()
+
+        self._generate_maj_ref_seq_set_and_infer_codom(self.vat.multi_modal_detection_rel_abund_df)
+
     def _make_abs_and_rel_abund_output_series(self):
         index_for_series = [vcc.id for vcc in self.vat.clade_collection_obj_set_profile_assignment]
         self.vat.type_output_rel_abund_series = pd.Series(index=index_for_series)
@@ -462,13 +469,13 @@ class VirtualAnalysisTypeManager():
         if db_at.species is not None:
             new_vat = self.VirtualAnalysisType(
                 clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
-                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, species=db_at.species)
+                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, species=db_at.species, name=db_at.name)
         else:
             new_vat = self.VirtualAnalysisType(
                 clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
-                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id)
+                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, name=db_at.name)
         vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=new_vat)
-        vat_init.init_vat_post_profile_assignment()
+        vat_init.init_vat_post_profile_assignment_from_db_at()
         self.vat_dict[new_vat.id] = new_vat
         return new_vat
 
@@ -536,22 +543,28 @@ class VirtualAnalysisTypeManager():
 
 
     class VirtualAnalysisType():
-        """A RAM stored representation of the AnalysisType object. Instances of these objects do not yet
-        exist in the database. We will eventually use these instances to make make AnalysisType objects that can be
-        stored in the db. I am hoping that by using these virtual objects that we will be able to cut down on some of the
+        """A RAM stored representation of the AnalysisType object. When doing an analysis,
+        instances of these objects do not yet exist in the database.
+        We will eventually use these instances to make make AnalysisType objects that can be
+        stored in the db. By using these virtual objects that we will be able to cut down on some of the
         attributes held in the AnalysisType model fields as many of these are used in the actual ananlysis. The only
-        attributes we would need to keep hold of those are those that are used in the outputs.
+        attributes we  need to keep hold of those are those that are used in the outputs.
 
         When doing init pre-profile assignment we will init from the clade_collection_obj_set_profile_discovery and
         populate the relative_seq_abund_profile_discovery_df and the relative_seq_abund_profile_assignment_df.
 
         When doing init post-profile assignment we will init from the clade_collection_obj_set_profile_assignment and
         populate the multi_modal_detection_rel_abund_df
+
+        When doing post-analysis outputs (i.e. analyses have already been completed and we want to output results
+        for a particular set of data sets or set of samples), we will recreate these virtual analysis types from
+        database objects. In these cases we make sure to use as many of the db object attributes as possible
+        rather than dynamically creating attributes such as e.g. the name.
         """
 
         def __init__(
                 self, ref_seq_obj_list, id, clade_collection_obj_list_pre_prof_assignment=None,
-                clade_collection_obj_list_post_prof_assignment=None, species=None):
+                clade_collection_obj_list_post_prof_assignment=None, species=None, name=None):
             self.id = id
             # There will be two different clade_collection_obj_sets. Firstly there is the set of CCs that are associated
             # to this VirtualAnalysisType during ProfileDiscovery. These CCs are used to define the max and min abundances
