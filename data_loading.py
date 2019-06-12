@@ -802,7 +802,7 @@ class DataLoading:
         elif self.datasheet_path.endswith('.csv'):
             with open(self.datasheet_path, 'r') as f:
                 data_sheet_as_file = [line.rstrip() for line in f]
-            if data_sheet_as_file[0].split(',') == 'sample_name':
+            if data_sheet_as_file[0].split(',')[0] == 'sample_name':
                 self.sample_meta_info_df = pd.read_csv(
                     filepath_or_buffer=self.datasheet_path)
             else:
