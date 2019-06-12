@@ -800,8 +800,14 @@ class DataLoading:
             self.sample_meta_info_df = pd.read_excel(
                 io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
         elif self.datasheet_path.endswith('.csv'):
-            self.sample_meta_info_df = pd.read_csv(
-                filepath_or_buffer=self.datasheet_path, skiprows=[0])
+            with open(self.datasheet_path, 'r') as f:
+                data_sheet_as_file = [line.rstrip() for line in f]
+            if data_sheet_as_file[0].split(',') == 'sample_name':
+                self.sample_meta_info_df = pd.read_csv(
+                    filepath_or_buffer=self.datasheet_path)
+            else:
+                self.sample_meta_info_df = pd.read_csv(
+                    filepath_or_buffer=self.datasheet_path, skiprows=[0])
         else:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
