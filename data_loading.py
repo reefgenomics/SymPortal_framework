@@ -19,6 +19,7 @@ from output import SequenceCountTableCreator, PreMedSeqOutput
 import ntpath
 import re
 import math
+from numpy import NaN
 
 
 class DataLoading:
@@ -814,11 +815,30 @@ class DataLoading:
 
         self.sample_meta_info_df.index = self.sample_meta_info_df.index.map(str)
 
+        self._check_for_binomial()
+
+        self._replace_null_vals_in_meta_info_df()
+
         self._check_seq_files_exist()
 
         self._check_lat_long()
 
         self._check_vars_can_be_string()
+
+    def _replace_null_vals_in_meta_info_df(self):
+        self.sample_meta_info_df = self.sample_meta_info_df.replace('N/A', NaN).replace('NA', NaN).replace('na',
+                                                                                                           NaN).replace(
+            'n/a', NaN)
+
+    def _check_for_binomial(self):
+        """People were putting the full binomial in the speices colums. This crops this back to just the
+        species component of binomial"""
+        for row_name in self.sample_meta_info_df.index.values.tolist():
+            current_species_val = self.sample_meta_info_df.at[row_name, 'host_species']
+            if ' ' in current_species_val:
+                new_species_val = current_species_val.split(' ')[-1]
+                print(f'changing {current_species_val} to {new_species_val} for {row_name}')
+                self.sample_meta_info_df.at[row_name, 'host_species'] = new_species_val
 
     def _check_vars_can_be_string(self):
         """First convert each of the columns to type string.
