@@ -841,13 +841,11 @@ class DataLoading:
         species component of binomial"""
         for row_name in self.sample_meta_info_df.index.values.tolist():
             current_species_val = self.sample_meta_info_df.at[row_name, 'host_species']
-            try:
+            if not pd.isnull(current_species_val):
                 if ' ' in current_species_val:
                     new_species_val = current_species_val.split(' ')[-1]
                     print(f'changing {current_species_val} to {new_species_val} for {row_name}')
                     self.sample_meta_info_df.at[row_name, 'host_species'] = new_species_val
-            except TypeError:
-                pass
 
 
     def _check_vars_can_be_string(self):
