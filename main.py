@@ -459,11 +459,10 @@ class SymPortalWorkFlowManager:
         if self.args.name == 'noName':
             if self.args.load.endswith('/'):
                 new_name = self.args.load.split('/')[-2]
-                self.args.name = new_name
-                print(f'No --name arg provided. Name is being set to {new_name}')
             else:
-                self.args.name = self.args.load.split('/')[-1]
-                print(f'No --name arg provided. Name is being set to {new_name}')
+                new_name = self.args.load.split('/')[-1]
+            self.args.name = new_name
+            print(f'No --name arg provided. Name is being set to {new_name}')
 
     # STAND_ALONE SEQUENCE OUTPUT
     def perform_stand_alone_sequence_output(self):
