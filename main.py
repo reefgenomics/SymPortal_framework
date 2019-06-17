@@ -454,11 +454,16 @@ class SymPortalWorkFlowManager:
             no_ord=self.args.no_ordinations, distance_method=self.args.distance_method, debug=self.args.debug)
         self.data_loading_object.load_data()
 
-
     def _verify_name_arg_given(self):
+        """If no name arg is provided use the folder name of the self.args.load argument"""
         if self.args.name == 'noName':
-            sys.exit('Please provide a name using the --name flag. e.g. --name informative_name')
-
+            if self.args.load.endswith('/'):
+                new_name = self.args.load.split('/')[-2]
+                self.args.name = new_name
+                print(f'No --name arg provided. Name is being set to {new_name}')
+            else:
+                self.args.name = self.args.load.split('/')[-1]
+                print(f'No --name arg provided. Name is being set to {new_name}')
 
     # STAND_ALONE SEQUENCE OUTPUT
     def perform_stand_alone_sequence_output(self):
