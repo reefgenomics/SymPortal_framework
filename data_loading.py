@@ -980,12 +980,19 @@ class DataLoading:
     def _check_seq_files_exist(self):
         # check that files exist
         file_not_found_list = []
-        for fwd_file in self.sample_meta_info_df['fastq_fwd_file_name'].values.tolist():
+        for df_ind in self.sample_meta_info_df.index.values.tolist():
+            fwd_file = self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name']
+            rev_file = self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name']
             if not os.path.exists(os.path.join(self.user_input_path, fwd_file)):
-                file_not_found_list.append(fwd_file)
-        for rev_file in self.sample_meta_info_df['fastq_rev_file_name'].values.tolist():
+                if os.path.exists(os.path.join(self.user_input_path, fwd_file + '.gz')):
+                    self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name'] = fwd_file + '.gz'
+                else:
+                    file_not_found_list.append(fwd_file)
             if not os.path.exists(os.path.join(self.user_input_path, rev_file)):
-                file_not_found_list.append(rev_file)
+                if os.path.exists(os.path.join(self.user_input_path, rev_file + '.gz')):
+                    self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name'] = rev_file + '.gz'
+                else:
+                    file_not_found_list.append(rev_file)
         if file_not_found_list:
             print('Some of the sequencing files listed in your datasheet cannot be found:')
             for file_name in file_not_found_list:
