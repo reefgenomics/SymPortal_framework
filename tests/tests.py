@@ -27,7 +27,7 @@ class SymPortalTester:
 
     def _test_data_loading_work_flow(self):
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc), '--data_sheet',
-             self.data_sheet_file_path]
+             self.data_sheet_file_path, '--debug']
         self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
         self.work_flow_manager.start_work_flow()
 
