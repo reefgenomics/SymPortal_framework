@@ -872,71 +872,67 @@ class DataLoading:
         for i, sample_name in enumerate(self.sample_meta_info_df.index.values.tolist()):
             lat = self.sample_meta_info_df.at[sample_name, 'collection_latitude']
             lon = self.sample_meta_info_df.at[sample_name, 'collection_longitude']
+            lat = lat.rstrip().lstrip().replace(chr(176), '')
+            lon = lon.rstrip().lstrip().replace(chr(176), '')
 
-            if math.isnan(lat) or math.isnan(lon):
+            # 1 - Check to see if we are dealing with nan values
+            # any nan values would initially have been numpy.NaN but after convertsion to string above
+            # will be "nan".
+            # This may cause an issue if the column is in str format already
+            if lat == 'nan' or lon == 'nan':
                 print(f'Lat and long are currently nan for {sample_name}. Values will be set to 999')
                 self._set_lat_lon_to_999(sample_name)
-
+                continue
             else:
-                lat = lat.rstrip().lstrip().replace(chr(176), '')
-                lon = lon.rstrip().lstrip().replace(chr(176), '')
-
-                # 1 - Check to see if we are dealing with nan values
-                # This may cause an issue if the column is in str format already
-                if lat == 'nan' or lon == 'nan':
-                    print(f'Lat and long are currently nan for {sample_name}. Values will be set to 999')
-                    self._set_lat_lon_to_999(sample_name)
-                    continue
-                else:
-                    # try to see if they are compatable floats
+                # try to see if they are compatable floats
+                try:
+                    lat_float = float(lat)
+                    lon_float = float(lon)
+                except Exception:
+                    # see if they are decimal degrees only with the hemisphere anotation of degree sign
                     try:
-                        lat_float = float(lat)
-                        lon_float = float(lon)
-                    except Exception:
-                        # see if they are decimal degrees only with the hemisphere anotation of degree sign
+                        if 'N' in lat:
+                            lat_float = float(lat.replace('N', '').replace(chr(176), ''))
+                            # lat_float should be positive
+                            if lat_float < 0:
+                                lat_float = lat_float * -1
+                        elif 'S' in lat:
+                            lat_float = float(lat.replace('S', '').replace(chr(176), ''))
+                            # lat_float should be negative
+                            if lat_float > 0:
+                                lat_float = lat_float * -1
+                        else:
+                            # There was not an N or S found in the lat so we should raise error
+                            raise RuntimeError
+                        if 'E' in lon:
+                            lon_float = float(lon.replace('E', '').replace(chr(176), ''))
+                            # lon_float should be positive
+                            if lon_float < 0:
+                                lon_float = lon_float * -1
+                        elif 'W' in lon:
+                            lon_float = float(lon.replace('W', '').replace(chr(176), ''))
+                            # lon_float should be negative
+                            if lon_float > 0:
+                                lon_float = lon_float * -1
+                        else:
+                            # There was not an N or S found in the lat so we should raise error
+                            raise RuntimeError
+                    except:
+                        # see if they are in proper dms format
                         try:
-                            if 'N' in lat:
-                                lat_float = float(lat.replace('N', '').replace(chr(176), ''))
-                                # lat_float should be positive
-                                if lat_float < 0:
-                                    lat_float = lat_float * -1
-                            elif 'S' in lat:
-                                lat_float = float(lat.replace('S', '').replace(chr(176), ''))
-                                # lat_float should be negative
-                                if lat_float > 0:
-                                    lat_float = lat_float * -1
-                            else:
-                                # There was not an N or S found in the lat so we should raise error
-                                raise RuntimeError
-                            if 'E' in lon:
-                                lon_float = float(lon.replace('E', '').replace(chr(176), ''))
-                                # lon_float should be positive
-                                if lon_float < 0:
-                                    lon_float = lon_float * -1
-                            elif 'W' in lon:
-                                lon_float = float(lon.replace('W', '').replace(chr(176), ''))
-                                # lon_float should be negative
-                                if lon_float > 0:
-                                    lon_float = lon_float * -1
-                            else:
-                                # There was not an N or S found in the lat so we should raise error
-                                raise RuntimeError
-                        except:
-                            # see if they are in proper dms format
-                            try:
-                                lat_float = self.dms2dec(lat)
-                                lon_float = self.dms2dec(lon)
-                            # if all this fails, convert to 999
-                            except Exception:
-                                print(f'Unable to convert the Lat Lon values of {sample_name} to float. Values will be set to 999')
-                                self._set_lat_lon_to_999(sample_name)
-                                continue
-                    # final check to make sure that the values are in a sensible range
-                    if (-90 <= lat_float <= 90) and (-180 <= lon_float <= 180):
-                        self.sample_meta_info_df.at[sample_name, 'collection_latitude'] = lat_float
-                        self.sample_meta_info_df.at[sample_name, 'collection_longitude'] = lon_float
-                    else:
-                        self._set_lat_lon_to_999(sample_name)
+                            lat_float = self.dms2dec(lat)
+                            lon_float = self.dms2dec(lon)
+                        # if all this fails, convert to 999
+                        except Exception:
+                            print(f'Unable to convert the Lat Lon values of {sample_name} to float. Values will be set to 999')
+                            self._set_lat_lon_to_999(sample_name)
+                            continue
+                # final check to make sure that the values are in a sensible range
+                if (-90 <= lat_float <= 90) and (-180 <= lon_float <= 180):
+                    self.sample_meta_info_df.at[sample_name, 'collection_latitude'] = lat_float
+                    self.sample_meta_info_df.at[sample_name, 'collection_longitude'] = lon_float
+                else:
+                    self._set_lat_lon_to_999(sample_name)
         # finally make sure that the lat and long cols are typed as float
         self.sample_meta_info_df['collection_latitude'] = self.sample_meta_info_df['collection_latitude'].astype(float)
         self.sample_meta_info_df['collection_longitude'] = self.sample_meta_info_df['collection_longitude'].astype(float)
