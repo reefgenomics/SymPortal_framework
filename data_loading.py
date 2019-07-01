@@ -42,6 +42,8 @@ class DataLoading:
 
         self.dataset_object = None
         # the stability file generated here is used as the base of the initial mothur QC
+        self.list_of_samples_names = None
+        self.list_of_fastq_files_in_wkd = []
         if self.datasheet_path:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
 
@@ -79,9 +81,7 @@ class DataLoading:
         self.debug = debug
         self.symclade_db_directory_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB'))
         self.symclade_db_full_path = os.path.join(self.symclade_db_directory_path, 'symClade.fa')
-        self.list_of_samples_names = None
-        self.list_of_fastq_file_names_in_wkd = None
-        self.list_of_fastq_files_in_wkd = []
+
         self.path_to_mothur_batch_file_for_dot_file_creation = None
         self.fastqs_are_gz_compressed = None
         self.path_to_latest_mothur_batch_file = None
