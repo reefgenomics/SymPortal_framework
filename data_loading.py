@@ -37,21 +37,27 @@ class DataLoading:
         self.datasheet_path = datasheet_path
         if self.datasheet_path:
             self._create_and_check_datasheet()
+        self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
+
+
         self.dataset_object = None
         # the stability file generated here is used as the base of the initial mothur QC
         if self.datasheet_path:
+            self._get_sample_names_and_create_new_dataset_object_with_datasheet()
+
+        else:
+            end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
+
+        self.temp_working_directory = self._setup_temp_working_directory()
+        self.output_directory = self._setup_output_directory()
+        if self.datasheet_path:
             self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
         else:
-            self._generate_stability_file_and_data_set_sample_objects_without_datasheet()
-
-
-        self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
+            self._generate_stability_file_and_data_set_sample_objects_without_datasheet(end_index)
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
         self.distance_method = distance_method
-        self.output_directory = self._setup_output_directory()
-        self.temp_working_directory = self._setup_temp_working_directory()
         self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         # this is the path of the file we will use to deposit a backup copy of the reference sequences
         self.seq_dump_file_path = self._setup_sequence_dump_file_path()
@@ -584,13 +590,14 @@ class DataLoading:
             if binary_count != 3:
                 self._exit_and_del_data_set_sample('Failure in creating blast binaries')
 
-    def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self):
-
-        for file in os.listdir(self.temp_working_directory):
+    def _get_sample_names_and_create_new_dataset_object_without_datasheet(self):
+        for file in os.listdir(self.user_input_path):
             if file.endswith('fastq') or file.endswith('fq') or file.endswith('fastq.gz') or file.endswith('fq.gz'):
                 self.list_of_fastq_files_in_wkd.append(file)
 
-        end_index = self._identify_sample_names_without_datasheet()
+        return self._identify_sample_names_without_datasheet()
+
+    def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self, end_index):
 
         self._make_new_dataset_object()
 
@@ -681,13 +688,16 @@ class DataLoading:
 
         return end_index
 
+    def _get_sample_names_and_create_new_dataset_object_with_datasheet(self):
+        self.list_of_samples_names = self.sample_meta_info_df.index.values.tolist()
+
+        self._make_new_dataset_object()
+
     def _generate_stability_file_and_data_set_sample_objects_with_datasheet(self):
         # if we are given a data_sheet then use the sample names given as the DataSetSample object names
-        self.list_of_samples_names = self.sample_meta_info_df.index.values.tolist()
 
         self.make_dot_stability_file_datasheet()
 
-        self._make_new_dataset_object()
 
         self._create_data_set_sample_objects_in_bulk_with_datasheet()
 
