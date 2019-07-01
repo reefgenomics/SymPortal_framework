@@ -38,7 +38,13 @@ class DataLoading:
         if self.datasheet_path:
             self._create_and_check_datasheet()
         self.dataset_object = None
-        self._make_new_dataset_object()
+        # the stability file generated here is used as the base of the initial mothur QC
+        if self.datasheet_path:
+            self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
+        else:
+            self._generate_stability_file_and_data_set_sample_objects_without_datasheet()
+
+
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.output_path_list = []
         self.no_fig = no_fig
@@ -121,12 +127,6 @@ class DataLoading:
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
-
-        # the stability file generated here is used as the base of the initial mothur QC
-        if self.datasheet_path:
-            self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
-        else:
-            self._generate_stability_file_and_data_set_sample_objects_without_datasheet()
 
         self._if_symclade_binaries_not_present_remake_db()
 
@@ -592,6 +592,8 @@ class DataLoading:
 
         end_index = self._identify_sample_names_without_datasheet()
 
+        self._make_new_dataset_object()
+
         self.make_dot_stability_file_inferred(end_index)
 
         self._create_data_set_sample_objects_in_bulk_without_datasheet()
@@ -682,6 +684,8 @@ class DataLoading:
         self.list_of_samples_names = self.sample_meta_info_df.index.values.tolist()
 
         self.make_dot_stability_file_datasheet()
+
+        self._make_new_dataset_object()
 
         self._create_data_set_sample_objects_in_bulk_with_datasheet()
 
