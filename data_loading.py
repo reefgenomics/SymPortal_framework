@@ -38,15 +38,12 @@ class DataLoading:
         if self.datasheet_path:
             self._create_and_check_datasheet()
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
-
-
         self.dataset_object = None
         # the stability file generated here is used as the base of the initial mothur QC
         self.list_of_samples_names = None
         self.list_of_fastq_files_in_wkd = []
         if self.datasheet_path:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
-
         else:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
 
@@ -677,7 +674,7 @@ class DataLoading:
             warning_str = 'Error in automatic sample name extraction. ' \
                           'Please explicitly supply sample names using a data sheet ' \
                           '(https://github.com/didillysquat/SymPortal_framework/wiki/Running-SymPortal#loading-data)'
-            self._exit_and_del_data_set_sample(warning_str)
+            sys.exit(warning_str)
         self.list_of_samples_names = list_of_sample_names
 
     def _identify_sample_names_without_datasheet(self):
