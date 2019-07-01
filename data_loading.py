@@ -42,6 +42,7 @@ class DataLoading:
         # the stability file generated here is used as the base of the initial mothur QC
         self.list_of_samples_names = None
         self.list_of_fastq_files_in_wkd = []
+        self.sample_fastq_pairs = None
         if self.datasheet_path:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
         else:
@@ -80,10 +81,8 @@ class DataLoading:
         self.symclade_db_full_path = os.path.join(self.symclade_db_directory_path, 'symClade.fa')
 
         self.path_to_mothur_batch_file_for_dot_file_creation = None
-        self.fastqs_are_gz_compressed = None
         self.path_to_latest_mothur_batch_file = None
-        self.fastq_file_to_sample_name_dict = None
-        self.sample_fastq_pairs = None
+
         self.samples_that_caused_errors_in_qc_list = []
         self.initial_mothur_handler = None
         self.post_initial_qc_name_file_name = None
@@ -682,7 +681,6 @@ class DataLoading:
         # well actually 50% of the samples so that we also remove the R1 and R2 parts.
         end_index = self._get_num_chars_in_common_with_fastq_names()
         self._get_sample_names_from_fastq_files_using_index(end_index)
-
         return end_index
 
     def _get_sample_names_and_create_new_dataset_object_with_datasheet(self):
