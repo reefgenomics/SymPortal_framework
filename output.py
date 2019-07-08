@@ -749,13 +749,13 @@ class SequenceCountTableCreator:
     def _set_analysis_rel_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
             self.output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_and_meta.txt')
         self.path_to_seq_output_abund_only_df_relative = os.path.join(
             self.output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_only.txt')
         self.path_to_seq_output_meta_only_df_relative = os.path.join(
             self.output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.meta_only.txt')
 
     def _set_analysis_abs_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
@@ -763,10 +763,10 @@ class SequenceCountTableCreator:
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
         self.path_to_seq_output_abund_only_df_absolute = os.path.join(
             self.output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_only.txt')
         self.path_to_seq_output_meta_only_df_absolute = os.path.join(
             self.output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.meta_only.txt')
 
     def _set_non_analysis_rel_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
@@ -803,6 +803,8 @@ class SequenceCountTableCreator:
 
     def _write_out_dfs_and_fasta(self):
         self._write_out_abund_and_meta_dfs()
+
+        self._write_out_js_seq_data_file()
 
         self._write_out_abund_only_dfs()
 
@@ -845,7 +847,7 @@ class SequenceCountTableCreator:
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
         self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
-        self._write_out_js_seq_data_file()
+
 
     def _write_out_js_seq_data_file(self):
         # now create the .js file that we will use to read in the data locally
