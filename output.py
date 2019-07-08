@@ -714,6 +714,15 @@ class SequenceCountTableCreator:
         self.output_df_absolute = None
         self.output_df_relative = None
         self.output_seqs_fasta_as_list = []
+        # the number of series (rows) that have been added to the dataframes.
+        # this number will be used to delete the appropriate number of rows when producing
+        # the abundance only tables.
+        self.number_of_meta_rows_added = 0
+        # the number of columns that are associated with meta data
+        # (including the sample names, qc data, no_name summaries and user supplied data)
+        # this number will be used to delete the appropriate number of columns when producing
+        # the abundance only tables.
+        self.number_of_meta_cols_added = 0
 
     def _init_output_paths(self):
         self.output_paths_list = []
@@ -789,16 +798,49 @@ class SequenceCountTableCreator:
         self._write_out_dfs_and_fasta()
 
     def _write_out_dfs_and_fasta(self):
+        self._write_out_abund_and_meta_dfs()
+
+        self._write_out_abund_only_dfs()
+
+        self._write_out_meta_only_dfs()
+
+        self._write_out_seq_fasta_for_loading()
+        print('\n\nITS2 sequence output files:')
+        for path_item in self.output_paths_list:
+            print(path_item)
+
+    def _write_out_meta_only_dfs(self):
+        # now do the meta output table
+        # we need to drop the accession row and then we need to drop the seq abund columns
+        df_abs_meta_only = self.output_df_absolute.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
+        df_rel_meta_only = self.output_df_relative.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
+        df_abs_meta_only.to_csv(self.path_to_seq_output_meta_only_df_absolute, sep="\t")
+        self.output_paths_list.append(self.path_to_seq_output_meta_only_df_absolute)
+        df_rel_meta_only.to_csv(self.path_to_seq_output_meta_only_df_relative, sep="\t")
+        self.output_paths_list.append(self.path_to_seq_output_meta_only_df_relative)
+
+    def _write_out_seq_fasta_for_loading(self):
+        # we created the fasta above.
+        general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
+        self.output_paths_list.append(self.output_fasta_path)
+
+    def _write_out_abund_only_dfs(self):
+        # get rid of the meta info rows and columns
+        # we will delete the number of meta row added plus one for the accession row
+        df_abs_abund_only = self.output_df_absolute.iloc[:-1 * (self.number_of_meta_rows_added + 1),
+                            self.number_of_meta_cols_added:]
+        df_rel_abund_only = self.output_df_relative.iloc[:-1 * (self.number_of_meta_rows_added + 1),
+                            self.number_of_meta_cols_added:]
+        df_abs_abund_only.to_csv(self.path_to_seq_output_abund_only_df_absolute, sep="\t")
+        self.output_paths_list.append(self.path_to_seq_output_abund_only_df_absolute)
+        df_rel_abund_only.to_csv(self.path_to_seq_output_abund_only_df_relative, sep="\t")
+        self.output_paths_list.append(self.path_to_seq_output_abund_only_df_relative)
+
+    def _write_out_abund_and_meta_dfs(self):
         self.output_df_absolute.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
         self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
-        # we created the fasta above.
-        general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
-        self.output_paths_list.append(self.output_fasta_path)
-        print('\n\nITS2 sequence output files:')
-        for path_item in self.output_paths_list:
-            print(path_item)
 
     def _append_meta_info_to_df(self):
         # Now append the meta infromation for each of the data_sets that make up the output contents
@@ -827,6 +869,12 @@ class SequenceCountTableCreator:
                                 name='meta_info_summary')
         self.output_df_absolute = self.output_df_absolute.append(temp_series)
         self.output_df_relative = self.output_df_relative.append(temp_series)
+        self._increase_number_meta_series_added()
+
+    def _increase_number_meta_series_added(self):
+        # keep track of the number of meta series we will need to remove from the dataframe when producing the
+        # abundance only output table
+        self.number_of_meta_rows_added += 1
 
     def _append_meta_info_to_df_analysis(self):
 
@@ -839,6 +887,7 @@ class SequenceCountTableCreator:
                                 name='meta_info_summary')
         self.output_df_absolute = self.output_df_absolute.append(temp_series)
         self.output_df_relative = self.output_df_relative.append(temp_series)
+        self._increase_number_meta_series_added()
         for data_set_object in self.ds_objs_to_output:
             data_set_meta_list = [
                 f'Data_set ID: {data_set_object.id}; '
@@ -849,6 +898,7 @@ class SequenceCountTableCreator:
             temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute)[0]], name='data_set_info')
             self.output_df_absolute = self.output_df_absolute.append(temp_series)
             self.output_df_relative = self.output_df_relative.append(temp_series)
+            self._increase_number_meta_series_added()
 
     def _append_meta_info_to_df_stand_alone(self):
         meta_info_string_items = [
@@ -858,6 +908,8 @@ class SequenceCountTableCreator:
                                 name='meta_info_summary')
         self.output_df_absolute = self.output_df_absolute.append(temp_series)
         self.output_df_relative = self.output_df_relative.append(temp_series)
+        self._increase_number_meta_series_added()
+
         for data_set_object in self.ds_objs_to_output:
             data_set_meta_list = [
                 f'Data_set ID: {data_set_object.id}; '
@@ -867,6 +919,7 @@ class SequenceCountTableCreator:
             temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute)[0]], name='data_set_info')
             self.output_df_absolute = self.output_df_absolute.append(temp_series)
             self.output_df_relative = self.output_df_relative.append(temp_series)
+            self._increase_number_meta_series_added()
 
     def _add_uids_for_seqs_to_dfs(self):
         """Now add the UID for each of the sequences"""
@@ -1326,7 +1379,9 @@ class SeqOutputSeriesGeneratorHandler:
             'sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species',
             'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth']
 
-        # append the noName sequences as individual sequence abundances
+        # we add the plus one to take account of the 'sample_name' header
+        self.seq_count_table_creator.number_of_meta_cols_added = \
+            len(qc_stats) + len(no_name_summary_strings) + len(user_supplied_stats) + 1
         return ['sample_name'] + qc_stats + no_name_summary_strings + user_supplied_stats + header_pre
 
 
