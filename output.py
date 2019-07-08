@@ -1322,9 +1322,12 @@ class SeqOutputSeriesGeneratorHandler:
             'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_taxa_id_unique_non_symbiodinium_seqs',
             'post_med_absolute',
             'post_med_unique']
+        user_supplied_stats = [
+            'sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species',
+            'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth']
 
         # append the noName sequences as individual sequence abundances
-        return ['sample_name'] + qc_stats + no_name_summary_strings + header_pre
+        return ['sample_name'] + qc_stats + no_name_summary_strings + user_supplied_stats + header_pre
 
 
 class SeqOutputSeriesGeneratorWorker:
@@ -1369,13 +1372,39 @@ class SeqOutputSeriesGeneratorWorker:
             sample_series_absolute, sample_series_relative]
 
     def _populate_quality_control_data_of_successful_sample(self):
+        self._populate_qc_meta_successful_sample()
+
+        self._populate_no_name_seq_clade_summaries_successful_sample()
+
+        self._populate_user_supplied_meta()
+
+        self._populate_seq_abunds_successful_sample()
+
+    def _populate_seq_abunds_successful_sample(self):
+        # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
+        # the sampleRowDataCounts and the sampleRowDataProps
+        for seq_name in self.clade_abundance_ordered_ref_seq_list:
+            sys.stdout.write('\rOutputting seq data for {}: sequence {}'.format(self.dss.name, seq_name))
+            self.sample_row_data_absolute.append(
+                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[0][seq_name])
+            self.sample_row_data_relative.append(
+                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[1][seq_name])
+
+    def _populate_no_name_seq_clade_summaries_successful_sample(self):
+        # now add the clade divided summaries of the clades
+        for clade in list('ABCDEFGHI'):
+            self.sample_row_data_absolute.append(
+                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[0][clade])
+            self.sample_row_data_relative.append(
+                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[1][clade])
+
+    def _populate_qc_meta_successful_sample(self):
         # Here we add in the post qc and post-taxa id counts
         # For the absolute counts we will report the absolute seq number
         # For the relative counts we will report these as proportions of the sampleSeqTot.
         # I.e. we will have numbers larger than 1 for many of the values and the symbiodinium seqs should be 1
         self.sample_row_data_absolute.append(self.dss.name)
         self.sample_row_data_relative.append(self.dss.name)
-
         # CONTIGS
         # This is the absolute number of sequences after make.contigs
         contig_num = self.dss.num_contigs
@@ -1424,22 +1453,6 @@ class SeqOutputSeriesGeneratorWorker:
         self.sample_row_data_absolute.append(post_med_unique)
         self.sample_row_data_relative.append(post_med_unique / self.sample_seq_tot)
 
-        # now add the clade divided summaries of the clades
-        for clade in list('ABCDEFGHI'):
-            self.sample_row_data_absolute.append(
-                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[0][clade])
-            self.sample_row_data_relative.append(
-                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[1][clade])
-
-        # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
-        # the sampleRowDataCounts and the sampleRowDataProps
-        for seq_name in self.clade_abundance_ordered_ref_seq_list:
-            sys.stdout.write('\rOutputting seq data for {}: sequence {}'.format(self.dss.name, seq_name))
-            self.sample_row_data_absolute.append(
-                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[0][seq_name])
-            self.sample_row_data_relative.append(
-                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[1][seq_name])
-
     def _output_the_failed_sample_pandas_series(self):
         sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.output_df_header, name=self.dss.id)
         sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.output_df_header, name=self.dss.id)
@@ -1452,6 +1465,74 @@ class SeqOutputSeriesGeneratorWorker:
         # CONTIGS
         # This is the absolute number of sequences after make.contigs
 
+        self._populate_qc_meta_failed_sample()
+
+        self._populate_no_name_seq_clade_summaries_failed_sample()
+
+        self._populate_user_supplied_meta()
+
+        self._populate_seq_abunds_failed_sample()
+
+    def _populate_seq_abunds_failed_sample(self):
+        # All sequences get 0s
+        for _ in self.clade_abundance_ordered_ref_seq_list:
+            self.sample_row_data_absolute.append(0)
+            self.sample_row_data_relative.append(0)
+
+    def _populate_user_supplied_meta(self):
+        # insert the user supplied meta stats
+        # sample_type
+        self.sample_row_data_absolute.append(self.dss.sample_type)
+        self.sample_row_data_relative.append(self.dss.sample_type)
+
+        # host_phylum
+        self.sample_row_data_absolute.append(self.dss.host_phylum)
+        self.sample_row_data_relative.append(self.dss.host_phylum)
+
+        # host_class
+        self.sample_row_data_absolute.append(self.dss.host_class)
+        self.sample_row_data_relative.append(self.dss.host_class)
+
+        # host_order
+        self.sample_row_data_absolute.append(self.dss.host_order)
+        self.sample_row_data_relative.append(self.dss.host_order)
+
+        # host_family
+        self.sample_row_data_absolute.append(self.dss.host_family)
+        self.sample_row_data_relative.append(self.dss.host_family)
+
+        # host_genus
+        self.sample_row_data_absolute.append(self.dss.host_genus)
+        self.sample_row_data_relative.append(self.dss.host_genus)
+
+        # host_species
+        self.sample_row_data_absolute.append(self.dss.host_species)
+        self.sample_row_data_relative.append(self.dss.host_species)
+
+        # collection_latitude
+        self.sample_row_data_absolute.append(self.dss.collection_latitude)
+        self.sample_row_data_relative.append(self.dss.collection_latitude)
+
+        # collection_longitude
+        self.sample_row_data_absolute.append(self.dss.collection_longitude)
+        self.sample_row_data_relative.append(self.dss.collection_longitude)
+
+        # collection_date
+        self.sample_row_data_absolute.append(self.dss.collection_date)
+        self.sample_row_data_relative.append(self.dss.collection_date)
+
+        # collection_depth
+        self.sample_row_data_absolute.append(self.dss.collection_depth)
+        self.sample_row_data_relative.append(self.dss.collection_depth)
+
+
+    def _populate_no_name_seq_clade_summaries_failed_sample(self):
+        # no name clade summaries get 0.
+        for _ in list('ABCDEFGHI'):
+            self.sample_row_data_absolute.append(0)
+            self.sample_row_data_relative.append(0)
+
+    def _populate_qc_meta_failed_sample(self):
         if self.dss.num_contigs:
             contig_num = self.dss.num_contigs
             self.sample_row_data_absolute.append(contig_num)
@@ -1539,16 +1620,6 @@ class SeqOutputSeriesGeneratorWorker:
             self.sample_row_data_absolute.append(post_med_uni)
             self.sample_row_data_relative.append(0)
         else:
-            self.sample_row_data_absolute.append(0)
-            self.sample_row_data_relative.append(0)
-
-        # no name clade summaries get 0.
-        for _ in list('ABCDEFGHI'):
-            self.sample_row_data_absolute.append(0)
-            self.sample_row_data_relative.append(0)
-
-        # All sequences get 0s
-        for _ in self.clade_abundance_ordered_ref_seq_list:
             self.sample_row_data_absolute.append(0)
             self.sample_row_data_relative.append(0)
 
