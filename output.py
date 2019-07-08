@@ -644,7 +644,7 @@ class SequenceCountTableCreator:
             self.time_date_str = time_date_str
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self._set_output_dir(call_type, ds_uids_output_str, output_dir, symportal_root_dir)
+        self._set_output_dirs(call_type, ds_uids_output_str, output_dir, symportal_root_dir)
         self.sorted_sample_uid_list = sorted_sample_uid_list
         self.analysis_obj = analysis_obj
         self.call_type = call_type
@@ -689,7 +689,9 @@ class SequenceCountTableCreator:
         if data_set_sample_ids_to_output_string is not None and data_set_uids_to_output_as_comma_sep_string is not None:
             raise RuntimeError('Provide either dss uids or ds uids for outputing sequence count tables')
 
-    def _set_output_dir(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir):
+    def _set_output_dirs(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir):
+        """Set both the standard output_dir where the count tables will be output and the directory to output
+        the resources for the browser based data explorer"""
         if call_type == 'submission':
             self.output_dir = os.path.abspath(os.path.join(
                 symportal_root_dir, 'outputs', 'loaded_data_sets', data_set_uids_to_output_as_comma_sep_string))
@@ -697,7 +699,9 @@ class SequenceCountTableCreator:
             self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'non_analysis', self.time_date_str))
         else:  # call_type == 'analysis
             self.output_dir = output_dir
+        self.html_output_dir = os.path.join(self.output_dir, 'html')
         os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.html_output_dir, exist_ok=True)
 
     def _init_seq_abundance_collection_objects(self):
         """Output objects from first worker to be used by second worker"""
@@ -841,6 +845,31 @@ class SequenceCountTableCreator:
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
         self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
+        self._write_out_js_seq_data_file()
+
+    def _write_out_js_seq_data_file(self):
+        # now create the .js file that we will use to read in the data locally
+        # we will create a single file that will contain the functions getSeqDataAbsolute and getSeqDataRelative
+        # to make this file we will first write out each of the dataframes to json. We will then read in the json
+        # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
+        # these into a single .js file called seq_data.js
+        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.json')
+        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.json')
+        js_file_path = os.path.join(self.html_output_dir, 'seq_data.js')
+        self.output_df_absolute.to_json(path_or_buf=absolute_json_path, orient='records')
+        self.output_df_relative.to_json(path_or_buf=relative_json_path, orient='records')
+        js_file = []
+        js_file.extend(self._make_js_function_from_json_file(absolute_json_path))
+        js_file.extend(self._make_js_function_from_json_file(relative_json_path))
+        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+
+    def _make_js_function_from_json_file(self, json_path):
+        temp_js_file_as_list = []
+        temp_js_file_as_list.append('function getSeqData(){')
+        temp_js_file_as_list.extend(general.read_defined_file_to_list(json_path))
+        temp_js_file_as_list[1] = 'return ' + temp_js_file_as_list[1]
+        temp_js_file_as_list.append('};')
+        return temp_js_file_as_list
 
     def _append_meta_info_to_df(self):
         # Now append the meta infromation for each of the data_sets that make up the output contents
