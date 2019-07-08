@@ -718,23 +718,61 @@ class SequenceCountTableCreator:
     def _init_output_paths(self):
         self.output_paths_list = []
         if self.analysis_obj:
-
-            self.path_to_seq_output_df_absolute = os.path.join(
-                self.output_dir,
-                f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
-            self.path_to_seq_output_df_relative = os.path.join(
-                self.output_dir,
-                f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
-
-            self.output_fasta_path = os.path.join(
-                self.output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
-
+            self._set_analysis_seq_table_output_paths()
         else:
-            self.path_to_seq_output_df_absolute = os.path.join(self.output_dir,
-                                                               f'{self.time_date_str}.seqs.absolute.txt')
-            self.path_to_seq_output_df_relative = os.path.join(self.output_dir,
-                                                               f'{self.time_date_str}.seqs.relative.txt')
-            self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
+            self._set_non_analysis_seq_table_output_paths()
+
+    def _set_non_analysis_seq_table_output_paths(self):
+        self._set_non_analysis_abs_count_tab_output_paths()
+        self._set_non_analysis_rel_count_tab_output_paths()
+        self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
+
+    def _set_analysis_seq_table_output_paths(self):
+        self._set_analysis_abs_count_tab_output_paths()
+        self._set_analysis_rel_count_tab_output_paths()
+        self.output_fasta_path = os.path.join(
+            self.output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
+
+    def _set_analysis_rel_count_tab_output_paths(self):
+        self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
+        self.path_to_seq_output_abund_only_df_relative = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
+        self.path_to_seq_output_meta_only_df_relative = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
+
+    def _set_analysis_abs_count_tab_output_paths(self):
+        self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+        self.path_to_seq_output_abund_only_df_absolute = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
+        self.path_to_seq_output_meta_only_df_absolute = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
+
+    def _set_non_analysis_rel_count_tab_output_paths(self):
+        self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.relative.abund_and_meta.txt')
+        self.path_to_seq_output_abund_only_df_relative = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.relative.abund_only.txt')
+        self.path_to_seq_output_meta_only_df_relative = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.relative.meta_only.txt')
+
+    def _set_non_analysis_abs_count_tab_output_paths(self):
+        # Path to output table that contains both the meta info and the abundance info
+        self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(self.output_dir,
+                                                           f'{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+        # Path to output table that contains only the abundance info
+        self.path_to_seq_output_abund_only_df_absolute = os.path.join(self.output_dir,
+                                                                      f'{self.time_date_str}.seqs.absolute.abund_only.txt')
+        # Path to output table that contains only the meta info
+        self.path_to_seq_output_meta_only_df_absolute = os.path.join(self.output_dir,
+                                                                     f'{self.time_date_str}.seqs.absolute.meta_only.txt')
 
     def make_output_tables(self):
         print('\n\nOutputting sequence abundance count tables\n')
@@ -751,10 +789,10 @@ class SequenceCountTableCreator:
         self._write_out_dfs_and_fasta()
 
     def _write_out_dfs_and_fasta(self):
-        self.output_df_absolute.to_csv(self.path_to_seq_output_df_absolute, sep="\t")
-        self.output_paths_list.append(self.path_to_seq_output_df_absolute)
-        self.output_df_relative.to_csv(self.path_to_seq_output_df_relative, sep="\t")
-        self.output_paths_list.append(self.path_to_seq_output_df_relative)
+        self.output_df_absolute.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t")
+        self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
+        self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")
+        self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
         # we created the fasta above.
         general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
         self.output_paths_list.append(self.output_fasta_path)

@@ -271,7 +271,7 @@ class SymPortalWorkFlowManager:
         As such, no ordered list of DataSetSamples should be passed to the plotter."""
         self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(
             output_directory=self.output_seq_count_table_obj.output_dir,
-            seq_relative_abund_count_table_path=self.output_seq_count_table_obj.path_to_seq_output_df_relative,
+            seq_relative_abund_count_table_path=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
             time_date_str=self.output_seq_count_table_obj.time_date_str)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
@@ -337,7 +337,7 @@ class SymPortalWorkFlowManager:
         DataSetSample order as that used in the ITS2 type profile output that was conducted in parallel."""
         self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(
             output_directory=self.output_seq_count_table_obj.output_dir,
-            seq_relative_abund_count_table_path=self.output_seq_count_table_obj.path_to_seq_output_df_relative,
+            seq_relative_abund_count_table_path=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
             ordered_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             time_date_str=self.output_seq_count_table_obj.time_date_str)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
