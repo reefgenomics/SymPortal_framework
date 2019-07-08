@@ -250,13 +250,12 @@ class DataLoading:
             ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
         self.sequence_count_table_creator.make_output_tables()
-        # TODO don't for get to write out where the non-sym and size violation seqs were output
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(self.sequence_count_table_creator)
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
         for path in sequence_count_table_creator.output_paths_list:
-            if 'relative' in path:
+            if 'relative.abund_and_meta' in path:
                 self.seq_abundance_relative_output_path = path
 
     def _delete_temp_working_directory_and_log_files(self):
