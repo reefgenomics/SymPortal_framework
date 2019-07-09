@@ -848,7 +848,6 @@ class SequenceCountTableCreator:
         self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
 
-
     def _write_out_js_seq_data_file(self):
         # now create the .js file that we will use to read in the data locally
         # we will create a single file that will contain the functions getSeqDataAbsolute and getSeqDataRelative
@@ -861,17 +860,9 @@ class SequenceCountTableCreator:
         self.output_df_absolute.to_json(path_or_buf=absolute_json_path, orient='records')
         self.output_df_relative.to_json(path_or_buf=relative_json_path, orient='records')
         js_file = []
-        js_file.extend(self._make_js_function_from_json_file(absolute_json_path))
-        js_file.extend(self._make_js_function_from_json_file(relative_json_path))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolute'))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelative'))
         general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
-
-    def _make_js_function_from_json_file(self, json_path):
-        temp_js_file_as_list = []
-        temp_js_file_as_list.append('function getSeqData(){')
-        temp_js_file_as_list.extend(general.read_defined_file_to_list(json_path))
-        temp_js_file_as_list[1] = 'return ' + temp_js_file_as_list[1]
-        temp_js_file_as_list.append('};')
-        return temp_js_file_as_list
 
     def _append_meta_info_to_df(self):
         # Now append the meta infromation for each of the data_sets that make up the output contents

@@ -381,7 +381,9 @@ class TypeStackedBarPlotter:
         self.type_uid_to_type_name_dict = None
         self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
         self.colour_dict = self._set_colour_dict()
-
+        general.output_js_color_objects_array(
+            output_directory=os.path.join(self.output_directory, 'html'),
+            colour_dict=self.colour_dict)
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
         self.samples_per_subplot = 50
         self.number_of_subplots = self._infer_num_subplots()
@@ -507,8 +509,7 @@ class TypeStackedBarPlotter:
         return  colour_dict
 
 
-
-class PreMedSeqPlotter:
+class PreMedSeqPlotter():
     def __init__(
             self, rel_abund_df, output_directory, plotting_sample_uid_order, time_date_str=None):
         self.output_directory = output_directory
@@ -528,6 +529,9 @@ class PreMedSeqPlotter:
         self.max_n_rows = 7
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
+        general.output_js_color_objects_array(
+            output_directory=os.path.join(self.output_directory, 'html'),
+            colour_dict=self.colour_dict)
         # plotting vars
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
         self.samples_per_subplot = 50
@@ -584,7 +588,7 @@ class PreMedSeqPlotter:
             number_of_subplots = int(self.num_samples / self.samples_per_subplot)
         return number_of_subplots
 
-class SeqStackedBarPlotter:
+class SeqStackedBarPlotter():
     """Class for plotting the sequence count table output"""
     def __init__(
             self, seq_relative_abund_count_table_path, output_directory,
@@ -604,6 +608,9 @@ class SeqStackedBarPlotter:
         self.max_n_rows = 7
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
+        general.output_js_color_objects_array(
+            output_directory=os.path.join(self.output_directory, 'html'),
+            colour_dict=self.colour_dict)
         # plotting vars
         self.ordered_sample_uid_list = self._set_ordered_sample_uid_list_and_reorder_df(ordered_sample_uid_list)
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
