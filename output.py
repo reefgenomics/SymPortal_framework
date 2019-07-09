@@ -63,23 +63,50 @@ class OutputTypeCountTable:
         self.number_of_samples = None
         self.call_type = call_type
         self.pre_headers = None
-        self.rel_abund_output_df, self.abs_abund_output_df = self._init_dfs()
+        # the number of meta rows that have been added to the dataframe.
+        # This number will be used to remove the meta rows when making the abundance only dataframes
+        self.number_of_meta_rows_added = 0
+        # the number of header rows that have been added to the dataframe.
+        # This number will be used to remove the header rows when making the abundance only dataframes
         # set of all of the species found in the vats
+        self.number_of_header_rows_added = 0
+        self.rel_abund_output_df, self.abs_abund_output_df = self._init_dfs()
         self.species_set = set()
         self.species_ref_dict = self._set_species_ref_dict()
         self.output_file_paths_list = []
-        self.output_dir = os.path.join(symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id), self.date_time_str)
+        self.output_dir = os.path.join(
+            symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id), self.date_time_str)
         os.makedirs(self.output_dir, exist_ok=True)
-        self.path_to_relative_count_table = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
-                             f'{self.data_analysis_obj.name}_'
-                             f'{self.date_time_str}.profiles.relative.txt')
-        self.path_to_absolute_count_table = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
-                             f'{self.data_analysis_obj.name}_'
-                             f'{self.date_time_str}.profiles.absolute.txt')
+        self._init_output_paths()
         self.output_file_paths_list.extend([
-            self.path_to_relative_count_table, self.path_to_absolute_count_table])
+            self.path_to_relative_count_table_profiles_abund_and_meta,
+            self.path_to_absolute_count_table_profiles_abund_and_meta])
+
+    def _init_output_paths(self):
+        self.path_to_absolute_count_table_profiles_abund_and_meta = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.absolute.abund_and_meta.txt')
+        self.path_to_absolute_count_table_profiles_abund_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.absolute.abund_only.txt')
+        self.path_to_absolute_count_table_profiles_meta_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.absolute.meta_only.txt')
+        self.path_to_relative_count_table_profiles_abund_and_meta = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.relative.abund_and_meta.txt')
+        self.path_to_relative_count_table_profiles_abund_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.relative.abund_only.txt')
+        self.path_to_relative_count_table_profiles_meta_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.relative.meta_only.txt')
 
     def _set_vcc_uids_to_output(self):
         list_of_sets_of_vcc_uids_in_vdss = [
@@ -131,11 +158,49 @@ class OutputTypeCountTable:
             self._append_meta_info_for_stand_alone_call_type()
 
     def _write_out_dfs(self):
+        self._write_out_abund_and_meta_dfs_profiles()
+
+        abundance_row_indices = self._write_out_abund_only_dfs_profiles()
+
+        self._write_out_meta_only_dfs_profiles(abundance_row_indices)
+
+    def _write_out_meta_only_dfs_profiles(self, abundance_row_indices):
+        # now output the meta_only dfs
+        # delete the abundance info rows and drop the sample_name column
+        rows_to_keep_by_index = list(range(self.number_of_header_rows_added))
+        rows_to_keep_by_index += list(range(self.number_of_header_rows_added + len(abundance_row_indices),
+                                            len(self.abs_abund_output_df.index.values.tolist())))
+        absolute_df_meta_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
+        relative_df_meta_only = self.rel_abund_output_df.iloc[rows_to_keep_by_index, :]
+        absolute_df_meta_only.drop(columns='sample_name', inplace=True)
+        relative_df_meta_only.drop(columns='sample_name', inplace=True)
+
+    def _write_out_abund_only_dfs_profiles(self):
+        # write out the abund_only dfs
+        # get rid of the header rows other than the profile uid that is the first row
+        # also get rid of all meta rows at the end
+        # also get rid of the sample_name column
+        rows_to_keep_by_index = [0]
+        abundance_row_indices = list(range(self.number_of_header_rows_added, (
+                    len(self.abs_abund_output_df.index.values.tolist()) - (self.number_of_meta_rows_added - 1))))
+        rows_to_keep_by_index += abundance_row_indices
+        absolute_df_abund_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
+        relative_df_abund_only = self.rel_abund_output_df.iloc[rows_to_keep_by_index, :]
+        absolute_df_abund_only.drop(columns='sample_name', inplace=True)
+        relative_df_abund_only.drop(columns='sample_name', inplace=True)
+        absolute_df_abund_only.to_csv(self.path_to_absolute_count_table_profiles_abund_only, sep="\t", header=False)
+        relative_df_abund_only.to_csv(self.path_to_relative_count_table_profiles_abund_only, sep="\t", header=False)
+        return abundance_row_indices
+
+    def _write_out_abund_and_meta_dfs_profiles(self):
+        # write out the abund_and_meta dfs
         print('\n\nITS2 type profile count tables output to:')
-        self.rel_abund_output_df.to_csv(self.path_to_relative_count_table, sep="\t", header=False)
-        print(self.path_to_relative_count_table)
-        self.abs_abund_output_df.to_csv(self.path_to_absolute_count_table, sep="\t", header=False)
-        print(f'{self.path_to_absolute_count_table}\n\n')
+        self.abs_abund_output_df.to_csv(
+            self.path_to_absolute_count_table_profiles_abund_and_meta, sep="\t", header=False)
+        print(f'{self.path_to_absolute_count_table_profiles_abund_and_meta}\n\n')
+        self.rel_abund_output_df.to_csv(
+            self.path_to_relative_count_table_profiles_abund_and_meta, sep="\t", header=False)
+        print(self.path_to_relative_count_table_profiles_abund_and_meta)
 
     def _append_meta_info_for_stand_alone_call_type(self):
         data_sets_of_analysis = len(self.data_analysis_obj.list_of_data_set_uids.split(','))
@@ -153,18 +218,23 @@ class OutputTypeCountTable:
 
     def _append_species_references_to_dfs(self):
         # now add the references for each of the associated species
+        # we put an NaN in the first column so that we can delete the sample_name column when making the
+        # meta only output table. If we put the species reference directly in that first column it would be deleted
+        # when deleting this column.
         for species in self.species_set:
             if species in self.species_ref_dict.keys():
-                temp_series = pd.Series([self.species_ref_dict[species]], index=[list(self.rel_abund_output_df)[0]],
+                temp_series = pd.Series([np.NaN, self.species_ref_dict[species]], index=[list(self.rel_abund_output_df)[0], list(self.rel_abund_output_df)[1]],
                                         name=species)
                 self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
                 self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+                self.number_of_meta_rows_added += 1
 
     def _append_species_header_to_dfs(self):
         # add a blank row with just the header Species reference
         temp_blank_series_with_name = pd.Series(name='Species reference')
         self.rel_abund_output_df = self.rel_abund_output_df.append(temp_blank_series_with_name)
         self.abs_abund_output_df = self.abs_abund_output_df.append(temp_blank_series_with_name)
+        self.number_of_meta_rows_added += 1
 
     def _append_data_set_info_to_dfs(self):
         ds_obj_list = self._chunk_query_ds_objs_from_ds_uids()
@@ -179,6 +249,7 @@ class OutputTypeCountTable:
                 data_set_meta_list, index=[list(self.rel_abund_output_df)[0]], name='data_set_info')
             self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
             self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+            self.number_of_meta_rows_added += 1
 
     def _chunk_query_ds_objs_from_ds_uids(self):
         ds_obj_list = []
@@ -199,6 +270,7 @@ class OutputTypeCountTable:
             meta_info_string_items, index=[list(self.rel_abund_output_df)[0]], name='meta_info_summary')
         self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
         self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+        self.number_of_meta_rows_added += 1
 
     def _make_stand_alone_data_set_meta_info_string(self, data_sets_of_analysis):
         meta_info_string_items = [
@@ -367,7 +439,9 @@ class OutputTypeCountTable:
     def _init_dfs(self):
         self.pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence',
                        'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
+        self.number_of_header_rows_added += len(self.pre_headers)
         post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
+        self.number_of_meta_rows_added += len(post_headers)
         self.df_index = self.pre_headers + self.sorted_list_of_vdss_uids_to_output + post_headers
         return pd.DataFrame(index=self.df_index), pd.DataFrame(index=self.df_index)
 
@@ -802,20 +876,20 @@ class SequenceCountTableCreator:
         self._write_out_dfs_and_fasta()
 
     def _write_out_dfs_and_fasta(self):
-        self._write_out_abund_and_meta_dfs()
+        self._write_out_abund_and_meta_dfs_seqs()
 
         self._write_out_js_seq_data_file_post_med()
 
-        self._write_out_abund_only_dfs()
+        self._write_out_abund_only_dfs_seqs()
 
-        self._write_out_meta_only_dfs()
+        self._write_out_meta_only_dfs_seqs()
 
         self._write_out_seq_fasta_for_loading()
         print('\n\nITS2 sequence output files:')
         for path_item in self.output_paths_list:
             print(path_item)
 
-    def _write_out_meta_only_dfs(self):
+    def _write_out_meta_only_dfs_seqs(self):
         # now do the meta output table
         # we need to drop the accession row and then we need to drop the seq abund columns
         df_abs_meta_only = self.output_df_absolute.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
@@ -830,7 +904,7 @@ class SequenceCountTableCreator:
         general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
         self.output_paths_list.append(self.output_fasta_path)
 
-    def _write_out_abund_only_dfs(self):
+    def _write_out_abund_only_dfs_seqs(self):
         # get rid of the meta info rows and columns
         # we will delete the number of meta row added plus one for the accession row
         df_abs_abund_only = self.output_df_absolute.iloc[:-1 * (self.number_of_meta_rows_added + 1),
@@ -842,7 +916,7 @@ class SequenceCountTableCreator:
         df_rel_abund_only.to_csv(self.path_to_seq_output_abund_only_df_relative, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_only_df_relative)
 
-    def _write_out_abund_and_meta_dfs(self):
+    def _write_out_abund_and_meta_dfs_seqs(self):
         self.output_df_absolute.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
         self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")

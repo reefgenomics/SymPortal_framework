@@ -278,7 +278,7 @@ class SymPortalWorkFlowManager:
     def _plot_type_stacked_bar_from_type_output_table(self):
         self.type_stacked_bar_plotter = plotting.TypeStackedBarPlotter(
             output_directory=self.output_type_count_table_obj.output_dir,
-            type_relative_abund_count_table_path=self.output_type_count_table_obj.path_to_relative_count_table,
+            type_relative_abund_count_table_path=self.output_type_count_table_obj.path_to_relative_count_table_profiles_abund_and_meta,
             time_date_str=self.output_type_count_table_obj.date_time_str)
         self.type_stacked_bar_plotter.plot_stacked_bar_seqs()
 
