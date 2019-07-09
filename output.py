@@ -778,14 +778,14 @@ class SequenceCountTableCreator:
 
     def _set_non_analysis_abs_count_tab_output_paths(self):
         # Path to output table that contains both the meta info and the abundance info
-        self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(self.output_dir,
-                                                           f'{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+        self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
         # Path to output table that contains only the abundance info
-        self.path_to_seq_output_abund_only_df_absolute = os.path.join(self.output_dir,
-                                                                      f'{self.time_date_str}.seqs.absolute.abund_only.txt')
+        self.path_to_seq_output_abund_only_df_absolute = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.absolute.abund_only.txt')
         # Path to output table that contains only the meta info
-        self.path_to_seq_output_meta_only_df_absolute = os.path.join(self.output_dir,
-                                                                     f'{self.time_date_str}.seqs.absolute.meta_only.txt')
+        self.path_to_seq_output_meta_only_df_absolute = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.absolute.meta_only.txt')
 
     def make_output_tables(self):
         print('\n\nOutputting sequence abundance count tables\n')
@@ -804,7 +804,7 @@ class SequenceCountTableCreator:
     def _write_out_dfs_and_fasta(self):
         self._write_out_abund_and_meta_dfs()
 
-        self._write_out_js_seq_data_file()
+        self._write_out_js_seq_data_file_post_med()
 
         self._write_out_abund_only_dfs()
 
@@ -848,20 +848,20 @@ class SequenceCountTableCreator:
         self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
 
-    def _write_out_js_seq_data_file(self):
+    def _write_out_js_seq_data_file_post_med(self):
         # now create the .js file that we will use to read in the data locally
         # we will create a single file that will contain the functions getSeqDataAbsolute and getSeqDataRelative
         # to make this file we will first write out each of the dataframes to json. We will then read in the json
         # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
         # these into a single .js file called seq_data.js
-        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.json')
-        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.json')
-        js_file_path = os.path.join(self.html_output_dir, 'seq_data.js')
+        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.postMED.json')
+        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.postMEDjson')
+        js_file_path = os.path.join(self.html_output_dir, 'seq_data.postMED.js')
         self.output_df_absolute.to_json(path_or_buf=absolute_json_path, orient='records')
         self.output_df_relative.to_json(path_or_buf=relative_json_path, orient='records')
         js_file = []
-        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolute'))
-        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelative'))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolutePostMED'))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelativePostMED'))
         general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
 
     def _append_meta_info_to_df(self):
@@ -1713,9 +1713,11 @@ class PreMedSeqOutput:
         self.df_sample_uid_order = df_sample_uid_order
         if df_sample_uid_order is not None:
             self.main_output_uid_to_dss_name_dict = self._get_dss_objects_and_relate_to_df_sample_uids()
-
+        # the directory that is specific to the pre-med outputs
         self.pre_med_dir = pre_med_dir
-        self.output_dir = output_directory
+        # the directory one above the pre_med_dir that contins the main data_loading outputs
+        self.root_output_dir = output_directory
+        self.html_output_dir = os.path.join(output_directory)
         self.sample_uid_to_sample_dir_path_dict = {}
         self.sample_uid_to_name_dict = self._make_sample_uid_to_name_dict()
         self.sample_dirs = general.return_list_of_directory_paths_in_directory(self.pre_med_dir)
@@ -1739,6 +1741,7 @@ class PreMedSeqOutput:
         uids to their names."""
         list_of_dss = list(DataSetSample.objects.filter(id__in=self.df_sample_uid_order))
         return {dss.id: dss.name for dss in list_of_dss}
+
     def _make_sample_uid_to_name_dict(self):
         list_of_dir_name = general.return_list_of_directory_names_in_directory(self.pre_med_dir)
         sample_uid_to_name_dict = {}
@@ -1767,7 +1770,7 @@ class PreMedSeqOutput:
             print('Too many samples ({num_samples}) to plot pre-MED data.')
         else:
             med_plotter = plotting.PreMedSeqPlotter(
-                output_directory=self.output_dir, rel_abund_df=self.rel_count_df,
+                output_directory=self.pre_med_dir, rel_abund_df=self.rel_count_df,
                 plotting_sample_uid_order=self.plotting_sample_uid_order, time_date_str=self.time_date_str)
             med_plotter.plot_stacked_bar_seqs()
 
@@ -1800,8 +1803,29 @@ class PreMedSeqOutput:
         # we should now write out these dfs to the directory that has the pre-MED sequences in them
         self._write_out_dfs_as_csv()
 
+        self._write_out_js_seq_data_file_pre_med()
+
+    def _write_out_js_seq_data_file_pre_med(self):
+        # now create the .js file that we will use to read in the data locally
+        # we will create a single file that will contain the
+        # functions getSeqDataAbsolutePreMED and getSeqDataRelativePreMED
+        # to make this file we will first write out each of the dataframes to json. We will then read in the json
+        # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
+        # these into a single .js file called seq_data.js
+        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.preMED.json')
+        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.preMED.json')
+        js_file_path = os.path.join(self.html_output_dir, 'seq_data.preMED.js')
+        self.abs_count_df.to_json(path_or_buf=absolute_json_path, orient='records')
+        self.rel_count_df.to_json(path_or_buf=relative_json_path, orient='records')
+        js_file = []
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path,
+                                                                    function_name='getSeqDataAbsolute'))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path,
+                                                                    function_name='getSeqDataRelative'))
+        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+
     def _output_pre_med_master_fasta(self):
-        fasta_out_path = os.path.join(self.output_dir, 'pre_med_master_seqs.fasta')
+        fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
         fasta_out = []
         for seq_name, seq in self.name_to_sequence_dict.items():
             fasta_out.append(f'>{seq_name}')
