@@ -162,11 +162,11 @@ class OutputTypeCountTable:
     def _write_out_dfs(self):
         self._write_out_abund_and_meta_dfs_profiles()
 
-        abund_row_indices, absolute_df_abund_only, relative_df_abund_only = self._write_out_abund_only_dfs_profiles()
+        abund_row_indices = self._write_out_abund_only_dfs_profiles()
 
         prof_meta_only = self._write_out_meta_only_dfs_profiles(abund_row_indices)
 
-        self._write_out_js_profile_data_file(absolute_df_abund_only, prof_meta_only, relative_df_abund_only)
+        self._write_out_js_profile_data_file(prof_meta_only)
 
         self._write_out_additional_info_profiles()
 
@@ -175,13 +175,34 @@ class OutputTypeCountTable:
                                           list_to_write=self.additional_info_file_as_list)
         print(self.path_to_additional_info_file)
 
-    def _write_out_js_profile_data_file(self, absolute_df_abund_only, prof_meta_only, relative_df_abund_only):
+    def _write_out_js_profile_data_file(self, prof_meta_only):
         # We will need to have three javascript methods for the explorere here.
         # one for the absolute abundances, one for the relative and one for the ITS2 type profile meta information
         absolute_json_path = os.path.join(self.html_output_dir, 'profile.absolute.json')
         relative_json_path = os.path.join(self.html_output_dir, 'profile.relative.json')
         profile_meta_json_path = os.path.join(self.html_output_dir, 'profile.meta.json')
         js_file_path = os.path.join(self.html_output_dir, 'profile_data.js')
+
+        rows_to_keep_by_index = [0]
+        abundance_row_indices = list(range(self.number_of_header_rows_added, (
+                len(self.abs_abund_output_df.index.values.tolist()) - self.number_of_meta_rows_added)))
+        rows_to_keep_by_index += abundance_row_indices
+        absolute_df_abund_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
+        relative_df_abund_only = self.rel_abund_output_df.iloc[rows_to_keep_by_index, :]
+
+        # replace the top item of the index with sample_uid rather than 'ITS2 type profile UID'
+        new_index = absolute_df_abund_only.index.values.tolist()
+        new_index[0] = 'sample_uid'
+        absolute_df_abund_only.index = new_index
+        relative_df_abund_only.index = new_index
+        # add sample_name identifier to top row
+        absolute_df_abund_only.iat[0, 0] = 'sample_name'
+        relative_df_abund_only.iat[0, 0] = 'sample_name'
+        # add the index in as a column as the index is not output using .to_json
+        absolute_df_abund_only.insert(loc=0, column='sample_uid', value=absolute_df_abund_only.index.values.tolist())
+        relative_df_abund_only.insert(loc=0, column='sample_uid', value=relative_df_abund_only.index.values.tolist())
+        absolute_df_abund_only.drop(index='sample_uid', inplace=True)
+        relative_df_abund_only.drop(index='sample_uid', inplace=True)
         absolute_df_abund_only.to_json(path_or_buf=absolute_json_path, orient='records')
         relative_df_abund_only.to_json(path_or_buf=relative_json_path, orient='records')
         prof_meta_only.to_json(path_or_buf=profile_meta_json_path, orient='records')
@@ -205,7 +226,9 @@ class OutputTypeCountTable:
                                             len(self.abs_abund_output_df.index.values.tolist())))
         profile_meta_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
         profile_meta_only.drop(columns='sample_name', inplace=True)
-        profile_meta_only.T.to_csv(self.path_to_absolute_count_table_profiles_meta_only, sep="\t", header=False)
+        profile_meta_only = profile_meta_only.T
+        profile_meta_only.to_csv(self.path_to_absolute_count_table_profiles_meta_only, sep="\t", header=True,
+                                 index=False)
         print(self.path_to_absolute_count_table_profiles_meta_only)
         return profile_meta_only
 
@@ -216,17 +239,22 @@ class OutputTypeCountTable:
         # also get rid of the sample_name column
         rows_to_keep_by_index = [0]
         abundance_row_indices = list(range(self.number_of_header_rows_added, (
-                    len(self.abs_abund_output_df.index.values.tolist()) - (self.number_of_meta_rows_added - 1))))
+                    len(self.abs_abund_output_df.index.values.tolist()) - self.number_of_meta_rows_added)))
         rows_to_keep_by_index += abundance_row_indices
         absolute_df_abund_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
         relative_df_abund_only = self.rel_abund_output_df.iloc[rows_to_keep_by_index, :]
         absolute_df_abund_only.drop(columns='sample_name', inplace=True)
         relative_df_abund_only.drop(columns='sample_name', inplace=True)
+        # replace the top item of the index with sample_uid rather than 'ITS2 type profile UID'
+        new_index = absolute_df_abund_only.index.values.tolist()
+        new_index[0] = 'sample_uid'
+        absolute_df_abund_only.index = new_index
+        relative_df_abund_only.index = new_index
         absolute_df_abund_only.to_csv(self.path_to_absolute_count_table_profiles_abund_only, sep="\t", header=False)
         relative_df_abund_only.to_csv(self.path_to_relative_count_table_profiles_abund_only, sep="\t", header=False)
         print(self.path_to_absolute_count_table_profiles_abund_only)
         print(self.path_to_relative_count_table_profiles_abund_only)
-        return abundance_row_indices, absolute_df_abund_only, relative_df_abund_only
+        return abundance_row_indices
 
     def _write_out_abund_and_meta_dfs_profiles(self):
         # write out the abund_and_meta dfs

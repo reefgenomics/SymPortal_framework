@@ -309,8 +309,8 @@ def make_json_object_array_from_python_dictionary(p_dict):
     json_str += '['
     for k, v in p_dict.items():
         json_str += '{'
-        json_str += f"\"seq_name\":\"{k}\", "
-        json_str += f"\"seq_color\":\"{v}\""
+        json_str += f"\"d_key\":\"{k}\", "
+        json_str += f"\"d_value\":\"{v}\""
         json_str += '}, '
     # remove last commar and space
     json_str = json_str[:-2]
