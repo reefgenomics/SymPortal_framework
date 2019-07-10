@@ -47,7 +47,7 @@ class DataLoading:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
         else:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
-
+        self._make_new_dataset_object()
         self.temp_working_directory = self._setup_temp_working_directory()
         self.output_directory = self._setup_output_directory()
         if self.datasheet_path:
