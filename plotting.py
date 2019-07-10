@@ -383,7 +383,7 @@ class TypeStackedBarPlotter:
         self.colour_dict = self._set_colour_dict()
         general.output_js_color_objects_array(
             output_directory=os.path.join(self.output_directory, 'html'),
-            colour_dict=self.colour_dict)
+            colour_dict=self.colour_dict, js_file_name='color_obj_array_profiles.js')
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
         self.samples_per_subplot = 50
         self.number_of_subplots = self._infer_num_subplots()
@@ -532,7 +532,7 @@ class PreMedSeqPlotter():
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
         general.output_js_color_objects_array(
             output_directory=os.path.join(self.root_output_directory, 'html'),
-            colour_dict=self.colour_dict)
+            colour_dict=self.colour_dict, js_file_name='color_obj_array_pre_med.js')
         # plotting vars
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
         self.samples_per_subplot = 50
@@ -611,7 +611,7 @@ class SeqStackedBarPlotter():
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
         general.output_js_color_objects_array(
             output_directory=os.path.join(self.output_directory, 'html'),
-            colour_dict=self.colour_dict)
+            colour_dict=self.colour_dict, js_file_name='color_obj_array_post_med.js')
         # plotting vars
         self.ordered_sample_uid_list = self._set_ordered_sample_uid_list_and_reorder_df(ordered_sample_uid_list)
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
