@@ -925,9 +925,9 @@ class SequenceCountTableCreator:
         # we need to drop the accession row and then we need to drop the seq abund columns
         df_abs_meta_only = self.output_df_absolute.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
         df_rel_meta_only = self.output_df_relative.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
-        df_abs_meta_only.to_csv(self.path_to_seq_output_meta_only_df_absolute, sep="\t")
+        df_abs_meta_only.to_csv(self.path_to_seq_output_meta_only_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_meta_only_df_absolute)
-        df_rel_meta_only.to_csv(self.path_to_seq_output_meta_only_df_relative, sep="\t")
+        df_rel_meta_only.to_csv(self.path_to_seq_output_meta_only_df_relative, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_meta_only_df_relative)
 
     def _write_out_seq_fasta_for_loading(self):
@@ -942,15 +942,15 @@ class SequenceCountTableCreator:
                             self.number_of_meta_cols_added:]
         df_rel_abund_only = self.output_df_relative.iloc[:-1 * (self.number_of_meta_rows_added + 1),
                             self.number_of_meta_cols_added:]
-        df_abs_abund_only.to_csv(self.path_to_seq_output_abund_only_df_absolute, sep="\t")
+        df_abs_abund_only.to_csv(self.path_to_seq_output_abund_only_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_only_df_absolute)
-        df_rel_abund_only.to_csv(self.path_to_seq_output_abund_only_df_relative, sep="\t")
+        df_rel_abund_only.to_csv(self.path_to_seq_output_abund_only_df_relative, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_only_df_relative)
 
     def _write_out_abund_and_meta_dfs_seqs(self):
-        self.output_df_absolute.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t")
+        self.output_df_absolute.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
-        self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t")
+        self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
 
     def _write_out_js_seq_data_file_post_med(self):
@@ -1126,7 +1126,10 @@ class SequenceCountTableCreator:
             'post_taxa_id_unique_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique',
             'size_screening_violation_absolute', 'size_screening_violation_unique']
         no_name_seq_columns = ['noName Clade {}'.format(clade) for clade in list('ABCDEFGHI')]
-        cols_to_drop = non_seq_columns + no_name_seq_columns
+        user_supplied_stats = [
+            'sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species',
+            'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth']
+        cols_to_drop = non_seq_columns + no_name_seq_columns + user_supplied_stats
         output_df_relative.drop(columns=cols_to_drop, inplace=True)
         return output_df_relative
 
@@ -1810,7 +1813,7 @@ class PreMedSeqOutput:
         self.pre_med_dir = pre_med_dir
         # the directory one above the pre_med_dir that contins the main data_loading outputs
         self.root_output_dir = output_directory
-        self.html_output_dir = os.path.join(output_directory)
+        self.html_output_dir = os.path.join(output_directory, 'html')
         self.sample_uid_to_sample_dir_path_dict = {}
         self.sample_uid_to_name_dict = self._make_sample_uid_to_name_dict()
         self.sample_dirs = general.return_list_of_directory_paths_in_directory(self.pre_med_dir)
@@ -1863,7 +1866,7 @@ class PreMedSeqOutput:
             print('Too many samples ({num_samples}) to plot pre-MED data.')
         else:
             med_plotter = plotting.PreMedSeqPlotter(
-                output_directory=self.pre_med_dir, rel_abund_df=self.rel_count_df,
+                pre_med_output_directory=self.pre_med_dir, root_output_directory=self.root_output_dir, rel_abund_df=self.rel_count_df,
                 plotting_sample_uid_order=self.plotting_sample_uid_order, time_date_str=self.time_date_str)
             med_plotter.plot_stacked_bar_seqs()
 

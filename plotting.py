@@ -511,13 +511,14 @@ class TypeStackedBarPlotter:
 
 class PreMedSeqPlotter():
     def __init__(
-            self, rel_abund_df, output_directory, plotting_sample_uid_order, time_date_str=None):
-        self.output_directory = output_directory
+            self, rel_abund_df, pre_med_output_directory, root_output_directory, plotting_sample_uid_order, time_date_str=None):
+        self.pre_med_output_directory = pre_med_output_directory
+        self.root_output_directory = root_output_directory
         if time_date_str:
             self.time_date_str = time_date_str
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
+        self.fig_output_base = os.path.join(self.pre_med_output_directory, f'{self.time_date_str}')
         self.smp_uid_to_smp_name_dict = None
         self.output_count_table_as_df = self._curate_output_count_table(rel_abund_df)
         if plotting_sample_uid_order is not None:
@@ -530,7 +531,7 @@ class PreMedSeqPlotter():
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
         general.output_js_color_objects_array(
-            output_directory=os.path.join(self.output_directory, 'html'),
+            output_directory=os.path.join(self.root_output_directory, 'html'),
             colour_dict=self.colour_dict)
         # plotting vars
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
@@ -784,7 +785,9 @@ class SeqStackedBarPlotter():
                      'post_taxa_id_absolute_non_symbiodinium_seqs',
                      'post_taxa_id_unique_non_symbiodinium_seqs',
                      'size_screening_violation_absolute', 'size_screening_violation_unique',
-                     'post_med_absolute', 'post_med_unique'
+                     'post_med_absolute', 'post_med_unique', 'sample_type', 'host_phylum', 'host_class', 'host_order',
+                     'host_family', 'host_genus', 'host_species',
+                     'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth'
                      ], inplace=True)
         sp_output_df = sp_output_df.astype('float')
         sp_output_df.index = sp_output_df.index.astype('int')

@@ -47,7 +47,7 @@ class DataLoading:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
         else:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
-
+        self._make_new_dataset_object()
         self.temp_working_directory = self._setup_temp_working_directory()
         self.output_directory = self._setup_output_directory()
         if self.datasheet_path:
@@ -2192,7 +2192,7 @@ class DataSetSampleSequenceCreatorWorker:
 
     def _assign_node_sequence_to_existing_ref_seq(self, node_nucleotide_sequence_object):
         """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
-        This take into account whether the seq_in_q could be a subset or super set of one of the
+        This takes into account whether the seq_in_q could be a subset or super set of one of the
         ref_seq.sequences.
         Will return false if no ref_seq match is found
         """
