@@ -215,3 +215,19 @@ class DataSetSampleSequence(models.Model):
             return self.reference_sequence_of.name
         else:
             return 'ID=' + str(self.id)
+
+class DataSetSampleSequencePM(models.Model):
+    # this is the pre-MED version of the DataSetSampleSequence object
+    # its purpose is to keep track of the
+    objects = models.Manager()
+    data_set_sample_from = models.ForeignKey(DataSetSample, on_delete=models.CASCADE, null=True)
+    reference_sequence_of = models.ForeignKey(ReferenceSequence, on_delete=models.CASCADE, null=True)
+    # reference_sequence_of = models.IntegerField(null=True)
+    abundance = models.IntegerField(default=0)
+
+
+    def __str__(self):
+        if self.reference_sequence_of.has_name:
+            return self.reference_sequence_of.name
+        else:
+            return 'ID=' + str(self.id)

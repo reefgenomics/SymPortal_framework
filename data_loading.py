@@ -1,4 +1,5 @@
-from dbApp.models import (DataSet, ReferenceSequence, DataSetSample, DataSetSampleSequence, CladeCollection)
+from dbApp.models import (
+    DataSet, ReferenceSequence, DataSetSample, DataSetSampleSequence, CladeCollection, DataSetSampleSequencePM)
 import sys
 import os
 import shutil
@@ -139,6 +140,8 @@ class DataLoading:
         self._do_med_decomposition()
 
         self._create_data_set_sample_sequences_from_med_nodes()
+
+        self._create_data_set_sample_sequence_pre_med_objs()
 
         self._print_sample_successful_or_failed_summary()
 
@@ -301,6 +304,11 @@ class DataLoading:
             data_loading_debug=self.debug, data_loading_dataset_object=self.dataset_object)
         self.dataset_object.currently_being_processed = False
         self.dataset_object.save()
+
+    def _create_data_set_sample_sequence_pre_med_objs(self):
+        print('\n\nCreating DataSetSampleSequencePM objects')
+        data_set_sample_pre_med_obj_creator = DataSetSampleSequencePMCreator(parent=self)
+        data_set_sample_pre_med_obj_creator.make_data_set_sample_pm_objects()
 
     def _do_med_decomposition(self):
         self.perform_med_handler_instance = PerformMEDHandler(
@@ -2059,9 +2067,7 @@ class DataSetSampleSequenceCreatorWorker:
                 NucleotideSequence(name=node_seq_name, abundance=node_seq_abundance, sequence=node_seq_sequence))
 
     def make_data_set_sample_sequences(self):
-        for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
-            if not self._assign_node_sequence_to_existing_ref_seq(node_nucleotide_sequence_object):
-                self._assign_node_sequence_to_new_ref_seq(node_nucleotide_sequence_object)
+        self._associate_med_nodes_to_ref_seq_objs()
 
         if self._two_or_more_nodes_associated_to_the_same_reference_sequence():
             self._make_associations_and_abundances_in_node_abund_df_unique_again()
@@ -2071,6 +2077,11 @@ class DataSetSampleSequenceCreatorWorker:
         self._if_more_than_200_seqs_create_clade_collection()
 
         self._create_data_set_sample_sequences()
+
+    def _associate_med_nodes_to_ref_seq_objs(self):
+        for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
+            if not self._assign_node_sequence_to_existing_ref_seq(node_nucleotide_sequence_object):
+                self._assign_node_sequence_to_new_ref_seq(node_nucleotide_sequence_object)
 
     def _create_data_set_sample_sequences(self):
         if self._we_made_a_clade_collection():
@@ -2299,3 +2310,197 @@ class DataSetSampleCreatorHandler:
             sys.stdout.write(
                 f'\n\nPopulating {data_set_sample_sequence_creator_worker.sample_name} with clade {data_set_sample_sequence_creator_worker.clade} sequences\n')
             data_set_sample_sequence_creator_worker.make_data_set_sample_sequences()
+
+class DataSetSampleSequencePMCreator:
+    """This class will be where we run the code for creating DataSetSAmpleSequencePM objects,
+    inluding the creation of reference sequences if necessary."""
+    def __init__(self, parent):
+        # dictionaries to save us having to do lots of database look ups
+        self.parent = parent
+        self.ref_seq_uid_to_ref_seq_name_dict = {
+            ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
+        self.ref_seq_sequence_to_ref_seq_id_dict = {
+            ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
+        self.list_of_pre_med_sample_dirs = self._populate_list_of_pre_med_sample_dirs()
+        self.nuc_sequence_name_to_ref_seq_id = {}
+        self.current_pre_med_sample_seq_collection = None
+        self.dataset_sample_object = DataSetSample.objects.get(
+            data_submission_from=parent.dataset_object, name=self.current_pre_med_sample_seq_collection.sample_name)
+
+
+    def _populate_list_of_pre_med_sample_dirs(self):
+        return general.return_list_of_directory_paths_in_directory(self.parent.pre_med_sequence_output_directory_path)
+
+    def make_data_set_sample_pm_objects(self):
+        for sample_pm_dir in self.list_of_pre_med_sample_dirs:
+            # get list of the fasta files (one per clade) that we will need to process
+            # we can deduce the .names file from the fasta file simply by changing the extension
+            sample_list_of_fasta_file_paths = [f_path for f_path in general.return_list_of_file_paths_in_directory(sample_pm_dir) if '.fasta' in f_path]
+            for f_path in sample_list_of_fasta_file_paths:
+                # for each clade there will be a fasta names pair
+                # for each of the fasta .names pairs we will need to look at each sequence
+                self.current_pre_med_sample_seq_collection = self.PreMEDSampleSeqCollection(
+                    clade=f_path.split('/')[-1].split('_')[3],
+                    fasta_dict = general.create_dict_from_fasta(fasta_path=f_path),
+                    names_dict=general.create_seq_name_to_abundance_dict_from_name_file(
+                        name_file_path=f_path.replace('.fasta', '.names')),
+                    sample_name=f_path.split('/')[-1].split('_')[4:].join('_').replace('.fasta', ''))
+
+                self._associate_pre_med_sequences_to_ref_seq_objs()
+
+                if self._two_or_more_pre_med_seqs_are_associated_to_the_same_reference_sequence():
+                    self._make_associations_and_abundances_in_node_abund_df_unique_again()
+
+                self._create_data_set_sample_pre_med_sequence_objs()
+
+    def _create_data_set_sample_pre_med_sequence_objs(self):
+        data_set_sample_sequence_pre_med_list = []
+        for seq_nuc_obj in self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs.values():
+            associated_ref_seq_id = self.nuc_sequence_name_to_ref_seq_id[seq_nuc_obj.name]
+            associated_ref_seq_object = ReferenceSequence.objects.get(id=associated_ref_seq_id)
+            dsspm = DataSetSampleSequencePM(reference_sequence_of=associated_ref_seq_object,
+                                        abundance=seq_nuc_obj.abundance,
+                                        data_set_sample_from=self.dataset_sample_object)
+            data_set_sample_sequence_pre_med_list.append(dsspm)
+        DataSetSampleSequence.objects.bulk_create(data_set_sample_sequence_pre_med_list)
+
+    def _two_or_more_pre_med_seqs_are_associated_to_the_same_reference_sequence(self):
+        """Multiple pre_med seqs may be assigned to the same reference sequence. We only want to create one
+        DataSetSampleSequencePM object per reference sequence. As such we need to consolidate abundances
+        """
+        return len(
+            set(self.nuc_sequence_name_to_ref_seq_id.values())) != len(self.nuc_sequence_name_to_ref_seq_id.keys())
+
+    def _make_associations_and_abundances_in_node_abund_df_unique_again(self):
+        list_of_non_unique_ref_seq_uids = [
+            ref_seq_uid for ref_seq_uid, count in
+            Counter(self.nuc_sequence_name_to_ref_seq_id.values()).items() if count > 1]
+        for non_unique_ref_seq_uid in list_of_non_unique_ref_seq_uids:
+
+            seq_names_to_be_consolidated = self._get_list_of_seq_names_that_need_consolidating(non_unique_ref_seq_uid)
+
+            summed_abund_of_seqs_associated_to_ref_seq = self._get_summed_abundances_of_the_seqs_to_be_consolidated(
+                seq_names_to_be_consolidated)
+
+            self._del_all_but_first_of_non_unique_seqs_from_association_dict(seq_names_to_be_consolidated)
+
+            self._update_seq_name_abund_in_seq_collection_and_names_dict(seq_names_to_be_consolidated, summed_abund_of_seqs_associated_to_ref_seq)
+
+    def _del_all_but_first_of_non_unique_seqs_from_association_dict(self, seq_names_to_be_consolidated):
+        #  delete all of the dictionary entries for the seq names to be consolidated except for the first one
+        for seq_name_to_del in seq_names_to_be_consolidated[1:]:
+            del self.current_pre_med_sample_seq_collection.fasta_dict[seq_name_to_del]
+            del self.current_pre_med_sample_seq_collection.names_dict[seq_name_to_del]
+            del self.nuc_sequence_name_to_ref_seq_id[seq_name_to_del]
+            del self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs[seq_name_to_del]
+
+    def _update_seq_name_abund_in_seq_collection_and_names_dict(self, seq_names_to_be_consolidated, summed_abund_of_seqs_associated_to_ref_seq):
+        """Modify the names abundance dict so that the one seq name being kept now has the summed abundance
+            also update the dict_of_nucleotide_sequence_objs"""
+        self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs[
+            seq_names_to_be_consolidated[0]].abundance = summed_abund_of_seqs_associated_to_ref_seq
+        self.current_pre_med_sample_seq_collection.names_dict[
+            seq_names_to_be_consolidated[0]] = summed_abund_of_seqs_associated_to_ref_seq
+
+    def _get_summed_abundances_of_the_seqs_to_be_consolidated(self, seq_names_to_be_consolidated):
+        summed_abund_of_seqs_associated_to_ref_seq = sum([self.current_pre_med_sample_seq_collection.names_dict[seq_name] for seq_name in seq_names_to_be_consolidated])
+        return summed_abund_of_seqs_associated_to_ref_seq
+
+    def _get_list_of_seq_names_that_need_consolidating(self, non_unique_ref_seq_uid):
+        node_names_to_be_consolidated = [
+            node_name for node_name in self.nuc_sequence_name_to_ref_seq_id.keys() if
+            self.nuc_sequence_name_to_ref_seq_id[node_name] == non_unique_ref_seq_uid]
+        return node_names_to_be_consolidated
+
+    def _associate_pre_med_sequences_to_ref_seq_objs(self):
+        for nuc_seq_obj in self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs.values():
+            if not self._assign_node_sequence_to_existing_ref_seq(nuc_seq_obj):
+                self._assign_nuc_seq_obj_to_new_ref_seq_obj(nuc_seq_obj)
+
+    def _assign_node_sequence_to_existing_ref_seq(self, nuc_seq_obj):
+        """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
+        This takes into account whether the seq_in_q could be a subset or super set of one of the
+        ref_seq.sequences.
+        Will return false if no ref_seq match is found
+        """
+        if self._nuc_seq_obj_exactly_matches_reference_sequence_sequence(nuc_seq_obj):
+            return self._associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(nuc_seq_obj)
+        elif self._nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(nuc_seq_obj):
+            # This was a seq shorter than refseq but we can associate
+            return self._associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(nuc_seq_obj)
+        else:
+            return self._search_for_super_set_match_and_associate_if_found_else_return_false(
+                nuc_seq_obj)
+
+    def _nuc_seq_obj_exactly_matches_reference_sequence_sequence(self, nuc_seq_obj):
+        return nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(self, nuc_seq_obj):
+        self.nuc_sequence_name_to_ref_seq_id[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            nuc_seq_obj.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict[nuc_seq_obj.sequence]]
+        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
+        return True
+
+    def _print_succesful_association_details_to_stdout(
+            self, nuc_seq_obj, name_of_reference_sequence):
+        sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade '
+                         f'{self.current_pre_med_sample_seq_collection.clade}: '
+                         f'Assigning MED node {nuc_seq_obj.name} '
+                         f'to existing reference sequence {name_of_reference_sequence}')
+
+    def _nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(self, nuc_seq_obj):
+        return 'A' + nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(self, nuc_seq_obj):
+        self.nuc_sequence_name_to_ref_seq_id[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            'A' + nuc_seq_obj.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict['A' + nuc_seq_obj.sequence]]
+        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
+        return True
+
+    def _search_for_super_set_match_and_associate_if_found_else_return_false(self, nuc_seq_obj):
+        # or if the seq in question is bigger than a refseq sequence and is a super set of it
+        # In either of these cases we should consider this a match and use the refseq matched to.
+        # This might be very coputationally expensive but lets give it a go
+        for ref_seq_sequence in self.ref_seq_sequence_to_ref_seq_id_dict.keys():
+            if nuc_seq_obj.sequence in ref_seq_sequence or \
+                    ref_seq_sequence in nuc_seq_obj.sequence:
+                # Then this is a match
+                self.nuc_sequence_name_to_ref_seq_id[nuc_seq_obj.name] = \
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
+                name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]]
+                self._print_succesful_association_details_to_stdout(nuc_seq_obj,
+                                                                    name_of_reference_sequence)
+                return True
+        return False
+
+    def _assign_nuc_seq_obj_to_new_ref_seq_obj(self, nuc_seq_obj):
+        new_ref_seq = ReferenceSequence(clade=self.current_pre_med_sample_seq_collection.clade, sequence=nuc_seq_obj.sequence)
+        new_ref_seq.save()
+        new_ref_seq.name = str(new_ref_seq.id)
+        new_ref_seq.save()
+        self.ref_seq_sequence_to_ref_seq_id_dict[new_ref_seq.sequence] = new_ref_seq.id
+        self.nuc_sequence_name_to_ref_seq_id[nuc_seq_obj.name] = new_ref_seq.id
+        self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
+
+        sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade {self.current_pre_med_sample_seq_collection.clade}: '
+                         f'Assigning MED node {nuc_seq_obj.name} '
+                         f'to new reference sequence {new_ref_seq.name}')
+
+    class PreMEDSampleSeqCollection:
+        def __init__(self, clade, fasta_dict, names_dict, sample_name):
+            self.clade = clade
+            self.fasta_dict = fasta_dict
+            self.names_dict = names_dict
+            self.dict_of_nucleotide_sequence_objs = {
+                seq_name : NucleotideSequence(
+                    name=seq_name, abundance=names_dict[seq_name], sequence=fasta_dict[seq_name])
+                        for seq_name in fasta_dict.keys()}
+
+            self.sample_name = sample_name
