@@ -293,6 +293,40 @@ def set_seq_colour_dict(ordered_list_of_seqs):
 
     return temp_colour_dict
 
+def make_js_function_to_return_json_file(function_name, json_path=None, json_file_as_str=None):
+    temp_js_file_as_list = []
+    temp_js_file_as_list.append('function ' + function_name + '(){')
+    if json_path:
+        temp_js_file_as_list.extend(read_defined_file_to_list(json_path))
+    else:
+        temp_js_file_as_list.append(json_file_as_str)
+    temp_js_file_as_list[1] = 'return ' + temp_js_file_as_list[1]
+    temp_js_file_as_list.append('};')
+    return temp_js_file_as_list
+
+def make_json_object_array_from_python_dictionary(p_dict):
+    json_str = ''
+    json_str += '['
+    for k, v in p_dict.items():
+        json_str += '{'
+        json_str += f"\"d_key\":\"{k}\", "
+        json_str += f"\"d_value\":\"{v}\""
+        json_str += '}, '
+    # remove last commar and space
+    json_str = json_str[:-2]
+    json_str += ']'
+    return json_str
+
+def output_js_color_objects_array(output_directory, colour_dict, js_file_name):
+    # write out the colour dict to the html file
+    json_col_dict_object_array_as_list = make_js_function_to_return_json_file(
+        json_file_as_str=make_json_object_array_from_python_dictionary(colour_dict),
+        function_name='getColDictObjArr')
+    write_list_to_destination(
+        destination=os.path.join(output_directory, js_file_name),
+        list_to_write=json_col_dict_object_array_as_list)
+
+
 def get_colour_lists():
     colour_palette = get_colour_list()
     grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']

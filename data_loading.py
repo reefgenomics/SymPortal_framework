@@ -168,7 +168,7 @@ class DataLoading:
     def _output_and_plot_pre_med_seqs_count_table(self):
         pre_med_output = PreMedSeqOutput(
             pre_med_dir=self.pre_med_sequence_output_directory_path,
-            output_directory=self.pre_med_sequence_output_directory_path,
+            output_directory=self.output_directory,
             df_sample_uid_order=self.sequence_count_table_creator.sorted_sample_uid_list,
             plotting_sample_uid_order=self.seq_stacked_bar_plotter.ordered_sample_uid_list, time_date_str=self.seq_stacked_bar_plotter.time_date_str)
         pre_med_output.make_pre_med_counts_and_plots()
@@ -250,13 +250,12 @@ class DataLoading:
             ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
         self.sequence_count_table_creator.make_output_tables()
-        # TODO don't for get to write out where the non-sym and size violation seqs were output
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(self.sequence_count_table_creator)
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
         for path in sequence_count_table_creator.output_paths_list:
-            if 'relative' in path:
+            if 'relative.abund_and_meta' in path:
                 self.seq_abundance_relative_output_path = path
 
     def _delete_temp_working_directory_and_log_files(self):
@@ -2193,7 +2192,7 @@ class DataSetSampleSequenceCreatorWorker:
 
     def _assign_node_sequence_to_existing_ref_seq(self, node_nucleotide_sequence_object):
         """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
-        This take into account whether the seq_in_q could be a subset or super set of one of the
+        This takes into account whether the seq_in_q could be a subset or super set of one of the
         ref_seq.sequences.
         Will return false if no ref_seq match is found
         """

@@ -46,8 +46,6 @@ class OutputTypeCountTable:
             num_proc, within_clade_cutoff)
 
         self.vcc_uids_to_output = self._set_vcc_uids_to_output()
-
-
         if call_type == 'analysis':
             self.date_time_str = self.data_analysis_obj.time_stamp
         elif call_type == 'stand_alone':
@@ -63,23 +61,54 @@ class OutputTypeCountTable:
         self.number_of_samples = None
         self.call_type = call_type
         self.pre_headers = None
-        self.rel_abund_output_df, self.abs_abund_output_df = self._init_dfs()
+        # the number of meta rows that have been added to the dataframe.
+        # This number will be used to remove the meta rows when making the abundance only dataframes
+        self.number_of_meta_rows_added = 0
+        # the number of header rows that have been added to the dataframe.
+        # This number will be used to remove the header rows when making the abundance only dataframes
         # set of all of the species found in the vats
+        self.number_of_header_rows_added = 0
+        self.rel_abund_output_df, self.abs_abund_output_df = self._init_dfs()
+        self.additional_info_file_as_list = []
         self.species_set = set()
         self.species_ref_dict = self._set_species_ref_dict()
         self.output_file_paths_list = []
-        self.output_dir = os.path.join(symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id), self.date_time_str)
+        self.output_dir = os.path.join(
+            symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id), self.date_time_str)
+        self.html_output_dir = os.path.join(self.output_dir, 'html')
         os.makedirs(self.output_dir, exist_ok=True)
-        self.path_to_relative_count_table = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
-                             f'{self.data_analysis_obj.name}_'
-                             f'{self.date_time_str}.profiles.relative.txt')
-        self.path_to_absolute_count_table = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
-                             f'{self.data_analysis_obj.name}_'
-                             f'{self.date_time_str}.profiles.absolute.txt')
+        os.makedirs(self.html_output_dir, exist_ok=True)
+        self._init_output_paths()
         self.output_file_paths_list.extend([
-            self.path_to_relative_count_table, self.path_to_absolute_count_table])
+            self.path_to_relative_count_table_profiles_abund_and_meta,
+            self.path_to_absolute_count_table_profiles_abund_and_meta])
+
+    def _init_output_paths(self):
+        self.path_to_absolute_count_table_profiles_abund_and_meta = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.absolute.abund_and_meta.txt')
+        self.path_to_absolute_count_table_profiles_abund_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.absolute.abund_only.txt')
+        self.path_to_absolute_count_table_profiles_meta_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.absolute.meta_only.txt')
+        self.path_to_relative_count_table_profiles_abund_and_meta = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.relative.abund_and_meta.txt')
+        self.path_to_relative_count_table_profiles_abund_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.relative.abund_only.txt')
+        self.path_to_relative_count_table_profiles_meta_only = os.path.join(
+            self.output_dir, f'{self.data_analysis_obj.id}_'
+                             f'{self.data_analysis_obj.name}_'
+                             f'{self.date_time_str}.profiles.relative.meta_only.txt')
+        self.path_to_additional_info_file = os.path.join(self.output_dir, 'additional_info.txt')
 
     def _set_vcc_uids_to_output(self):
         list_of_sets_of_vcc_uids_in_vdss = [
@@ -122,8 +151,8 @@ class OutputTypeCountTable:
         self.rel_abund_output_df.insert(loc=0, column='sample_name', value=sample_name_series)
 
     def _populate_meta_info_of_dfs(self):
-        self._append_species_header_to_dfs()
-        self._append_species_references_to_dfs()
+        self._add_species_info_to_addition_info_file()
+
         if self.call_type == 'analysis':
             self._append_meta_info_for_analysis_call_type()
         else:
@@ -131,11 +160,111 @@ class OutputTypeCountTable:
             self._append_meta_info_for_stand_alone_call_type()
 
     def _write_out_dfs(self):
+        self._write_out_abund_and_meta_dfs_profiles()
+
+        abund_row_indices = self._write_out_abund_only_dfs_profiles()
+
+        prof_meta_only = self._write_out_meta_only_dfs_profiles(abund_row_indices)
+
+        self._write_out_js_profile_data_file(prof_meta_only)
+
+        self._write_out_additional_info_profiles()
+
+    def _write_out_additional_info_profiles(self):
+        general.write_list_to_destination(destination=self.path_to_additional_info_file,
+                                          list_to_write=self.additional_info_file_as_list)
+        print(self.path_to_additional_info_file)
+
+    def _write_out_js_profile_data_file(self, prof_meta_only):
+        # We will need to have three javascript methods for the explorere here.
+        # one for the absolute abundances, one for the relative and one for the ITS2 type profile meta information
+        absolute_json_path = os.path.join(self.html_output_dir, 'profile.absolute.json')
+        relative_json_path = os.path.join(self.html_output_dir, 'profile.relative.json')
+        profile_meta_json_path = os.path.join(self.html_output_dir, 'profile.meta.json')
+        js_file_path = os.path.join(self.html_output_dir, 'profile_data.js')
+
+        rows_to_keep_by_index = [0]
+        abundance_row_indices = list(range(self.number_of_header_rows_added, (
+                len(self.abs_abund_output_df.index.values.tolist()) - self.number_of_meta_rows_added)))
+        rows_to_keep_by_index += abundance_row_indices
+        absolute_df_abund_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
+        relative_df_abund_only = self.rel_abund_output_df.iloc[rows_to_keep_by_index, :]
+
+        # replace the top item of the index with sample_uid rather than 'ITS2 type profile UID'
+        new_index = absolute_df_abund_only.index.values.tolist()
+        new_index[0] = 'sample_uid'
+        absolute_df_abund_only.index = new_index
+        relative_df_abund_only.index = new_index
+        # add sample_name identifier to top row
+        absolute_df_abund_only.iat[0, 0] = 'sample_name'
+        relative_df_abund_only.iat[0, 0] = 'sample_name'
+        # add the index in as a column as the index is not output using .to_json
+        absolute_df_abund_only.insert(loc=0, column='sample_uid', value=absolute_df_abund_only.index.values.tolist())
+        relative_df_abund_only.insert(loc=0, column='sample_uid', value=relative_df_abund_only.index.values.tolist())
+        absolute_df_abund_only.drop(index='sample_uid', inplace=True)
+        relative_df_abund_only.drop(index='sample_uid', inplace=True)
+        absolute_df_abund_only.to_json(path_or_buf=absolute_json_path, orient='records')
+        relative_df_abund_only.to_json(path_or_buf=relative_json_path, orient='records')
+        prof_meta_only.to_json(path_or_buf=profile_meta_json_path, orient='records')
+        js_file = []
+        js_file.extend(
+            general.make_js_function_to_return_json_file(
+                json_path=absolute_json_path, function_name='getProfileDataAbsolute'))
+        js_file.extend(general.make_js_function_to_return_json_file(
+            json_path=relative_json_path, function_name='getProfileDataRelative'))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=profile_meta_json_path,
+                                                                    function_name='getProfileMeta'))
+        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+
+    def _write_out_meta_only_dfs_profiles(self, abundance_row_indices):
+        # now output the meta_only dfs
+        # delete the abundance info rows and drop the sample_name column
+        # then output the transposed matrix so that this is essentially the meta info for each of the
+        # ITS2 type profiles
+        rows_to_keep_by_index = list(range(self.number_of_header_rows_added))
+        rows_to_keep_by_index += list(range(self.number_of_header_rows_added + len(abundance_row_indices),
+                                            len(self.abs_abund_output_df.index.values.tolist())))
+        profile_meta_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
+        profile_meta_only.drop(columns='sample_name', inplace=True)
+        profile_meta_only = profile_meta_only.T
+        profile_meta_only.to_csv(self.path_to_absolute_count_table_profiles_meta_only, sep="\t", header=True,
+                                 index=False)
+        print(self.path_to_absolute_count_table_profiles_meta_only)
+        return profile_meta_only
+
+    def _write_out_abund_only_dfs_profiles(self):
+        # write out the abund_only dfs
+        # get rid of the header rows other than the profile uid that is the first row
+        # also get rid of all meta rows at the end
+        # also get rid of the sample_name column
+        rows_to_keep_by_index = [0]
+        abundance_row_indices = list(range(self.number_of_header_rows_added, (
+                    len(self.abs_abund_output_df.index.values.tolist()) - self.number_of_meta_rows_added)))
+        rows_to_keep_by_index += abundance_row_indices
+        absolute_df_abund_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
+        relative_df_abund_only = self.rel_abund_output_df.iloc[rows_to_keep_by_index, :]
+        absolute_df_abund_only.drop(columns='sample_name', inplace=True)
+        relative_df_abund_only.drop(columns='sample_name', inplace=True)
+        # replace the top item of the index with sample_uid rather than 'ITS2 type profile UID'
+        new_index = absolute_df_abund_only.index.values.tolist()
+        new_index[0] = 'sample_uid'
+        absolute_df_abund_only.index = new_index
+        relative_df_abund_only.index = new_index
+        absolute_df_abund_only.to_csv(self.path_to_absolute_count_table_profiles_abund_only, sep="\t", header=False)
+        relative_df_abund_only.to_csv(self.path_to_relative_count_table_profiles_abund_only, sep="\t", header=False)
+        print(self.path_to_absolute_count_table_profiles_abund_only)
+        print(self.path_to_relative_count_table_profiles_abund_only)
+        return abundance_row_indices
+
+    def _write_out_abund_and_meta_dfs_profiles(self):
+        # write out the abund_and_meta dfs
         print('\n\nITS2 type profile count tables output to:')
-        self.rel_abund_output_df.to_csv(self.path_to_relative_count_table, sep="\t", header=False)
-        print(self.path_to_relative_count_table)
-        self.abs_abund_output_df.to_csv(self.path_to_absolute_count_table, sep="\t", header=False)
-        print(f'{self.path_to_absolute_count_table}\n\n')
+        self.abs_abund_output_df.to_csv(
+            self.path_to_absolute_count_table_profiles_abund_and_meta, sep="\t", header=False)
+        print(f'{self.path_to_absolute_count_table_profiles_abund_and_meta}\n\n')
+        self.rel_abund_output_df.to_csv(
+            self.path_to_relative_count_table_profiles_abund_and_meta, sep="\t", header=False)
+        print(self.path_to_relative_count_table_profiles_abund_and_meta)
 
     def _append_meta_info_for_stand_alone_call_type(self):
         data_sets_of_analysis = len(self.data_analysis_obj.list_of_data_set_uids.split(','))
@@ -143,42 +272,34 @@ class OutputTypeCountTable:
             meta_info_string_items = self._make_stand_alone_data_set_meta_info_string(data_sets_of_analysis)
         else:
             meta_info_string_items = self._make_stand_alone_data_set_samples_meta_info_string(data_sets_of_analysis)
-        self._append_meta_info_summary_string_to_dfs(meta_info_string_items)
-        self._append_data_set_info_to_dfs()
+        self._append_meta_info_summary_string_to_additional_info_file(meta_info_string_items)
+        self._append_data_set_info_to_additional_info()
 
     def _append_meta_info_for_analysis_call_type(self):
         meta_info_string_items = self._make_analysis_meta_info_string()
-        self._append_meta_info_summary_string_to_dfs(meta_info_string_items)
-        self._append_data_set_info_to_dfs()
+        self._append_meta_info_summary_string_to_additional_info_file(meta_info_string_items)
+        self._append_data_set_info_to_additional_info()
 
-    def _append_species_references_to_dfs(self):
+    def _add_species_info_to_addition_info_file(self):
+        # add a blank row with just the header Species reference
+        self.additional_info_file_as_list.append('Species references')
         # now add the references for each of the associated species
+        # we put an NaN in the first column so that we can delete the sample_name column when making the
+        # meta only output table. If we put the species reference directly in that first column it would be deleted
+        # when deleting this column.
         for species in self.species_set:
             if species in self.species_ref_dict.keys():
-                temp_series = pd.Series([self.species_ref_dict[species]], index=[list(self.rel_abund_output_df)[0]],
-                                        name=species)
-                self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
-                self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+                self.additional_info_file_as_list.append(self.species_ref_dict[species])
 
-    def _append_species_header_to_dfs(self):
-        # add a blank row with just the header Species reference
-        temp_blank_series_with_name = pd.Series(name='Species reference')
-        self.rel_abund_output_df = self.rel_abund_output_df.append(temp_blank_series_with_name)
-        self.abs_abund_output_df = self.abs_abund_output_df.append(temp_blank_series_with_name)
-
-    def _append_data_set_info_to_dfs(self):
+    def _append_data_set_info_to_additional_info(self):
         ds_obj_list = self._chunk_query_ds_objs_from_ds_uids()
         for data_set_object in ds_obj_list:
-            data_set_meta_list = [
-                f'Data_set ID: {data_set_object.id}; '
-                f'Data_set name: {data_set_object.name}; '
-                f'submitting_user: {data_set_object.submitting_user}; '
-                f'time_stamp: {data_set_object.time_stamp}']
+            data_set_meta_str = f'Data_set ID: {data_set_object.id}; ' \
+                                f'Data_set name: {data_set_object.name}; ' \
+                                f'submitting_user: {data_set_object.submitting_user}; ' \
+                                f'time_stamp: {data_set_object.time_stamp}'
 
-            temp_series = pd.Series(
-                data_set_meta_list, index=[list(self.rel_abund_output_df)[0]], name='data_set_info')
-            self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
-            self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+            self.additional_info_file_as_list.append(data_set_meta_str)
 
     def _chunk_query_ds_objs_from_ds_uids(self):
         ds_obj_list = []
@@ -194,11 +315,8 @@ class OutputTypeCountTable:
             f'time_stamp: {self.data_analysis_obj.time_stamp}']
         return meta_info_string_items
 
-    def _append_meta_info_summary_string_to_dfs(self, meta_info_string_items):
-        temp_series = pd.Series(
-            meta_info_string_items, index=[list(self.rel_abund_output_df)[0]], name='meta_info_summary')
-        self.rel_abund_output_df = self.rel_abund_output_df.append(temp_series)
-        self.abs_abund_output_df = self.abs_abund_output_df.append(temp_series)
+    def _append_meta_info_summary_string_to_additional_info_file(self, meta_info_string_items):
+        self.additional_info_file_as_list.append(meta_info_string_items)
 
     def _make_stand_alone_data_set_meta_info_string(self, data_sets_of_analysis):
         meta_info_string_items = [
@@ -367,7 +485,9 @@ class OutputTypeCountTable:
     def _init_dfs(self):
         self.pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence',
                        'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
+        self.number_of_header_rows_added += len(self.pre_headers)
         post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
+        self.number_of_meta_rows_added += len(post_headers)
         self.df_index = self.pre_headers + self.sorted_list_of_vdss_uids_to_output + post_headers
         return pd.DataFrame(index=self.df_index), pd.DataFrame(index=self.df_index)
 
@@ -644,7 +764,7 @@ class SequenceCountTableCreator:
             self.time_date_str = time_date_str
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self._set_output_dir(call_type, ds_uids_output_str, output_dir, symportal_root_dir)
+        self._set_output_dirs(call_type, ds_uids_output_str, output_dir, symportal_root_dir)
         self.sorted_sample_uid_list = sorted_sample_uid_list
         self.analysis_obj = analysis_obj
         self.call_type = call_type
@@ -689,7 +809,9 @@ class SequenceCountTableCreator:
         if data_set_sample_ids_to_output_string is not None and data_set_uids_to_output_as_comma_sep_string is not None:
             raise RuntimeError('Provide either dss uids or ds uids for outputing sequence count tables')
 
-    def _set_output_dir(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir):
+    def _set_output_dirs(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir):
+        """Set both the standard output_dir where the count tables will be output and the directory to output
+        the resources for the browser based data explorer"""
         if call_type == 'submission':
             self.output_dir = os.path.abspath(os.path.join(
                 symportal_root_dir, 'outputs', 'loaded_data_sets', data_set_uids_to_output_as_comma_sep_string))
@@ -697,7 +819,9 @@ class SequenceCountTableCreator:
             self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'non_analysis', self.time_date_str))
         else:  # call_type == 'analysis
             self.output_dir = output_dir
+        self.html_output_dir = os.path.join(self.output_dir, 'html')
         os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.html_output_dir, exist_ok=True)
 
     def _init_seq_abundance_collection_objects(self):
         """Output objects from first worker to be used by second worker"""
@@ -713,28 +837,80 @@ class SequenceCountTableCreator:
         self.dss_id_to_pandas_series_results_list_dict = None
         self.output_df_absolute = None
         self.output_df_relative = None
+        self.additional_info_file = []
         self.output_seqs_fasta_as_list = []
+        # the number of series (rows) that have been added to the dataframes.
+        # this number will be used to delete the appropriate number of rows when producing
+        # the abundance only tables.
+        self.number_of_meta_rows_added = 0
+        # the number of columns that are associated with meta data
+        # (including the sample names, qc data, no_name summaries and user supplied data)
+        # this number will be used to delete the appropriate number of columns when producing
+        # the abundance only tables.
+        self.number_of_meta_cols_added = 0
 
     def _init_output_paths(self):
         self.output_paths_list = []
         if self.analysis_obj:
-
-            self.path_to_seq_output_df_absolute = os.path.join(
-                self.output_dir,
-                f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.txt')
-            self.path_to_seq_output_df_relative = os.path.join(
-                self.output_dir,
-                f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.txt')
-
-            self.output_fasta_path = os.path.join(
-                self.output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
-
+            self._set_analysis_seq_table_output_paths()
         else:
-            self.path_to_seq_output_df_absolute = os.path.join(self.output_dir,
-                                                               f'{self.time_date_str}.seqs.absolute.txt')
-            self.path_to_seq_output_df_relative = os.path.join(self.output_dir,
-                                                               f'{self.time_date_str}.seqs.relative.txt')
-            self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
+            self._set_non_analysis_seq_table_output_paths()
+
+    def _set_non_analysis_seq_table_output_paths(self):
+        self._set_non_analysis_abs_count_tab_output_paths()
+        self._set_non_analysis_rel_count_tab_output_paths()
+        self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
+        self.additional_info_file_path = os.path.join(self.output_dir, f'{self.time_date_str}.additional_info.txt')
+
+    def _set_analysis_seq_table_output_paths(self):
+        self._set_analysis_abs_count_tab_output_paths()
+        self._set_analysis_rel_count_tab_output_paths()
+        self.output_fasta_path = os.path.join(
+            self.output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
+        self.additional_info_file_path = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.additional_info.txt')
+
+    def _set_analysis_rel_count_tab_output_paths(self):
+        self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_and_meta.txt')
+        self.path_to_seq_output_abund_only_df_relative = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_only.txt')
+        self.path_to_seq_output_meta_only_df_relative = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.meta_only.txt')
+
+    def _set_analysis_abs_count_tab_output_paths(self):
+        self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+        self.path_to_seq_output_abund_only_df_absolute = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_only.txt')
+        self.path_to_seq_output_meta_only_df_absolute = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.meta_only.txt')
+
+    def _set_non_analysis_rel_count_tab_output_paths(self):
+        self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.relative.abund_and_meta.txt')
+        self.path_to_seq_output_abund_only_df_relative = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.relative.abund_only.txt')
+        self.path_to_seq_output_meta_only_df_relative = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.relative.meta_only.txt')
+
+    def _set_non_analysis_abs_count_tab_output_paths(self):
+        # Path to output table that contains both the meta info and the abundance info
+        self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+        # Path to output table that contains only the abundance info
+        self.path_to_seq_output_abund_only_df_absolute = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.absolute.abund_only.txt')
+        # Path to output table that contains only the meta info
+        self.path_to_seq_output_meta_only_df_absolute = os.path.join(
+            self.output_dir, f'{self.time_date_str}.seqs.absolute.meta_only.txt')
 
     def make_output_tables(self):
         print('\n\nOutputting sequence abundance count tables\n')
@@ -751,16 +927,75 @@ class SequenceCountTableCreator:
         self._write_out_dfs_and_fasta()
 
     def _write_out_dfs_and_fasta(self):
-        self.output_df_absolute.to_csv(self.path_to_seq_output_df_absolute, sep="\t")
-        self.output_paths_list.append(self.path_to_seq_output_df_absolute)
-        self.output_df_relative.to_csv(self.path_to_seq_output_df_relative, sep="\t")
-        self.output_paths_list.append(self.path_to_seq_output_df_relative)
-        # we created the fasta above.
-        general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
-        self.output_paths_list.append(self.output_fasta_path)
+        self._write_out_abund_and_meta_dfs_seqs()
+
+        self._write_out_js_seq_data_file_post_med()
+
+        self._write_out_abund_only_dfs_seqs()
+
+        self._write_out_meta_only_dfs_seqs()
+
+        self._write_out_seq_fasta_for_loading()
+
+        self._write_out_additional_info_seqs()
+
         print('\n\nITS2 sequence output files:')
         for path_item in self.output_paths_list:
             print(path_item)
+
+    def _write_out_additional_info_seqs(self):
+        general.write_list_to_destination(destination=self.additional_info_file_path,
+                                          list_to_write=self.additional_info_file)
+        self.output_paths_list.append(self.additional_info_file_path)
+
+    def _write_out_meta_only_dfs_seqs(self):
+        # now do the meta output table
+        # we need to drop the accession row and then we need to drop the seq abund columns
+        df_abs_meta_only = self.output_df_absolute.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
+        df_rel_meta_only = self.output_df_relative.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
+        df_abs_meta_only.to_csv(self.path_to_seq_output_meta_only_df_absolute, sep="\t", index_label='sample_uid')
+        self.output_paths_list.append(self.path_to_seq_output_meta_only_df_absolute)
+        df_rel_meta_only.to_csv(self.path_to_seq_output_meta_only_df_relative, sep="\t", index_label='sample_uid')
+        self.output_paths_list.append(self.path_to_seq_output_meta_only_df_relative)
+
+    def _write_out_seq_fasta_for_loading(self):
+        # we created the fasta above.
+        general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
+        self.output_paths_list.append(self.output_fasta_path)
+
+    def _write_out_abund_only_dfs_seqs(self):
+        # get rid of the meta info rows and columns
+        # we will delete the number of meta row added plus one for the accession row
+        df_abs_abund_only = self.output_df_absolute.iloc[:-1 * (self.number_of_meta_rows_added + 1),
+                            self.number_of_meta_cols_added:]
+        df_rel_abund_only = self.output_df_relative.iloc[:-1 * (self.number_of_meta_rows_added + 1),
+                            self.number_of_meta_cols_added:]
+        df_abs_abund_only.to_csv(self.path_to_seq_output_abund_only_df_absolute, sep="\t", index_label='sample_uid')
+        self.output_paths_list.append(self.path_to_seq_output_abund_only_df_absolute)
+        df_rel_abund_only.to_csv(self.path_to_seq_output_abund_only_df_relative, sep="\t", index_label='sample_uid')
+        self.output_paths_list.append(self.path_to_seq_output_abund_only_df_relative)
+
+    def _write_out_abund_and_meta_dfs_seqs(self):
+        self.output_df_absolute.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t", index_label='sample_uid')
+        self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
+        self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t", index_label='sample_uid')
+        self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
+
+    def _write_out_js_seq_data_file_post_med(self):
+        # now create the .js file that we will use to read in the data locally
+        # we will create a single file that will contain the functions getSeqDataAbsolute and getSeqDataRelative
+        # to make this file we will first write out each of the dataframes to json. We will then read in the json
+        # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
+        # these into a single .js file called seq_data.js
+        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.postMED.json')
+        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.postMED.json')
+        js_file_path = os.path.join(self.html_output_dir, 'seq_data.postMED.js')
+        self.output_df_absolute.to_json(path_or_buf=absolute_json_path, orient='records')
+        self.output_df_relative.to_json(path_or_buf=relative_json_path, orient='records')
+        js_file = []
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolutePostMED'))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelativePostMED'))
+        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
 
     def _append_meta_info_to_df(self):
         # Now append the meta infromation for each of the data_sets that make up the output contents
@@ -771,48 +1006,44 @@ class SequenceCountTableCreator:
         # or stand alone: call_type = 'stand_alone'
         # we should have an output for each scenario
         if self.call_type == 'submission':
-            self._append_meta_info_to_df_submission()
+            self._append_meta_info_to_additional_info_file_submission()
         elif self.call_type == 'analysis':
-            self._append_meta_info_to_df_analysis()
+            self._append_meta_info_to_additional_info_file_analysis()
         else:
             # call_type=='stand_alone'
-            self._append_meta_info_to_df_stand_alone()
+            self._append_meta_info_to_additional_info_file_stand_alone()
 
-    def _append_meta_info_to_df_submission(self):
+    def _append_meta_info_to_additional_info_file_submission(self):
         data_set_object = self.ds_objs_to_output[0]
         # there will only be one data_set object
-        meta_info_string_items = [
-            f'Output as part of data_set submission ID: {data_set_object.id}; '
-            f'submitting_user: {data_set_object.submitting_user}; '
-            f'time_stamp: {data_set_object.time_stamp}']
-        temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute)[0]],
-                                name='meta_info_summary')
-        self.output_df_absolute = self.output_df_absolute.append(temp_series)
-        self.output_df_relative = self.output_df_relative.append(temp_series)
+        meta_info_string = f'Output as part of data_set submission ID: {data_set_object.id}; ' \
+                           f'submitting_user: {data_set_object.submitting_user}; ' \
+                           f'time_stamp: {data_set_object.time_stamp}'
 
-    def _append_meta_info_to_df_analysis(self):
+        self.additional_info_file.append(meta_info_string)
+
+    def _increase_number_meta_series_added(self):
+        # keep track of the number of meta series we will need to remove from the dataframe when producing the
+        # abundance only output table
+        self.number_of_meta_rows_added += 1
+
+    def _append_meta_info_to_additional_info_file_analysis(self):
 
         num_data_set_objects_as_part_of_analysis = len(self.analysis_obj.list_of_data_set_uids.split(','))
-        meta_info_string_items = [
-            f'Output as part of data_analysis ID: {self.analysis_obj.id}; '
-            f'Number of data_set objects as part of analysis = {num_data_set_objects_as_part_of_analysis}; '
-            f'submitting_user: {self.analysis_obj.submitting_user}; time_stamp: {self.analysis_obj.time_stamp}']
-        temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute)[0]],
-                                name='meta_info_summary')
-        self.output_df_absolute = self.output_df_absolute.append(temp_series)
-        self.output_df_relative = self.output_df_relative.append(temp_series)
+        meta_info_string = f'Output as part of data_analysis ID: {self.analysis_obj.id}; ' \
+                           f'Number of data_set objects as part of analysis = {num_data_set_objects_as_part_of_analysis}; ' \
+                           f'submitting_user: {self.analysis_obj.submitting_user}; time_stamp: {self.analysis_obj.time_stamp}'
+        self.additional_info_file.append(meta_info_string)
+
         for data_set_object in self.ds_objs_to_output:
-            data_set_meta_list = [
-                f'Data_set ID: {data_set_object.id}; '
-                f'Data_set name: {data_set_object.name}; '
-                f'submitting_user: {data_set_object.submitting_user}; '
-                f'time_stamp: {data_set_object.time_stamp}']
+            data_set_meta_str = f'Data_set ID: {data_set_object.id}; ' \
+                                f'Data_set name: {data_set_object.name}; ' \
+                                f'submitting_user: {data_set_object.submitting_user}; ' \
+                                f'time_stamp: {data_set_object.time_stamp}'
 
-            temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute)[0]], name='data_set_info')
-            self.output_df_absolute = self.output_df_absolute.append(temp_series)
-            self.output_df_relative = self.output_df_relative.append(temp_series)
+            self.additional_info_file.append(data_set_meta_str)
 
-    def _append_meta_info_to_df_stand_alone(self):
+    def _append_meta_info_to_additional_info_file_stand_alone(self):
         meta_info_string_items = [
             f'Stand_alone output by {self.output_user} on {self.time_date_str}; '
             f'Number of data_set objects as part of output = {len(self.ds_objs_to_output)}']
@@ -820,6 +1051,8 @@ class SequenceCountTableCreator:
                                 name='meta_info_summary')
         self.output_df_absolute = self.output_df_absolute.append(temp_series)
         self.output_df_relative = self.output_df_relative.append(temp_series)
+        self._increase_number_meta_series_added()
+
         for data_set_object in self.ds_objs_to_output:
             data_set_meta_list = [
                 f'Data_set ID: {data_set_object.id}; '
@@ -829,6 +1062,7 @@ class SequenceCountTableCreator:
             temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute)[0]], name='data_set_info')
             self.output_df_absolute = self.output_df_absolute.append(temp_series)
             self.output_df_relative = self.output_df_relative.append(temp_series)
+            self._increase_number_meta_series_added()
 
     def _add_uids_for_seqs_to_dfs(self):
         """Now add the UID for each of the sequences"""
@@ -920,7 +1154,10 @@ class SequenceCountTableCreator:
             'post_taxa_id_unique_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique',
             'size_screening_violation_absolute', 'size_screening_violation_unique']
         no_name_seq_columns = ['noName Clade {}'.format(clade) for clade in list('ABCDEFGHI')]
-        cols_to_drop = non_seq_columns + no_name_seq_columns
+        user_supplied_stats = [
+            'sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species',
+            'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth']
+        cols_to_drop = non_seq_columns + no_name_seq_columns + user_supplied_stats
         output_df_relative.drop(columns=cols_to_drop, inplace=True)
         return output_df_relative
 
@@ -1284,9 +1521,14 @@ class SeqOutputSeriesGeneratorHandler:
             'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_taxa_id_unique_non_symbiodinium_seqs',
             'post_med_absolute',
             'post_med_unique']
+        user_supplied_stats = [
+            'sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species',
+            'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth']
 
-        # append the noName sequences as individual sequence abundances
-        return ['sample_name'] + qc_stats + no_name_summary_strings + header_pre
+        # we add the plus one to take account of the 'sample_name' header
+        self.seq_count_table_creator.number_of_meta_cols_added = \
+            len(qc_stats) + len(no_name_summary_strings) + len(user_supplied_stats) + 1
+        return ['sample_name'] + qc_stats + no_name_summary_strings + user_supplied_stats + header_pre
 
 
 class SeqOutputSeriesGeneratorWorker:
@@ -1331,13 +1573,39 @@ class SeqOutputSeriesGeneratorWorker:
             sample_series_absolute, sample_series_relative]
 
     def _populate_quality_control_data_of_successful_sample(self):
+        self._populate_qc_meta_successful_sample()
+
+        self._populate_no_name_seq_clade_summaries_successful_sample()
+
+        self._populate_user_supplied_meta()
+
+        self._populate_seq_abunds_successful_sample()
+
+    def _populate_seq_abunds_successful_sample(self):
+        # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
+        # the sampleRowDataCounts and the sampleRowDataProps
+        for seq_name in self.clade_abundance_ordered_ref_seq_list:
+            sys.stdout.write('\rOutputting seq data for {}: sequence {}'.format(self.dss.name, seq_name))
+            self.sample_row_data_absolute.append(
+                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[0][seq_name])
+            self.sample_row_data_relative.append(
+                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[1][seq_name])
+
+    def _populate_no_name_seq_clade_summaries_successful_sample(self):
+        # now add the clade divided summaries of the clades
+        for clade in list('ABCDEFGHI'):
+            self.sample_row_data_absolute.append(
+                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[0][clade])
+            self.sample_row_data_relative.append(
+                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[1][clade])
+
+    def _populate_qc_meta_successful_sample(self):
         # Here we add in the post qc and post-taxa id counts
         # For the absolute counts we will report the absolute seq number
         # For the relative counts we will report these as proportions of the sampleSeqTot.
         # I.e. we will have numbers larger than 1 for many of the values and the symbiodinium seqs should be 1
         self.sample_row_data_absolute.append(self.dss.name)
         self.sample_row_data_relative.append(self.dss.name)
-
         # CONTIGS
         # This is the absolute number of sequences after make.contigs
         contig_num = self.dss.num_contigs
@@ -1386,22 +1654,6 @@ class SeqOutputSeriesGeneratorWorker:
         self.sample_row_data_absolute.append(post_med_unique)
         self.sample_row_data_relative.append(post_med_unique / self.sample_seq_tot)
 
-        # now add the clade divided summaries of the clades
-        for clade in list('ABCDEFGHI'):
-            self.sample_row_data_absolute.append(
-                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[0][clade])
-            self.sample_row_data_relative.append(
-                self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[1][clade])
-
-        # and append these abundances in order of cladeAbundanceOrderedRefSeqList to
-        # the sampleRowDataCounts and the sampleRowDataProps
-        for seq_name in self.clade_abundance_ordered_ref_seq_list:
-            sys.stdout.write('\rOutputting seq data for {}: sequence {}'.format(self.dss.name, seq_name))
-            self.sample_row_data_absolute.append(
-                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[0][seq_name])
-            self.sample_row_data_relative.append(
-                self.list_of_abs_and_rel_abund_of_contained_dsss_dicts[1][seq_name])
-
     def _output_the_failed_sample_pandas_series(self):
         sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.output_df_header, name=self.dss.id)
         sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.output_df_header, name=self.dss.id)
@@ -1414,6 +1666,74 @@ class SeqOutputSeriesGeneratorWorker:
         # CONTIGS
         # This is the absolute number of sequences after make.contigs
 
+        self._populate_qc_meta_failed_sample()
+
+        self._populate_no_name_seq_clade_summaries_failed_sample()
+
+        self._populate_user_supplied_meta()
+
+        self._populate_seq_abunds_failed_sample()
+
+    def _populate_seq_abunds_failed_sample(self):
+        # All sequences get 0s
+        for _ in self.clade_abundance_ordered_ref_seq_list:
+            self.sample_row_data_absolute.append(0)
+            self.sample_row_data_relative.append(0)
+
+    def _populate_user_supplied_meta(self):
+        # insert the user supplied meta stats
+        # sample_type
+        self.sample_row_data_absolute.append(self.dss.sample_type)
+        self.sample_row_data_relative.append(self.dss.sample_type)
+
+        # host_phylum
+        self.sample_row_data_absolute.append(self.dss.host_phylum)
+        self.sample_row_data_relative.append(self.dss.host_phylum)
+
+        # host_class
+        self.sample_row_data_absolute.append(self.dss.host_class)
+        self.sample_row_data_relative.append(self.dss.host_class)
+
+        # host_order
+        self.sample_row_data_absolute.append(self.dss.host_order)
+        self.sample_row_data_relative.append(self.dss.host_order)
+
+        # host_family
+        self.sample_row_data_absolute.append(self.dss.host_family)
+        self.sample_row_data_relative.append(self.dss.host_family)
+
+        # host_genus
+        self.sample_row_data_absolute.append(self.dss.host_genus)
+        self.sample_row_data_relative.append(self.dss.host_genus)
+
+        # host_species
+        self.sample_row_data_absolute.append(self.dss.host_species)
+        self.sample_row_data_relative.append(self.dss.host_species)
+
+        # collection_latitude
+        self.sample_row_data_absolute.append(self.dss.collection_latitude)
+        self.sample_row_data_relative.append(self.dss.collection_latitude)
+
+        # collection_longitude
+        self.sample_row_data_absolute.append(self.dss.collection_longitude)
+        self.sample_row_data_relative.append(self.dss.collection_longitude)
+
+        # collection_date
+        self.sample_row_data_absolute.append(self.dss.collection_date)
+        self.sample_row_data_relative.append(self.dss.collection_date)
+
+        # collection_depth
+        self.sample_row_data_absolute.append(self.dss.collection_depth)
+        self.sample_row_data_relative.append(self.dss.collection_depth)
+
+
+    def _populate_no_name_seq_clade_summaries_failed_sample(self):
+        # no name clade summaries get 0.
+        for _ in list('ABCDEFGHI'):
+            self.sample_row_data_absolute.append(0)
+            self.sample_row_data_relative.append(0)
+
+    def _populate_qc_meta_failed_sample(self):
         if self.dss.num_contigs:
             contig_num = self.dss.num_contigs
             self.sample_row_data_absolute.append(contig_num)
@@ -1504,16 +1824,6 @@ class SeqOutputSeriesGeneratorWorker:
             self.sample_row_data_absolute.append(0)
             self.sample_row_data_relative.append(0)
 
-        # no name clade summaries get 0.
-        for _ in list('ABCDEFGHI'):
-            self.sample_row_data_absolute.append(0)
-            self.sample_row_data_relative.append(0)
-
-        # All sequences get 0s
-        for _ in self.clade_abundance_ordered_ref_seq_list:
-            self.sample_row_data_absolute.append(0)
-            self.sample_row_data_relative.append(0)
-
     def _dss_had_problem_in_processing(self):
         return self.dss.error_in_processing or self.sample_seq_tot == 0
 
@@ -1527,9 +1837,11 @@ class PreMedSeqOutput:
         self.df_sample_uid_order = df_sample_uid_order
         if df_sample_uid_order is not None:
             self.main_output_uid_to_dss_name_dict = self._get_dss_objects_and_relate_to_df_sample_uids()
-
+        # the directory that is specific to the pre-med outputs
         self.pre_med_dir = pre_med_dir
-        self.output_dir = output_directory
+        # the directory one above the pre_med_dir that contins the main data_loading outputs
+        self.root_output_dir = output_directory
+        self.html_output_dir = os.path.join(output_directory, 'html')
         self.sample_uid_to_sample_dir_path_dict = {}
         self.sample_uid_to_name_dict = self._make_sample_uid_to_name_dict()
         self.sample_dirs = general.return_list_of_directory_paths_in_directory(self.pre_med_dir)
@@ -1553,6 +1865,7 @@ class PreMedSeqOutput:
         uids to their names."""
         list_of_dss = list(DataSetSample.objects.filter(id__in=self.df_sample_uid_order))
         return {dss.id: dss.name for dss in list_of_dss}
+
     def _make_sample_uid_to_name_dict(self):
         list_of_dir_name = general.return_list_of_directory_names_in_directory(self.pre_med_dir)
         sample_uid_to_name_dict = {}
@@ -1581,7 +1894,7 @@ class PreMedSeqOutput:
             print('Too many samples ({num_samples}) to plot pre-MED data.')
         else:
             med_plotter = plotting.PreMedSeqPlotter(
-                output_directory=self.output_dir, rel_abund_df=self.rel_count_df,
+                pre_med_output_directory=self.pre_med_dir, root_output_directory=self.root_output_dir, rel_abund_df=self.rel_count_df,
                 plotting_sample_uid_order=self.plotting_sample_uid_order, time_date_str=self.time_date_str)
             med_plotter.plot_stacked_bar_seqs()
 
@@ -1614,8 +1927,29 @@ class PreMedSeqOutput:
         # we should now write out these dfs to the directory that has the pre-MED sequences in them
         self._write_out_dfs_as_csv()
 
+        self._write_out_js_seq_data_file_pre_med()
+
+    def _write_out_js_seq_data_file_pre_med(self):
+        # now create the .js file that we will use to read in the data locally
+        # we will create a single file that will contain the
+        # functions getSeqDataAbsolutePreMED and getSeqDataRelativePreMED
+        # to make this file we will first write out each of the dataframes to json. We will then read in the json
+        # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
+        # these into a single .js file called seq_data.js
+        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.preMED.json')
+        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.preMED.json')
+        js_file_path = os.path.join(self.html_output_dir, 'seq_data.preMED.js')
+        self.abs_count_df.to_json(path_or_buf=absolute_json_path, orient='records')
+        self.rel_count_df.to_json(path_or_buf=relative_json_path, orient='records')
+        js_file = []
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path,
+                                                                    function_name='getSeqDataAbsolute'))
+        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path,
+                                                                    function_name='getSeqDataRelative'))
+        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+
     def _output_pre_med_master_fasta(self):
-        fasta_out_path = os.path.join(self.output_dir, 'pre_med_master_seqs.fasta')
+        fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
         fasta_out = []
         for seq_name, seq in self.name_to_sequence_dict.items():
             fasta_out.append(f'>{seq_name}')
