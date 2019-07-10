@@ -168,6 +168,13 @@ class OutputTypeCountTable:
 
         self._write_out_js_profile_data_file(absolute_df_abund_only, prof_meta_only, relative_df_abund_only)
 
+        self._write_out_additional_info_profiles()
+
+    def _write_out_additional_info_profiles(self):
+        general.write_list_to_destination(destination=self.path_to_additional_info_file,
+                                          list_to_write=self.additional_info_file_as_list)
+        print(self.path_to_additional_info_file)
+
     def _write_out_js_profile_data_file(self, absolute_df_abund_only, prof_meta_only, relative_df_abund_only):
         # We will need to have three javascript methods for the explorere here.
         # one for the absolute abundances, one for the relative and one for the ITS2 type profile meta information
@@ -199,6 +206,7 @@ class OutputTypeCountTable:
         profile_meta_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
         profile_meta_only.drop(columns='sample_name', inplace=True)
         profile_meta_only.T.to_csv(self.path_to_absolute_count_table_profiles_meta_only, sep="\t", header=False)
+        print(self.path_to_absolute_count_table_profiles_meta_only)
         return profile_meta_only
 
     def _write_out_abund_only_dfs_profiles(self):
@@ -216,6 +224,8 @@ class OutputTypeCountTable:
         relative_df_abund_only.drop(columns='sample_name', inplace=True)
         absolute_df_abund_only.to_csv(self.path_to_absolute_count_table_profiles_abund_only, sep="\t", header=False)
         relative_df_abund_only.to_csv(self.path_to_relative_count_table_profiles_abund_only, sep="\t", header=False)
+        print(self.path_to_absolute_count_table_profiles_abund_only)
+        print(self.path_to_relative_count_table_profiles_abund_only)
         return abundance_row_indices, absolute_df_abund_only, relative_df_abund_only
 
     def _write_out_abund_and_meta_dfs_profiles(self):
@@ -799,6 +809,7 @@ class SequenceCountTableCreator:
         self.dss_id_to_pandas_series_results_list_dict = None
         self.output_df_absolute = None
         self.output_df_relative = None
+        self.additional_info_file = []
         self.output_seqs_fasta_as_list = []
         # the number of series (rows) that have been added to the dataframes.
         # this number will be used to delete the appropriate number of rows when producing
@@ -821,12 +832,16 @@ class SequenceCountTableCreator:
         self._set_non_analysis_abs_count_tab_output_paths()
         self._set_non_analysis_rel_count_tab_output_paths()
         self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
+        self.additional_info_file_path = os.path.join(self.output_dir, f'{self.time_date_str}.additional_info.txt')
 
     def _set_analysis_seq_table_output_paths(self):
         self._set_analysis_abs_count_tab_output_paths()
         self._set_analysis_rel_count_tab_output_paths()
         self.output_fasta_path = os.path.join(
             self.output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
+        self.additional_info_file_path = os.path.join(
+            self.output_dir,
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.additional_info.txt')
 
     def _set_analysis_rel_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
@@ -893,9 +908,17 @@ class SequenceCountTableCreator:
         self._write_out_meta_only_dfs_seqs()
 
         self._write_out_seq_fasta_for_loading()
+
+        self._write_out_additional_info_seqs()
+
         print('\n\nITS2 sequence output files:')
         for path_item in self.output_paths_list:
             print(path_item)
+
+    def _write_out_additional_info_seqs(self):
+        general.write_list_to_destination(destination=self.additional_info_file_path,
+                                          list_to_write=self.additional_info_file)
+        self.output_paths_list.append(self.additional_info_file_path)
 
     def _write_out_meta_only_dfs_seqs(self):
         # now do the meta output table
@@ -955,56 +978,44 @@ class SequenceCountTableCreator:
         # or stand alone: call_type = 'stand_alone'
         # we should have an output for each scenario
         if self.call_type == 'submission':
-            self._append_meta_info_to_df_submission()
+            self._append_meta_info_to_additional_info_file_submission()
         elif self.call_type == 'analysis':
-            self._append_meta_info_to_df_analysis()
+            self._append_meta_info_to_additional_info_file_analysis()
         else:
             # call_type=='stand_alone'
-            self._append_meta_info_to_df_stand_alone()
+            self._append_meta_info_to_additional_info_file_stand_alone()
 
-    def _append_meta_info_to_df_submission(self):
+    def _append_meta_info_to_additional_info_file_submission(self):
         data_set_object = self.ds_objs_to_output[0]
         # there will only be one data_set object
-        meta_info_string_items = [
-            f'Output as part of data_set submission ID: {data_set_object.id}; '
-            f'submitting_user: {data_set_object.submitting_user}; '
-            f'time_stamp: {data_set_object.time_stamp}']
-        temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute)[0]],
-                                name='meta_info_summary')
-        self.output_df_absolute = self.output_df_absolute.append(temp_series)
-        self.output_df_relative = self.output_df_relative.append(temp_series)
-        self._increase_number_meta_series_added()
+        meta_info_string = f'Output as part of data_set submission ID: {data_set_object.id}; ' \
+                           f'submitting_user: {data_set_object.submitting_user}; ' \
+                           f'time_stamp: {data_set_object.time_stamp}'
+
+        self.additional_info_file.append(meta_info_string)
 
     def _increase_number_meta_series_added(self):
         # keep track of the number of meta series we will need to remove from the dataframe when producing the
         # abundance only output table
         self.number_of_meta_rows_added += 1
 
-    def _append_meta_info_to_df_analysis(self):
+    def _append_meta_info_to_additional_info_file_analysis(self):
 
         num_data_set_objects_as_part_of_analysis = len(self.analysis_obj.list_of_data_set_uids.split(','))
-        meta_info_string_items = [
-            f'Output as part of data_analysis ID: {self.analysis_obj.id}; '
-            f'Number of data_set objects as part of analysis = {num_data_set_objects_as_part_of_analysis}; '
-            f'submitting_user: {self.analysis_obj.submitting_user}; time_stamp: {self.analysis_obj.time_stamp}']
-        temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute)[0]],
-                                name='meta_info_summary')
-        self.output_df_absolute = self.output_df_absolute.append(temp_series)
-        self.output_df_relative = self.output_df_relative.append(temp_series)
-        self._increase_number_meta_series_added()
+        meta_info_string = f'Output as part of data_analysis ID: {self.analysis_obj.id}; ' \
+                           f'Number of data_set objects as part of analysis = {num_data_set_objects_as_part_of_analysis}; ' \
+                           f'submitting_user: {self.analysis_obj.submitting_user}; time_stamp: {self.analysis_obj.time_stamp}'
+        self.additional_info_file.append(meta_info_string)
+
         for data_set_object in self.ds_objs_to_output:
-            data_set_meta_list = [
-                f'Data_set ID: {data_set_object.id}; '
-                f'Data_set name: {data_set_object.name}; '
-                f'submitting_user: {data_set_object.submitting_user}; '
-                f'time_stamp: {data_set_object.time_stamp}']
+            data_set_meta_str = f'Data_set ID: {data_set_object.id}; ' \
+                                f'Data_set name: {data_set_object.name}; ' \
+                                f'submitting_user: {data_set_object.submitting_user}; ' \
+                                f'time_stamp: {data_set_object.time_stamp}'
 
-            temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute)[0]], name='data_set_info')
-            self.output_df_absolute = self.output_df_absolute.append(temp_series)
-            self.output_df_relative = self.output_df_relative.append(temp_series)
-            self._increase_number_meta_series_added()
+            self.additional_info_file.append(data_set_meta_str)
 
-    def _append_meta_info_to_df_stand_alone(self):
+    def _append_meta_info_to_additional_info_file_stand_alone(self):
         meta_info_string_items = [
             f'Stand_alone output by {self.output_user} on {self.time_date_str}; '
             f'Number of data_set objects as part of output = {len(self.ds_objs_to_output)}']
