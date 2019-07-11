@@ -1373,9 +1373,9 @@ class SequenceCountTableCreator:
             self.rel_count_df.to_json(path_or_buf=relative_json_path, orient='records')
             js_file = []
             js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path,
-                                                                        function_name='getSeqDataAbsolute'))
+                                                                        function_name='getSeqDataAbsolutePreMED'))
             js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path,
-                                                                        function_name='getSeqDataRelative'))
+                                                                        function_name='getSeqDataRelativePreMED'))
             general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
 
         def _output_pre_med_master_fasta(self):
@@ -1396,7 +1396,7 @@ class SequenceCountTableCreator:
 
         def _populate_dfs_in_parent_sample_order(self):
             print('\nPopulating pre-MED dfs\n')
-            ordered_seq_names = [sorted(self.master_sequence_count_dict.items(), key=lambda x: x[1], reverse=True)]
+            ordered_seq_names = [_[0] for _ in sorted(self.master_sequence_count_dict.items(), key=lambda x: x[1], reverse=True)]
 
             # fastest way to create the df from the dictionaries is to create a list of dictionaries and then
             # fill in the nan values and rearrange the columns
@@ -1435,16 +1435,12 @@ class SequenceCountTableCreator:
                 self.sample_uid_to_name_dict[dss_obj.id] = dss_obj.name
                 dsspm_objs_of_sample = DataSetSampleSequencePM.objects.filter(data_set_sample_from=dss_obj)
                 # total_seqs = dss_obj.non_sym_absolute_num_seqs
-                self.master_sample_uid_to_abund_dict[dss_obj.id] = {
-                    dsspm_obj.reference_seqeunce_of.id:dsspm_obj.abundance for dsspm_obj in dsspm_objs_of_sample
-                }
-
                 sample_temp_abundance_dict = {}
                 for dsspm_obj in dsspm_objs_of_sample:
-                    if dsspm_obj.reference_seqeunce_of.name not in self.master_fasta_dict:
-                        self.master_fasta_dict[dsspm_obj.reference_seqeunce_of.name] = dsspm_obj.reference_seqeunce_of.sequence
-                    sample_temp_abundance_dict[dsspm_obj.reference_seqeunce_of.name] = dsspm_obj.abundance
-                    self.master_sequence_count_dict[dsspm_obj.reference_seqeunce_of.name] += dsspm_obj.abundance / dss_obj.non_sym_absolute_num_seqs
+                    if dsspm_obj.reference_sequence_of.name not in self.master_fasta_dict:
+                        self.master_fasta_dict[str(dsspm_obj.reference_sequence_of)] = dsspm_obj.reference_sequence_of.sequence
+                    sample_temp_abundance_dict[str(dsspm_obj.reference_sequence_of)] = dsspm_obj.abundance
+                    self.master_sequence_count_dict[str(dsspm_obj.reference_sequence_of)] += dsspm_obj.abundance / dss_obj.absolute_num_sym_seqs
                 self.master_sample_uid_to_abund_dict[dss_obj.id] = sample_temp_abundance_dict
 
 

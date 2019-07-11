@@ -16,7 +16,7 @@ from datetime import datetime
 import distance
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
-from output import SequenceCountTableCreator, PreMedSeqOutput
+from output import SequenceCountTableCreator
 import ntpath
 import re
 import math
@@ -154,14 +154,9 @@ class DataLoading:
 
         self._output_seqs_count_table()
 
-        # TODO incorporate the pre-med seq output into the outputs_seqs_count_table after main seq output is complete.
-        # split up the plotting and the output of the pre-med seqs
-
         self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
 
         self._output_seqs_stacked_bar_plots()
-
-        # TODO do the pre_med plotting here
 
         self._do_sample_ordination()
 

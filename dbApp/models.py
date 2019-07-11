@@ -199,7 +199,7 @@ class ReferenceSequence(models.Model):
         if self.has_name:
             return self.name
         else:
-            return '{}'.format(self.id)
+            return f'{self.id}_{self.clade}'
 
 
 class DataSetSampleSequence(models.Model):
