@@ -153,9 +153,14 @@ class DataLoading:
 
         self._output_seqs_count_table()
 
+        # TODO incorporate the pre-med seq output into the outputs_seqs_count_table after main seq output is complete.
+        # split up the plotting and the output of the pre-med seqs
+
         self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
 
         self._output_seqs_stacked_bar_plot()
+
+        # TODO do the pre_med plotting here
 
         self._output_and_plot_pre_med_seqs_count_table()
 
@@ -2322,11 +2327,8 @@ class DataSetSampleSequencePMCreator:
         self.ref_seq_sequence_to_ref_seq_id_dict = {
             ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
         self.list_of_pre_med_sample_dirs = self._populate_list_of_pre_med_sample_dirs()
-        self.nuc_sequence_name_to_ref_seq_id = {}
+        self.nuc_sequence_name_to_ref_seq_id_dict = None
         self.current_pre_med_sample_seq_collection = None
-        self.dataset_sample_object = DataSetSample.objects.get(
-            data_submission_from=parent.dataset_object, name=self.current_pre_med_sample_seq_collection.sample_name)
-
 
     def _populate_list_of_pre_med_sample_dirs(self):
         return general.return_list_of_directory_paths_in_directory(self.parent.pre_med_sequence_output_directory_path)
@@ -2339,12 +2341,13 @@ class DataSetSampleSequencePMCreator:
             for f_path in sample_list_of_fasta_file_paths:
                 # for each clade there will be a fasta names pair
                 # for each of the fasta .names pairs we will need to look at each sequence
+                self.nuc_sequence_name_to_ref_seq_id_dict = {}
                 self.current_pre_med_sample_seq_collection = self.PreMEDSampleSeqCollection(
                     clade=f_path.split('/')[-1].split('_')[3],
                     fasta_dict = general.create_dict_from_fasta(fasta_path=f_path),
                     names_dict=general.create_seq_name_to_abundance_dict_from_name_file(
                         name_file_path=f_path.replace('.fasta', '.names')),
-                    sample_name=f_path.split('/')[-1].split('_')[4:].join('_').replace('.fasta', ''))
+                    sample_name='_'.join(f_path.split('/')[-1].split('_')[4:]).replace('.fasta', ''))
 
                 self._associate_pre_med_sequences_to_ref_seq_objs()
 
@@ -2355,26 +2358,28 @@ class DataSetSampleSequencePMCreator:
 
     def _create_data_set_sample_pre_med_sequence_objs(self):
         data_set_sample_sequence_pre_med_list = []
+        dataset_sample_object = DataSetSample.objects.get(
+            data_submission_from=self.parent.dataset_object, name=self.current_pre_med_sample_seq_collection.sample_name)
         for seq_nuc_obj in self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs.values():
-            associated_ref_seq_id = self.nuc_sequence_name_to_ref_seq_id[seq_nuc_obj.name]
+            associated_ref_seq_id = self.nuc_sequence_name_to_ref_seq_id_dict[seq_nuc_obj.name]
             associated_ref_seq_object = ReferenceSequence.objects.get(id=associated_ref_seq_id)
             dsspm = DataSetSampleSequencePM(reference_sequence_of=associated_ref_seq_object,
                                         abundance=seq_nuc_obj.abundance,
-                                        data_set_sample_from=self.dataset_sample_object)
+                                        data_set_sample_from=dataset_sample_object)
             data_set_sample_sequence_pre_med_list.append(dsspm)
-        DataSetSampleSequence.objects.bulk_create(data_set_sample_sequence_pre_med_list)
+        DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
 
     def _two_or_more_pre_med_seqs_are_associated_to_the_same_reference_sequence(self):
         """Multiple pre_med seqs may be assigned to the same reference sequence. We only want to create one
         DataSetSampleSequencePM object per reference sequence. As such we need to consolidate abundances
         """
         return len(
-            set(self.nuc_sequence_name_to_ref_seq_id.values())) != len(self.nuc_sequence_name_to_ref_seq_id.keys())
+            set(self.nuc_sequence_name_to_ref_seq_id_dict.values())) != len(self.nuc_sequence_name_to_ref_seq_id_dict.keys())
 
     def _make_associations_and_abundances_in_node_abund_df_unique_again(self):
         list_of_non_unique_ref_seq_uids = [
             ref_seq_uid for ref_seq_uid, count in
-            Counter(self.nuc_sequence_name_to_ref_seq_id.values()).items() if count > 1]
+            Counter(self.nuc_sequence_name_to_ref_seq_id_dict.values()).items() if count > 1]
         for non_unique_ref_seq_uid in list_of_non_unique_ref_seq_uids:
 
             seq_names_to_be_consolidated = self._get_list_of_seq_names_that_need_consolidating(non_unique_ref_seq_uid)
@@ -2384,14 +2389,17 @@ class DataSetSampleSequencePMCreator:
 
             self._del_all_but_first_of_non_unique_seqs_from_association_dict(seq_names_to_be_consolidated)
 
-            self._update_seq_name_abund_in_seq_collection_and_names_dict(seq_names_to_be_consolidated, summed_abund_of_seqs_associated_to_ref_seq)
+            self._update_seq_name_abund_in_seq_collection_and_names_dict(
+                seq_names_to_be_consolidated,
+                summed_abund_of_seqs_associated_to_ref_seq
+            )
 
     def _del_all_but_first_of_non_unique_seqs_from_association_dict(self, seq_names_to_be_consolidated):
         #  delete all of the dictionary entries for the seq names to be consolidated except for the first one
         for seq_name_to_del in seq_names_to_be_consolidated[1:]:
             del self.current_pre_med_sample_seq_collection.fasta_dict[seq_name_to_del]
             del self.current_pre_med_sample_seq_collection.names_dict[seq_name_to_del]
-            del self.nuc_sequence_name_to_ref_seq_id[seq_name_to_del]
+            del self.nuc_sequence_name_to_ref_seq_id_dict[seq_name_to_del]
             del self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs[seq_name_to_del]
 
     def _update_seq_name_abund_in_seq_collection_and_names_dict(self, seq_names_to_be_consolidated, summed_abund_of_seqs_associated_to_ref_seq):
@@ -2407,10 +2415,10 @@ class DataSetSampleSequencePMCreator:
         return summed_abund_of_seqs_associated_to_ref_seq
 
     def _get_list_of_seq_names_that_need_consolidating(self, non_unique_ref_seq_uid):
-        node_names_to_be_consolidated = [
-            node_name for node_name in self.nuc_sequence_name_to_ref_seq_id.keys() if
-            self.nuc_sequence_name_to_ref_seq_id[node_name] == non_unique_ref_seq_uid]
-        return node_names_to_be_consolidated
+        seq_names_to_be_consolidated = [
+            seq_name for seq_name in self.nuc_sequence_name_to_ref_seq_id_dict.keys() if
+            self.nuc_sequence_name_to_ref_seq_id_dict[seq_name] == non_unique_ref_seq_uid]
+        return seq_names_to_be_consolidated
 
     def _associate_pre_med_sequences_to_ref_seq_objs(self):
         for nuc_seq_obj in self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs.values():
@@ -2436,7 +2444,7 @@ class DataSetSampleSequencePMCreator:
         return nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
 
     def _associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(self, nuc_seq_obj):
-        self.nuc_sequence_name_to_ref_seq_id[
+        self.nuc_sequence_name_to_ref_seq_id_dict[
             nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
             nuc_seq_obj.sequence]
         name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
@@ -2448,14 +2456,14 @@ class DataSetSampleSequencePMCreator:
             self, nuc_seq_obj, name_of_reference_sequence):
         sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade '
                          f'{self.current_pre_med_sample_seq_collection.clade}: '
-                         f'Assigning MED node {nuc_seq_obj.name} '
+                         f'Assigning pre-MED sequence {nuc_seq_obj.name} '
                          f'to existing reference sequence {name_of_reference_sequence}')
 
     def _nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(self, nuc_seq_obj):
         return 'A' + nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
 
     def _associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(self, nuc_seq_obj):
-        self.nuc_sequence_name_to_ref_seq_id[
+        self.nuc_sequence_name_to_ref_seq_id_dict[
             nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
             'A' + nuc_seq_obj.sequence]
         name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
@@ -2471,7 +2479,7 @@ class DataSetSampleSequencePMCreator:
             if nuc_seq_obj.sequence in ref_seq_sequence or \
                     ref_seq_sequence in nuc_seq_obj.sequence:
                 # Then this is a match
-                self.nuc_sequence_name_to_ref_seq_id[nuc_seq_obj.name] = \
+                self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = \
                     self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
                 name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
                     self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]]
@@ -2486,7 +2494,7 @@ class DataSetSampleSequencePMCreator:
         new_ref_seq.name = str(new_ref_seq.id)
         new_ref_seq.save()
         self.ref_seq_sequence_to_ref_seq_id_dict[new_ref_seq.sequence] = new_ref_seq.id
-        self.nuc_sequence_name_to_ref_seq_id[nuc_seq_obj.name] = new_ref_seq.id
+        self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = new_ref_seq.id
         self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
 
         sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade {self.current_pre_med_sample_seq_collection.clade}: '
