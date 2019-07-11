@@ -119,8 +119,9 @@ class DataLoading:
         self.perform_med_handler_instance = None
         # data set sample creation
         self.data_set_sample_creator_handler_instance = None
-        # plotting sequence output
-        self.seq_abundance_relative_output_path = None
+        # plotting sequence output from both post-med and pre-med seq outputs
+        self.seq_abundance_relative_output_path_post_med = None
+        self.seq_abundance_relative_output_path_pre_med = None
         # we will use this sequence count table creator when outputting the pre_MED seqs so that the df
         # can be put in the same order
         self.sequence_count_table_creator = None
@@ -158,7 +159,7 @@ class DataLoading:
 
         self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
 
-        self._output_seqs_stacked_bar_plot()
+        self._output_seqs_stacked_bar_plots()
 
         # TODO do the pre_med plotting here
 
@@ -227,7 +228,8 @@ class DataLoading:
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
 
-    def _output_seqs_stacked_bar_plot(self):
+    def _output_seqs_stacked_bar_plots(self):
+        """Plot up the post- and pre-MED seqs as both .png and .svg"""
         if not self.no_fig:
             if len(self.list_of_samples_names) > 1000:
                 print(f'Too many samples ({len(self.list_of_samples_names)}) to generate plots')
@@ -236,10 +238,12 @@ class DataLoading:
 
                 self.seq_stacked_bar_plotter = SeqStackedBarPlotter(
                     output_directory=self.output_directory,
-                    seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path,
-                    time_date_str=self.date_time_string)
-                self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
+                    seq_relative_abund_count_table_path_post_med=self.seq_abundance_relative_output_path_post_med,
+                    time_date_str=self.date_time_string,
+                    seq_relative_abund_count_table_path_pre_med=self.seq_abundance_relative_output_path_pre_med)
+                self.seq_stacked_bar_plotter.plot_stacked_bar_seqs_post_med()
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
+                self.seq_stacked_bar_plotter.plot_pre_med_seqs()
 
     def _output_seqs_count_table(self):
         sys.stdout.write('\nGenerating count tables for post- and pre-MED sequence abundances\n')
@@ -251,11 +255,12 @@ class DataLoading:
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(self.sequence_count_table_creator)
         self.sequence_count_table_creator.make_output_tables_pre_med()
+        self.seq_abundance_relative_output_path_pre_med = self.sequence_count_table_creator.pre_med_relative_df_path
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
         for path in sequence_count_table_creator.output_paths_list:
             if 'relative.abund_and_meta' in path:
-                self.seq_abundance_relative_output_path = path
+                self.seq_abundance_relative_output_path_post_med = path
 
     def _delete_temp_working_directory_and_log_files(self):
         if os.path.exists(self.temp_working_directory):
