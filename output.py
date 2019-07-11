@@ -1,5 +1,5 @@
 from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
-                          DataAnalysis)
+                          DataAnalysis, DataSetSampleSequencePM)
 from multiprocessing import Queue, Process, Manager
 import sys
 from django import db
@@ -819,7 +819,10 @@ class SequenceCountTableCreator:
             self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'non_analysis', self.time_date_str))
         else:  # call_type == 'analysis
             self.output_dir = output_dir
+        # the directory where all count tables and plots that are of the post-med seqs will be output.
+        self.post_med_output_dir = os.path.join(self.output_dir, 'post_med_seqs')
         self.html_output_dir = os.path.join(self.output_dir, 'html')
+        os.makedirs(self.post_med_output_dir, exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.html_output_dir, exist_ok=True)
 
@@ -855,64 +858,71 @@ class SequenceCountTableCreator:
             self._set_analysis_seq_table_output_paths()
         else:
             self._set_non_analysis_seq_table_output_paths()
+        self.pre_med_absolute_df_path = None
+        self.pre_med_relative_df_path = None
 
     def _set_non_analysis_seq_table_output_paths(self):
         self._set_non_analysis_abs_count_tab_output_paths()
         self._set_non_analysis_rel_count_tab_output_paths()
-        self.output_fasta_path = os.path.join(self.output_dir, f'{self.time_date_str}.seqs.fasta')
-        self.additional_info_file_path = os.path.join(self.output_dir, f'{self.time_date_str}.additional_info.txt')
+        self.output_fasta_path = os.path.join(self.post_med_output_dir, f'{self.time_date_str}.seqs.fasta')
+        self.additional_info_file_path = os.path.join(self.post_med_output_dir, f'{self.time_date_str}.additional_info.txt')
 
     def _set_analysis_seq_table_output_paths(self):
         self._set_analysis_abs_count_tab_output_paths()
         self._set_analysis_rel_count_tab_output_paths()
         self.output_fasta_path = os.path.join(
-            self.output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
+            self.post_med_output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
         self.additional_info_file_path = os.path.join(
-            self.output_dir,
+            self.post_med_output_dir,
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.additional_info.txt')
 
     def _set_analysis_rel_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
-            self.output_dir,
+            self.post_med_output_dir,
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_and_meta.txt')
         self.path_to_seq_output_abund_only_df_relative = os.path.join(
-            self.output_dir,
+            self.post_med_output_dir,
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_only.txt')
         self.path_to_seq_output_meta_only_df_relative = os.path.join(
-            self.output_dir,
+            self.post_med_output_dir,
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.meta_only.txt')
 
     def _set_analysis_abs_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
-            self.output_dir,
+            self.post_med_output_dir,
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
         self.path_to_seq_output_abund_only_df_absolute = os.path.join(
-            self.output_dir,
+            self.post_med_output_dir,
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_only.txt')
         self.path_to_seq_output_meta_only_df_absolute = os.path.join(
-            self.output_dir,
+            self.post_med_output_dir,
             f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.meta_only.txt')
 
     def _set_non_analysis_rel_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
-            self.output_dir, f'{self.time_date_str}.seqs.relative.abund_and_meta.txt')
+            self.post_med_output_dir, f'{self.time_date_str}.seqs.relative.abund_and_meta.txt')
         self.path_to_seq_output_abund_only_df_relative = os.path.join(
-            self.output_dir, f'{self.time_date_str}.seqs.relative.abund_only.txt')
+            self.post_med_output_dir, f'{self.time_date_str}.seqs.relative.abund_only.txt')
         self.path_to_seq_output_meta_only_df_relative = os.path.join(
-            self.output_dir, f'{self.time_date_str}.seqs.relative.meta_only.txt')
+            self.post_med_output_dir, f'{self.time_date_str}.seqs.relative.meta_only.txt')
 
     def _set_non_analysis_abs_count_tab_output_paths(self):
         # Path to output table that contains both the meta info and the abundance info
         self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
-            self.output_dir, f'{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+            self.post_med_output_dir, f'{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
         # Path to output table that contains only the abundance info
         self.path_to_seq_output_abund_only_df_absolute = os.path.join(
-            self.output_dir, f'{self.time_date_str}.seqs.absolute.abund_only.txt')
+            self.post_med_output_dir, f'{self.time_date_str}.seqs.absolute.abund_only.txt')
         # Path to output table that contains only the meta info
         self.path_to_seq_output_meta_only_df_absolute = os.path.join(
-            self.output_dir, f'{self.time_date_str}.seqs.absolute.meta_only.txt')
+            self.post_med_output_dir, f'{self.time_date_str}.seqs.absolute.meta_only.txt')
 
-    def make_output_tables(self):
+    def make_output_tables_pre_med(self):
+        pre_med_output = self.PreMedSeqOutput(parent=self)
+        pre_med_output.make_pre_med_count_tables()
+
+
+    def make_output_tables_post_med(self):
         print('\n\nOutputting sequence abundance count tables\n')
         self._collect_abundances_for_creating_the_output()
 
@@ -1298,6 +1308,144 @@ class SequenceCountTableCreator:
 
         self.clade_abundance_ordered_ref_seq_list = \
             seq_collection_handler.clade_abundance_ordered_ref_seq_list
+
+    class PreMedSeqOutput:
+        def __init__(self, parent):
+            self.parent = parent
+            # the directory that is specific to the pre-med outputs
+            self.pre_med_dir = os.path.join(self.parent.output_dir, 'pre_med_seqs')
+            # the directory one above the pre_med_dir that contins the main data_loading outputs
+            self.root_output_dir = self.parent.output_dir
+            # the directory that will house the ouputs for html
+            self.html_output_dir = os.path.join(self.parent.output_dir, 'html')
+
+            # dict that will have dss uid as key and an abundance dictionary as value
+            self.master_sample_uid_to_abund_dict = {}
+            # dict that will have the rs uid as key and the cummulative relative abundance as value
+            self.master_sequence_count_dict = defaultdict(float)
+
+            # The dataframes that will become the output tables
+            self.abs_count_df = None
+            self.rel_count_df = None
+
+            # The directories for the output tables
+            self.parent.pre_med_absolute_df_path = os.path.join(self.pre_med_dir, 'pre_med_absolute_abundance_df.csv')
+            self.parent.pre_med_relative_df_path = os.path.join(self.pre_med_dir, 'pre_med_relative_abundance_df.csv')
+
+            # The dictionary that will be used to create the master fasta file for all pre_med_seqs
+            self.master_fasta_dict = {}
+
+            # dictionary to keep track of the id to dss name so we can output name in the dataframe as well.
+            self.sample_uid_to_name_dict = {}
+
+
+        def make_pre_med_count_tables(self):
+            # output two tables, one relative abundance and one absolute
+            # will also ouput a single .js file that allows us to retrieve the absolute and relative abund info
+            # we will use the sample order that we can inherit from the outer sequence output
+            # we will calculate our own sequence order purely according to the abundance of reference sequences
+            # associated with each of the DataSetSampleSequencePM objects
+            # we go through each sample by sample and populate a master dict that holds abundance
+            # to reference sequence uid, and then for each sample we can have a dict of that is accessed through the
+            # uid of the sample and then holds another dictionary that is refseq uid to abundance in that sample
+
+            self._count_sequences_in_each_sample()
+
+            self._output_pre_med_master_fasta()
+
+            self._populate_dfs_in_parent_sample_order()
+
+            self._write_out_dfs_as_csv()
+
+            self._write_out_js_seq_data_file_pre_med()
+
+        def _write_out_js_seq_data_file_pre_med(self):
+            # now create the .js file that we will use to read in the data locally
+            # we will create a single file that will contain the
+            # functions getSeqDataAbsolutePreMED and getSeqDataRelativePreMED
+            # to make this file we will first write out each of the dataframes to json. We will then read in the json
+            # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
+            # these into a single .js file called seq_data.js
+            absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.preMED.json')
+            relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.preMED.json')
+            js_file_path = os.path.join(self.html_output_dir, 'seq_data.preMED.js')
+            self.abs_count_df.to_json(path_or_buf=absolute_json_path, orient='records')
+            self.rel_count_df.to_json(path_or_buf=relative_json_path, orient='records')
+            js_file = []
+            js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path,
+                                                                        function_name='getSeqDataAbsolute'))
+            js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path,
+                                                                        function_name='getSeqDataRelative'))
+            general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+
+        def _output_pre_med_master_fasta(self):
+            fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
+            fasta_out = []
+            for seq_name, seq in self.master_fasta_dict.items():
+                fasta_out.append(f'>{seq_name}')
+                fasta_out.append(f'{seq}')
+
+            general.write_list_to_destination(fasta_out_path, fasta_out)
+
+        def _write_out_dfs_as_csv(self):
+            print('\nWriting out pre-med sequence count tables: \n')
+            print(self.parent.pre_med_absolute_df_path)
+            print(self.parent.pre_med_relative_df_path)
+            self.rel_count_df.to_csv(self.parent.pre_med_relative_df_path)
+            self.abs_count_df.to_csv(self.parent.pre_med_absolute_df_path)
+
+        def _populate_dfs_in_parent_sample_order(self):
+            print('\nPopulating pre-MED dfs\n')
+            ordered_seq_names = [sorted(self.master_sequence_count_dict.items(), key=lambda x: x[1], reverse=True)]
+
+            # fastest way to create the df from the dictionaries is to create a list of dictionaries and then
+            # fill in the nan values and rearrange the columns
+            list_of_dicts = []
+            for sample_uid in self.parent.sorted_sample_uid_list:
+                abund_dict = self.master_sample_uid_to_abund_dict[sample_uid]
+                temp_dict = {seq_name: abund for seq_name, abund in abund_dict.items()}
+                temp_dict['sample_uid'] = sample_uid
+                list_of_dicts.append(temp_dict)
+
+            self.abs_count_df = pd.DataFrame(list_of_dicts)
+            self.abs_count_df.set_index('sample_uid', inplace=True, drop=True)
+            self.abs_count_df = self.abs_count_df.reindex(ordered_seq_names, axis=1).fillna(0)
+
+            self.rel_count_df = self.abs_count_df.div(self.abs_count_df.sum(axis=1), axis=0)
+            sample_names_list = [self.sample_uid_to_name_dict[sample_uid] for sample_uid in
+                                 self.abs_count_df.index.values.tolist()]
+            self.abs_count_df['sample_name'] = sample_names_list
+            self.rel_count_df['sample_name'] = sample_names_list
+            # reorder the columns of the df
+            self.abs_count_df = self.abs_count_df.reindex(['sample_name'] + list(self.abs_count_df)[:-1], axis=1)
+            self.rel_count_df = self.rel_count_df.reindex(['sample_name'] + list(self.rel_count_df)[:-1], axis=1)
+
+            return ordered_seq_names
+
+        def _count_sequences_in_each_sample(self):
+            """Populate the master_sequence_count_dict that holds the cummulative relative abundance of every
+            reference sequence in the pre-med seq collection across all of the samples.
+            Also populate the master_sample_uid_to_abund_dict, that holds an absolute abundance dict for each
+            sample where the sample.uid is the key and a temporary dictionary is the value where the key is the
+            rs.name and the value is the abosulte abundance of that sequence in the sample.
+            Through the process of counting, also populate the master_fasta_dict be rs_name to rs_sequence dictionary.
+            This will be used to make the master fasta that will represent every sequence in the pre-med sequence
+            collection."""
+            for dss_obj in self.parent.list_of_dss_objects:
+                self.sample_uid_to_name_dict[dss_obj.id] = dss_obj.name
+                dsspm_objs_of_sample = DataSetSampleSequencePM.objects.filter(data_set_sample_from=dss_obj)
+                # total_seqs = dss_obj.non_sym_absolute_num_seqs
+                self.master_sample_uid_to_abund_dict[dss_obj.id] = {
+                    dsspm_obj.reference_seqeunce_of.id:dsspm_obj.abundance for dsspm_obj in dsspm_objs_of_sample
+                }
+
+                sample_temp_abundance_dict = {}
+                for dsspm_obj in dsspm_objs_of_sample:
+                    if dsspm_obj.reference_seqeunce_of.name not in self.master_fasta_dict:
+                        self.master_fasta_dict[dsspm_obj.reference_seqeunce_of.name] = dsspm_obj.reference_seqeunce_of.sequence
+                    sample_temp_abundance_dict[dsspm_obj.reference_seqeunce_of.name] = dsspm_obj.abundance
+                    self.master_sequence_count_dict[dsspm_obj.reference_seqeunce_of.name] += dsspm_obj.abundance / dss_obj.non_sym_absolute_num_seqs
+                self.master_sample_uid_to_abund_dict[dss_obj.id] = sample_temp_abundance_dict
 
 
 class SequenceCountTableCollectAbundanceHandler:
@@ -1828,306 +1976,4 @@ class SeqOutputSeriesGeneratorWorker:
         return self.dss.error_in_processing or self.sample_seq_tot == 0
 
 
-class PreMedSeqOutput:
-    def __init__(
-            self, pre_med_dir, output_directory, use_cache=False, df_sample_uid_order=None,
-            plotting_sample_uid_order=None, time_date_str=None):
-        self.time_date_str = time_date_str
-        self.plotting_sample_uid_order = plotting_sample_uid_order
-        self.df_sample_uid_order = df_sample_uid_order
-        if df_sample_uid_order is not None:
-            self.main_output_uid_to_dss_name_dict = self._get_dss_objects_and_relate_to_df_sample_uids()
-        # the directory that is specific to the pre-med outputs
-        self.pre_med_dir = pre_med_dir
-        # the directory one above the pre_med_dir that contins the main data_loading outputs
-        self.root_output_dir = output_directory
-        self.html_output_dir = os.path.join(output_directory, 'html')
-        self.sample_uid_to_sample_dir_path_dict = {}
-        self.sample_uid_to_name_dict = self._make_sample_uid_to_name_dict()
-        self.sample_dirs = general.return_list_of_directory_paths_in_directory(self.pre_med_dir)
-        # dict that will identify the clade for every given sequence
-        self.master_sample_uid_to_abund_dict = {}
-        self.sequence_to_clade_dict = {}
-        self.sequence_count_dict = defaultdict(float)
-        self.sequence_to_name_dict = {}
-        self.abs_count_df = None
-        self.rel_count_df = None
-        self.unk_seq_clade_name_counter_dict = {clade: 0 for clade in list('ABCDEFGHI')}
-        self.rel_count_df_output_path = os.path.join(self.pre_med_dir, 'pre_med_relative_abundance_df.csv')
-        self.abs_count_df_output_path = os.path.join(self.pre_med_dir, 'pre_med_absolute_abundance_df.csv')
-        self.use_cache = use_cache
 
-    def _get_dss_objects_and_relate_to_df_sample_uids(self):
-        """Because this pre-MED code looks to see which directories are present (one per sample) in the
-        main pre-MED directory to assertain which samples it should be making a count table for and plotting,
-        it misses any samples that failed in the initial QC. However, failed sample UIDs may still be passed in
-        from the main output in the df_sample_uid_order. As such, we need to be able to match all the passed sample
-        uids to their names."""
-        list_of_dss = list(DataSetSample.objects.filter(id__in=self.df_sample_uid_order))
-        return {dss.id: dss.name for dss in list_of_dss}
-
-    def _make_sample_uid_to_name_dict(self):
-        list_of_dir_name = general.return_list_of_directory_names_in_directory(self.pre_med_dir)
-        sample_uid_to_name_dict = {}
-        for dir_name in list_of_dir_name:
-            dir_name_split_list = dir_name.split('_')
-            sample_uid = int(dir_name_split_list[0])
-            sample_name = '_'.join(dir_name_split_list[1:])
-            sample_uid_to_name_dict[sample_uid] = sample_name
-            self.sample_uid_to_sample_dir_path_dict[sample_uid] = os.path.join(self.pre_med_dir, dir_name)
-        return sample_uid_to_name_dict
-
-    def make_pre_med_counts_and_plots(self):
-        # If use_cache we will look into the pre_med_dir to see if the count table already exist and if
-        # they do we willl use them rather than producing from scratch
-        if self.use_cache:
-            if os.path.isfile(self.rel_count_df_output_path) and os.path.isfile(self.abs_count_df_output_path):
-                self.rel_count_df = pd.read_csv(self.rel_count_df_output_path, index_col=0)
-            else:
-                self._create_dfs()
-        else:
-            self._create_dfs()
-
-        # now plot
-        num_samples = len(self.rel_count_df.index.values.tolist())
-        if num_samples > 1000:
-            print('Too many samples ({num_samples}) to plot pre-MED data.')
-        else:
-            med_plotter = plotting.PreMedSeqPlotter(
-                pre_med_output_directory=self.pre_med_dir, root_output_directory=self.root_output_dir, rel_abund_df=self.rel_count_df,
-                plotting_sample_uid_order=self.plotting_sample_uid_order, time_date_str=self.time_date_str)
-            med_plotter.plot_stacked_bar_seqs()
-
-    def _create_dfs(self):
-        # for each sample
-        self._count_sequences_in_each_sample()
-        # here we have the count info for each clade
-        # we also have the info for most abundant sequences
-        # we also have the clades for each sequence
-        # the only thing we need now before making the df and doing the plotting is to see if the sequences
-        # match sequences already in the symportal database
-        self._name_pre_med_seqs_by_exact_match_to_rs()
-
-        # output a fasta corresponding to the sequences in the ouput count tables
-        self._output_pre_med_master_fasta()
-
-        # now we can populate the df
-        # We will firstly do this using an arbitrary sample order in the index
-        # We will then use this df to calculate the sample order and reindex the df accordingly
-        # We will do the sequences only by order as there are going to be potentially a very large number of sequences
-        # and it would not be helpful to have them in clade order.
-        ordered_seq_names = self._populate_dfs_with_arbitrary_sample_order()
-        # here we have the dfs populated
-        # now we need to generate the ordered sample list and reindex the dfs
-        if self.df_sample_uid_order is None:
-            ordered_sample_uid_list = self._get_ordered_sample_list(ordered_seq_names)
-            self._reorder_dfs_by_sorted_samples(ordered_sample_uid_list)
-        else:
-            self._reorder_dfs_by_sorted_samples(self.df_sample_uid_order)
-        # we should now write out these dfs to the directory that has the pre-MED sequences in them
-        self._write_out_dfs_as_csv()
-
-        self._write_out_js_seq_data_file_pre_med()
-
-    def _write_out_js_seq_data_file_pre_med(self):
-        # now create the .js file that we will use to read in the data locally
-        # we will create a single file that will contain the
-        # functions getSeqDataAbsolutePreMED and getSeqDataRelativePreMED
-        # to make this file we will first write out each of the dataframes to json. We will then read in the json
-        # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
-        # these into a single .js file called seq_data.js
-        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.preMED.json')
-        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.preMED.json')
-        js_file_path = os.path.join(self.html_output_dir, 'seq_data.preMED.js')
-        self.abs_count_df.to_json(path_or_buf=absolute_json_path, orient='records')
-        self.rel_count_df.to_json(path_or_buf=relative_json_path, orient='records')
-        js_file = []
-        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path,
-                                                                    function_name='getSeqDataAbsolute'))
-        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path,
-                                                                    function_name='getSeqDataRelative'))
-        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
-
-    def _output_pre_med_master_fasta(self):
-        fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
-        fasta_out = []
-        for seq_name, seq in self.name_to_sequence_dict.items():
-            fasta_out.append(f'>{seq_name}')
-            fasta_out.append(f'{seq}')
-
-        general.write_list_to_destination(fasta_out_path, fasta_out)
-
-    def _write_out_dfs_as_csv(self):
-        print('\nWriting out pre-med sequence count tables: \n')
-        print(self.rel_count_df_output_path)
-        print(self.abs_count_df_output_path)
-        self.rel_count_df.to_csv(self.rel_count_df_output_path)
-        self.abs_count_df.to_csv(self.abs_count_df_output_path)
-
-    def _reorder_dfs_by_sorted_samples(self, ordered_sample_uid_list):
-        # now reorder the samples for the dfs
-        self._add_qc_failed_sample_info(ordered_sample_uid_list)
-        self.rel_count_df = self.rel_count_df.reindex(ordered_sample_uid_list)
-        self.abs_count_df = self.abs_count_df.reindex(ordered_sample_uid_list)
-
-    def _add_qc_failed_sample_info(self, ordered_sample_uid_list):
-        """Because this pre-MED code looks to see which directories are present (one per sample) in the
-        main pre-MED directory to assertain which samples it should be making a count table for and plotting,
-        it misses any samples that failed in the initial QC. However, failed sample UIDs may still be passed in
-        from the main output in the df_sample_uid_order. As such, we need to be able to match all the passed sample
-        uids to their names."""
-        for uid in ordered_sample_uid_list:
-            # if the uid is not found in the current index then we need to add it to the dataframes before doing
-            # any reordering
-            if uid not in self.rel_count_df.index.values.tolist():
-                # create a series and add this to both dfs
-                sample_name = self.main_output_uid_to_dss_name_dict[uid]
-                data = [sample_name] + [0 for _ in range(len(list(self.rel_count_df)) - 1)]
-                temp_ser_to_add = pd.Series(data=data, name=uid, index=list(self.rel_count_df))
-                self.rel_count_df = self.rel_count_df.append(temp_ser_to_add)
-                self.abs_count_df = self.abs_count_df.append(temp_ser_to_add)
-
-    def _get_ordered_sample_list(self, ordered_seq_names):
-        max_seq_ddict, no_maj_samps, seq_to_samp_ddict = self._generate_most_abundant_sequence_dictionaries(
-            self.rel_count_df)
-        ordered_sample_uid_list = self._generate_ordered_sample_list_from_most_abund_seq_dicts(
-            ordered_seq_names=ordered_seq_names, no_maj_samps=no_maj_samps, seq_to_samp_ddict=seq_to_samp_ddict)
-        return ordered_sample_uid_list
-
-    def _populate_dfs_with_arbitrary_sample_order(self):
-        print('\nPopulating pre-MED dfs\n')
-        ordered_seq_names = [self.sequence_to_name_dict[tup[0]] for tup in
-                             sorted(self.sequence_count_dict.items(), key=lambda x: x[1], reverse=True)]
-
-        # fastest way to create the df from the dictionaries is to create a list of dictionaries and then
-        # fill in the nan values and rearrange the columns
-        list_of_dicts = []
-        for sample_uid, abund_dict in self.master_sample_uid_to_abund_dict.items():
-            temp_dict = {self.sequence_to_name_dict[seq]: abund for seq, abund in abund_dict.items()}
-            temp_dict['sample_uid'] = sample_uid
-            list_of_dicts.append(temp_dict)
-
-        self.abs_count_df = pd.DataFrame(list_of_dicts)
-        self.abs_count_df.set_index('sample_uid', inplace=True, drop=True)
-        self.abs_count_df = self.abs_count_df.reindex(ordered_seq_names, axis=1).fillna(0)
-
-        self.rel_count_df = self.abs_count_df.div(self.abs_count_df.sum(axis=1), axis=0)
-        sample_names_list = [self.sample_uid_to_name_dict[sample_uid] for sample_uid in
-                             self.abs_count_df.index.values.tolist()]
-        self.abs_count_df['sample_name'] = sample_names_list
-        self.rel_count_df['sample_name'] = sample_names_list
-        # reorder the columns of the df
-        self.abs_count_df = self.abs_count_df.reindex(['sample_name'] + list(self.abs_count_df)[:-1], axis=1)
-        self.rel_count_df = self.rel_count_df.reindex(['sample_name'] + list(self.rel_count_df)[:-1], axis=1)
-
-        return ordered_seq_names
-
-    def _name_pre_med_seqs_by_exact_match_to_rs(self):
-        print('\nNaming pre-MED sequences\n')
-        reference_sequence_list = list(ReferenceSequence.objects.all())
-        for sequence, abund in sorted(self.sequence_count_dict.items(), key=lambda x: x[1], reverse=True):
-            clade_of_seq = self.sequence_to_clade_dict[sequence]
-            match_list = []
-            for rs_obj in [rs for rs in reference_sequence_list if rs.clade == clade_of_seq]:
-                if sequence == rs_obj.sequence:
-                    if rs_obj.has_name:
-                        match_list.append(rs_obj.name)
-                    else:
-                        match_list.append(f'{rs_obj.id}_{rs_obj.clade}')
-            if match_list:
-                if len(match_list) == 1 and match_list[0] not in self.sequence_to_name_dict.values():
-                    self.sequence_to_name_dict[sequence] = match_list[0]
-                else:
-                    self.sequence_to_name_dict[
-                        sequence] = f'unk_{clade_of_seq}_{self.unk_seq_clade_name_counter_dict[clade_of_seq]}'
-                    self.unk_seq_clade_name_counter_dict[clade_of_seq] += 1
-            else:
-                self.sequence_to_name_dict[
-                    sequence] = f'unk_{clade_of_seq}_{self.unk_seq_clade_name_counter_dict[clade_of_seq]}'
-                self.unk_seq_clade_name_counter_dict[clade_of_seq] += 1
-        self.name_to_sequence_dict = {name: sequence for sequence, name in self.sequence_to_name_dict.items()}
-
-    def _count_sequences_in_each_sample(self):
-        """We will count the sequences in each of the samples using the paired fasta and name files
-        In parallel we will keep track of which clade a sequence belongs to and the overall counts of the sequences
-        acorss all samples."""
-        for sample_uid, sample_dir in self.sample_uid_to_sample_dir_path_dict.items():
-            # We need count the sequences that are found in each of the samples
-            files_in_dir = general.return_list_of_file_names_in_directory(sample_dir)
-            fasta_files_in_dir = [file_name for file_name in files_in_dir if 'fasta' in file_name]
-            clades_of_sample = [file_name.split('_')[3] for file_name in fasta_files_in_dir]
-            # now go clade by clade
-            total_seqs = self._get_total_seqs_in_sample(clades_of_sample, fasta_files_in_dir, sample_dir)
-            sample_abund_dict = {}
-            for clade in clades_of_sample:
-                fasta_file_name = None
-                for fasta_file in fasta_files_in_dir:
-                    if f'_{clade}_' in fasta_file:
-                        fasta_file_name = fasta_file
-                if fasta_file_name is None:
-                    raise RuntimeError('Fasta file for clade not found while processing output of pre-MED seqs')
-                clade_fasta_path = os.path.join(sample_dir, fasta_file_name)
-                # at this point we have both the fasta and name dict for the sample
-                clade_fasta_dict = general.create_dict_from_fasta(fasta_path=clade_fasta_path)
-                clade_name_dict = general.create_seq_name_to_abundance_dict_from_name_file(
-                    name_file_path=clade_fasta_path.replace('.fasta', '.names'))
-
-                for seq_name, seq_seq in clade_fasta_dict.items():
-                    seq_abund = clade_name_dict[seq_name]
-                    sample_abund_dict[seq_seq] = seq_abund
-                    self.sequence_to_clade_dict[seq_seq] = clade
-                    self.sequence_count_dict[seq_seq] += seq_abund / total_seqs
-            self.master_sample_uid_to_abund_dict[int(sample_dir.split('/')[-1].split('_')[0])] = sample_abund_dict
-
-    def _get_total_seqs_in_sample(self, clades_of_sample, fasta_files_in_dir, sample_dir):
-        total_seqs = 0
-        for clade in clades_of_sample:
-            fasta_file_name = None
-            for fasta_file in fasta_files_in_dir:
-                if f'_{clade}_' in fasta_file:
-                    fasta_file_name = fasta_file
-            if fasta_file_name is None:
-                raise RuntimeError('Fasta file for clade not found while processing output of pre-MED seqs')
-            clade_fasta_path = os.path.join(sample_dir, fasta_file_name)
-            # at this point we have both the fasta and name dict for the sample
-            clade_name_dict = general.create_seq_name_to_abundance_dict_from_name_file(
-                name_file_path=clade_fasta_path.replace('.fasta', '.names'))
-            total_seqs += sum(clade_name_dict.values())
-        return total_seqs
-
-    # we will put the sequence in the df in order of clade, then abund
-    # we will put the samples in an arbitrary order
-    def _generate_most_abundant_sequence_dictionaries(self, sequence_only_df_relative):
-        # {sequence_name_found_to_be_most_abund_in_sample: num_samples_it_was_found_to_be_most_abund_in}
-        max_seq_ddict = defaultdict(int)
-        # {most_abundant_seq_name: [(dss.id, rel_abund_of_most_abund_seq) for samples with that seq as most abund]}
-        seq_to_samp_ddict = defaultdict(list)
-        # a list to hold the names of samples in which there was no most abundant sequence identified
-        no_maj_samps = []
-        for sample_to_sort_uid in sequence_only_df_relative.index.values.tolist():
-            sample_series_as_float = sequence_only_df_relative.loc[sample_to_sort_uid][1:].astype('float')
-            max_rel_abund = sample_series_as_float.max()
-            if not max_rel_abund > 0:
-                no_maj_samps.append(sample_to_sort_uid)
-            else:
-                max_abund_seq = sample_series_as_float.idxmax()
-                # add a tup of sample name and rel abund of seq to the seq_to_samp_dict
-                seq_to_samp_ddict[max_abund_seq].append((sample_to_sort_uid, max_rel_abund))
-                # add this to the ddict count
-                max_seq_ddict[max_abund_seq] += 1
-        return max_seq_ddict, no_maj_samps, seq_to_samp_ddict
-
-    @staticmethod
-    def _generate_ordered_sample_list_from_most_abund_seq_dicts(ordered_seq_names, no_maj_samps, seq_to_samp_ddict):
-        # then once we have compelted this for all sequences go clade by clade
-        # and generate the sample order
-        ordered_sample_list_by_uid = []
-        for seq_to_order_samples_by in ordered_seq_names:
-            tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_ddict[seq_to_order_samples_by]
-            ordered_list_of_samples_for_seq_ordered = \
-                [x[0] for x in
-                 sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
-            ordered_sample_list_by_uid.extend(ordered_list_of_samples_for_seq_ordered)
-        # finally add in the samples that didn't have a maj sequence
-        ordered_sample_list_by_uid.extend(no_maj_samps)
-        return ordered_sample_list_by_uid

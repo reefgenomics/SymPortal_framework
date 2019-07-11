@@ -421,7 +421,7 @@ class SymPortalWorkFlowManager:
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
             time_date_str=self.output_type_count_table_obj.date_time_str)
-        self.output_seq_count_table_obj.make_output_tables()
+        self.output_seq_count_table_obj.make_output_tables_post_med()
 
     def _make_data_analysis_output_type_tables(self):
         # Write out the AnalysisType count table
@@ -479,14 +479,14 @@ class SymPortalWorkFlowManager:
             symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
             ds_uids_output_str=self.args.print_output_seqs,
             num_proc=self.args.num_proc)
-        self.output_seq_count_table_obj.make_output_tables()
+        self.output_seq_count_table_obj.make_output_tables_post_med()
 
     def _stand_alone_sequence_output_data_set_sample(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
             dss_uids_output_str=self.args.print_output_seqs_sample_set,
             num_proc=self.args.num_proc)
-        self.output_seq_count_table_obj.make_output_tables()
+        self.output_seq_count_table_obj.make_output_tables_post_med()
 
     # STAND_ALONE TYPE OUTPUT
     def perform_stand_alone_type_output(self):
@@ -517,7 +517,7 @@ class SymPortalWorkFlowManager:
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
             time_date_str=self.output_type_count_table_obj.date_time_str)
-        self.output_seq_count_table_obj.make_output_tables()
+        self.output_seq_count_table_obj.make_output_tables_post_med()
 
     def _stand_alone_seq_output_from_type_output_data_set_sample(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
@@ -529,7 +529,7 @@ class SymPortalWorkFlowManager:
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
             time_date_str=self.output_type_count_table_obj.date_time_str)
-        self.output_seq_count_table_obj.make_output_tables()
+        self.output_seq_count_table_obj.make_output_tables_post_med()
 
     def _stand_alone_type_output_data_set(self):
         ds_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.print_output_types.split(',')]

@@ -162,8 +162,6 @@ class DataLoading:
 
         # TODO do the pre_med plotting here
 
-        self._output_and_plot_pre_med_seqs_count_table()
-
         self._do_sample_ordination()
 
     def _make_new_dataset_object(self):
@@ -172,14 +170,6 @@ class DataLoading:
             submitting_user=self.parent.submitting_user, submitting_user_email=self.parent.submitting_user_email)
         self.dataset_object.save()
         self.parent.data_set_object = self.dataset_object
-
-    def _output_and_plot_pre_med_seqs_count_table(self):
-        pre_med_output = PreMedSeqOutput(
-            pre_med_dir=self.pre_med_sequence_output_directory_path,
-            output_directory=self.output_directory,
-            df_sample_uid_order=self.sequence_count_table_creator.sorted_sample_uid_list,
-            plotting_sample_uid_order=self.seq_stacked_bar_plotter.ordered_sample_uid_list, time_date_str=self.seq_stacked_bar_plotter.time_date_str)
-        pre_med_output.make_pre_med_counts_and_plots()
 
     def _write_sym_non_sym_and_size_violation_dirs_to_stdout(self):
         print(f'\nPre-MED Symbiodiniaceae sequences written out to:\n'
@@ -252,14 +242,15 @@ class DataLoading:
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
 
     def _output_seqs_count_table(self):
-        sys.stdout.write('\nGenerating count tables\n')
+        sys.stdout.write('\nGenerating count tables for post- and pre-MED sequence abundances\n')
         self.sequence_count_table_creator = SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='submission',
             ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
-        self.sequence_count_table_creator.make_output_tables()
+        self.sequence_count_table_creator.make_output_tables_post_med()
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(self.sequence_count_table_creator)
+        self.sequence_count_table_creator.make_output_tables_pre_med()
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
         for path in sequence_count_table_creator.output_paths_list:
