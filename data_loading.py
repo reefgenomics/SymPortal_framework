@@ -66,6 +66,7 @@ class DataLoading:
         self.dataset_object.save()
         # This is the directory that sequences that have undergone QC for each sample will be written out as
         # .names and .fasta pairs BEFORE MED decomposition
+        # We will delete the directory if it already exists
         self.pre_med_sequence_output_directory_path = self._create_pre_med_write_out_directory_path()
         self.num_proc = num_proc
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
@@ -1076,7 +1077,9 @@ class DataLoading:
 
     def _create_pre_med_write_out_directory_path(self):
         pre_med_write_out_directory_path = os.path.join(self.output_directory, 'pre_med_seqs')
-        os.makedirs(pre_med_write_out_directory_path, exist_ok=True)
+        if os.path.exists(pre_med_write_out_directory_path):
+            shutil.rmtree(pre_med_write_out_directory_path)
+        os.makedirs(pre_med_write_out_directory_path)
         return pre_med_write_out_directory_path
 
     def _setup_output_directory(self):
