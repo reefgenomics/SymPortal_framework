@@ -838,8 +838,9 @@ class SequenceCountTableCreator:
     def _init_vars_for_putting_together_the_dfs(self):
         # variables concerned with putting together the dataframes
         self.dss_id_to_pandas_series_results_list_dict = None
-        self.output_df_absolute = None
-        self.output_df_relative = None
+        self.output_df_absolute_post_med = None
+        self.output_df_relative_post_med = None
+        self.output_df_relative_pre_med = None
         self.additional_info_file = []
         self.output_seqs_fasta_as_list = []
         # the number of series (rows) that have been added to the dataframes.
@@ -920,6 +921,7 @@ class SequenceCountTableCreator:
     def make_output_tables_pre_med(self):
         pre_med_output = self.PreMedSeqOutput(parent=self)
         pre_med_output.make_pre_med_count_tables()
+        self.output_df_relative_pre_med = pre_med_output.rel_count_df
 
 
     def make_output_tables_post_med(self):
@@ -961,8 +963,8 @@ class SequenceCountTableCreator:
     def _write_out_meta_only_dfs_seqs(self):
         # now do the meta output table
         # we need to drop the accession row and then we need to drop the seq abund columns
-        df_abs_meta_only = self.output_df_absolute.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
-        df_rel_meta_only = self.output_df_relative.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
+        df_abs_meta_only = self.output_df_absolute_post_med.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
+        df_rel_meta_only = self.output_df_relative_post_med.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
         df_abs_meta_only.to_csv(self.path_to_seq_output_meta_only_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_meta_only_df_absolute)
         df_rel_meta_only.to_csv(self.path_to_seq_output_meta_only_df_relative, sep="\t", index_label='sample_uid')
@@ -976,9 +978,9 @@ class SequenceCountTableCreator:
     def _write_out_abund_only_dfs_seqs(self):
         # get rid of the meta info rows and columns
         # we will delete the number of meta row added plus one for the accession row
-        df_abs_abund_only = self.output_df_absolute.iloc[:-1 * (self.number_of_meta_rows_added + 1),
+        df_abs_abund_only = self.output_df_absolute_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1),
                             self.number_of_meta_cols_added:]
-        df_rel_abund_only = self.output_df_relative.iloc[:-1 * (self.number_of_meta_rows_added + 1),
+        df_rel_abund_only = self.output_df_relative_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1),
                             self.number_of_meta_cols_added:]
         df_abs_abund_only.to_csv(self.path_to_seq_output_abund_only_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_only_df_absolute)
@@ -986,9 +988,9 @@ class SequenceCountTableCreator:
         self.output_paths_list.append(self.path_to_seq_output_abund_only_df_relative)
 
     def _write_out_abund_and_meta_dfs_seqs(self):
-        self.output_df_absolute.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t", index_label='sample_uid')
+        self.output_df_absolute_post_med.to_csv(self.path_to_seq_output_abund_and_meta_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_absolute)
-        self.output_df_relative.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t", index_label='sample_uid')
+        self.output_df_relative_post_med.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
 
     def _write_out_js_seq_data_file_post_med(self):
@@ -1000,8 +1002,8 @@ class SequenceCountTableCreator:
         absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.postMED.json')
         relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.postMED.json')
         js_file_path = os.path.join(self.html_output_dir, 'seq_data.postMED.js')
-        self.output_df_absolute.to_json(path_or_buf=absolute_json_path, orient='records')
-        self.output_df_relative.to_json(path_or_buf=relative_json_path, orient='records')
+        self.output_df_absolute_post_med.to_json(path_or_buf=absolute_json_path, orient='records')
+        self.output_df_relative_post_med.to_json(path_or_buf=relative_json_path, orient='records')
         js_file = []
         js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolutePostMED'))
         js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelativePostMED'))
@@ -1057,10 +1059,10 @@ class SequenceCountTableCreator:
         meta_info_string_items = [
             f'Stand_alone output by {self.output_user} on {self.time_date_str}; '
             f'Number of data_set objects as part of output = {len(self.ds_objs_to_output)}']
-        temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute)[0]],
+        temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute_post_med)[0]],
                                 name='meta_info_summary')
-        self.output_df_absolute = self.output_df_absolute.append(temp_series)
-        self.output_df_relative = self.output_df_relative.append(temp_series)
+        self.output_df_absolute_post_med = self.output_df_absolute_post_med.append(temp_series)
+        self.output_df_relative_post_med = self.output_df_relative_post_med.append(temp_series)
         self._increase_number_meta_series_added()
 
         for data_set_object in self.ds_objs_to_output:
@@ -1069,9 +1071,9 @@ class SequenceCountTableCreator:
                 f'Data_set name: {data_set_object.name}; '
                 f'submitting_user: {data_set_object.submitting_user}; '
                 f'time_stamp: {data_set_object.time_stamp}']
-            temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute)[0]], name='data_set_info')
-            self.output_df_absolute = self.output_df_absolute.append(temp_series)
-            self.output_df_relative = self.output_df_relative.append(temp_series)
+            temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute_post_med)[0]], name='data_set_info')
+            self.output_df_absolute_post_med = self.output_df_absolute_post_med.append(temp_series)
+            self.output_df_relative_post_med = self.output_df_relative_post_med.append(temp_series)
             self._increase_number_meta_series_added()
 
     def _add_uids_for_seqs_to_dfs(self):
@@ -1083,8 +1085,8 @@ class SequenceCountTableCreator:
         no_name_dict = {rs.id: rs.sequence for rs in reference_sequences_in_data_sets_no_name}
         has_name_dict = {rs.name: (rs.id, rs.sequence) for rs in reference_sequences_in_data_sets_has_name}
         accession_list = []
-        num_cols = len(list(self.output_df_relative))
-        for i, col_name in enumerate(list(self.output_df_relative)):
+        num_cols = len(list(self.output_df_relative_post_med))
+        for i, col_name in enumerate(list(self.output_df_relative_post_med)):
             sys.stdout.write('\rAppending accession info and creating fasta {}: {}/{}'.format(col_name, i, num_cols))
             if col_name in self.clade_abundance_ordered_ref_seq_list:
                 if col_name[-2] == '_':
@@ -1099,9 +1101,9 @@ class SequenceCountTableCreator:
                     self.output_seqs_fasta_as_list.append(col_name_tup[1])
             else:
                 accession_list.append(np.nan)
-        temp_series = pd.Series(accession_list, name='seq_accession', index=list(self.output_df_relative))
-        self.output_df_absolute = self.output_df_absolute.append(temp_series)
-        self.output_df_relative = self.output_df_relative.append(temp_series)
+        temp_series = pd.Series(accession_list, name='seq_accession', index=list(self.output_df_relative_post_med))
+        self.output_df_absolute_post_med = self.output_df_absolute_post_med.append(temp_series)
+        self.output_df_relative_post_med = self.output_df_relative_post_med.append(temp_series)
 
     def _chunk_query_rs_objs_with_name_from_dss_objs(self):
         reference_sequences_in_data_sets_no_name_set = set()
@@ -1263,8 +1265,8 @@ class SequenceCountTableCreator:
         output_df_absolute = output_df_absolute.T
         output_df_relative = output_df_relative.T
         # now make sure that the order is correct.
-        self.output_df_absolute = output_df_absolute.reindex(self.sorted_sample_uid_list)
-        self.output_df_relative = output_df_relative.reindex(self.sorted_sample_uid_list)
+        self.output_df_absolute_post_med = output_df_absolute.reindex(self.sorted_sample_uid_list)
+        self.output_df_relative_post_med = output_df_relative.reindex(self.sorted_sample_uid_list)
 
     def _check_sorted_sample_list_is_valid(self):
         if len(self.sorted_sample_uid_list) != len(self.list_of_dss_objects):

@@ -122,6 +122,8 @@ class DataLoading:
         # plotting sequence output from both post-med and pre-med seq outputs
         self.seq_abundance_relative_output_path_post_med = None
         self.seq_abundance_relative_output_path_pre_med = None
+        self.seq_abund_relative_df_post_med = None
+        self.seq_abund_relative_df_pre_med = None
         # we will use this sequence count table creator when outputting the pre_MED seqs so that the df
         # can be put in the same order
         self.sequence_count_table_creator = None
@@ -235,7 +237,7 @@ class DataLoading:
                     output_directory=self.output_directory,
                     seq_relative_abund_count_table_path_post_med=self.seq_abundance_relative_output_path_post_med,
                     time_date_str=self.date_time_string,
-                    seq_relative_abund_count_table_path_pre_med=self.seq_abundance_relative_output_path_pre_med)
+                    seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med)
                 self.seq_stacked_bar_plotter.plot_stacked_bar_seqs_post_med()
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
                 self.seq_stacked_bar_plotter.plot_pre_med_seqs()
@@ -247,9 +249,11 @@ class DataLoading:
             ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
         self.sequence_count_table_creator.make_output_tables_post_med()
+        self.seq_abund_relative_df_post_med = self.sequence_count_table_creator.output_df_relative_post_med
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(self.sequence_count_table_creator)
         self.sequence_count_table_creator.make_output_tables_pre_med()
+        self.seq_abund_relative_df_pre_med = self.sequence_count_table_creator.output_df_relative_pre_med
         self.seq_abundance_relative_output_path_pre_med = self.sequence_count_table_creator.pre_med_relative_df_path
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):

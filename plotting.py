@@ -512,10 +512,10 @@ class TypeStackedBarPlotter:
 class SeqStackedBarPlotter():
     """Class for plotting the sequence count table output"""
     def __init__(
-            self, seq_relative_abund_count_table_path_post_med, seq_relative_abund_count_table_path_pre_med, output_directory,
+            self, seq_relative_abund_count_table_path_post_med, seq_relative_abund_df_pre_med, output_directory,
             time_date_str=None, ordered_sample_uid_list=None):
         self.seq_relative_abund_count_table_path_post_med = seq_relative_abund_count_table_path_post_med
-        self.seq_relative_abund_count_table_path_pre_med = seq_relative_abund_count_table_path_pre_med
+        self.seq_relative_abund_df_pre_med = seq_relative_abund_df_pre_med
         self.root_output_directory = output_directory
         self.post_med_output_directory = os.path.join(self.root_output_directory, 'post_med_seqs')
         self.pre_med_output_directory = os.path.join(self.root_output_directory, 'pre_med_seqs')
@@ -807,7 +807,7 @@ class SeqStackedBarPlotter():
             self.root_output_directory = self.parent.root_output_directory
             self.fig_output_base = os.path.join(self.parent.pre_med_output_directory, f'{self.parent.time_date_str}')
             self.smp_uid_to_smp_name_dict = None
-            self.output_count_table_as_df = self._curate_output_count_table(self.parent.seq_relative_abund_count_table_path_pre_med)
+            self.output_count_table_as_df = self._curate_output_count_table(self.parent.seq_relative_abund_df_pre_med)
             self.ordered_list_of_seqs_names = list(self.output_count_table_as_df)
             # legend parameters and vars
             self.max_n_cols = 8
