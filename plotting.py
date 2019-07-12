@@ -371,7 +371,7 @@ class TypeStackedBarPlotter:
             self.time_date_str = time_date_str
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
+        self.fig_output_base = os.path.join(self.output_directory, 'its2_type_profiles', f'{self.time_date_str}')
         self.max_n_cols = 5
         self.max_n_rows = 10
         self.num_leg_cells = self.max_n_cols * self.max_n_rows
@@ -390,7 +390,7 @@ class TypeStackedBarPlotter:
         self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
         self.output_path_list = []
 
-    def plot_stacked_bar_seqs(self):
+    def plot_stacked_bar_profiles(self):
         print('\n\nPlotting ITS2 type profile abundances')
         for sub_plot_index in range(self.number_of_subplots):
             sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
@@ -544,7 +544,11 @@ class SeqStackedBarPlotter():
         self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
         self.output_path_list = []
 
-    def plot_stacked_bar_seqs_post_med(self):
+    def plot_stacked_bar_seqs(self):
+        self._plot_stacked_bar_seqs_post_med()
+        self._plot_stacked_bar_seqs_pre_med()
+
+    def _plot_stacked_bar_seqs_post_med(self):
         print('\n\nPlotting sequence abundances')
         for sub_plot_index in range(self.number_of_subplots):
             sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
@@ -797,7 +801,7 @@ class SeqStackedBarPlotter():
             "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
         return colour_list
 
-    def plot_pre_med_seqs(self):
+    def _plot_stacked_bar_seqs_pre_med(self):
         pre_med_seq_plotter = self.PreMedSeqPlotter(parent=self)
         pre_med_seq_plotter.plot_stacked_bar_seqs()
 

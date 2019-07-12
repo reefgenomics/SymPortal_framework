@@ -75,9 +75,11 @@ class OutputTypeCountTable:
         self.output_file_paths_list = []
         self.output_dir = os.path.join(
             symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id), self.date_time_str)
+        self.profiles_output_dir = os.path.join(self.output_dir, 'its2_type_profiles')
         self.html_output_dir = os.path.join(self.output_dir, 'html')
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.html_output_dir, exist_ok=True)
+        os.makedirs(self.profiles_output_dir, exist_ok=True)
         self._init_output_paths()
         self.output_file_paths_list.extend([
             self.path_to_relative_count_table_profiles_abund_and_meta,
@@ -85,30 +87,30 @@ class OutputTypeCountTable:
 
     def _init_output_paths(self):
         self.path_to_absolute_count_table_profiles_abund_and_meta = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
+            self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.absolute.abund_and_meta.txt')
         self.path_to_absolute_count_table_profiles_abund_only = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
+            self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.absolute.abund_only.txt')
         self.path_to_absolute_count_table_profiles_meta_only = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
+            self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.absolute.meta_only.txt')
         self.path_to_relative_count_table_profiles_abund_and_meta = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
+            self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.relative.abund_and_meta.txt')
         self.path_to_relative_count_table_profiles_abund_only = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
+            self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.relative.abund_only.txt')
         self.path_to_relative_count_table_profiles_meta_only = os.path.join(
-            self.output_dir, f'{self.data_analysis_obj.id}_'
+            self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.relative.meta_only.txt')
-        self.path_to_additional_info_file = os.path.join(self.output_dir, 'additional_info.txt')
+        self.path_to_additional_info_file = os.path.join(self.profiles_output_dir, 'additional_info.txt')
 
     def _set_vcc_uids_to_output(self):
         list_of_sets_of_vcc_uids_in_vdss = [
@@ -918,13 +920,16 @@ class SequenceCountTableCreator:
         self.path_to_seq_output_meta_only_df_absolute = os.path.join(
             self.post_med_output_dir, f'{self.time_date_str}.seqs.absolute.meta_only.txt')
 
-    def make_output_tables_pre_med(self):
+    def _make_output_tables_pre_med(self):
         pre_med_output = self.PreMedSeqOutput(parent=self)
         pre_med_output.make_pre_med_count_tables()
         self.output_df_relative_pre_med = pre_med_output.rel_count_df
 
+    def make_seq_output_tables(self):
+        self._make_output_tables_post_med()
+        self._make_output_tables_pre_med()
 
-    def make_output_tables_post_med(self):
+    def _make_output_tables_post_med(self):
         print('\n\nOutputting sequence abundance count tables\n')
         self._collect_abundances_for_creating_the_output()
 
@@ -1316,6 +1321,7 @@ class SequenceCountTableCreator:
             self.parent = parent
             # the directory that is specific to the pre-med outputs
             self.pre_med_dir = os.path.join(self.parent.output_dir, 'pre_med_seqs')
+            os.makedirs(self.pre_med_dir, exist_ok=True)
             # the directory one above the pre_med_dir that contins the main data_loading outputs
             self.root_output_dir = self.parent.output_dir
             # the directory that will house the ouputs for html
