@@ -48,7 +48,7 @@ class DataLoading:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
         else:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
-        self._make_new_dataset_object()
+
         self.temp_working_directory = self._setup_temp_working_directory()
         self.output_directory = self._setup_output_directory()
         if self.datasheet_path:
@@ -597,7 +597,11 @@ class DataLoading:
             if file.endswith('fastq') or file.endswith('fq') or file.endswith('fastq.gz') or file.endswith('fq.gz'):
                 self.list_of_fastq_files_in_wkd.append(file)
 
-        return self._identify_sample_names_without_datasheet()
+        end_index = self._identify_sample_names_without_datasheet()
+
+        self._make_new_dataset_object()
+
+        return end_index
 
     def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self, end_index):
 
