@@ -618,7 +618,7 @@ class DataLoading:
             rev_file_path = None
             # This is aimed at matching R1.fastq.gz, R2.fq.gz, 1.fq, 2.fastq, .../asdfads_R1_001.fastq.gz etc.
             compiled_reg_ex = re.compile('\.([R12]+)\.f[ast]*q(\.gz)?')
-            for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
+            for file_path in return_list_of_file_paths_in_directory(self.user_input_path):
                 if sample_name == ntpath.basename(file_path)[:-end_index]:
                     read_direction_match = re.search(compiled_reg_ex, file_path)
                     if read_direction_match is not None:
@@ -2494,7 +2494,7 @@ class DataSetSampleSequencePMCreator:
         self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
 
         sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade {self.current_pre_med_sample_seq_collection.clade}: '
-                         f'Assigning MED node {nuc_seq_obj.name} '
+                         f'Assigning pre-MED seq {nuc_seq_obj.name} '
                          f'to new reference sequence {new_ref_seq.name}')
 
     class PreMEDSampleSeqCollection:
