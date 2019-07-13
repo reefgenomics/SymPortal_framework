@@ -11,12 +11,12 @@ class DataSetSubSampler:
             description='Intragenomic analysis of the ITS2 region of the nrDNA',
             epilog='For support email: benjamin.hume@kaust.edu.sa')
         self.parser.add_argument(
-            'input_dir', type=str,
+            '--input_dir', type=str, required=True,
             help='The full path to the directory containing the fastq or fastq.gz files to be subsampled')
         self.parser.add_argument(
-            'output_dir', type=str,
+            '--output_dir', type=str, required=True,
             help='The output path to the directory where the subsampled fastq files will be output')
-        self.parser.add_argument('depth', help='subsampling depth.')
+        self.parser.add_argument('--depth', help='subsampling depth.', required=True)
         self.parser.add_argument('-s', '--suffix', help='The string that will be appened between the base of '
                                                         'the original file name and its extension. E.g. if original '
                                                         'was seq_file_one.fastq.gz and \'_sub\' is passed to --sufix, '
