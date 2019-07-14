@@ -371,7 +371,7 @@ class TypeStackedBarPlotter:
             self.time_date_str = time_date_str
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
+        self.fig_output_base = os.path.join(self.output_directory, 'its2_type_profiles', f'{self.time_date_str}')
         self.max_n_cols = 5
         self.max_n_rows = 10
         self.num_leg_cells = self.max_n_cols * self.max_n_rows
@@ -390,7 +390,7 @@ class TypeStackedBarPlotter:
         self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
         self.output_path_list = []
 
-    def plot_stacked_bar_seqs(self):
+    def plot_stacked_bar_profiles(self):
         print('\n\nPlotting ITS2 type profile abundances')
         for sub_plot_index in range(self.number_of_subplots):
             sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
@@ -509,98 +509,21 @@ class TypeStackedBarPlotter:
         return  colour_dict
 
 
-class PreMedSeqPlotter():
-    def __init__(
-            self, rel_abund_df, pre_med_output_directory, root_output_directory, plotting_sample_uid_order, time_date_str=None):
-        self.pre_med_output_directory = pre_med_output_directory
-        self.root_output_directory = root_output_directory
-        if time_date_str:
-            self.time_date_str = time_date_str
-        else:
-            self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.fig_output_base = os.path.join(self.pre_med_output_directory, f'{self.time_date_str}')
-        self.smp_uid_to_smp_name_dict = None
-        self.output_count_table_as_df = self._curate_output_count_table(rel_abund_df)
-        if plotting_sample_uid_order is not None:
-            self.output_count_table_as_df = self.output_count_table_as_df.reindex(
-                [int(a) for a in plotting_sample_uid_order])
-        self.ordered_list_of_seqs_names = list(self.output_count_table_as_df)
-        # legend parameters and vars
-        self.max_n_cols = 8
-        self.max_n_rows = 7
-        self.num_leg_cells = self.max_n_rows * self.max_n_cols
-        self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
-        general.output_js_color_objects_array(
-            output_directory=os.path.join(self.root_output_directory, 'html'),
-            colour_dict=self.colour_dict, js_file_name='color_obj_array_pre_med.js')
-        # plotting vars
-        self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
-        self.samples_per_subplot = 50
-        self.number_of_subplots = self._infer_number_of_subplots()
-        # we add  1 to the n_subplots here for the legend at the bottom
-        self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
-        self.output_path_list = []
-
-    def _curate_output_count_table(self, rel_abund_df):
-        self.smp_uid_to_smp_name_dict = {
-            uid:str(name) for uid, name in
-            zip(rel_abund_df.index.values.tolist(), rel_abund_df['sample_name'].values.tolist())}
-        df = rel_abund_df.drop(columns='sample_name')
-        return df.astype('float')
-
-    def plot_stacked_bar_seqs(self):
-        print('\n\nPlotting sequence abundances')
-        for sub_plot_index in range(self.number_of_subplots):
-            sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
-            sub_plotter.plot_seq_subplot()
-
-        self._plot_legend()
-
-        plt.tight_layout()
-
-        self._write_out_plot()
-
-        self.output_path_list.extend(
-            [
-                f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.svg',
-                f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.png'
-            ])
-
-    def _write_out_plot(self):
-        sys.stdout.write('\nFigure generation complete')
-        sys.stdout.write('\nFigures output to:\n')
-
-        svg_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.svg'
-        sys.stdout.write(f'{svg_path}\n')
-        plt.savefig(svg_path)
-
-        png_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.png'
-        sys.stdout.write(f'{png_path}\n')
-        plt.savefig(png_path, dpi=600)
-
-    def _plot_legend(self):
-        legend_plotter = LegendPlotter(parent_plotter=self)
-        legend_plotter.plot_legend_seqs()
-
-    def _infer_number_of_subplots(self):
-        if (self.num_samples % self.samples_per_subplot) != 0:
-            number_of_subplots = int(self.num_samples / self.samples_per_subplot) + 1
-        else:
-            number_of_subplots = int(self.num_samples / self.samples_per_subplot)
-        return number_of_subplots
-
 class SeqStackedBarPlotter():
     """Class for plotting the sequence count table output"""
     def __init__(
-            self, seq_relative_abund_count_table_path, output_directory,
+            self, seq_relative_abund_count_table_path_post_med, seq_relative_abund_df_pre_med, output_directory,
             time_date_str=None, ordered_sample_uid_list=None):
-        self.seq_relative_abund_count_table_path = seq_relative_abund_count_table_path
-        self.output_directory = output_directory
+        self.seq_relative_abund_count_table_path_post_med = seq_relative_abund_count_table_path_post_med
+        self.seq_relative_abund_df_pre_med = seq_relative_abund_df_pre_med
+        self.root_output_directory = output_directory
+        self.post_med_output_directory = os.path.join(self.root_output_directory, 'post_med_seqs')
+        self.pre_med_output_directory = os.path.join(self.root_output_directory, 'pre_med_seqs')
         if time_date_str:
             self.time_date_str = time_date_str
         else:
             self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.fig_output_base = os.path.join(self.output_directory, f'{self.time_date_str}')
+        self.fig_output_base = os.path.join(self.post_med_output_directory, f'{self.time_date_str}')
         self.smp_uid_to_smp_name_dict = None
         self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
         self.ordered_list_of_seqs_names = self._set_ordered_list_of_seqs_names()
@@ -610,7 +533,7 @@ class SeqStackedBarPlotter():
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
         general.output_js_color_objects_array(
-            output_directory=os.path.join(self.output_directory, 'html'),
+            output_directory=os.path.join(self.root_output_directory, 'html'),
             colour_dict=self.colour_dict, js_file_name='color_obj_array_post_med.js')
         # plotting vars
         self.ordered_sample_uid_list = self._set_ordered_sample_uid_list_and_reorder_df(ordered_sample_uid_list)
@@ -622,6 +545,10 @@ class SeqStackedBarPlotter():
         self.output_path_list = []
 
     def plot_stacked_bar_seqs(self):
+        self._plot_stacked_bar_seqs_post_med()
+        self._plot_stacked_bar_seqs_pre_med()
+
+    def _plot_stacked_bar_seqs_post_med(self):
         print('\n\nPlotting sequence abundances')
         for sub_plot_index in range(self.number_of_subplots):
             sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
@@ -763,7 +690,7 @@ class SeqStackedBarPlotter():
         need to make the smp_id_to_smp_name_dict before dropping the sample_name col"""
 
         sp_output_df = pd.read_csv(
-            self.seq_relative_abund_count_table_path, sep='\t', lineterminator='\n', header=0, index_col=0)
+            self.seq_relative_abund_count_table_path_post_med, sep='\t', lineterminator='\n', header=0, index_col=0)
 
         meta_index_to_cut_from = self._get_df_index_to_drop_from(sp_output_df)
 
@@ -873,3 +800,82 @@ class SeqStackedBarPlotter():
             "#00B57F",
             "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
         return colour_list
+
+    def _plot_stacked_bar_seqs_pre_med(self):
+        pre_med_seq_plotter = self.PreMedSeqPlotter(parent=self)
+        pre_med_seq_plotter.plot_stacked_bar_seqs()
+
+    class PreMedSeqPlotter():
+        def __init__(self, parent):
+            self.parent = parent
+            self.root_output_directory = self.parent.root_output_directory
+            self.fig_output_base = os.path.join(self.parent.pre_med_output_directory, f'{self.parent.time_date_str}')
+            self.smp_uid_to_smp_name_dict = None
+            self.output_count_table_as_df = self._curate_output_count_table(self.parent.seq_relative_abund_df_pre_med)
+            self.ordered_list_of_seqs_names = list(self.output_count_table_as_df)
+            # legend parameters and vars
+            self.max_n_cols = 8
+            self.max_n_rows = 7
+            self.num_leg_cells = self.max_n_rows * self.max_n_cols
+            self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
+            general.output_js_color_objects_array(
+                output_directory=os.path.join(self.root_output_directory, 'html'),
+                colour_dict=self.colour_dict, js_file_name='color_obj_array_pre_med.js')
+            # plotting vars
+            self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
+            self.samples_per_subplot = 50
+            self.number_of_subplots = self._infer_number_of_subplots()
+            # we add  1 to the n_subplots here for the legend at the bottom
+            self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
+            self.output_path_list = []
+
+        def _curate_output_count_table(self, rel_abund_df):
+            self.smp_uid_to_smp_name_dict = {
+                uid: str(name) for uid, name in
+                zip(rel_abund_df.index.values.tolist(), rel_abund_df['sample_name'].values.tolist())}
+            df = rel_abund_df.drop(columns='sample_name')
+            df = df.astype('float')
+            df = df.reindex(
+                [int(a) for a in self.parent.ordered_sample_uid_list])
+            return df.astype('float')
+
+        def plot_stacked_bar_seqs(self):
+            print('\n\nPlotting sequence abundances')
+            for sub_plot_index in range(self.number_of_subplots):
+                sub_plotter = SubPlotter(index_of_this_subplot=sub_plot_index, parent_plotter_instance=self)
+                sub_plotter.plot_seq_subplot()
+
+            self._plot_legend()
+
+            plt.tight_layout()
+
+            self._write_out_plot()
+
+            self.output_path_list.extend(
+                [
+                    f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.svg',
+                    f'{self.fig_output_base}_seq_abundance_stacked_bar_plots.png'
+                ])
+
+        def _write_out_plot(self):
+            sys.stdout.write('\nFigure generation complete')
+            sys.stdout.write('\nFigures output to:\n')
+
+            svg_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.svg'
+            sys.stdout.write(f'{svg_path}\n')
+            plt.savefig(svg_path)
+
+            png_path = f'{self.fig_output_base}_seq_abundance_stacked_bar_plot.png'
+            sys.stdout.write(f'{png_path}\n')
+            plt.savefig(png_path, dpi=600)
+
+        def _plot_legend(self):
+            legend_plotter = LegendPlotter(parent_plotter=self)
+            legend_plotter.plot_legend_seqs()
+
+        def _infer_number_of_subplots(self):
+            if (self.num_samples % self.samples_per_subplot) != 0:
+                number_of_subplots = int(self.num_samples / self.samples_per_subplot) + 1
+            else:
+                number_of_subplots = int(self.num_samples / self.samples_per_subplot)
+            return number_of_subplots

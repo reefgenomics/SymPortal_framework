@@ -42,3 +42,5 @@ Y11,Y11.1_subsampled.fastq,Y11.2_subsampled.fastq,coral,cnidaria,anthozoa,sclera
 Y12,Y12.1_subsampled.fastq,Y12.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
 Y13,Y13.1_subsampled.fastq,Y13.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
 Y15,Y15.1_subsampled.fastq,Y15.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
+no_sym_0,no_sym_0.1_subsampled.fastq,no_sym_0.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
+no_sym_1,no_sym_1.1_subsampled.fastq,no_sym_1.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12

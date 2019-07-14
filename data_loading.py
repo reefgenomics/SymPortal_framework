@@ -1,4 +1,5 @@
-from dbApp.models import (DataSet, ReferenceSequence, DataSetSample, DataSetSampleSequence, CladeCollection)
+from dbApp.models import (
+    DataSet, ReferenceSequence, DataSetSample, DataSetSampleSequence, CladeCollection, DataSetSampleSequencePM)
 import sys
 import os
 import shutil
@@ -15,7 +16,7 @@ from datetime import datetime
 import distance
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
 from symportal_utils import BlastnAnalysis, MothurAnalysis, NucleotideSequence
-from output import SequenceCountTableCreator, PreMedSeqOutput
+from output import SequenceCountTableCreator
 import ntpath
 import re
 import math
@@ -47,24 +48,26 @@ class DataLoading:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
         else:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
-        self._make_new_dataset_object()
+
         self.temp_working_directory = self._setup_temp_working_directory()
+        self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.output_directory = self._setup_output_directory()
         if self.datasheet_path:
             self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
         else:
             self._generate_stability_file_and_data_set_sample_objects_without_datasheet(end_index)
+        self.list_of_dss_objects = DataSetSample.objects.filter(data_submission_from=self.dataset_object)
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
         self.distance_method = distance_method
-        self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         # this is the path of the file we will use to deposit a backup copy of the reference sequences
         self.seq_dump_file_path = self._setup_sequence_dump_file_path()
         self.dataset_object.working_directory = self.temp_working_directory
         self.dataset_object.save()
         # This is the directory that sequences that have undergone QC for each sample will be written out as
         # .names and .fasta pairs BEFORE MED decomposition
+        # We will delete the directory if it already exists
         self.pre_med_sequence_output_directory_path = self._create_pre_med_write_out_directory_path()
         self.num_proc = num_proc
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
@@ -118,8 +121,11 @@ class DataLoading:
         self.perform_med_handler_instance = None
         # data set sample creation
         self.data_set_sample_creator_handler_instance = None
-        # plotting sequence output
-        self.seq_abundance_relative_output_path = None
+        # plotting sequence output from both post-med and pre-med seq outputs
+        self.seq_abundance_relative_output_path_post_med = None
+        self.seq_abundance_relative_output_path_pre_med = None
+        self.seq_abund_relative_df_post_med = None
+        self.seq_abund_relative_df_pre_med = None
         # we will use this sequence count table creator when outputting the pre_MED seqs so that the df
         # can be put in the same order
         self.sequence_count_table_creator = None
@@ -140,6 +146,8 @@ class DataLoading:
 
         self._create_data_set_sample_sequences_from_med_nodes()
 
+        self._create_data_set_sample_sequence_pre_med_objs()
+
         self._print_sample_successful_or_failed_summary()
 
         self._perform_sequence_drop()
@@ -152,9 +160,7 @@ class DataLoading:
 
         self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
 
-        self._output_seqs_stacked_bar_plot()
-
-        self._output_and_plot_pre_med_seqs_count_table()
+        self._output_seqs_stacked_bar_plots()
 
         self._do_sample_ordination()
 
@@ -164,14 +170,6 @@ class DataLoading:
             submitting_user=self.parent.submitting_user, submitting_user_email=self.parent.submitting_user_email)
         self.dataset_object.save()
         self.parent.data_set_object = self.dataset_object
-
-    def _output_and_plot_pre_med_seqs_count_table(self):
-        pre_med_output = PreMedSeqOutput(
-            pre_med_dir=self.pre_med_sequence_output_directory_path,
-            output_directory=self.output_directory,
-            df_sample_uid_order=self.sequence_count_table_creator.sorted_sample_uid_list,
-            plotting_sample_uid_order=self.seq_stacked_bar_plotter.ordered_sample_uid_list, time_date_str=self.seq_stacked_bar_plotter.time_date_str)
-        pre_med_output.make_pre_med_counts_and_plots()
 
     def _write_sym_non_sym_and_size_violation_dirs_to_stdout(self):
         print(f'\nPre-MED Symbiodiniaceae sequences written out to:\n'
@@ -229,7 +227,8 @@ class DataLoading:
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
 
-    def _output_seqs_stacked_bar_plot(self):
+    def _output_seqs_stacked_bar_plots(self):
+        """Plot up the post- and pre-MED seqs as both .png and .svg"""
         if not self.no_fig:
             if len(self.list_of_samples_names) > 1000:
                 print(f'Too many samples ({len(self.list_of_samples_names)}) to generate plots')
@@ -238,25 +237,29 @@ class DataLoading:
 
                 self.seq_stacked_bar_plotter = SeqStackedBarPlotter(
                     output_directory=self.output_directory,
-                    seq_relative_abund_count_table_path=self.seq_abundance_relative_output_path,
-                    time_date_str=self.date_time_string)
+                    seq_relative_abund_count_table_path_post_med=self.seq_abundance_relative_output_path_post_med,
+                    time_date_str=self.date_time_string,
+                    seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med)
                 self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
 
     def _output_seqs_count_table(self):
-        sys.stdout.write('\nGenerating count tables\n')
+        sys.stdout.write('\nGenerating count tables for post- and pre-MED sequence abundances\n')
         self.sequence_count_table_creator = SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='submission',
             ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, time_date_str=self.date_time_string)
-        self.sequence_count_table_creator.make_output_tables()
+        self.sequence_count_table_creator.make_seq_output_tables()
+        self.seq_abund_relative_df_post_med = self.sequence_count_table_creator.output_df_relative_post_med
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
         self._set_seq_abundance_relative_output_path(self.sequence_count_table_creator)
+        self.seq_abund_relative_df_pre_med = self.sequence_count_table_creator.output_df_relative_pre_med
+        self.seq_abundance_relative_output_path_pre_med = self.sequence_count_table_creator.pre_med_relative_df_path
 
     def _set_seq_abundance_relative_output_path(self, sequence_count_table_creator):
         for path in sequence_count_table_creator.output_paths_list:
             if 'relative.abund_and_meta' in path:
-                self.seq_abundance_relative_output_path = path
+                self.seq_abundance_relative_output_path_post_med = path
 
     def _delete_temp_working_directory_and_log_files(self):
         if os.path.exists(self.temp_working_directory):
@@ -301,6 +304,11 @@ class DataLoading:
             data_loading_debug=self.debug, data_loading_dataset_object=self.dataset_object)
         self.dataset_object.currently_being_processed = False
         self.dataset_object.save()
+
+    def _create_data_set_sample_sequence_pre_med_objs(self):
+        print('\n\nCreating DataSetSampleSequencePM objects')
+        data_set_sample_pre_med_obj_creator = DataSetSampleSequencePMCreator(parent=self)
+        data_set_sample_pre_med_obj_creator.make_data_set_sample_pm_objects()
 
     def _do_med_decomposition(self):
         self.perform_med_handler_instance = PerformMEDHandler(
@@ -590,7 +598,11 @@ class DataLoading:
             if file.endswith('fastq') or file.endswith('fq') or file.endswith('fastq.gz') or file.endswith('fq.gz'):
                 self.list_of_fastq_files_in_wkd.append(file)
 
-        return self._identify_sample_names_without_datasheet()
+        end_index = self._identify_sample_names_without_datasheet()
+
+        self._make_new_dataset_object()
+
+        return end_index
 
     def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self, end_index):
 
@@ -611,7 +623,7 @@ class DataLoading:
             rev_file_path = None
             # This is aimed at matching R1.fastq.gz, R2.fq.gz, 1.fq, 2.fastq, .../asdfads_R1_001.fastq.gz etc.
             compiled_reg_ex = re.compile('\.([R12]+)\.f[ast]*q(\.gz)?')
-            for file_path in return_list_of_file_paths_in_directory(self.temp_working_directory):
+            for file_path in return_list_of_file_paths_in_directory(self.user_input_path):
                 if sample_name == ntpath.basename(file_path)[:-end_index]:
                     read_direction_match = re.search(compiled_reg_ex, file_path)
                     if read_direction_match is not None:
@@ -1070,12 +1082,14 @@ class DataLoading:
 
     def _create_pre_med_write_out_directory_path(self):
         pre_med_write_out_directory_path = os.path.join(self.output_directory, 'pre_med_seqs')
-        os.makedirs(pre_med_write_out_directory_path, exist_ok=True)
+        if os.path.exists(pre_med_write_out_directory_path):
+            shutil.rmtree(pre_med_write_out_directory_path)
+        os.makedirs(pre_med_write_out_directory_path)
         return pre_med_write_out_directory_path
 
     def _setup_output_directory(self):
         output_directory = os.path.join(self.symportal_root_directory,
-                                        'outputs', 'loaded_data_sets', f'{self.dataset_object.id}')
+                                        'outputs', 'loaded_data_sets', f'{self.dataset_object.id}', self.date_time_string)
         os.makedirs(output_directory, exist_ok=True)
         return output_directory
 
@@ -1105,6 +1119,29 @@ class DataLoading:
             shutil.rmtree(self.temp_working_directory)
         os.makedirs(self.temp_working_directory)
 
+class DSSAttributeAssignmentHolder:
+    """
+    This will hold the values of the attributes of the DataSetSamples that were being set during the
+    mothur QC process. The attributes are not able to be set during QC when working within a
+    Django TransactionTestCase testing frame work. To get around this problem we will collect the attributes
+    and their corresponding values in this class and then set them when we are back outside of the multiprocessing.
+    """
+    def __init__(self, name, uid):
+        self.uid = uid
+        self.name = name
+        self.num_contigs = 0
+        self.post_qc_absolute_num_seqs = 0
+        self.post_qc_unique_num_seqs = 0
+        self.absolute_num_sym_seqs = 0
+        self.unique_num_sym_seqs = 0
+        self.non_sym_absolute_num_seqs = 0
+        self.non_sym_unique_num_seqs = 0
+        self.size_violation_absolute = 0
+        self.size_violation_unique = 0
+        self.error_in_processing = False
+        self.error_reason = 'noError'
+        self.cladal_seq_totals = None
+        self.initial_processing_complete = False
 
 class InitialMothurHandler:
     def __init__(self, data_loading_parent):
@@ -1112,6 +1149,7 @@ class InitialMothurHandler:
         self.input_queue_containing_pairs_of_fastq_file_paths = Queue()
         self.worker_manager = Manager()
         self.samples_that_caused_errors_in_qc_mp_list = self.worker_manager.list()
+        self.output_queue_for_attribute_data = Queue()
         self._populate_input_queue()
 
     def _populate_input_queue(self):
@@ -1137,6 +1175,29 @@ class InitialMothurHandler:
 
         for p in all_processes:
             p.join()
+
+        self._update_dss_obj_attributes()
+
+    def _update_dss_obj_attributes(self):
+        self.output_queue_for_attribute_data.put('STOP')
+        dss_obj_uid_to_obj_dict = {dss_obj.id: dss_obj for dss_obj in
+                                   DataSetSample.objects.filter(data_submission_from=self.parent.dataset_object)}
+        for dss_proxy in iter(self.output_queue_for_attribute_data.get, 'STOP'):
+            dss_obj = dss_obj_uid_to_obj_dict[dss_proxy.uid]
+            if dss_proxy.error_in_processing:
+                dss_obj.error_in_processing = dss_proxy.error_in_processing
+                dss_obj.error_reason = dss_proxy.error_reason
+                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
+                dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
+                dss_obj.num_contigs = dss_proxy.num_contigs
+                dss_obj.save()
+            else:
+                dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
+                dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
+                dss_obj.num_contigs = dss_proxy.num_contigs
+                dss_obj.save()
 
     def _worker_initial_mothur(self):
         """
@@ -1165,6 +1226,7 @@ class InitialMothurWorker:
         self.data_set_sample = DataSetSample.objects.get(
                 name=self.sample_name, data_submission_from=self.parent.parent.dataset_object
             )
+        self.dss_att_holder = DSSAttributeAssignmentHolder(name=self.data_set_sample.name, uid=self.data_set_sample.id)
         self.cwd = os.path.join(self.parent.parent.temp_working_directory, self.sample_name)
         os.makedirs(self.cwd, exist_ok=True)
         self.mothur_analysis_object = MothurAnalysis.init_from_pair_of_fastq_gz_files(
@@ -1196,11 +1258,11 @@ class InitialMothurWorker:
 
         self._set_absolute_num_seqs_after_inital_qc()
 
-        self._save_changes_to_data_set_sample()
-
         sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
 
         self._write_out_final_name_and_fasta_for_tax_screening()
+
+        self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
 
     def _write_out_final_name_and_fasta_for_tax_screening(self):
         name_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
@@ -1209,9 +1271,6 @@ class InitialMothurWorker:
         fasta_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.fasta_path)
         taxonomic_screening_fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
         write_list_to_destination(taxonomic_screening_fasta_file_path, fasta_file_as_list)
-
-    def _save_changes_to_data_set_sample(self):
-        self.data_set_sample.save()
 
     def _do_fwd_and_rev_pcr(self):
         try:
@@ -1258,14 +1317,14 @@ class InitialMothurWorker:
         number_of_contig_seqs_absolute = len(
             read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)
         ) - 1
-        self.data_set_sample.num_contigs = number_of_contig_seqs_absolute
+        self.dss_att_holder.num_contigs = number_of_contig_seqs_absolute
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.num_contigs = {number_of_contig_seqs_absolute}\n')
 
     def _set_unique_num_seqs_after_initial_qc(self):
         number_of_contig_seqs_unique = len(
             read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)) - 1
-        self.data_set_sample.post_qc_unique_num_seqs = number_of_contig_seqs_unique
+        self.dss_att_holder.post_qc_unique_num_seqs = number_of_contig_seqs_unique
         sys.stdout.write(
             f'{self.sample_name}: '
             f'data_set_sample_instance_in_q.post_qc_unique_num_seqs = {number_of_contig_seqs_unique}\n')
@@ -1275,7 +1334,7 @@ class InitialMothurWorker:
         absolute_count = 0
         for line in last_summary[1:]:
             absolute_count += int(line.split('\t')[6])
-        self.data_set_sample.post_qc_absolute_num_seqs = absolute_count
+            self.dss_att_holder.post_qc_absolute_num_seqs = absolute_count
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {absolute_count}\n')
 
@@ -1303,12 +1362,13 @@ class InitialMothurWorker:
 
     def log_qc_error_and_continue(self, errorreason):
         print('Error in processing sample: {}'.format(self.sample_name))
-        self.data_set_sample.unique_num_sym_seqs = 0
-        self.data_set_sample.absolute_num_sym_seqs = 0
-        self.data_set_sample.initial_processing_complete = True
-        self.data_set_sample.error_in_processing = True
-        self.data_set_sample.error_reason = errorreason
-        self._save_changes_to_data_set_sample()
+        self.dss_att_holder.unique_num_sym_seqs = 0
+        self.dss_att_holder.absolute_num_sym_seqs = 0
+        self.dss_att_holder.initial_processing_complete = True
+        self.dss_att_holder.error_in_processing = True
+        self.dss_att_holder.error_reason = errorreason
+        self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
+
 
 
 class PotentialSymTaxScreeningHandler:
@@ -1534,6 +1594,7 @@ class SymNonSymTaxScreeningHandler:
         self.samples_that_caused_errors_in_qc_mp_list = self.sym_non_sym_mp_manager.list(
             data_loading_samples_that_caused_errors_in_qc_mp_list
         )
+        self.sample_attributes_mp_output_queue = Queue()
         self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
         self.num_proc = data_loading_num_proc
         self._populate_input_queue(data_loading_list_of_samples_names)
@@ -1564,6 +1625,37 @@ class SymNonSymTaxScreeningHandler:
         for p in all_processes:
             p.join()
 
+        self._associate_info_to_dss_objects(data_loading_dataset_object)
+
+    def _associate_info_to_dss_objects(self, data_loading_dataset_object):
+        # now save the collected data contained in the sample_attributes_holder_mp_dict to the relevant
+        # dss_objs.
+        self.sample_attributes_mp_output_queue.put('STOP')
+        dss_uid_to_dss_obj_dict = {dss.id: dss for dss in
+                                   DataSetSample.objects.filter(data_submission_from=data_loading_dataset_object)}
+        for dss_proxy in iter(self.sample_attributes_mp_output_queue.get, 'STOP'):
+            dss_obj = dss_uid_to_dss_obj_dict[dss_proxy.uid]
+            if dss_proxy.error_in_processing:  # if error occured
+                dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
+                dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
+                dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
+                dss_obj.size_violation_unique = dss_proxy.size_violation_unique
+                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
+                dss_obj.error_in_processing = dss_proxy.error_in_processing
+                dss_obj.error_reason = dss_proxy.error_reason
+                dss_obj.save()
+            else:
+                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
+                dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
+                dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
+                dss_obj.size_violation_unique = dss_proxy.size_violation_unique
+                dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
+                dss_obj.save()
+
     def _sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object,
                                           data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
                                           data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
@@ -1578,7 +1670,7 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
                 data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
-                data_loading_debug=data_loading_debug
+                data_loading_debug=data_loading_debug, sample_attributes_mp_output_queue=self.sample_attributes_mp_output_queue
             )
 
             try:
@@ -1591,10 +1683,12 @@ class SymNonSymTaxScreeningWorker:
     def __init__(
             self, data_loading_temp_working_directory, sample_name, data_loading_dataset_object,
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
-            data_loading_pre_med_sequence_output_directory_path, data_loading_debug
+            data_loading_pre_med_sequence_output_directory_path, data_loading_debug,
+            sample_attributes_mp_output_queue
     ):
         self._init_core_class_attributes(
-            data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug)
+            data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug,
+            sample_attributes_mp_output_queue)
         self._init_fasta_name_blast_and_clade_dict_attributes()
         self._init_non_sym_and_size_violation_output_paths(
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path)
@@ -1656,13 +1750,16 @@ class SymNonSymTaxScreeningWorker:
         }
 
     def _init_core_class_attributes(
-            self, data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug):
+            self, data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug,
+            sample_attributes_mp_output_queue):
         self.sample_name = sample_name
         self.cwd = os.path.join(data_loading_temp_working_directory, sample_name)
         self.datasetsample_object = DataSetSample.objects.get(
             name=sample_name, data_submission_from=data_loading_dataset_object
         )
+        self.sample_att_holder = DSSAttributeAssignmentHolder(name=self.datasetsample_object.name, uid=self.datasetsample_object.id)
         self.debug = data_loading_debug
+        self.sample_attributes_mp_output_queue = sample_attributes_mp_output_queue
 
     def identify_sym_non_sym_seqs(self):
         """This method completes the pre-med quality control.
@@ -1689,7 +1786,7 @@ class SymNonSymTaxScreeningWorker:
         else:
             self._log_dataset_attr_and_raise_runtime_error()
 
-        self._associate_qc_meta_info_to_data_sheet()
+        self._associate_qc_meta_info_to_dss_objs()
 
     def _write_out_no_size_violation_seqs(self):
         self._write_out_no_size_violation_seqs_to_pre_med_dirs()
@@ -1806,53 +1903,55 @@ class SymNonSymTaxScreeningWorker:
                 else:
                     self.sym_size_violation_sequence_name_set_for_sample.add(query_sequence_name)
 
-    def _associate_qc_meta_info_to_data_sheet(self):
+    def _associate_qc_meta_info_to_dss_objs(self):
         self._associate_non_sym_seq_attributes_to_dataset()
         self._associate_sym_seq_no_size_violation_attributes_to_dataset()
         self._associate_sym_seq_size_violation_attributes_to_dataset()
-        self.datasetsample_object.initial_processing_complete = True
-        self.datasetsample_object.save()
+        self.sample_att_holder.initial_processing_complete = True
+        self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
         print(f'{self.sample_name}: pre-med QC complete')
 
     def _associate_sym_seq_size_violation_attributes_to_dataset(self):
-        self.datasetsample_object.size_violation_absolute = (
+        # it is important that we set these values from the objects of this class rather
+        # from the data_set_sample object attributes as some of these have not been set yet
+        self.sample_att_holder.size_violation_absolute = (
                 self.datasetsample_object.post_qc_absolute_num_seqs -
-                self.datasetsample_object.absolute_num_sym_seqs -
-                self.datasetsample_object.non_sym_absolute_num_seqs
+                self.sample_att_holder.absolute_num_sym_seqs -
+                self.sample_att_holder.non_sym_absolute_num_seqs
         )
         print(f'{self.sample_name}: size_violation_absolute = {self.datasetsample_object.size_violation_absolute}')
-        self.datasetsample_object.size_violation_unique = (
+        self.sample_att_holder.size_violation_unique = (
                 self.datasetsample_object.post_qc_unique_num_seqs -
-                self.datasetsample_object.unique_num_sym_seqs -
-                self.datasetsample_object.non_sym_unique_num_seqs
+                self.sample_att_holder.unique_num_sym_seqs -
+                self.sample_att_holder.non_sym_unique_num_seqs
         )
         print(f'{self.sample_name}: size_violation_unique = {self.datasetsample_object.size_violation_unique}')
 
     def _associate_sym_seq_no_size_violation_attributes_to_dataset(self):
-        self.datasetsample_object.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
-        self.datasetsample_object.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
+        self.sample_att_holder.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
+        self.sample_att_holder.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
         print(f'{self.sample_name}: unique_num_sym_seqs = {self.datasetsample_object.unique_num_sym_seqs}')
         print(f'{self.sample_name}: absolute_num_sym_seqs = {self.absolute_number_of_sym_no_size_violation_sequences}')
 
     def _associate_non_sym_seq_attributes_to_dataset(self):
-        self.datasetsample_object.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.datasetsample_object.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        self.sample_att_holder.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.sample_att_holder.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
         print(f'{self.sample_name}: non_sym_unique_num_seqs = {self.datasetsample_object.non_sym_unique_num_seqs}')
         print(f'{self.sample_name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
 
     def _log_dataset_attr_and_raise_runtime_error(self):
         # if there are no symbiodiniaceae sequenes then log error and associate meta info
         print(f'{self.sample_name}: QC error.\n No symbiodiniaceae sequences left in sample after pre-med QC.')
-        self.datasetsample_object.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.datasetsample_object.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        self.datasetsample_object.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
-        self.datasetsample_object.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
-        self.datasetsample_object.unique_num_sym_seqs = 0
-        self.datasetsample_object.absolute_num_sym_seqs = 0
-        self.datasetsample_object.initial_processing_complete = True
-        self.datasetsample_object.error_in_processing = True
-        self.datasetsample_object.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
-        self.datasetsample_object.save()
+        self.sample_att_holder.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.sample_att_holder.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        self.sample_att_holder.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
+        self.sample_att_holder.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
+        self.sample_att_holder.unique_num_sym_seqs = 0
+        self.sample_att_holder.absolute_num_sym_seqs = 0
+        self.sample_att_holder.initial_processing_complete = True
+        self.sample_att_holder.error_in_processing = True
+        self.sample_att_holder.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
+        self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
         raise RuntimeError({'sample_name':self.sample_name})
 
     def _identify_and_write_non_sym_seqs_in_sample(self):
@@ -2059,9 +2158,7 @@ class DataSetSampleSequenceCreatorWorker:
                 NucleotideSequence(name=node_seq_name, abundance=node_seq_abundance, sequence=node_seq_sequence))
 
     def make_data_set_sample_sequences(self):
-        for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
-            if not self._assign_node_sequence_to_existing_ref_seq(node_nucleotide_sequence_object):
-                self._assign_node_sequence_to_new_ref_seq(node_nucleotide_sequence_object)
+        self._associate_med_nodes_to_ref_seq_objs()
 
         if self._two_or_more_nodes_associated_to_the_same_reference_sequence():
             self._make_associations_and_abundances_in_node_abund_df_unique_again()
@@ -2071,6 +2168,11 @@ class DataSetSampleSequenceCreatorWorker:
         self._if_more_than_200_seqs_create_clade_collection()
 
         self._create_data_set_sample_sequences()
+
+    def _associate_med_nodes_to_ref_seq_objs(self):
+        for node_nucleotide_sequence_object in self.nodes_list_of_nucleotide_sequences:
+            if not self._assign_node_sequence_to_existing_ref_seq(node_nucleotide_sequence_object):
+                self._assign_node_sequence_to_new_ref_seq(node_nucleotide_sequence_object)
 
     def _create_data_set_sample_sequences(self):
         if self._we_made_a_clade_collection():
@@ -2299,3 +2401,200 @@ class DataSetSampleCreatorHandler:
             sys.stdout.write(
                 f'\n\nPopulating {data_set_sample_sequence_creator_worker.sample_name} with clade {data_set_sample_sequence_creator_worker.clade} sequences\n')
             data_set_sample_sequence_creator_worker.make_data_set_sample_sequences()
+
+class DataSetSampleSequencePMCreator:
+    """This class will be where we run the code for creating DataSetSAmpleSequencePM objects,
+    inluding the creation of reference sequences if necessary."""
+    def __init__(self, parent):
+        # dictionaries to save us having to do lots of database look ups
+        self.parent = parent
+        self.ref_seq_uid_to_ref_seq_name_dict = {
+            ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
+        self.ref_seq_sequence_to_ref_seq_id_dict = {
+            ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
+        self.list_of_pre_med_sample_dirs = self._populate_list_of_pre_med_sample_dirs()
+        self.nuc_sequence_name_to_ref_seq_id_dict = None
+        self.current_pre_med_sample_seq_collection = None
+
+    def _populate_list_of_pre_med_sample_dirs(self):
+        return general.return_list_of_directory_paths_in_directory(self.parent.pre_med_sequence_output_directory_path)
+
+    def make_data_set_sample_pm_objects(self):
+        for sample_pm_dir in self.list_of_pre_med_sample_dirs:
+            # get list of the fasta files (one per clade) that we will need to process
+            # we can deduce the .names file from the fasta file simply by changing the extension
+            sample_list_of_fasta_file_paths = [f_path for f_path in general.return_list_of_file_paths_in_directory(sample_pm_dir) if '.fasta' in f_path]
+            for f_path in sample_list_of_fasta_file_paths:
+                # for each clade there will be a fasta names pair
+                # for each of the fasta .names pairs we will need to look at each sequence
+                self.nuc_sequence_name_to_ref_seq_id_dict = {}
+                self.current_pre_med_sample_seq_collection = self.PreMEDSampleSeqCollection(
+                    clade=f_path.split('/')[-1].split('_')[3],
+                    fasta_dict = general.create_dict_from_fasta(fasta_path=f_path),
+                    names_dict=general.create_seq_name_to_abundance_dict_from_name_file(
+                        name_file_path=f_path.replace('.fasta', '.names')),
+                    sample_name='_'.join(f_path.split('/')[-1].split('_')[4:]).replace('.fasta', ''))
+
+                self._associate_pre_med_sequences_to_ref_seq_objs()
+
+                if self._two_or_more_pre_med_seqs_are_associated_to_the_same_reference_sequence():
+                    self._make_associations_and_abundances_in_node_abund_df_unique_again()
+
+                self._create_data_set_sample_pre_med_sequence_objs()
+
+    def _create_data_set_sample_pre_med_sequence_objs(self):
+        data_set_sample_sequence_pre_med_list = []
+        dataset_sample_object = DataSetSample.objects.get(
+            data_submission_from=self.parent.dataset_object, name=self.current_pre_med_sample_seq_collection.sample_name)
+        for seq_nuc_obj in self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs.values():
+            associated_ref_seq_id = self.nuc_sequence_name_to_ref_seq_id_dict[seq_nuc_obj.name]
+            associated_ref_seq_object = ReferenceSequence.objects.get(id=associated_ref_seq_id)
+            dsspm = DataSetSampleSequencePM(reference_sequence_of=associated_ref_seq_object,
+                                        abundance=seq_nuc_obj.abundance,
+                                        data_set_sample_from=dataset_sample_object)
+            data_set_sample_sequence_pre_med_list.append(dsspm)
+        DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
+
+    def _two_or_more_pre_med_seqs_are_associated_to_the_same_reference_sequence(self):
+        """Multiple pre_med seqs may be assigned to the same reference sequence. We only want to create one
+        DataSetSampleSequencePM object per reference sequence. As such we need to consolidate abundances
+        """
+        return len(
+            set(self.nuc_sequence_name_to_ref_seq_id_dict.values())) != len(self.nuc_sequence_name_to_ref_seq_id_dict.keys())
+
+    def _make_associations_and_abundances_in_node_abund_df_unique_again(self):
+        list_of_non_unique_ref_seq_uids = [
+            ref_seq_uid for ref_seq_uid, count in
+            Counter(self.nuc_sequence_name_to_ref_seq_id_dict.values()).items() if count > 1]
+        for non_unique_ref_seq_uid in list_of_non_unique_ref_seq_uids:
+
+            seq_names_to_be_consolidated = self._get_list_of_seq_names_that_need_consolidating(non_unique_ref_seq_uid)
+
+            summed_abund_of_seqs_associated_to_ref_seq = self._get_summed_abundances_of_the_seqs_to_be_consolidated(
+                seq_names_to_be_consolidated)
+
+            self._del_all_but_first_of_non_unique_seqs_from_association_dict(seq_names_to_be_consolidated)
+
+            self._update_seq_name_abund_in_seq_collection_and_names_dict(
+                seq_names_to_be_consolidated,
+                summed_abund_of_seqs_associated_to_ref_seq
+            )
+
+    def _del_all_but_first_of_non_unique_seqs_from_association_dict(self, seq_names_to_be_consolidated):
+        #  delete all of the dictionary entries for the seq names to be consolidated except for the first one
+        for seq_name_to_del in seq_names_to_be_consolidated[1:]:
+            del self.current_pre_med_sample_seq_collection.fasta_dict[seq_name_to_del]
+            del self.current_pre_med_sample_seq_collection.names_dict[seq_name_to_del]
+            del self.nuc_sequence_name_to_ref_seq_id_dict[seq_name_to_del]
+            del self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs[seq_name_to_del]
+
+    def _update_seq_name_abund_in_seq_collection_and_names_dict(self, seq_names_to_be_consolidated, summed_abund_of_seqs_associated_to_ref_seq):
+        """Modify the names abundance dict so that the one seq name being kept now has the summed abundance
+            also update the dict_of_nucleotide_sequence_objs"""
+        self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs[
+            seq_names_to_be_consolidated[0]].abundance = summed_abund_of_seqs_associated_to_ref_seq
+        self.current_pre_med_sample_seq_collection.names_dict[
+            seq_names_to_be_consolidated[0]] = summed_abund_of_seqs_associated_to_ref_seq
+
+    def _get_summed_abundances_of_the_seqs_to_be_consolidated(self, seq_names_to_be_consolidated):
+        summed_abund_of_seqs_associated_to_ref_seq = sum([self.current_pre_med_sample_seq_collection.names_dict[seq_name] for seq_name in seq_names_to_be_consolidated])
+        return summed_abund_of_seqs_associated_to_ref_seq
+
+    def _get_list_of_seq_names_that_need_consolidating(self, non_unique_ref_seq_uid):
+        seq_names_to_be_consolidated = [
+            seq_name for seq_name in self.nuc_sequence_name_to_ref_seq_id_dict.keys() if
+            self.nuc_sequence_name_to_ref_seq_id_dict[seq_name] == non_unique_ref_seq_uid]
+        return seq_names_to_be_consolidated
+
+    def _associate_pre_med_sequences_to_ref_seq_objs(self):
+        for nuc_seq_obj in self.current_pre_med_sample_seq_collection.dict_of_nucleotide_sequence_objs.values():
+            if not self._assign_node_sequence_to_existing_ref_seq(nuc_seq_obj):
+                self._assign_nuc_seq_obj_to_new_ref_seq_obj(nuc_seq_obj)
+
+    def _assign_node_sequence_to_existing_ref_seq(self, nuc_seq_obj):
+        """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
+        This takes into account whether the seq_in_q could be a subset or super set of one of the
+        ref_seq.sequences.
+        Will return false if no ref_seq match is found
+        """
+        if self._nuc_seq_obj_exactly_matches_reference_sequence_sequence(nuc_seq_obj):
+            return self._associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(nuc_seq_obj)
+        elif self._nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(nuc_seq_obj):
+            # This was a seq shorter than refseq but we can associate
+            return self._associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(nuc_seq_obj)
+        else:
+            return self._search_for_super_set_match_and_associate_if_found_else_return_false(
+                nuc_seq_obj)
+
+    def _nuc_seq_obj_exactly_matches_reference_sequence_sequence(self, nuc_seq_obj):
+        return nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(self, nuc_seq_obj):
+        self.nuc_sequence_name_to_ref_seq_id_dict[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            nuc_seq_obj.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict[nuc_seq_obj.sequence]]
+        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
+        return True
+
+    def _print_succesful_association_details_to_stdout(
+            self, nuc_seq_obj, name_of_reference_sequence):
+        sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade '
+                         f'{self.current_pre_med_sample_seq_collection.clade}: '
+                         f'Assigning pre-MED sequence {nuc_seq_obj.name} '
+                         f'to existing reference sequence {name_of_reference_sequence}')
+
+    def _nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(self, nuc_seq_obj):
+        return 'A' + nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(self, nuc_seq_obj):
+        self.nuc_sequence_name_to_ref_seq_id_dict[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            'A' + nuc_seq_obj.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict['A' + nuc_seq_obj.sequence]]
+        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
+        return True
+
+    def _search_for_super_set_match_and_associate_if_found_else_return_false(self, nuc_seq_obj):
+        # or if the seq in question is bigger than a refseq sequence and is a super set of it
+        # In either of these cases we should consider this a match and use the refseq matched to.
+        # This might be very coputationally expensive but lets give it a go
+        for ref_seq_sequence in self.ref_seq_sequence_to_ref_seq_id_dict.keys():
+            if nuc_seq_obj.sequence in ref_seq_sequence or \
+                    ref_seq_sequence in nuc_seq_obj.sequence:
+                # Then this is a match
+                self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = \
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
+                name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]]
+                self._print_succesful_association_details_to_stdout(nuc_seq_obj,
+                                                                    name_of_reference_sequence)
+                return True
+        return False
+
+    def _assign_nuc_seq_obj_to_new_ref_seq_obj(self, nuc_seq_obj):
+        new_ref_seq = ReferenceSequence(clade=self.current_pre_med_sample_seq_collection.clade, sequence=nuc_seq_obj.sequence)
+        new_ref_seq.save()
+        new_ref_seq.name = str(new_ref_seq.id)
+        new_ref_seq.save()
+        self.ref_seq_sequence_to_ref_seq_id_dict[new_ref_seq.sequence] = new_ref_seq.id
+        self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = new_ref_seq.id
+        self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
+
+        sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade {self.current_pre_med_sample_seq_collection.clade}: '
+                         f'Assigning pre-MED seq {nuc_seq_obj.name} '
+                         f'to new reference sequence {new_ref_seq.name}')
+
+    class PreMEDSampleSeqCollection:
+        def __init__(self, clade, fasta_dict, names_dict, sample_name):
+            self.clade = clade
+            self.fasta_dict = fasta_dict
+            self.names_dict = names_dict
+            self.dict_of_nucleotide_sequence_objs = {
+                seq_name : NucleotideSequence(
+                    name=seq_name, abundance=names_dict[seq_name], sequence=fasta_dict[seq_name])
+                        for seq_name in fasta_dict.keys()}
+
+            self.sample_name = sample_name
