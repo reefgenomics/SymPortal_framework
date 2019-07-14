@@ -50,6 +50,7 @@ class DataLoading:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
 
         self.temp_working_directory = self._setup_temp_working_directory()
+        self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.output_directory = self._setup_output_directory()
         if self.datasheet_path:
             self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
@@ -60,7 +61,6 @@ class DataLoading:
         self.no_fig = no_fig
         self.no_ord = no_ord
         self.distance_method = distance_method
-        self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
         # this is the path of the file we will use to deposit a backup copy of the reference sequences
         self.seq_dump_file_path = self._setup_sequence_dump_file_path()
         self.dataset_object.working_directory = self.temp_working_directory
@@ -337,24 +337,6 @@ class DataLoading:
         self.initial_mothur_handler.execute_worker_initial_mothur()
         self.samples_that_caused_errors_in_qc_list = list(
             self.initial_mothur_handler.samples_that_caused_errors_in_qc_mp_list)
-        # Now set the attributes for the the samples
-        # get make a dictionary of the dss objects that we are working with
-        list_of_uids_of_dss_obj_proxies = [dss_p.uid for dss_p in self.initial_mothur_handler.sample_attributes_holder_mp_dict.values()]
-        uid_to_dss_obj_dict = {dss_obj.uid: dss_obj for dss_obj in DataSetSample.objects.filter(id__in=list_of_uids_of_dss_obj_proxies)}
-        for dss_obj_proxy in self.initial_mothur_handler.sample_attributes_holder_mp_dict.values():
-            dss_obj = uid_to_dss_obj_dict[dss_obj_proxy.uid]
-            if not dss_obj.error_in_processing:
-                dss_obj.error_in_processing = True
-                dss_obj.error_reason = dss_obj_proxy.error_reason
-                dss_obj.unique_num_sym_seqs = dss_obj_proxy.unique_num_sym_seqs
-                dss_obj.absolute_num_sym_seqs = dss_obj_proxy.absolute_num_sym_seqs
-                dss_obj.post_qc_absolute_num_seqs = dss_obj_proxy.post_qc_absolute_num_seqs
-                dss_obj.post_qc_unique_num_seqs = dss_obj_proxy.post_qc_unique_num_seqs
-                dss_obj.num_contigs = dss_obj_proxy.num_contigs
-                dss_obj.save()
-            else:
-                dss_obj.error_in_processing = False
-
 
     def _taxonomic_screening(self):
         """
@@ -1137,29 +1119,29 @@ class DataLoading:
             shutil.rmtree(self.temp_working_directory)
         os.makedirs(self.temp_working_directory)
 
-    class DSSAttributeAssignmentHolder:
-        """
-        This will hold the values of the attributes of the DataSetSamples that were being set during the
-        mothur QC process. The attributes are not able to be set during QC when working within a
-        Django TransactionTestCase testing frame work. To get around this problem we will collect the attributes
-        and their corresponding values in this class and then set them when we are back outside of the multiprocessing.
-        """
-        def __init__(self, name, uid):
-            self.dss_uid = uid
-            self.dss_name = name
-            self.num_contigs = 0
-            self.post_qc_absolute_num_seqs = 0
-            self.post_qc_unique_num_seqs = 0
-            self.absolute_num_sym_seqs = 0
-            self.unique_num_sym_seqs = 0
-            self.non_sym_absolute_num_seqs = 0
-            self.non_sym_unique_seqs = 0
-            self.size_violation_absolute = 0
-            self.size_violation_unique = 0
-            self.error_in_processing = False
-            self.error_reason = 'noError'
-            self.cladal_seq_totals = None
-            self.initial_processing_complete = False
+class DSSAttributeAssignmentHolder:
+    """
+    This will hold the values of the attributes of the DataSetSamples that were being set during the
+    mothur QC process. The attributes are not able to be set during QC when working within a
+    Django TransactionTestCase testing frame work. To get around this problem we will collect the attributes
+    and their corresponding values in this class and then set them when we are back outside of the multiprocessing.
+    """
+    def __init__(self, name, uid):
+        self.uid = uid
+        self.name = name
+        self.num_contigs = 0
+        self.post_qc_absolute_num_seqs = 0
+        self.post_qc_unique_num_seqs = 0
+        self.absolute_num_sym_seqs = 0
+        self.unique_num_sym_seqs = 0
+        self.non_sym_absolute_num_seqs = 0
+        self.non_sym_unique_num_seqs = 0
+        self.size_violation_absolute = 0
+        self.size_violation_unique = 0
+        self.error_in_processing = False
+        self.error_reason = 'noError'
+        self.cladal_seq_totals = None
+        self.initial_processing_complete = False
 
 class InitialMothurHandler:
     def __init__(self, data_loading_parent):
@@ -1167,13 +1149,8 @@ class InitialMothurHandler:
         self.input_queue_containing_pairs_of_fastq_file_paths = Queue()
         self.worker_manager = Manager()
         self.samples_that_caused_errors_in_qc_mp_list = self.worker_manager.list()
-        self.sample_attributes_holder_mp_dict = self.worker_manager.dict()
+        self.output_queue_for_attribute_data = Queue()
         self._populate_input_queue()
-        self._populate_sample_attributes_holder_dict()
-
-    def _populate_sample_attributes_holder_dict(self):
-        for dss_obj in self.parent.list_of_dss_objects:
-            self.sample_attributes_holder_mp_dict[dss_obj.id] = self.parent.DSSAttributeAssignmentHolder(name=dss_obj.name, uid=dss_obj.id)
 
     def _populate_input_queue(self):
         for fastq_path_pair in self.parent.sample_fastq_pairs:
@@ -1198,6 +1175,29 @@ class InitialMothurHandler:
 
         for p in all_processes:
             p.join()
+
+        self._update_dss_obj_attributes()
+
+    def _update_dss_obj_attributes(self):
+        self.output_queue_for_attribute_data.put('STOP')
+        dss_obj_uid_to_obj_dict = {dss_obj.id: dss_obj for dss_obj in
+                                   DataSetSample.objects.filter(data_submission_from=self.parent.dataset_object)}
+        for dss_proxy in iter(self.output_queue_for_attribute_data.get, 'STOP'):
+            dss_obj = dss_obj_uid_to_obj_dict[dss_proxy.uid]
+            if dss_proxy.error_in_processing:
+                dss_obj.error_in_processing = dss_proxy.error_in_processing
+                dss_obj.error_reason = dss_proxy.error_reason
+                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
+                dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
+                dss_obj.num_contigs = dss_proxy.num_contigs
+                dss_obj.save()
+            else:
+                dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
+                dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
+                dss_obj.num_contigs = dss_proxy.num_contigs
+                dss_obj.save()
 
     def _worker_initial_mothur(self):
         """
@@ -1226,6 +1226,7 @@ class InitialMothurWorker:
         self.data_set_sample = DataSetSample.objects.get(
                 name=self.sample_name, data_submission_from=self.parent.parent.dataset_object
             )
+        self.dss_att_holder = DSSAttributeAssignmentHolder(name=self.data_set_sample.name, uid=self.data_set_sample.id)
         self.cwd = os.path.join(self.parent.parent.temp_working_directory, self.sample_name)
         os.makedirs(self.cwd, exist_ok=True)
         self.mothur_analysis_object = MothurAnalysis.init_from_pair_of_fastq_gz_files(
@@ -1257,11 +1258,11 @@ class InitialMothurWorker:
 
         self._set_absolute_num_seqs_after_inital_qc()
 
-        self._save_changes_to_data_set_sample()
-
         sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
 
         self._write_out_final_name_and_fasta_for_tax_screening()
+
+        self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
 
     def _write_out_final_name_and_fasta_for_tax_screening(self):
         name_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
@@ -1270,9 +1271,6 @@ class InitialMothurWorker:
         fasta_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.fasta_path)
         taxonomic_screening_fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
         write_list_to_destination(taxonomic_screening_fasta_file_path, fasta_file_as_list)
-
-    def _save_changes_to_data_set_sample(self):
-        self.data_set_sample.save()
 
     def _do_fwd_and_rev_pcr(self):
         try:
@@ -1319,15 +1317,14 @@ class InitialMothurWorker:
         number_of_contig_seqs_absolute = len(
             read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)
         ) - 1
-        self.parent.sample_attributes_holder_mp_dict[self.data_set_sample.id].num_contigs = number_of_contig_seqs_absolute
+        self.dss_att_holder.num_contigs = number_of_contig_seqs_absolute
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.num_contigs = {number_of_contig_seqs_absolute}\n')
 
     def _set_unique_num_seqs_after_initial_qc(self):
         number_of_contig_seqs_unique = len(
             read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)) - 1
-        self.parent.sample_attributes_holder_mp_dict[
-            self.data_set_sample.id].post_qc_unique_num_seqs = number_of_contig_seqs_unique
+        self.dss_att_holder.post_qc_unique_num_seqs = number_of_contig_seqs_unique
         sys.stdout.write(
             f'{self.sample_name}: '
             f'data_set_sample_instance_in_q.post_qc_unique_num_seqs = {number_of_contig_seqs_unique}\n')
@@ -1337,8 +1334,7 @@ class InitialMothurWorker:
         absolute_count = 0
         for line in last_summary[1:]:
             absolute_count += int(line.split('\t')[6])
-        self.parent.sample_attributes_holder_mp_dict[
-            self.data_set_sample.id].post_qc_absolute_num_seqs = absolute_count
+            self.dss_att_holder.post_qc_absolute_num_seqs = absolute_count
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {absolute_count}\n')
 
@@ -1366,17 +1362,13 @@ class InitialMothurWorker:
 
     def log_qc_error_and_continue(self, errorreason):
         print('Error in processing sample: {}'.format(self.sample_name))
-        self.parent.sample_attributes_holder_mp_dict[
-            self.data_set_sample.id].unique_num_sym_seqs = 0
-        self.parent.sample_attributes_holder_mp_dict[
-            self.data_set_sample.id].absolute_num_sym_seqs = 0
-        self.parent.sample_attributes_holder_mp_dict[
-            self.data_set_sample.id].initial_processing_complete = True
-        self.parent.sample_attributes_holder_mp_dict[
-            self.data_set_sample.id].error_in_processing = True
-        self.parent.sample_attributes_holder_mp_dict[
-            self.data_set_sample.id].error_reason = errorreason
-        self._save_changes_to_data_set_sample()
+        self.dss_att_holder.unique_num_sym_seqs = 0
+        self.dss_att_holder.absolute_num_sym_seqs = 0
+        self.dss_att_holder.initial_processing_complete = True
+        self.dss_att_holder.error_in_processing = True
+        self.dss_att_holder.error_reason = errorreason
+        self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
+
 
 
 class PotentialSymTaxScreeningHandler:
@@ -1602,17 +1594,10 @@ class SymNonSymTaxScreeningHandler:
         self.samples_that_caused_errors_in_qc_mp_list = self.sym_non_sym_mp_manager.list(
             data_loading_samples_that_caused_errors_in_qc_mp_list
         )
-        self.sample_attributes_holder_mp_dict = self.sym_non_sym_mp_manager.dict()
+        self.sample_attributes_mp_output_queue = Queue()
         self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
         self.num_proc = data_loading_num_proc
-        self.non_error_dss_objs = [dss for dss in DataSetSample.objects.filter(data_submission_from=self.parent.dataset_object) if not dss.error_in_processing]
         self._populate_input_queue(data_loading_list_of_samples_names)
-        self._populate_sample_attributes_holder_dict()
-
-    def _populate_sample_attributes_holder_dict(self):
-        for dss_obj in self.non_error_dss_objs:
-            self.sample_attributes_holder_mp_dict[dss_obj.id] = self.parent.DSSAttributeAssignmentHolder(
-                name=dss_obj.name, uid=dss_obj.id)
 
     def _populate_input_queue(self, data_loading_list_of_samples_names):
         for sample_name in data_loading_list_of_samples_names:
@@ -1640,30 +1625,35 @@ class SymNonSymTaxScreeningHandler:
         for p in all_processes:
             p.join()
 
+        self._associate_info_to_dss_objects(data_loading_dataset_object)
+
+    def _associate_info_to_dss_objects(self, data_loading_dataset_object):
         # now save the collected data contained in the sample_attributes_holder_mp_dict to the relevant
         # dss_objs.
-        dss_uid_to_dss_obj_dict = {dss.uid:dss for dss in DataSetSample.objects.filter(data_submission_from=data_loading_dataset_object)}
-        for dss_proxy in self.sample_attributes_holder_mp_dict.values():
+        self.sample_attributes_mp_output_queue.put('STOP')
+        dss_uid_to_dss_obj_dict = {dss.id: dss for dss in
+                                   DataSetSample.objects.filter(data_submission_from=data_loading_dataset_object)}
+        for dss_proxy in iter(self.sample_attributes_mp_output_queue.get, 'STOP'):
             dss_obj = dss_uid_to_dss_obj_dict[dss_proxy.uid]
-            if not dss_proxy.error_in_processing:
-                dss_obj.non_sym_unique_num_seqs =     dss_proxy.non_sym_unique_num_seqs.non_sym_unique_num_seqs
-                dss_obj.non_sym_absolute_num_seqs =   dss_proxy.non_sym_unique_num_seqs.non_sym_absolute_num_seqs
-                dss_obj.size_violation_absolute =     dss_proxy.non_sym_unique_num_seqs.size_violation_absolute
-                dss_obj.size_violation_unique =       dss_proxy.non_sym_unique_num_seqs.size_violation_unique
-                dss_obj.unique_num_sym_seqs =         dss_proxy.non_sym_unique_num_seqs.unique_num_sym_seqs
-                dss_obj.absolute_num_sym_seqs =       dss_proxy.non_sym_unique_num_seqs.absolute_num_sym_seqs
-                dss_obj.initial_processing_complete = dss_proxy.non_sym_unique_num_seqs.initial_processing_complete
-                dss_obj.error_in_processing =         dss_proxy.non_sym_unique_num_seqs.error_in_processing
-                dss_obj.error_reason = dss_proxy.non_sym_unique_num_seqs.error_reason
+            if dss_proxy.error_in_processing:  # if error occured
+                dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
+                dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
+                dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
+                dss_obj.size_violation_unique = dss_proxy.size_violation_unique
+                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
+                dss_obj.error_in_processing = dss_proxy.error_in_processing
+                dss_obj.error_reason = dss_proxy.error_reason
                 dss_obj.save()
             else:
-                dss_obj.unique_num_sym_seqs = dss_proxy.non_sym_unique_num_seqs.unique_num_sym_seqs
-                dss_obj.absolute_num_sym_seqs = dss_proxy.non_sym_unique_num_seqs.absolute_num_sym_seqs
-                dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs.non_sym_unique_num_seqs
-                dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_unique_num_seqs.non_sym_absolute_num_seqs
-                dss_obj.size_violation_absolute = dss_proxy.non_sym_unique_num_seqs.size_violation_absolute
-                dss_obj.size_violation_unique = dss_proxy.non_sym_unique_num_seqs.size_violation_unique
-                dss_obj.initial_processing_complete = dss_proxy.non_sym_unique_num_seqs.initial_processing_complete
+                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
+                dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
+                dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
+                dss_obj.size_violation_unique = dss_proxy.size_violation_unique
+                dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
                 dss_obj.save()
 
     def _sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object,
@@ -1680,7 +1670,7 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
                 data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
-                data_loading_debug=data_loading_debug, sample_attributes_holder_mp_dict=self.sample_attributes_holder_mp_dict
+                data_loading_debug=data_loading_debug, sample_attributes_mp_output_queue=self.sample_attributes_mp_output_queue
             )
 
             try:
@@ -1694,11 +1684,11 @@ class SymNonSymTaxScreeningWorker:
             self, data_loading_temp_working_directory, sample_name, data_loading_dataset_object,
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
             data_loading_pre_med_sequence_output_directory_path, data_loading_debug,
-            sample_attributes_holder_mp_dict
+            sample_attributes_mp_output_queue
     ):
         self._init_core_class_attributes(
             data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug,
-            sample_attributes_holder_mp_dict)
+            sample_attributes_mp_output_queue)
         self._init_fasta_name_blast_and_clade_dict_attributes()
         self._init_non_sym_and_size_violation_output_paths(
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path)
@@ -1761,14 +1751,15 @@ class SymNonSymTaxScreeningWorker:
 
     def _init_core_class_attributes(
             self, data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug,
-            sample_attributes_holder_mp_dict):
+            sample_attributes_mp_output_queue):
         self.sample_name = sample_name
         self.cwd = os.path.join(data_loading_temp_working_directory, sample_name)
         self.datasetsample_object = DataSetSample.objects.get(
             name=sample_name, data_submission_from=data_loading_dataset_object
         )
+        self.sample_att_holder = DSSAttributeAssignmentHolder(name=self.datasetsample_object.name, uid=self.datasetsample_object.id)
         self.debug = data_loading_debug
-        self.sample_attributes_holder_mp_dict = sample_attributes_holder_mp_dict
+        self.sample_attributes_mp_output_queue = sample_attributes_mp_output_queue
 
     def identify_sym_non_sym_seqs(self):
         """This method completes the pre-med quality control.
@@ -1916,48 +1907,51 @@ class SymNonSymTaxScreeningWorker:
         self._associate_non_sym_seq_attributes_to_dataset()
         self._associate_sym_seq_no_size_violation_attributes_to_dataset()
         self._associate_sym_seq_size_violation_attributes_to_dataset()
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].initial_processing_complete = True
-
+        self.sample_att_holder.initial_processing_complete = True
+        self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
         print(f'{self.sample_name}: pre-med QC complete')
 
     def _associate_sym_seq_size_violation_attributes_to_dataset(self):
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].size_violation_absolute = (
+        # it is important that we set these values from the objects of this class rather
+        # from the data_set_sample object attributes as some of these have not been set yet
+        self.sample_att_holder.size_violation_absolute = (
                 self.datasetsample_object.post_qc_absolute_num_seqs -
-                self.datasetsample_object.absolute_num_sym_seqs -
-                self.datasetsample_object.non_sym_absolute_num_seqs
+                self.sample_att_holder.absolute_num_sym_seqs -
+                self.sample_att_holder.non_sym_absolute_num_seqs
         )
         print(f'{self.sample_name}: size_violation_absolute = {self.datasetsample_object.size_violation_absolute}')
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].size_violation_unique = (
+        self.sample_att_holder.size_violation_unique = (
                 self.datasetsample_object.post_qc_unique_num_seqs -
-                self.datasetsample_object.unique_num_sym_seqs -
-                self.datasetsample_object.non_sym_unique_num_seqs
+                self.sample_att_holder.unique_num_sym_seqs -
+                self.sample_att_holder.non_sym_unique_num_seqs
         )
         print(f'{self.sample_name}: size_violation_unique = {self.datasetsample_object.size_violation_unique}')
 
     def _associate_sym_seq_no_size_violation_attributes_to_dataset(self):
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
+        self.sample_att_holder.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
+        self.sample_att_holder.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
         print(f'{self.sample_name}: unique_num_sym_seqs = {self.datasetsample_object.unique_num_sym_seqs}')
         print(f'{self.sample_name}: absolute_num_sym_seqs = {self.absolute_number_of_sym_no_size_violation_sequences}')
 
     def _associate_non_sym_seq_attributes_to_dataset(self):
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        self.sample_att_holder.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.sample_att_holder.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
         print(f'{self.sample_name}: non_sym_unique_num_seqs = {self.datasetsample_object.non_sym_unique_num_seqs}')
         print(f'{self.sample_name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
 
     def _log_dataset_attr_and_raise_runtime_error(self):
         # if there are no symbiodiniaceae sequenes then log error and associate meta info
         print(f'{self.sample_name}: QC error.\n No symbiodiniaceae sequences left in sample after pre-med QC.')
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].unique_num_sym_seqs = 0
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].absolute_num_sym_seqs = 0
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].initial_processing_complete = True
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].error_in_processing = True
-        self.sample_attributes_holder_mp_dict[self.datasetsample_object.id].error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
+        self.sample_att_holder.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.sample_att_holder.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        self.sample_att_holder.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
+        self.sample_att_holder.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
+        self.sample_att_holder.unique_num_sym_seqs = 0
+        self.sample_att_holder.absolute_num_sym_seqs = 0
+        self.sample_att_holder.initial_processing_complete = True
+        self.sample_att_holder.error_in_processing = True
+        self.sample_att_holder.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
+        self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
         raise RuntimeError({'sample_name':self.sample_name})
 
     def _identify_and_write_non_sym_seqs_in_sample(self):
