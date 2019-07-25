@@ -1439,7 +1439,12 @@ class SequenceCountTableCreator:
             Through the process of counting, also populate the master_fasta_dict be rs_name to rs_sequence dictionary.
             This will be used to make the master fasta that will represent every sequence in the pre-med sequence
             collection."""
+            print('\nCounting pre-MED sequences in DataSetSamples')
+            count = 0
+            num_samples = len(self.parent.list_of_dss_objects)
             for dss_obj in self.parent.list_of_dss_objects:
+                count += 1
+                sys.stdout.write(f'\rcounting pre-MED sequences for {dss_obj.name}: {count} out of {num_samples} samples')
                 self.sample_uid_to_name_dict[dss_obj.id] = dss_obj.name
                 dsspm_objs_of_sample = DataSetSampleSequencePM.objects.filter(data_set_sample_from=dss_obj)
                 # total_seqs = dss_obj.non_sym_absolute_num_seqs
@@ -1450,6 +1455,7 @@ class SequenceCountTableCreator:
                     sample_temp_abundance_dict[str(dsspm_obj.reference_sequence_of)] = dsspm_obj.abundance
                     self.master_sequence_count_dict[str(dsspm_obj.reference_sequence_of)] += dsspm_obj.abundance / dss_obj.absolute_num_sym_seqs
                 self.master_sample_uid_to_abund_dict[dss_obj.id] = sample_temp_abundance_dict
+            print('\nPre-MED sequence counting complete')
 
 
 class SequenceCountTableCollectAbundanceHandler:
