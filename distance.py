@@ -17,6 +17,7 @@ import itertools
 from scipy.spatial.distance import braycurtis
 from symportal_utils import MothurAnalysis, SequenceCollection
 from datetime import datetime
+from collections import defaultdict
 # General methods
 class SequenceCollectionComplete(Exception):
     pass
@@ -775,6 +776,8 @@ class BaseUnifracDistPCoACreator:
         self.clade_dist_file_as_list = None
         self.is_sqrt_transf = is_sqrt_transf
 
+        self.clade_tree_directory = os.path.join
+
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list, cct_set_uid_list):
         if data_set_sample_uid_list:
             data_set_samples_of_output = self._chunk_query_dss_objs_from_dss_uids(data_set_sample_uid_list)
@@ -1018,6 +1021,132 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self._append_output_files_to_output_list()
 
         self._write_output_paths_to_stdout()
+
+    def compute_unifrac_dists_and_pcoa_coords_mcminds(self):
+
+        # This will largely all be calculated on a clade by clade basis
+        for clade_in_question in self.clades_for_dist_calcs:
+
+            # First step is to create an abundance dataframe where the sequences are in the columns
+            # and the AnalysisType objects or possibly the DataSetSample objects uids are in the rows
+            tadfg = self.TypeAbundanceDFGenerator(parent=self, clade=clade_in_question)
+            clade_abund_df, set_of_ref_seq_uids = tadfg.generate_abundance_dataframe_for_clade().analysis_type_objs_of_clade
+
+            # Second step will be to get a tree that we can supply to the skbio inplementation of weighted unifrac
+            # To speed things up we will write out the tree that we eventually make so that
+            # if the the sequences involved in the current distance analysis are contained in the tree that
+            # already exists then we will be able to use this tree. (i.e. we won't need to generate one from scratch)
+            # Else we will need to calculate a tree from scratch
+            # 2a - check to see if a tree exists already and if it does, whether it contains all of the sequences that
+            # we need.
+            # 2b - if it doesn't then we need to create a tree from scratch.
+            # We can have a couple of options for speeding up this process.
+            # The fist
+
+
+    class TreeCreatorForUniFrac:
+        def __init__(self, parent):
+            self.parent = parent
+
+    class TypeAbundanceDFGenerator:
+        """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
+        and the AnalysisType object uids are in the rows and the values are the normalised abundances
+        (normalised to 10000 sequences)."""
+        def __init__(self, parent, clade):
+            self.parent = parent
+            self.clade = clade
+            # Added as part of the mcminds enhancement
+            # A default dict that will have clade as key and list of reference sequence objects as value
+            self.reference_seq_uid_set = set()
+
+            # Type uid is the key and the value is a dictionary of abundances normalised to 10000
+            self.seq_abundance_dict = {}
+
+            # This will be the dataframe that we populate and can be returned from the class
+            self.abundance_df = None
+
+            self.analysis_type_objs_of_clade = [at for at in self.parent.at_list_for_output if at.clade == self.clade]
+
+        def generate_abundance_dataframe_for_clade(self):
+            for at_obj in self.analysis_type_objs_of_clade:
+                # the order of rows in this df is the CladeCollections in list_of_clade_collections
+                # the columns is order of ordered_footprint_list (ref_seq_ids)
+                df = pd.DataFrame(at_obj.get_ratio_list())
+
+                ref_seq_uids_of_analysis_type = [int(b) for b in at_obj.ordered_footprint_list.split(',')]
+
+                self.reference_seq_uid_set.update(ref_seq_uids_of_analysis_type)
+
+                if self.parent.is_sqrt_transf:
+                    df = general.sqrt_transform_abundance_df(df)
+
+                # A dictionary that will hold the abundance of the reference sequences in the given AnalysisType
+                # object. Key is RefSeq_obj uid and value is abundance normalised to 10000 reads.
+                normalised_abundance_of_divs_dict = None
+                if self.parent.local_abunds_only:  # Calculate the UniFrac using only the ccts from the specified samples
+                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
+                        at_obj, df, ref_seq_uids_of_analysis_type)
+                elif self.parent.clade_col_type_objects:  # Caculate the abundance for only the specific cct that have been provided
+                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_cct_set_unifrac(
+                        at_obj, df, ref_seq_uids_of_analysis_type)
+                else:  # use all abund info to calculate av div rel abund
+                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_all_clade_cols_unifrac(
+                        df, ref_seq_uids_of_analysis_type)
+
+                self.seq_abundance_dict[at_obj.uid] = normalised_abundance_of_divs_dict
+
+            # Here we have the self.seq_abundance_dict populated and we can use this dict of dicts to build
+            # the dataframe
+            self.abundance_df = pd.DataFrame.from_dict(self.seq_abundance_dict, orient='index')
+
+
+    @staticmethod
+    def _create_norm_abund_dict_from_all_clade_cols_unifrac(df, ref_seq_uids_of_analysis_type):
+        normalised_abundance_of_divs_dict = {
+            ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 10000) for
+            i in range(len(ref_seq_uids_of_analysis_type))}
+        return normalised_abundance_of_divs_dict
+
+
+    def _create_norm_abund_dict_from_cct_set_unifrac(self, at, df, ref_seq_uids_of_analysis_type):
+        # Then we are working with a custom set of CladeCollection-AnalysisType associations. i.e. for every
+        # analysis type we are working with we will have to check exactly which CladeCollections we should
+        # be infering the average DIV abundances from.
+        # Because the list of AnalysisTypes that we are looking through are defined by the CladeCollectionTypes
+        # that we're working with, we know that there are no types in which we aren't looking at at least
+        # one CladeCollection from.
+        clade_collection_uid_list_of_type = [
+            int(a) for a in at.list_of_clade_collections.split(',')]
+        clade_collection_uids_to_output_for_this_type = []
+        for cct_obj in self.clade_col_type_objects:
+            if cct_obj.analysis_type_of.id == at.id:
+                # then this is a CladeCollectionType of the at
+                clade_collection_uids_to_output_for_this_type.append(cct_obj.clade_collection_found_in.id)
+        indices = []
+        for i in range(len(clade_collection_uid_list_of_type)):
+            if clade_collection_uid_list_of_type[i] in clade_collection_uids_to_output_for_this_type:
+                indices.append(i)
+        normalised_abundance_of_divs_dict = {
+            ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices, i].mean() * 10000) for
+            i in range(len(ref_seq_uids_of_analysis_type))}
+        return normalised_abundance_of_divs_dict
+
+    def _create_norm_abund_dict_from_local_clade_cols_unifrac(self, at, df, ref_seq_uids_of_analysis_type):
+        # we want to limit the inference of the average relative abundance of the DIVs to only those
+        # div abundance values that were found in samples from the output in question
+        # as such we need to first get a list of the clade collections and see which of these
+        # clade collections were from self.data_set_sample_uid_list
+        clade_collection_uid_list_of_type = [
+            int(a) for a in at.list_of_clade_collections.split(',')]
+        # the indices of the clade collections that are of this output
+        indices = []
+        for i in range(len(clade_collection_uid_list_of_type)):
+            if clade_collection_uid_list_of_type[i] in self.clade_col_uid_list:
+                indices.append(i)
+        normalised_abundance_of_divs_dict = {
+            ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices, i].mean() * 10000) for
+            i in range(len(ref_seq_uids_of_analysis_type))}
+        return normalised_abundance_of_divs_dict
 
     def _add_sample_uids_to_dist_file_and_write(self):
         # for the output version lets also append the sample name to each line so that we can see which sample it is

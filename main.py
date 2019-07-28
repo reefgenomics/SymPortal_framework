@@ -604,6 +604,7 @@ class SymPortalWorkFlowManager:
             else:
                 self._start_type_braycurtis_data_sets()
 
+    # BRAYCURTIS between its2 type profile distance methods
     def _start_type_braycurtis_cct_set(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
@@ -635,6 +636,7 @@ class SymPortalWorkFlowManager:
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
+    # UNIFRAC between its2 type profile distance methods
     def _start_type_unifrac_cct_set(self):
         self.distance_object = distance.TypeUnifracDistPCoACreator(
             call_type='stand_alone',
