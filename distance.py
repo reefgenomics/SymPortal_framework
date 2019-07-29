@@ -977,6 +977,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         else:
             self.clade_col_type_objects = None
             self.at_list_for_output = self._chunk_query_set_distinct_at_list_for_output_from_dss_uids()
+        self.at_id_to_at_name  = {at.id:at.name for at in self.at_list_for_output}
         self.clades_for_dist_calcs = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = self._setup_output_dir(call_type, output_dir)
         # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only
@@ -1037,11 +1038,15 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
         # This will largely all be calculated on a clade by clade basis
         for clade_in_question in self.clades_for_dist_calcs:
+            print(f'Calculating UniFrac Distances for clade: {clade_in_question}')
             self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
             # First step is to create an abundance dataframe where the sequences are in the columns
             # and the AnalysisType objects or possibly the DataSetSample objects uids are in the rows
+            print(f'Generating abundance dataframe for its2 type profile in clade: {clade_in_question}')
             tadfg = self.TypeAbundanceDFGenerator(parent=self, clade=clade_in_question)
-            clade_abund_df, set_of_ref_seq_uids = tadfg.generate_abundance_dataframe_for_clade().analysis_type_objs_of_clade
+            tadfg.generate_abundance_dataframe_for_clade()
+            clade_abund_df = tadfg.abundance_df
+            set_of_ref_seq_uids = tadfg.reference_seq_uid_set
 
             # Second step will be to get a tree that we can supply to the skbio inplementation of weighted unifrac
             # At first we will just implement a vanilla version of UniFrac that will always make a tree.
@@ -1057,38 +1062,49 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             # We can have a couple of options for speeding up this process.
             # The fist
 
-            tree_creator = self.TreeCreatorForUniFrac(parent=self, set_of_ref_seq_uids=set_of_ref_seq_uids, clade=clade_in_question)
+            print(
+                f'Generating phylogentic tree for DIV its2 '
+                f'sequences found in its2 type profiles of clade: {clade_in_question}')
+            tree_creator = self.TreeCreatorForUniFrac(
+                parent=self, set_of_ref_seq_uids=set_of_ref_seq_uids, clade=clade_in_question)
             tree_creator.make_tree()
             tree = tree_creator.rooted_tree
 
             # perform unifrac
+            print('Performing unifrac calculations')
             wu = beta_diversity(
-                metric='weighted_unifrac', counts=clade_abund_df.to_numpy(), ids=list(clade_abund_df.index),
-                tree=tree, otu_ids=list(clade_abund_df.columns))
+                metric='weighted_unifrac', counts=clade_abund_df.to_numpy(), ids=[str(_) for _ in list(clade_abund_df.index)],
+                tree=tree, otu_ids=[str(_) for _ in list(clade_abund_df.columns)])
 
-            # # Here we have the distance matrix.
-            # # Add the sample names to the dataframe and write out
-            # # have a second dataframe object that doesn't have the names in it
-            #
-            # # compute the pcoa
-            # pcoa_output = pcoa(dist_as_np_array)
-            #
-            # # rename the pcoa dataframe index as the sample names
-            # pcoa_output.samples['sample'] = sample_names_from_dist_matrix
-            # renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
-            #
-            # # now add the variance explained as a final row to the renamed_dataframe
-            # renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
-            #     pcoa_output.proportion_explained.rename('proportion_explained'))
-            #
-            # sample_ids_from_dist_matrix.append(0)
-            # renamed_pcoa_dataframe.insert(loc=0, column='sample_uid', value=sample_ids_from_dist_matrix)
-            # renamed_pcoa_dataframe['sample_uid'] = renamed_pcoa_dataframe['sample_uid'].astype('int')
-            #
-            # renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
-            #
-            #
-            # self.output_file_paths.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
+            # get the names of the at types to ouput in the df so that the user can relate distances
+            ordered_at_names = list(self.at_id_to_at_name[at_id] for at_id in  clade_abund_df.index)
+            # create df from the numpy 2d array
+            dist_df = pd.DataFrame(data=wu.data, columns=ordered_at_names, index=ordered_at_names)
+            # write out the df
+            clade_dist_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_string}_unifrac_btwn_profile_distances_{clade_in_question}.dist')
+
+            dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
+
+            # compute the pcoa
+            pcoa_output = pcoa(wu.data)
+
+            # rename the pcoa dataframe index as the sample names
+            pcoa_output.samples['sample'] = ordered_at_names
+            renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
+
+            # now add the variance explained as a final row to the renamed_dataframe
+            renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
+                pcoa_output.proportion_explained.rename('proportion_explained'))
+
+            # now output the pcoa
+            clade_pcoa_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_string}.unifrac_profiles_PCoA_coords_{clade_in_question}.csv')
+            renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_dist_file_path, sep=',')
+
+            self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
 
     class TreeCreatorForUniFrac:
         def __init__(self, parent, set_of_ref_seq_uids, clade):
@@ -1105,26 +1121,35 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         def make_tree(self):
 
             # write out the sequences unaligned
+            print('Writing out unaligned sequences')
             self._write_out_unaligned_seqs()
 
             # align the sequences
+            print('Aligning sequences')
             general.mafft_align_fasta(
                 input_path=self.fasta_unaligned_path, output_path=self.fasta_aligned_path,
                 method='unifrac', num_proc=self.parent.num_proc)
 
             # make the tree
-            subprocess.run(
-                ['iqtree', '-nt', 'AUTO', '-ntmax', f'{self.parent.num_proc}', '-s', f'{self.fasta_aligned_path}'],
-                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if os.path.exists(self.tree_out_path_unrooted):
+                print('Tree already exists')
+                print('Reading in tree')
+            else:
+                print('Testing models and making phylogenetic tree')
+                subprocess.run(
+                    ['iqtree', '-nt', 'AUTO', '-s', f'{self.fasta_aligned_path}'],
+                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
 
-            # root the tree
+                # root the tree
+                print('Tree creation complete')
+                print('Rooting the tree at midpoint')
             self.rooted_tree = TreeNode.read(self.tree_out_path_unrooted).root_at_midpoint()
             self.rooted_tree.write(self.tree_out_path_rooted)
 
 
         def _write_out_unaligned_seqs(self):
             django_general.write_ref_seq_objects_to_fasta(
-                path=self.fasta_unaligned_path, list_of_ref_seq_objs=self.ref_seq_objs)
+                path=self.fasta_unaligned_path, list_of_ref_seq_objs=self.ref_seq_objs, identifier='id')
 
     class TypeAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -1162,20 +1187,21 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 # object. Key is RefSeq_obj uid and value is abundance normalised to 10000 reads.
                 normalised_abundance_of_divs_dict = None
                 if self.parent.local_abunds_only:  # Calculate the UniFrac using only the ccts from the specified samples
-                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
+                    normalised_abundance_of_divs_dict = self.parent._create_norm_abund_dict_from_local_clade_cols_unifrac(
                         at_obj, df, ref_seq_uids_of_analysis_type)
                 elif self.parent.clade_col_type_objects:  # Caculate the abundance for only the specific cct that have been provided
-                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_cct_set_unifrac(
+                    normalised_abundance_of_divs_dict = self.parent._create_norm_abund_dict_from_cct_set_unifrac(
                         at_obj, df, ref_seq_uids_of_analysis_type)
                 else:  # use all abund info to calculate av div rel abund
-                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_all_clade_cols_unifrac(
+                    normalised_abundance_of_divs_dict = self.parent._create_norm_abund_dict_from_all_clade_cols_unifrac(
                         df, ref_seq_uids_of_analysis_type)
 
-                self.seq_abundance_dict[at_obj.uid] = normalised_abundance_of_divs_dict
+                self.seq_abundance_dict[at_obj.id] = normalised_abundance_of_divs_dict
 
             # Here we have the self.seq_abundance_dict populated and we can use this dict of dicts to build
             # the dataframe
             self.abundance_df = pd.DataFrame.from_dict(self.seq_abundance_dict, orient='index')
+            self.abundance_df[pd.isna(self.abundance_df)] = 0
 
 
     @staticmethod
