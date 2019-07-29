@@ -192,6 +192,11 @@ def mafft_align_fasta(input_path, output_path, method='auto', mafft_exec_string=
     elif method == 'linsi':
         mafft = local[f'{mafft_exec_string}']
         (mafft['--localpair', '--maxiterate', f'{iterations}', '--thread', f'{num_proc}', input_path] > output_path)()
+    elif method == 'unifrac':  # These are the alignment settings specifically for doing the unifrac alignments
+        mafft = local[f'{mafft_exec_string}']
+        (mafft[
+             '--thread', f'{num_proc}', '--maxiterate', f'{iterations}',
+             '--ep', '0', '--genafpair', input_path] > output_path)()
     print(f'Writing to {output_path}')
 
 

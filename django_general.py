@@ -14,3 +14,9 @@ def delete_data_set(uid):
 def delete_data_analysis(uid):
     DataAnalysis.objects.get(id=uid).delete()
 
+def write_ref_seq_objects_to_fasta(path, list_of_ref_seq_objs):
+    with open(path, 'w') as f:
+        for ref_seq_obj in list_of_ref_seq_objs:
+            f.write(f'>{ref_seq_obj.name}\n')
+            f.write(f'>{ref_seq_obj.sequence}\n')
+

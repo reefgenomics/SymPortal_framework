@@ -1,5 +1,6 @@
-from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence,
-                          AnalysisType, DataSetSample, DataAnalysis, CladeCollection, CladeCollectionType)
+from dbApp.models import (
+    DataSet, ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
+    DataAnalysis, CladeCollection, CladeCollectionType)
 import os
 import shutil
 from multiprocessing import Queue, Process, current_process
@@ -12,12 +13,16 @@ import subprocess
 import re
 import numpy as np
 from skbio.stats.ordination import pcoa
-import general
+from skbio.tree import TreeNode
+from skbio.diversity import beta_diversity
+import general, django_general
 import itertools
 from scipy.spatial.distance import braycurtis
 from symportal_utils import MothurAnalysis, SequenceCollection
 from datetime import datetime
-from collections import defaultdict
+
+
+
 # General methods
 class SequenceCollectionComplete(Exception):
     pass
@@ -824,6 +829,12 @@ class BaseUnifracDistPCoACreator:
             clade_cols_of_output_set.update(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
         return list(clade_cols_of_output_set)
 
+    def _chunk_query_distinct_rs_objs_from_rs_uids(self, rs_uid_list):
+        rs_obj_of_output_set = set()
+        for rs_list in general.chunks(rs_uid_list):
+            rs_obj_of_output_set.update(list(ReferenceSequence.objects.filter(id__in=rs_list)))
+        return list(rs_obj_of_output_set)
+
     def _get_cc_uids_of_output_from_dss_objs(self, data_set_samples_of_output):
         clade_cols_of_output = self._chunk_query_cc_objs_from_dss_objs(data_set_samples_of_output)
         clade_col_uids_of_output = [
@@ -1026,13 +1037,16 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
         # This will largely all be calculated on a clade by clade basis
         for clade_in_question in self.clades_for_dist_calcs:
-
+            self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
             # First step is to create an abundance dataframe where the sequences are in the columns
             # and the AnalysisType objects or possibly the DataSetSample objects uids are in the rows
             tadfg = self.TypeAbundanceDFGenerator(parent=self, clade=clade_in_question)
             clade_abund_df, set_of_ref_seq_uids = tadfg.generate_abundance_dataframe_for_clade().analysis_type_objs_of_clade
 
             # Second step will be to get a tree that we can supply to the skbio inplementation of weighted unifrac
+            # At first we will just implement a vanilla version of UniFrac that will always make a tree.
+            # Later on we will implement a few options that will speed up the calculation of the trees
+
             # To speed things up we will write out the tree that we eventually make so that
             # if the the sequences involved in the current distance analysis are contained in the tree that
             # already exists then we will be able to use this tree. (i.e. we won't need to generate one from scratch)
@@ -1043,10 +1057,74 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             # We can have a couple of options for speeding up this process.
             # The fist
 
+            tree_creator = self.TreeCreatorForUniFrac(parent=self, set_of_ref_seq_uids=set_of_ref_seq_uids, clade=clade_in_question)
+            tree_creator.make_tree()
+            tree = tree_creator.rooted_tree
+
+            # perform unifrac
+            wu = beta_diversity(
+                metric='weighted_unifrac', counts=clade_abund_df.to_numpy(), ids=list(clade_abund_df.index),
+                tree=tree, otu_ids=list(clade_abund_df.columns))
+
+            # # Here we have the distance matrix.
+            # # Add the sample names to the dataframe and write out
+            # # have a second dataframe object that doesn't have the names in it
+            #
+            # # compute the pcoa
+            # pcoa_output = pcoa(dist_as_np_array)
+            #
+            # # rename the pcoa dataframe index as the sample names
+            # pcoa_output.samples['sample'] = sample_names_from_dist_matrix
+            # renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
+            #
+            # # now add the variance explained as a final row to the renamed_dataframe
+            # renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
+            #     pcoa_output.proportion_explained.rename('proportion_explained'))
+            #
+            # sample_ids_from_dist_matrix.append(0)
+            # renamed_pcoa_dataframe.insert(loc=0, column='sample_uid', value=sample_ids_from_dist_matrix)
+            # renamed_pcoa_dataframe['sample_uid'] = renamed_pcoa_dataframe['sample_uid'].astype('int')
+            #
+            # renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
+            #
+            #
+            # self.output_file_paths.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
 
     class TreeCreatorForUniFrac:
-        def __init__(self, parent):
+        def __init__(self, parent, set_of_ref_seq_uids, clade):
             self.parent = parent
+            self.clade = clade
+            self.ref_seq_objs = self.parent._chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list=set_of_ref_seq_uids)
+            self.fasta_unaligned_path = os.path.join(self.parent.clade_output_dir, f'clade_{self.clade}_seqs.unaligned.fasta')
+            self.fasta_aligned_path = self.fasta_unaligned_path.replace('unaligned', 'aligned')
+            # self.iqtree = local['iqtree']
+            self.tree_out_path_unrooted = self.fasta_aligned_path + '.treefile'
+            self.tree_out_path_rooted = self.tree_out_path_unrooted.replace('.treefile', '.rooted.treefile')
+            self.rooted_tree = None
+
+        def make_tree(self):
+
+            # write out the sequences unaligned
+            self._write_out_unaligned_seqs()
+
+            # align the sequences
+            general.mafft_align_fasta(
+                input_path=self.fasta_unaligned_path, output_path=self.fasta_aligned_path,
+                method='unifrac', num_proc=self.parent.num_proc)
+
+            # make the tree
+            subprocess.run(
+                ['iqtree', '-nt', 'AUTO', '-ntmax', f'{self.parent.num_proc}', '-s', f'{self.fasta_aligned_path}'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # root the tree
+            self.rooted_tree = TreeNode.read(self.tree_out_path_unrooted).root_at_midpoint()
+            self.rooted_tree.write(self.tree_out_path_rooted)
+
+
+        def _write_out_unaligned_seqs(self):
+            django_general.write_ref_seq_objects_to_fasta(
+                path=self.fasta_unaligned_path, list_of_ref_seq_objs=self.ref_seq_objs)
 
     class TypeAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
