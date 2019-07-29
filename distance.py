@@ -1040,6 +1040,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         for clade_in_question in self.clades_for_dist_calcs:
             print(f'Calculating UniFrac Distances for clade: {clade_in_question}')
             self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
+            os.makedirs(self.clade_output_dir, exist_ok=True)
             # First step is to create an abundance dataframe where the sequences are in the columns
             # and the AnalysisType objects or possibly the DataSetSample objects uids are in the rows
             print(f'Generating abundance dataframe for its2 type profile in clade: {clade_in_question}')
@@ -1063,9 +1064,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             # The fist
 
             print(
-                f'Generating phylogentic tree for DIV its2 '
+                f'Generating phylogentic tree from {len(set_of_ref_seq_uids)} DIV its2 '
                 f'sequences found in its2 type profiles of clade: {clade_in_question}')
-            tree_creator = self.TreeCreatorForUniFrac(
+            tree_creator = TreeCreatorForUniFrac(
                 parent=self, set_of_ref_seq_uids=set_of_ref_seq_uids, clade=clade_in_question)
             tree_creator.make_tree()
             tree = tree_creator.rooted_tree
@@ -1102,54 +1103,10 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             clade_pcoa_file_path = os.path.join(
                 self.clade_output_dir,
                 f'{self.date_time_string}.unifrac_profiles_PCoA_coords_{clade_in_question}.csv')
-            renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_dist_file_path, sep=',')
+            renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
 
             self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
 
-    class TreeCreatorForUniFrac:
-        def __init__(self, parent, set_of_ref_seq_uids, clade):
-            self.parent = parent
-            self.clade = clade
-            self.ref_seq_objs = self.parent._chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list=set_of_ref_seq_uids)
-            self.fasta_unaligned_path = os.path.join(self.parent.clade_output_dir, f'clade_{self.clade}_seqs.unaligned.fasta')
-            self.fasta_aligned_path = self.fasta_unaligned_path.replace('unaligned', 'aligned')
-            # self.iqtree = local['iqtree']
-            self.tree_out_path_unrooted = self.fasta_aligned_path + '.treefile'
-            self.tree_out_path_rooted = self.tree_out_path_unrooted.replace('.treefile', '.rooted.treefile')
-            self.rooted_tree = None
-
-        def make_tree(self):
-
-            # write out the sequences unaligned
-            print('Writing out unaligned sequences')
-            self._write_out_unaligned_seqs()
-
-            # align the sequences
-            print('Aligning sequences')
-            general.mafft_align_fasta(
-                input_path=self.fasta_unaligned_path, output_path=self.fasta_aligned_path,
-                method='unifrac', num_proc=self.parent.num_proc)
-
-            # make the tree
-            if os.path.exists(self.tree_out_path_unrooted):
-                print('Tree already exists')
-                print('Reading in tree')
-            else:
-                print('Testing models and making phylogenetic tree')
-                subprocess.run(
-                    ['iqtree', '-nt', 'AUTO', '-s', f'{self.fasta_aligned_path}'],
-                    stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-
-                # root the tree
-                print('Tree creation complete')
-                print('Rooting the tree at midpoint')
-            self.rooted_tree = TreeNode.read(self.tree_out_path_unrooted).root_at_midpoint()
-            self.rooted_tree.write(self.tree_out_path_rooted)
-
-
-        def _write_out_unaligned_seqs(self):
-            django_general.write_ref_seq_objects_to_fasta(
-                path=self.fasta_unaligned_path, list_of_ref_seq_objs=self.ref_seq_objs, identifier='id')
 
     class TypeAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -1302,6 +1259,53 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             return os.path.join(output_dir, 'between_profile_distances')
 
 
+class TreeCreatorForUniFrac:
+    def __init__(self, parent, set_of_ref_seq_uids, clade):
+        self.parent = parent
+        self.clade = clade
+        self.ref_seq_objs = self.parent._chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list=set_of_ref_seq_uids)
+        self.num_seqs = len(self.ref_seq_objs)
+        self.fasta_unaligned_path = os.path.join(self.parent.clade_output_dir, f'clade_{self.clade}_seqs.unaligned.fasta')
+        self.fasta_aligned_path = self.fasta_unaligned_path.replace('unaligned', 'aligned')
+        # self.iqtree = local['iqtree']
+        self.tree_out_path_unrooted = self.fasta_aligned_path + '.treefile'
+        self.tree_out_path_rooted = self.tree_out_path_unrooted.replace('.treefile', '.rooted.treefile')
+        self.rooted_tree = None
+
+    def make_tree(self):
+
+        # write out the sequences unaligned
+        print(f'Writing out {self.num_seqs} unaligned sequences')
+        self._write_out_unaligned_seqs()
+
+        # align the sequences
+        print(f'Aligning {self.num_seqs} sequences')
+        general.mafft_align_fasta(
+            input_path=self.fasta_unaligned_path, output_path=self.fasta_aligned_path,
+            method='unifrac', num_proc=self.parent.num_proc)
+
+        # make the tree
+        if os.path.exists(self.tree_out_path_unrooted):
+            print('Tree already exists')
+            print('Reading in tree')
+        else:
+            print('Testing models and making phylogenetic tree')
+            print('This could take some time...')
+            subprocess.run(
+                ['iqtree', '-nt', 'AUTO', '-s', f'{self.fasta_aligned_path}'],
+                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+            # root the tree
+            print('Tree creation complete')
+            print('Rooting the tree at midpoint')
+        self.rooted_tree = TreeNode.read(self.tree_out_path_unrooted).root_at_midpoint()
+        self.rooted_tree.write(self.tree_out_path_rooted)
+
+
+    def _write_out_unaligned_seqs(self):
+        django_general.write_ref_seq_objects_to_fasta(
+            path=self.fasta_unaligned_path, list_of_ref_seq_objs=self.ref_seq_objs, identifier='id')
+
 class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """
 
@@ -1355,20 +1359,21 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             symportal_root_directory=symportal_root_directory, call_type=call_type,
             date_time_string=date_time_string, profiles_or_samples='samples', is_sqrt_transf=is_sqrt_transf, cct_set_uid_list=None)
 
-        self._chunk_query_set_cc_obj_from_dss_uids()
+        self.clade_collections_from_data_set_samples = self._chunk_query_set_cc_obj_from_dss_uids()
+        self.cc_id_to_sample_name_dict = {cc_obj.id: cc_obj.data_set_sample_from.name for cc_obj in self.clade_collections_from_data_set_samples}
 
         self.clades_for_dist_calcs = list(set([a.clade for a in self.clade_collections_from_data_set_samples]))
+
         self.output_dir = self._setup_output_dir(call_type, output_dir)
 
     def _chunk_query_set_cc_obj_from_dss_uids(self):
         temp_clade_col_objs = []
         for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
             temp_clade_col_objs.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
-        self.clade_collections_from_data_set_samples = temp_clade_col_objs
+        return temp_clade_col_objs
 
     def compute_unifrac_dists_and_pcoa_coords(self):
         for clade_in_question in self.clades_for_dist_calcs:
-
             self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
 
             try:
@@ -1398,6 +1403,128 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self._append_output_files_to_output_list()
 
         self._write_output_paths_to_stdout()
+
+    def compute_unifrac_dists_and_pcoa_coords_mcminds(self):
+        for clade_in_question in self.clades_for_dist_calcs:
+            print(f'Calculating UniFrac Distances for clade: {clade_in_question}')
+            self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
+            os.makedirs(self.clade_output_dir, exist_ok=True)
+
+            # First step is to create an abundance dataframe where the sequences are in the columns
+            # and the CladeCollection object uids are in the rows
+            print(f'Generating abundance dataframe for its2 type profile in clade: {clade_in_question}')
+            sadfg = self.SampleAbundanceDFGenerator(parent=self, clade=clade_in_question)
+            sadfg.generate_abundance_dataframe_for_clade()
+            clade_abund_df = sadfg.abundance_df
+            set_of_ref_seq_uids = sadfg.reference_seq_uid_set
+
+            print(
+                f'Generating phylogentic tree from {len(set_of_ref_seq_uids)} its2 '
+                f'sequences found in CladeCollections of clade: {clade_in_question}')
+            tree_creator = TreeCreatorForUniFrac(
+                parent=self, set_of_ref_seq_uids=set_of_ref_seq_uids, clade=clade_in_question)
+            tree_creator.make_tree()
+            tree = tree_creator.rooted_tree
+
+            # perform unifrac
+            print('Performing unifrac calculations')
+            wu = beta_diversity(
+                metric='weighted_unifrac', counts=clade_abund_df.to_numpy(),
+                ids=[str(_) for _ in list(clade_abund_df.index)],
+                tree=tree, otu_ids=[str(_) for _ in list(clade_abund_df.columns)])
+
+            # get the names of the samples that contained the CladeCollections
+            # to ouput in the df so that the user can relate distances
+            ordered_sample_names = list(self.cc_id_to_sample_name_dict[cc_uid] for cc_uid in clade_abund_df.index)
+            # create df from the numpy 2d array
+            dist_df = pd.DataFrame(data=wu.data, columns=ordered_sample_names, index=ordered_sample_names)
+            # write out the df
+            clade_dist_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_string}_unifrac_btwn_sample_distances_{clade_in_question}.dist')
+
+            dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
+
+            # compute the pcoa
+            pcoa_output = pcoa(wu.data)
+
+            # rename the pcoa dataframe index as the sample names
+            pcoa_output.samples['sample'] = ordered_sample_names
+            renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
+
+            # now add the variance explained as a final row to the renamed_dataframe
+            renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
+                pcoa_output.proportion_explained.rename('proportion_explained'))
+
+            # now output the pcoa
+            clade_pcoa_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_string}.unifrac_sample_PCoA_coords_{clade_in_question}.csv')
+            renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
+
+            self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
+
+
+    class SampleAbundanceDFGenerator:
+        """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
+        and the AnalysisType object uids are in the rows and the values are the normalised abundances
+        (normalised to 10000 sequences)."""
+        def __init__(self, parent, clade):
+            self.parent = parent
+            self.clade = clade
+            # Added as part of the mcminds enhancement
+            # A default dict that will have clade as key and list of reference sequence objects as value
+            self.reference_seq_uid_set = set()
+
+            # Type uid is the key and the value is a dictionary of abundances normalised to 10000
+            self.seq_abundance_dict = {}
+
+            # This will be the dataframe that we populate and can be returned from the class
+            self.abundance_df = None
+
+            self.clade_collections_of_clade = [
+                cc for cc in self.parent.clade_collections_from_data_set_samples if cc.clade == self.clade]
+
+        def generate_abundance_dataframe_for_clade(self):
+            for cc_obj in self.clade_collections_of_clade:
+                list_of_dsss_in_cc = list(DataSetSampleSequence.objects.filter(
+                    clade_collection_found_in=cc_obj))
+
+                self.reference_seq_uid_set.update([dsss.reference_sequence_of.id for dsss in list_of_dsss_in_cc])
+
+                if self.parent.is_sqrt_transf:
+                    normalised_abund_dict = self._make_norm_abund_dict_sqrt(list_of_dsss_in_cc)
+                else:
+                    normalised_abund_dict = self._make_norm_abund_dict_no_sqrt(list_of_dsss_in_cc)
+
+                self.seq_abundance_dict[cc_obj.id] = normalised_abund_dict
+
+            # Here we have the self.seq_abundance_dict populated and we can use this dict of dicts to build
+            # the dataframe
+            self.abundance_df = pd.DataFrame.from_dict(self.seq_abundance_dict, orient='index')
+            self.abundance_df[pd.isna(self.abundance_df)] = 0
+
+        def _make_norm_abund_dict_no_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
+            total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
+            normalised_abund_dict = {
+                dsss.id: int((dsss.abundance / total_seqs_of_cc) * normalisation_sequencing_depth) for
+                dsss in list_of_dsss_in_cc}
+            return normalised_abund_dict
+
+        def _make_norm_abund_dict_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
+            total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
+            rel_abund_dict = {dsss.id: (dsss.abundance / total_seqs_of_cc) for
+                              dsss in list_of_dsss_in_cc}
+            dsss_uid_to_sqrt_rel_abund_dict = {
+                dsss_uid: math.sqrt(rel_abund) for dsss_uid, rel_abund in rel_abund_dict.items()}
+
+            sqr_total = sum(dsss_uid_to_sqrt_rel_abund_dict.values())
+
+            normalised_abund_dict = {
+                dsss.reference_sequence_of.id: int((dsss_uid_to_sqrt_rel_abund_dict[dsss.id] / sqr_total) * normalisation_sequencing_depth)
+                for dsss in list_of_dsss_in_cc}
+
+            return normalised_abund_dict
 
     def _add_sample_uids_to_dist_file_and_write(self):
         # for the output version lets also append the sample name to each line so that we can see which sample it is
@@ -1443,12 +1570,15 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def _setup_output_dir(self, call_type, output_dir):
         if call_type == 'stand_alone':
-            return os.path.abspath(
+            new_output_dir = os.path.abspath(
                 os.path.join(
                     self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'), 'between_samples'))
+            os.makedirs(new_output_dir, exist_ok=True)
         else:
             # call_type == 'submission' or 'analysis':
-            return os.path.join(output_dir, 'between_sample_distances')
+            new_output_dir = os.path.join(output_dir, 'between_sample_distances')
+            os.makedirs(new_output_dir, exist_ok=True)
+        return new_output_dir
 
 
 # BrayCurtis classes
