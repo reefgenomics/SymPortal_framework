@@ -389,13 +389,13 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 # object. Key is RefSeq_obj uid and value is abundance normalised to 10000 reads.
                 normalised_abundance_of_divs_dict = None
                 if self.parent.local_abunds_only:  # Calculate the UniFrac using only the ccts from the specified samples
-                    normalised_abundance_of_divs_dict = self.parent._create_norm_abund_dict_from_local_clade_cols_unifrac(
+                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
                         at_obj, df, ref_seq_uids_of_analysis_type)
                 elif self.parent.clade_col_type_objects:  # Caculate the abundance for only the specific cct that have been provided
-                    normalised_abundance_of_divs_dict = self.parent._create_norm_abund_dict_from_cct_set_unifrac(
+                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_cct_set_unifrac(
                         at_obj, df, ref_seq_uids_of_analysis_type)
                 else:  # use all abund info to calculate av div rel abund
-                    normalised_abundance_of_divs_dict = self.parent._create_norm_abund_dict_from_all_clade_cols_unifrac(
+                    normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_all_clade_cols_unifrac(
                         df, ref_seq_uids_of_analysis_type)
 
                 self.seq_abundance_dict[at_obj.id] = normalised_abundance_of_divs_dict
@@ -422,7 +422,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             clade_collection_uid_list_of_type = [
                 int(a) for a in at.list_of_clade_collections.split(',')]
             clade_collection_uids_to_output_for_this_type = []
-            for cct_obj in self.clade_col_type_objects:
+            for cct_obj in self.parent.clade_col_type_objects:
                 if cct_obj.analysis_type_of.id == at.id:
                     # then this is a CladeCollectionType of the at
                     clade_collection_uids_to_output_for_this_type.append(cct_obj.clade_collection_found_in.id)
@@ -445,7 +445,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             # the indices of the clade collections that are of this output
             indices = []
             for i in range(len(clade_collection_uid_list_of_type)):
-                if clade_collection_uid_list_of_type[i] in self.clade_col_uid_list:
+                if clade_collection_uid_list_of_type[i] in self.parent.clade_col_uid_list:
                     indices.append(i)
             normalised_abundance_of_divs_dict = {
                 ref_seq_uids_of_analysis_type[i]: math.ceil(df.iloc[indices, i].mean() * 10000) for
