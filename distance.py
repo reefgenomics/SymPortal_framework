@@ -191,9 +191,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
 
-            if not tree.children:
+            if str(tree).count(')') == 1:
                 print(f'There are no internal nodes on the rooted tree. '
-                      f'This is likely caused by a lack of variation in sequences used to build the tree.'
+                      f'This is likely caused by a lack of variation in the sequences used to build the tree. '
                       f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
@@ -458,9 +458,9 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
 
-            if not tree.children:
+            if str(tree).count(')') == 1:
                 print(f'There are no internal nodes on the rooted tree. '
-                      f'This is likely caused by a lack of variation in sequences used to build the tree.'
+                      f'This is likely caused by a lack of variation in the sequences used to build the tree. '
                       f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
