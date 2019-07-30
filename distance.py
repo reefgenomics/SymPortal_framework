@@ -275,17 +275,17 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             wu = self._perform_unifrac(clade_abund_df, tree)
 
-            clade_dist_file_path, ordered_at_names = self._write_out_dist_df(clade_abund_df, wu)
+            clade_dist_file_path, ordered_at_names = self._write_out_dist_df(clade_abund_df, wu, clade_in_question)
 
             pcoa_output = self._compute_pcoa(wu)
 
-            clade_pcoa_file_path = self._write_out_pcoa(ordered_at_names, pcoa_output)
+            clade_pcoa_file_path = self._write_out_pcoa(ordered_at_names, pcoa_output, clade_in_question)
 
             self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
 
         self._write_output_paths_to_stdout()
 
-    def _write_out_pcoa(self, ordered_at_names, pcoa_output):
+    def _write_out_pcoa(self, ordered_at_names, pcoa_output, clade_in_question):
         # rename the pcoa dataframe index as the sample names
         pcoa_output.samples['sample'] = ordered_at_names
         renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
@@ -304,7 +304,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         pcoa_output = pcoa(wu.data)
         return pcoa_output
 
-    def _write_out_dist_df(self, clade_abund_df, wu):
+    def _write_out_dist_df(self, clade_abund_df, wu, clade_in_question):
         # get the names of the at types to ouput in the df so that the user can relate distances
         ordered_at_names = list(self.at_id_to_at_name[at_id] for at_id in clade_abund_df.index)
         # create df from the numpy 2d array
@@ -536,17 +536,17 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             wu = self._perform_unifrac(clade_abund_df, tree)
 
-            clade_dist_file_path, ordered_sample_names = self._write_out_dist_df(clade_abund_df, wu)
+            clade_dist_file_path, ordered_sample_names = self._write_out_dist_df(clade_abund_df, wu, clade_in_question)
 
             pcoa_output = self._compute_pcoa(wu)
 
-            clade_pcoa_file_path = self._write_out_pcoa(ordered_sample_names, pcoa_output)
+            clade_pcoa_file_path = self._write_out_pcoa(ordered_sample_names, pcoa_output, clade_in_question)
 
             self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
 
         self._write_output_paths_to_stdout()
 
-    def _write_out_pcoa(self, ordered_sample_names, pcoa_output):
+    def _write_out_pcoa(self, ordered_sample_names, pcoa_output, clade_in_question):
         # rename the pcoa dataframe index as the sample names
         pcoa_output.samples['sample'] = ordered_sample_names
         renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
@@ -564,7 +564,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         pcoa_output = pcoa(wu.data)
         return pcoa_output
 
-    def _write_out_dist_df(self, clade_abund_df, wu):
+    def _write_out_dist_df(self, clade_abund_df, wu, clade_in_question):
         # get the names of the samples that contained the CladeCollections
         # to ouput in the df so that the user can relate distances
         ordered_sample_names = list(self.cc_id_to_sample_name_dict[cc_uid] for cc_uid in clade_abund_df.index)
@@ -657,7 +657,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         def _make_norm_abund_dict_no_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
             total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
             normalised_abund_dict = {
-                dsss.id: int((dsss.abundance / total_seqs_of_cc) * normalisation_sequencing_depth) for
+                dsss.reference_sequence_of.id: int((dsss.abundance / total_seqs_of_cc) * normalisation_sequencing_depth) for
                 dsss in list_of_dsss_in_cc}
             return normalised_abund_dict
 
