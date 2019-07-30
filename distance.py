@@ -1,16 +1,12 @@
 from dbApp.models import (
-    DataSet, ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
-    DataAnalysis, CladeCollection, CladeCollectionType)
+    ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
+    CladeCollection, CladeCollectionType)
 import os
-import shutil
-from multiprocessing import Queue, Process, current_process
 import math
 import sys
 from plumbum import local
 import pandas as pd
-from django import db
 import subprocess
-import re
 import numpy as np
 from skbio.stats.ordination import pcoa
 from skbio.tree import TreeNode
@@ -18,85 +14,7 @@ from skbio.diversity import beta_diversity
 import general, django_general
 import itertools
 from scipy.spatial.distance import braycurtis
-from symportal_utils import MothurAnalysis, SequenceCollection
 from datetime import datetime
-
-
-
-# General methods
-class SequenceCollectionComplete(Exception):
-    pass
-
-
-class FseqbootAlignmentGenerator:
-    """This class is to be used in the UnifracDistanceCreator to handle the creation of the fseqboot alignments
-    for a given clade. It produces a directory (self.output_dir) that contains a number of alignment replicates."""
-
-    def __init__(self, parent_unifrac_dist_creator, clade_in_question, num_reps):
-        self.parent_unifrac_dist_creator = parent_unifrac_dist_creator
-        self.clade = clade_in_question
-        self.num_reps = num_reps
-        self.input_fasta_path = self.parent_unifrac_dist_creator.clade_master_fasta_file_aligned_path
-        self.output_seqboot_file_path = self.input_fasta_path + '.fseqboot'
-        self.fseqboot_local = None
-        self._setup_fseqboot_plum_bum_local()
-        self.output_dir = os.path.join(self.parent_unifrac_dist_creator.output_dir, self.clade)
-        # this is the base of the path that will be used to build the path of each of the alignment replicates
-        # to build the complete path a rep_count string (str(count)) will be appended to this base.
-        self.fseqboot_clade_root_dir = os.path.join(self.output_dir, 'out_seq_boot_reps')
-        os.makedirs(self.fseqboot_clade_root_dir, exist_ok=True)
-        self.fseqboot_base = os.path.join(self.fseqboot_clade_root_dir, 'fseqboot_rep_')
-        self.fseqboot_file_as_list = None
-        self.rep_count = 0
-        self.fseqboot_individual_alignment_as_list = None
-
-    def do_fseqboot_alignment_generation(self):
-        self._execute_fseqboot()
-
-        self.fseqboot_file_as_list = general.read_defined_file_to_list(self.output_seqboot_file_path)
-
-        self._divide_fseqboot_file_into_indi_alignments_and_write_out()
-
-    def _divide_fseqboot_file_into_indi_alignments_and_write_out(self):
-        # Now divide the fseqboot file up into its 100 different alignments
-        # here we use the re to match if its the end of an alignment. More often it will not be and so we will just
-        # add the next line to the alignment.
-        # when we do find the end of an alignmnet then we write it out. And grab the next line to start the next
-        # alignment
-        self.fseqboot_individual_alignment_as_list = [self.fseqboot_file_as_list[0]]
-        reg_ex = re.compile('[0-9]+$')
-        for line in self.fseqboot_file_as_list[1:]:
-            reg_ex_matches_list = reg_ex.findall(line)
-            if len(reg_ex_matches_list) == 1:
-                general.write_list_to_destination('{}{}'.format(self.fseqboot_base, self.rep_count),
-                                          self.fseqboot_individual_alignment_as_list)
-                self.fseqboot_individual_alignment_as_list = [line]
-                self.rep_count += 1
-            else:
-                self.fseqboot_individual_alignment_as_list.append(line)
-                general.write_list_to_destination(f'{self.fseqboot_base}{self.rep_count}', self.fseqboot_individual_alignment_as_list)
-
-    def _execute_fseqboot(self):
-        sys.stdout.write('\rGenerating multiple fseqboot alignments')
-        (self.fseqboot_local[
-            '-sequence', self.input_fasta_path, '-outfile', self.output_seqboot_file_path,
-            '-test', 'b', '-reps', self.num_reps])()
-
-    def _setup_fseqboot_plum_bum_local(self):
-        is_installed = subprocess.call(['which', 'fseqboot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        if is_installed == 0:
-            self.fseqboot_local = local["fseqboot"]
-        else:
-            fseqboot_path = os.path.join(
-                self.parent_unifrac_dist_creator.symportal_root_dir, 'lib', 'phylipnew', 'fseqboot')
-            if os.path.isfile(fseqboot_path):
-                self.fseqboot_local = local[fseqboot_path]
-            else:
-                raise RuntimeError('Cannot find fseqboot in PATH or in local installation at ./lib/phylipnew/fseqboot\n'
-                                   'For instructions on installing the phylipnew dependencies '
-                                   'please visit the SymPortal '
-                                   'GitHub page: https://github.com/didillysquat/SymPortal_framework/'
-                                   'wiki/SymPortal-setup#6-third-party-dependencies')
 
 
 class BaseUnifracDistPCoACreator:
@@ -209,7 +127,7 @@ class BaseUnifracDistPCoACreator:
 class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """Class for calculating the UniFrac distances between ITS2 type profiles, producing PCoA coordinates from
     these distances and plotting the resultant PCoA coordinates. These are all done on a clade by clade basis.
-    TODO implement the --local flag. Also implement a --cct_uids flag which will allow users calculate distances
+    Done: implement the --local flag. Also implement a --cct_uids flag which will allow users calculate distances
      for specific sets of its2 type profiles where the distances are calculated using specific sets of CladeCollections
      to work out the average relative abundances of the DIVs.
     """
@@ -272,6 +190,12 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             clade_abund_df, set_of_ref_seq_uids = self._create_profile_abundance_df(clade_in_question)
 
             tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
+
+            if not tree.children:
+                print(f'There are no internal nodes on the rooted tree. '
+                      f'This is likely caused by a lack of variation in sequences used to build the tree.'
+                      f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
+                continue
 
             wu = self._perform_unifrac(clade_abund_df, tree)
 
@@ -533,6 +457,12 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             clade_abund_df, set_of_ref_seq_uids = self._create_sample_abundance_df(clade_in_question)
 
             tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
+
+            if not tree.children:
+                print(f'There are no internal nodes on the rooted tree. '
+                      f'This is likely caused by a lack of variation in sequences used to build the tree.'
+                      f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
+                continue
 
             wu = self._perform_unifrac(clade_abund_df, tree)
 
