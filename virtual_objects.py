@@ -466,14 +466,18 @@ class VirtualAnalysisTypeManager():
         return new_vat
 
     def _init_vat_from_db_at(self, clade_collection_obj_list, ref_seq_obj_list, db_at):
+        # The grand total of instances of the analysis type in the db for the given analysis
+        # This is used for populating the 'ITS2 type baundance
+        abundacnce_db = len(db_at.list_of_clade_collections.split(','))
         if db_at.species is not None:
             new_vat = self.VirtualAnalysisType(
                 clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
-                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, species=db_at.species, name=db_at.name)
+                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, species=db_at.species, name=db_at.name,
+                abund_db=abundacnce_db)
         else:
             new_vat = self.VirtualAnalysisType(
                 clade_collection_obj_list_post_prof_assignment=clade_collection_obj_list,
-                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, name=db_at.name)
+                ref_seq_obj_list=ref_seq_obj_list, id=db_at.id, name=db_at.name, abund_db=abundacnce_db)
         vat_init = VirutalAnalysisTypeInit(parent_vat_manager=self, vat_to_init=new_vat)
         vat_init.init_vat_post_profile_assignment_from_db_at()
         self.vat_dict[new_vat.id] = new_vat
@@ -564,7 +568,7 @@ class VirtualAnalysisTypeManager():
 
         def __init__(
                 self, ref_seq_obj_list, id, clade_collection_obj_list_pre_prof_assignment=None,
-                clade_collection_obj_list_post_prof_assignment=None, species=None, name=None):
+                clade_collection_obj_list_post_prof_assignment=None, species=None, name=None, abund_db=None):
             self.id = id
             # There will be two different clade_collection_obj_sets. Firstly there is the set of CCs that are associated
             # to this VirtualAnalysisType during ProfileDiscovery. These CCs are used to define the max and min abundances
@@ -579,6 +583,7 @@ class VirtualAnalysisTypeManager():
                 self.clade_collection_obj_set_profile_discovery = set()
                 self.clade_collection_obj_set_profile_assignment = set(clade_collection_obj_list_post_prof_assignment)
                 self.clade = list(clade_collection_obj_list_post_prof_assignment)[0].clade
+                self.grand_tot_num_instances_of_vat_in_analysis = abund_db
 
             self.footprint_as_ref_seq_objs_set = ref_seq_obj_list
             self.ref_seq_uids_set = set([rs.id for rs in self.footprint_as_ref_seq_objs_set])
@@ -604,6 +609,19 @@ class VirtualAnalysisTypeManager():
             # For the output we will need a relative and absolute abundance set of dataframes.
             # The relative abundance dataframe should be proportional to the total sequencs of the CladeCollection
             # across all clades
+            # NB When creating this VAT as part of an output, because the vcc objects that the vat is aware of are those
+            # in the clade_collection_obj_list_post_prof_assignment and this is limited to the vcc objects
+            # that are in the vcc_manager, and these vcc_manager vccs are only the vccs found in the set of dss
+            # objects that are being analysed, these abundance dataframes do not contain all CladeCollection objects
+            # that were found to contain the VAT in question. This has two important effects.
+            # Firstly, we cannot use the clade_collection_obj_set_profile_assignment set to get a total number of
+            # clade collections the type was found in to populate the 'ITS2 type abundance DB' item in the output
+            # count table. Secondly, the abundances of the divs of the profiles as output in the count table will be
+            # based on only the VCC objects of the output rather than from all instances of the VAT in the analysis.
+            # Importantly, the distances between the types though will still be generated using all instances of the
+            # analysis types unless the --local attribute is passed to the distance method.
+            # We have implemented self.grand_tot_num_instances_of_vat_in_analysis above to be able to populate the
+            # 'ITS2 type abundance DB' info in the count table.
             self.type_output_rel_abund_series = None
             self.type_output_abs_abund_series = None
 

@@ -447,8 +447,9 @@ class OutputTypeCountTable:
             vccs_of_type = self.vat.clade_collection_obj_set_profile_assignment
             vccs_of_type_from_output = [vcc for vcc in vccs_of_type if
                                         vcc.vdss_uid in self.output_type_count_table.sorted_list_of_vdss_uids_to_output]
-            self.data_absolute_list.extend([str(len(vccs_of_type_from_output)), str(len(vccs_of_type))])
-            self.data_relative_list.extend([str(len(vccs_of_type_from_output)), str(len(vccs_of_type))])
+            abund_db = self.vat.grand_tot_num_instances_of_vat_in_analysis
+            self.data_absolute_list.extend([str(len(vccs_of_type_from_output)), str(abund_db)])
+            self.data_relative_list.extend([str(len(vccs_of_type_from_output)), str(abund_db)])
 
         def _pop_species(self):
             # species
