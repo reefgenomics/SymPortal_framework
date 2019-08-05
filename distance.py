@@ -432,6 +432,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
         self.clade_collections_from_data_set_samples = self._chunk_query_set_cc_obj_from_dss_uids()
         self.cc_id_to_sample_name_dict = {cc_obj.id: cc_obj.data_set_sample_from.name for cc_obj in self.clade_collections_from_data_set_samples}
+        self.cc_id_to_sample_id = {cc_obj.id: cc_obj.data_set_sample_from.id for cc_obj in self.clade_collections_from_data_set_samples}
 
         self.clades_for_dist_calcs = list(set([a.clade for a in self.clade_collections_from_data_set_samples]))
 
@@ -498,8 +499,11 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         # get the names of the samples that contained the CladeCollections
         # to ouput in the df so that the user can relate distances
         ordered_sample_names = list(self.cc_id_to_sample_name_dict[cc_uid] for cc_uid in clade_abund_df.index)
+        ordered_sample_uids = list(self.cc_id_to_sample_id[cc_uid] for cc_uid in clade_abund_df.index)
         # create df from the numpy 2d array
         dist_df = pd.DataFrame(data=wu.data, columns=ordered_sample_names, index=ordered_sample_names)
+        dist_df['sample_uid'] = ordered_sample_uids
+        dist_df = dist_df[list(dist_df)[-1:] + list(dist_df)[:-1]]
         # write out the df
         clade_dist_file_path = os.path.join(
             self.clade_output_dir,
