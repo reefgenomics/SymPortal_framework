@@ -395,7 +395,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc, call_type='analysis',
             data_analysis_obj=self.data_analysis_object,
             date_time_string=self.output_type_count_table_obj.date_time_str,
-            data_set_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
+            data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_type_count_table_obj.output_dir,
             is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
