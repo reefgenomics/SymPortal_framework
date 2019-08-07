@@ -608,7 +608,7 @@ class SymPortalWorkFlowManager:
     def _start_type_braycurtis_cct_set(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
             symportal_root_directory=self.symportal_root_directory,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in self.args.between_type_distances_cct_set.split(',')],
             is_sqrt_transf=self.args.sqrt, local_abunds_only=False
@@ -618,7 +618,7 @@ class SymPortalWorkFlowManager:
     def _start_type_braycurtis_data_sets(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
             symportal_root_directory=self.symportal_root_directory,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in self.args.between_type_distances.split(',')],
             is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
@@ -628,7 +628,7 @@ class SymPortalWorkFlowManager:
     def _start_type_braycurtis_data_set_samples(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
             symportal_root_directory=self.symportal_root_directory,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
@@ -641,7 +641,7 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.TypeUnifracDistPCoACreator(
             call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
             num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in
                                self.args.between_type_distances_cct_set.split(',')],
@@ -653,7 +653,7 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.TypeUnifracDistPCoACreator(
             call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
             num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in
                                self.args.between_type_distances.split(',')],
@@ -665,7 +665,7 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.TypeUnifracDistPCoACreator(
             call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.data_analysis_object.time_stamp,
+            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
             num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],

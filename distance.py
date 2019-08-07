@@ -274,7 +274,8 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         if call_type == 'stand_alone':
             return os.path.abspath(
                 os.path.join(
-                    self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string, 'between_profiles'))
+                    self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
+                    'between_profiles'))
         else:
             # call_type == 'analysis':
             return os.path.join(output_dir, 'between_profile_distances')
