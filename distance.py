@@ -233,6 +233,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         ordered_at_names = list(self.at_id_to_at_name[at_id] for at_id in clade_abund_df.index)
         # create df from the numpy 2d array
         dist_df = pd.DataFrame(data=wu.data, columns=ordered_at_names, index=ordered_at_names)
+        # add in the uids of the profiles
+        dist_df['profile_uid'] = clade_abund_df.index.values.tolist()
+        dist_df = dist_df[list(dist_df)[-1:] + list(dist_df)[:-1]]
         # write out the df
         clade_dist_file_path = os.path.join(
             self.clade_output_dir,
