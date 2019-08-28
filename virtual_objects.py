@@ -579,6 +579,7 @@ class VirtualAnalysisTypeManager():
                 self.clade_collection_obj_set_profile_discovery = set(clade_collection_obj_list_pre_prof_assignment)
                 self.clade_collection_obj_set_profile_assignment = set()
                 self.clade = list(clade_collection_obj_list_pre_prof_assignment)[0].clade
+                self.grand_tot_num_instances_of_vat_in_analysis = None
             else:
                 self.clade_collection_obj_set_profile_discovery = set()
                 self.clade_collection_obj_set_profile_assignment = set(clade_collection_obj_list_post_prof_assignment)
