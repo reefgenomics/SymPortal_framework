@@ -59,6 +59,8 @@ class SPDataAnalysis:
 
         self._profile_assignment()
 
+        self._update_grand_tot_attribute_for_vats()
+
         self._name_divs()
 
         self._associate_species_designations()
@@ -67,6 +69,13 @@ class SPDataAnalysis:
 
         print('DATA ANALYSIS COMPLETE')
         self._make_analysis_type_objects_from_vats()
+
+    def _update_grand_tot_attribute_for_vats(self):
+        """We need to populate the grand_tot_num_instances_of_vat_in_analysis attribute of the vats after
+        # the profile assignment."""
+        for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            self.virtual_object_manager.vat_manager.vat_dict[vat.id].grand_tot_num_instances_of_vat_in_analysis = len(
+                vat.clade_collection_obj_set_profile_assignment)
 
     def _reset_vcc_vat_rep_abund_dicts(self):
         for vcc_uid in self.virtual_object_manager.vcc_manager.vcc_dict.keys():
