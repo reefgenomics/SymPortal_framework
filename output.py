@@ -1008,8 +1008,8 @@ class SequenceCountTableCreator:
         absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.postMED.json')
         relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.postMED.json')
         js_file_path = os.path.join(self.html_output_dir, 'seq_data.postMED.js')
-        self.output_df_absolute_post_med.to_json(path_or_buf=absolute_json_path, orient='records')
-        self.output_df_relative_post_med.to_json(path_or_buf=relative_json_path, orient='records')
+        general.json_out_df(path_to_json_file=absolute_json_path, df_to_json=self.output_df_absolute_post_med)
+        general.json_out_df(path_to_json_file=relative_json_path, df_to_json=self.output_df_relative_post_med)
         js_file = []
         js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolutePostMED'))
         js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelativePostMED'))
@@ -1378,8 +1378,8 @@ class SequenceCountTableCreator:
             absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.preMED.json')
             relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.preMED.json')
             js_file_path = os.path.join(self.html_output_dir, 'seq_data.preMED.js')
-            self.abs_count_df.to_json(path_or_buf=absolute_json_path, orient='records')
-            self.rel_count_df.to_json(path_or_buf=relative_json_path, orient='records')
+            general.json_out_df(path_to_json_file=absolute_json_path, df_to_json=self.abs_count_df)
+            general.json_out_df(path_to_json_file=relative_json_path, df_to_json=self.rel_count_df)
             js_file = []
             js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path,
                                                                         function_name='getSeqDataAbsolutePreMED'))

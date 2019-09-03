@@ -331,6 +331,15 @@ def output_js_color_objects_array(output_directory, colour_dict, js_file_name):
         destination=os.path.join(output_directory, js_file_name),
         list_to_write=json_col_dict_object_array_as_list)
 
+def json_out_df(path_to_json_file, df_to_json):
+    # manually add the sample_uid to the df to be jsoned as the orient='record' option does not output the index
+    temp_df = df_to_json.copy()
+    temp_df['sample_uid'] = df_to_json.index.values.tolist()
+    cols = temp_df.columns.values.tolist()
+    cols_reorder = cols[-1:] + cols[:-1]
+    temp_df = temp_df[cols_reorder]
+    # remove the assension numbers row at the end
+    temp_df.iloc[:-1].to_json(path_or_buf=path_to_json_file, orient='records')
 
 def get_colour_lists():
     colour_palette = get_colour_list()
