@@ -322,11 +322,11 @@ def make_json_object_array_from_python_dictionary(p_dict):
     json_str += ']'
     return json_str
 
-def output_js_color_objects_array(output_directory, colour_dict, js_file_name):
+def output_js_color_objects_array(output_directory, colour_dict, js_file_name, function_name):
     # write out the colour dict to the html file
     json_col_dict_object_array_as_list = make_js_function_to_return_json_file(
         json_file_as_str=make_json_object_array_from_python_dictionary(colour_dict),
-        function_name='getColDictObjArr')
+        function_name=function_name)
     write_list_to_destination(
         destination=os.path.join(output_directory, js_file_name),
         list_to_write=json_col_dict_object_array_as_list)
