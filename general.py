@@ -342,7 +342,7 @@ def json_out_df(path_to_json_file, df_to_json, remove_last_row):
     if remove_last_row:
         temp_df.iloc[:-1].to_json(path_or_buf=path_to_json_file, orient='records')
     else:
-        temp_df.iloc.to_json(path_or_buf=path_to_json_file, orient='records')
+        temp_df.to_json(path_or_buf=path_to_json_file, orient='records')
 
 def get_colour_lists():
     colour_palette = get_colour_list()
