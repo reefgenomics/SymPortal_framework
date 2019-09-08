@@ -1164,7 +1164,7 @@ class InitialMothurHandler:
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
 
-        sys.stdout.write('\nPerforming QC\n')
+        sys.stdout.write('\nPerforming initial mothur QC\n')
         for n in range(self.parent.num_proc):
             p = Process(target=self._worker_initial_mothur,
                         args=()
@@ -1400,7 +1400,7 @@ class PotentialSymTaxScreeningHandler:
         all_processes = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
-        sys.stdout.write('\nPerforming QC\n')
+        sys.stdout.write('\nPerforming potential sym tax screening QC\n')
         for n in range(self.num_proc):
             new_process = Process(
                 target=self._potential_sym_tax_screening_worker,
@@ -1612,7 +1612,7 @@ class SymNonSymTaxScreeningHandler:
         all_processes = []
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
-        sys.stdout.write('\nPerforming QC\n')
+        sys.stdout.write('\nPerforming sym non sym tax screening QC\n')
 
         for n in range(self.num_proc):
             p = Process(target=self._sym_non_sym_tax_screening_worker, args=(
