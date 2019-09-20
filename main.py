@@ -286,17 +286,25 @@ class SymPortalWorkFlowManager:
         """Search for the path of the .csv file that holds the PC coordinates and pass this into plotting"""
         sys.stdout.write('\n\nPlotting ITS2 type profile distances\n')
         for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
-            local_plotter = plotting.DistScatterPlotterTypes(
-                csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
-            local_plotter.make_type_dist_scatter_plot()
+            try:
+                local_plotter = plotting.DistScatterPlotterTypes(
+                    csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
+                local_plotter.make_type_dist_scatter_plot()
+            except RuntimeError:
+                # The error message is printed to stdout at the source
+                continue
 
     def _plot_sample_distances_from_distance_object(self):
         """Search for the path of the .csv file that holds the PC coordinates and pass this into plotting"""
         sys.stdout.write('\n\nPlotting sample distances\n')
         for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
-            local_plotter = plotting.DistScatterPlotterSamples(
-                csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
-            local_plotter.make_sample_dist_scatter_plot()
+            try:
+                local_plotter = plotting.DistScatterPlotterSamples(
+                    csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
+                local_plotter.make_sample_dist_scatter_plot()
+            except RuntimeError:
+                # The error message is printed to stdout at the source
+                continue
 
     # DATA ANALYSIS
     def _perform_data_analysis(self):

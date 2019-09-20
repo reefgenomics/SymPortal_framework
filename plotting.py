@@ -73,6 +73,13 @@ class DistScatterPlotter:
         self.output_directory = os.path.dirname(csv_path)
         self.clade = self.output_directory.split('/')[-1]
         self.plotting_df = pd.read_csv(csv_path, sep=',', lineterminator='\n', header=0, index_col=0)
+        # Check to see that there are more than two samples with sequences from this clade
+        # and explicitly check to see that the PC2 exists
+        # if not, then raise a run time exception
+        if not len(self.plotting_df.index.values.tolist()) > 2 or 'PC2' not in list(self.plotting_df):
+            print(f'Insufficient samples or distance between samples for clade {self.clade}. '
+                  f'Distances will not be plotted for this clade.')
+            raise RuntimeError()
         self.f, self.ax = plt.subplots(1, 1, figsize=(9, 9))
         self.x_values = self.plotting_df['PC1'].values.tolist()[:-1]
         self.y_values = self.plotting_df['PC2'].values.tolist()[:-1]

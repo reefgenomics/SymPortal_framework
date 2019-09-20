@@ -192,9 +192,13 @@ class DataLoading:
                     if self.this_is_pcoa_path(output_path):
                         clade_of_output = os.path.dirname(output_path).split('/')[-1]
                         sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
-                        dist_scatter_plotter_samples = DistScatterPlotterSamples(csv_path=output_path,
-                                                                                 date_time_str=self.date_time_string)
-                        dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
+                        try:
+                            dist_scatter_plotter_samples = DistScatterPlotterSamples(csv_path=output_path,
+                                                                                     date_time_str=self.date_time_string)
+                            dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
+                        except RuntimeError:
+                            # The error message is printed to stdout at the source
+                            continue
                         self.output_path_list.extend(dist_scatter_plotter_samples.output_path_list)
 
     def _do_sample_dist_and_pcoa(self):
