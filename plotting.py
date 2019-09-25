@@ -704,11 +704,16 @@ class SeqStackedBarPlotter():
 
         self._drop_meta_info_rows_from_df(meta_index_to_cut_from, sp_output_df)
 
+        self._sample_names_to_string(sp_output_df)
+
         self._populate_smpl_id_to_smp_name_dict(sp_output_df)
 
         sp_output_df = self._drop_non_seq_abund_cols_and_set_df_types(sp_output_df)
 
         return sp_output_df
+
+    def _sample_names_to_string(self, sp_output_df):
+        sp_output_df['sample_name'] = sp_output_df['sample_name'].astype(str)
 
     @staticmethod
     def _drop_non_seq_abund_cols_and_set_df_types(sp_output_df):

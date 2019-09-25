@@ -37,6 +37,16 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
+    # TEST DATA LOADING only one sample with numerical name
+    def test_data_loading_work_flow_number_only(self):
+        print('\n\nTesting: data_loading_work_flow\n\n')
+        test_data_dir_path_num_only = os.path.join(self.test_data_dir_path, 'num_only')
+        data_sheet_file_path = os.path.join(test_data_dir_path_num_only, 'test_data_submission_input_lite_num_only.csv')
+        custom_args_list = ['--load', test_data_dir_path_num_only, '--name', self.name, '--num_proc', str(self.num_proc),
+                            '--data_sheet', data_sheet_file_path, '--distance_method', 'unifrac']
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
     # TEST DATA ANALYSIS
     def test_data_analysis_work_flow(self):
         print('\n\nTesting: data_analysis_work_flow\n\n')
