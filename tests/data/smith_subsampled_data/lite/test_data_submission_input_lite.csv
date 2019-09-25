@@ -1,6 +1,7 @@
 ,,,,host_info if applicable,,,,,,sampling info if applicable,,,
 sample_name,fastq_fwd_file_name,fastq_rev_file_name,sample_type,host_phylum,host_class,host_order,host_family,host_genus,host_species,collection_latitude,collection_longitude,collection_date,collection_depth
 A01,A01.1_subsampled.fastq,A01.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
+1234,1234.1_subsampled.fastq,1234.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
 C01,C01.1_subsampled.fastq,C01.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
 Y01,Y01.1_subsampled.fastq,Y01.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
 no_sym_0,no_sym_0.1_subsampled.fastq,no_sym_0.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.86,0-12
