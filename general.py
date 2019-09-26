@@ -4,6 +4,7 @@ import subprocess
 import sys
 import pandas as pd
 from plumbum import local
+import json
 import numpy as np
 
 def return_list_of_file_names_in_directory(directory_to_list):
@@ -343,6 +344,22 @@ def make_js_function_to_return_json_file(function_name, json_path=None, json_fil
     temp_js_file_as_list[1] = 'return ' + temp_js_file_as_list[1]
     temp_js_file_as_list.append('};')
     return temp_js_file_as_list
+
+def write_out_js_file_to_return_python_objs_as_js_objs(list_of_func_obj_dicts, js_outpath):
+    '''This function writes out a javascript file that will the javascript version of one or more
+    python objects. The list_of_func_obj_dicts should ab a list of dictionaries, where each dictionary
+    has a key of function_name and python_obj, the values of these keys will be used below.'''
+    temp_js_file_as_list = []
+    for python_obj_dict in list_of_func_obj_dicts:
+        obj_as_json = json.dumps(python_obj_dict['python_obj'])
+
+        temp_js_file_as_list.append('function ' + python_obj_dict['function_name'] + '(){')
+        temp_js_file_as_list.append("\treturn " + obj_as_json)
+        temp_js_file_as_list.append("}")
+
+    with open(js_outpath, 'w') as f:
+        for line in temp_js_file_as_list:
+            f.write(f'{line}\n')
 
 def make_json_object_array_from_python_dictionary(p_dict):
     json_str = ''

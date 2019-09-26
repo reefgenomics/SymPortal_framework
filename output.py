@@ -947,7 +947,7 @@ class SequenceCountTableCreator:
     def _write_out_dfs_and_fasta(self):
         self._write_out_abund_and_meta_dfs_seqs()
 
-        self._write_out_js_seq_data_file_post_med()
+        self._write_out_js_seq_data_files_post_med()
 
         self._write_out_abund_only_dfs_seqs()
 
@@ -999,7 +999,87 @@ class SequenceCountTableCreator:
         self.output_df_relative_post_med.to_csv(self.path_to_seq_output_abund_and_meta_df_relative, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
 
-    def _write_out_js_seq_data_file_post_med(self):
+    def _write_out_js_seq_data_files_post_med(self):
+        '''Here we will want to put out two js files.
+        One that contains the sample meta information and one that contains the rectangle information
+        for each sequence in each sample.'''
+
+        sample_meta_dict, index_of_first_seq = self._populate_sample_meta_info_dict()
+
+        # here we have the dictionary that will become the sample meta information
+        js_file_path = os.path.join(self.html_output_dir, 'sample_meta_info.js')
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name':'GetSampleMetaInfo', 'python_obj':sample_meta_dict}], js_outpath=js_file_path)
+
+
+        # now we need to create the rectangle array
+        post_med_rect_dict = {sample_uid :[] for sample_uid in self.output_df_absolute_post_med.index.values.tolist()}
+        # The sequences in the output df are ordered by clade and then abundance. We need to provide the
+        # y_abs and y_rel properties of the rect objects in order of the most abundant sequences first.
+        # We want this order to be independent of clade so we need to do a sorting.
+        abundance_dict = {}
+        for col in list(self.output_df_absolute_post_med)[index_of_first_seq:]:
+            abundance_dict[col] = sum(self.output_df_absolute_post_med[col][:-1])
+
+        # get the names of the sequences sorted according to their totalled abundance
+        sorted_seq_names = [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
+
+        # also gonna be handy to have a seq_name to uid dict
+        seq_name_to_uid_dict = {
+            seq_name:uid for seq_name, uid in
+            zip(
+                list(self.output_df_absolute_post_med)[index_of_first_seq:],
+                self.output_df_absolute_post_med.iloc[-1,index_of_first_seq:]
+            )}
+
+        with open(os.path.join(self.html_output_dir, 'seq_col_dict.json'), 'r') as f:
+            seq_colour_dict = json.load(f)
+
+        max_cumulative_abs = 0
+        for sample_uid in self.output_df_absolute_post_med.index:
+            new_rect_list = []
+            abs_series = self.output_df_absolute_post_med.loc[sample_uid]
+            rel_series = self.output_df_relative_post_med.loc[sample_uid]
+            cumulative_count_abs = 0
+            cumulative_count_rel = 0
+            # we need the inverse cumulative as well for the modal plot
+            # this is just adding the cumulation value after the height has been assigned
+            cumulative_count_abs_inv = 0
+            cumulative_count_rel_inv = 0
+            for seq in sorted_seq_names:
+                seq_abund_abs = abs_series.at[seq]
+                seq_abund_rel = rel_series.at[seq]
+                if seq_abund_abs:
+                    cumulative_count_abs += int(seq_abund_abs)
+                    cumulative_count_rel += float(seq_abund_rel)
+                    new_rect_list.append({
+                        "sample_name": abs_series['sample_name'],
+                        "seq_name": seq,
+                        "sample_uid": sample_uid,
+                        "seq_uid": seq_name_to_uid_dict,
+                        "y_abs": cumulative_count_abs,
+                        "y_rel": cumulative_count_rel,
+                        "y_abs_inv": cumulative_count_abs_inv,
+                        "y_rel_inv": cumulative_count_rel_inv,
+                        "height_rel": float(seq_abund_rel),
+                        "height_abs": int(seq_abund_abs),
+                        "fill": seq_colour_dict[seq]
+                    })
+                    cumulative_count_abs_inv += int(seq_abund_abs)
+                    cumulative_count_rel_inv += float(seq_abund_rel)
+            post_med_rect_dict[sample_uid] = new_rect_list
+            if cumulative_count_abs > max_cumulative_abs:
+                max_cumulative_abs = cumulative_count_abs
+
+
+        # now we have the dictionary that holds the rectangle arrays populated
+        # and we have the maximum abundance
+        # now write these out as js file and functions to return.
+        js_file_path = os.path.join(self.html_output_dir, 'rect_array_postMED_by_sample.js')
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getRectDataPostMEDBySample', 'python_obj': post_med_rect_dict},
+             {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}], js_outpath=js_file_path)
+
         # now create the .js file that we will use to read in the data locally
         # we will create a single file that will contain the functions getSeqDataAbsolute and getSeqDataRelative
         # to make this file we will first write out each of the dataframes to json. We will then read in the json
@@ -1014,6 +1094,55 @@ class SequenceCountTableCreator:
         js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolutePostMED'))
         js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelativePostMED'))
         general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+
+    def _populate_sample_meta_info_dict(self):
+        # first lets produce the meta information.
+        # dictionary of where the sample UID is the key to a second dictionary that contains the other properties
+        sample_meta_dict = {uid: {} for uid in self.output_df_absolute_post_med.index.values.tolist()}
+        taxa_fields = ['host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species']
+        index_of_first_seq = list(self.output_df_absolute_post_med).index('collection_depth') + 1
+        for k in sample_meta_dict.keys():
+            sample_meta_dict['uid'] = k
+            sample_meta_dict['sample_name'] = self.output_df_absolute_post_med.loc[k, 'sample_name']
+            sample_meta_dict['raw_contigs'] = self.output_df_absolute_post_med.loc[k, 'raw_contigs']
+            sample_meta_dict['post_taxa_id_absolute_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+                k, 'post_taxa_id_absolute_symbiodinium_seqs']
+            sample_meta_dict['post_taxa_id_unique_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+                k, 'post_taxa_id_unique_symbiodinium_seqs']
+            sample_meta_dict['post_taxa_id_absolute_non_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+                k, 'post_taxa_id_absolute_non_symbiodinium_seqs']
+            sample_meta_dict['post_taxa_id_unique_non_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+                k, 'post_taxa_id_unique_non_symbiodinium_seqs']
+            sample_meta_dict['post_med_absolute'] = self.output_df_absolute_post_med.loc[k, 'post_med_absolute']
+            sample_meta_dict['post_med_unique'] = self.output_df_absolute_post_med.loc[k, 'post_med_unique']
+            sample_meta_dict['sample_type'] = self.output_df_absolute_post_med.loc[k, 'sample_type']
+
+            taxa_string = ';'.join([self.output_df_absolute_post_med.loc[k, taxa_field] for taxa_field in taxa_fields])
+            sample_meta_dict['taxa_string'] = taxa_string
+            sample_meta_dict['lat'] = self.output_df_absolute_post_med.loc[k, 'collection_latitude']
+            sample_meta_dict['lon'] = self.output_df_absolute_post_med.loc[k, 'collection_longitude']
+            sample_meta_dict['collection_date'] = self.output_df_absolute_post_med.loc[k, 'collection_date']
+            sample_meta_dict['collection_depth'] = self.output_df_absolute_post_med.loc[k, 'collection_depth']
+
+            self._populate_clade_proportion_string(k, sample_meta_dict, index_of_first_seq)
+        return sample_meta_dict, index_of_first_seq
+
+    def _populate_clade_proportion_string(self, k, sample_meta_dict, index_of_first_seq):
+        # get the clade breakdown from the abundances of the sequences
+
+        prop_counting_dict = {clade: 0 for clade in list('ABCDEFGHI')}
+        for seq_index in range(len(list(self.output_df_absolute_post_med)))[index_of_first_seq:]:
+            seq_abund = self.output_df_absolute_post_med.at[k, seq_index]
+            if seq_index[0] in list('ABCDEFGHI'):
+                prop_counting_dict[seq_index[0]] += seq_abund
+            elif seq_index[-1] in list('ABCDEFGHI'):
+                prop_counting_dict[seq_index[-1]] += seq_abund
+            else:
+                raise RuntimeError('Unrecognised clade identifier in seq name')
+        # now turn these into proportions and a string semicolon seperated
+        tot_seqs = sum(prop_counting_dict.values())
+        props = [prop_counting_dict[clade] / tot_seqs for clade in list('ABCDEFGHI')]
+        sample_meta_dict['clade_prop'] = ';'.join([f'{prop:.2f}' for prop in props])
 
     def _append_meta_info_to_df(self):
         # Now append the meta infromation for each of the data_sets that make up the output contents
