@@ -1007,34 +1007,86 @@ class SequenceCountTableCreator:
         sample_meta_dict, index_of_first_seq = self._populate_sample_meta_info_dict()
 
         # here we have the dictionary that will become the sample meta information
+
+        # next we want to produce arrays that are the order of the sample uids according to various sortings
+        sorted_sample_arrays = self._populate_sorted_sample_uid_arrays()
+
         js_file_path = os.path.join(self.html_output_dir, 'sample_meta_info.js')
+
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name':'GetSampleMetaInfo', 'python_obj':sample_meta_dict}], js_outpath=js_file_path)
+            [{'function_name':'getSampleMetaInfo', 'python_obj':sample_meta_dict},
+             {'function_name':'getSampleSortedArrays', 'python_obj':sorted_sample_arrays}], js_outpath=js_file_path)
 
+        self._make_post_med_rect_array(index_of_first_seq)
 
+    def _populate_sorted_sample_uid_arrays(self):
+        # we should be able to make these quickly from the output_df_absolute by doing sorts
+        # we will create a single dictionary that has the sorting prerequisite as the key and then an array of the
+        # sample uids.
+        # we will create a copy of the df so that we can mess it up without affecting the output df
+        df_to_sort = self.output_df_absolute_post_med.copy()
+        df_to_sort = df_to_sort.iloc[:-1]
+        sorted_sample_arrays = {}
+        sorted_sample_arrays['sample_name'] = df_to_sort.sort_value('raw_contigs', ascending=True,
+                                                                    inplace=True).index.values.tolist()
+        sorted_sample_arrays['raw_contigs'] = df_to_sort.sort_value('raw_contigs', ascending=True,
+                                                                    inplace=True).index.values.tolist()
+        sorted_sample_arrays['post_med_absolute'] = df_to_sort.sort_value('post_med_absolute', ascending=True,
+                                                                          inplace=True).index.values.tolist()
+        sorted_sample_arrays['post_med_unique'] = df_to_sort.sort_value('post_med_unique', ascending=True,
+                                                                        inplace=True).index.values.tolist()
+        df_to_sort['taxa_string'] = [';'.join(i) for i in zip(
+            df_to_sort["host_phylum"].map(str),
+            df_to_sort["host_class"].map(str),
+            df_to_sort["host_order"].map(str),
+            df_to_sort["host_family"].map(str),
+            df_to_sort["host_genus"].map(str),
+            df_to_sort["host_species"].map(str))]
+        sorted_sample_arrays['taxa_string'] = df_to_sort.sort_value('taxa_string', ascending=True,
+                                                                    inplace=True).index.values.tolist()
+        df_to_sort['lat_lon_str'] = [';'.join(i) for i in zip(
+            df_to_sort["collection_latitude"].map(str),
+            df_to_sort["collection_longitude"].map(str))]
+        sorted_sample_arrays['lat_lon'] = df_to_sort.sort_value('lat_lon_str', ascending=True,
+                                                                inplace=True).index.values.tolist()
+        sorted_sample_arrays['collection_date'] = df_to_sort.sort_value('collection_date', ascending=True,
+                                                                        inplace=True).index.values.tolist()
+        sorted_sample_arrays['collection_depth'] = df_to_sort.sort_value('collection_depth', ascending=True,
+                                                                         inplace=True).index.values.tolist()
+        return sorted_sample_arrays
+
+    def _make_post_med_rect_array(self, index_of_first_seq):
         # now we need to create the rectangle array
-        post_med_rect_dict = {sample_uid :[] for sample_uid in self.output_df_absolute_post_med.index.values.tolist()}
+        post_med_rect_dict = {sample_uid: [] for sample_uid in self.output_df_absolute_post_med.index.values.tolist()}
         # The sequences in the output df are ordered by clade and then abundance. We need to provide the
         # y_abs and y_rel properties of the rect objects in order of the most abundant sequences first.
         # We want this order to be independent of clade so we need to do a sorting.
         abundance_dict = {}
         for col in list(self.output_df_absolute_post_med)[index_of_first_seq:]:
             abundance_dict[col] = sum(self.output_df_absolute_post_med[col][:-1])
-
         # get the names of the sequences sorted according to their totalled abundance
         sorted_seq_names = [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
-
         # also gonna be handy to have a seq_name to uid dict
         seq_name_to_uid_dict = {
-            seq_name:uid for seq_name, uid in
+            seq_name: uid for seq_name, uid in
             zip(
                 list(self.output_df_absolute_post_med)[index_of_first_seq:],
-                self.output_df_absolute_post_med.iloc[-1,index_of_first_seq:]
+                self.output_df_absolute_post_med.iloc[-1, index_of_first_seq:]
             )}
-
         with open(os.path.join(self.html_output_dir, 'seq_col_dict.json'), 'r') as f:
             seq_colour_dict = json.load(f)
+        max_cumulative_abs = self._populate_post_med_rect_dict(post_med_rect_dict, seq_colour_dict,
+                                                               seq_name_to_uid_dict, sorted_seq_names)
+        # now we have the dictionary that holds the rectangle arrays populated
+        # and we have the maximum abundance
+        # now write these out as js file and functions to return.
+        js_file_path = os.path.join(self.html_output_dir, 'rect_array_postMED_by_sample.js')
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getRectDataPostMEDBySample', 'python_obj': post_med_rect_dict},
+             {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
+            js_outpath=js_file_path)
 
+    def _populate_post_med_rect_dict(self, post_med_rect_dict, seq_colour_dict, seq_name_to_uid_dict, sorted_seq_names):
         max_cumulative_abs = 0
         for sample_uid in self.output_df_absolute_post_med.index:
             new_rect_list = []
@@ -1070,30 +1122,7 @@ class SequenceCountTableCreator:
             post_med_rect_dict[sample_uid] = new_rect_list
             if cumulative_count_abs > max_cumulative_abs:
                 max_cumulative_abs = cumulative_count_abs
-
-
-        # now we have the dictionary that holds the rectangle arrays populated
-        # and we have the maximum abundance
-        # now write these out as js file and functions to return.
-        js_file_path = os.path.join(self.html_output_dir, 'rect_array_postMED_by_sample.js')
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name': 'getRectDataPostMEDBySample', 'python_obj': post_med_rect_dict},
-             {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}], js_outpath=js_file_path)
-
-        # now create the .js file that we will use to read in the data locally
-        # we will create a single file that will contain the functions getSeqDataAbsolute and getSeqDataRelative
-        # to make this file we will first write out each of the dataframes to json. We will then read in the json
-        # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
-        # these into a single .js file called seq_data.js
-        absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.postMED.json')
-        relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.postMED.json')
-        js_file_path = os.path.join(self.html_output_dir, 'seq_data.postMED.js')
-        general.json_out_df(path_to_json_file=absolute_json_path, df_to_json=self.output_df_absolute_post_med, remove_last_row=True)
-        general.json_out_df(path_to_json_file=relative_json_path, df_to_json=self.output_df_relative_post_med, remove_last_row=True)
-        js_file = []
-        js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path, function_name='getSeqDataAbsolutePostMED'))
-        js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path, function_name='getSeqDataRelativePostMED'))
-        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+        return max_cumulative_abs
 
     def _populate_sample_meta_info_dict(self):
         # first lets produce the meta information.
