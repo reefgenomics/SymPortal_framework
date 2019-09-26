@@ -16,6 +16,7 @@ import numpy as np
 import sys
 from datetime import datetime
 import general
+import json
 from dbApp.models import ReferenceSequence
 
 plt.ioff()
@@ -388,15 +389,16 @@ class TypeStackedBarPlotter:
         self.type_uid_to_type_name_dict = None
         self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
         self.colour_dict = self._set_colour_dict()
-        general.output_js_color_objects_array(
-            output_directory=os.path.join(self.output_directory, 'html'),
-            colour_dict=self.colour_dict, js_file_name='color_obj_array_profiles.js',
-            function_name='getColDictObjArrProfs')
+        self._json_dump_col_dict_for_html()
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
         self.samples_per_subplot = 50
         self.number_of_subplots = self._infer_num_subplots()
         self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
         self.output_path_list = []
+
+    def _json_dump_col_dict_for_html(self):
+        with open(os.path.join(self.output_directory, 'html', 'profile_col_dict.json'), 'w') as f:
+            json.dump(self.colour_dict, f)
 
     def plot_stacked_bar_profiles(self):
         print('\n\nPlotting ITS2 type profile abundances')
@@ -540,9 +542,6 @@ class SeqStackedBarPlotter():
         self.max_n_rows = 7
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
         self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
-        general.output_js_color_objects_array(
-            output_directory=os.path.join(self.root_output_directory, 'html'),
-            colour_dict=self.colour_dict, js_file_name='color_obj_array_post_med.js', function_name='getColDictObjArrPostMED')
         # plotting vars
         self.ordered_sample_uid_list = self._set_ordered_sample_uid_list_and_reorder_df(ordered_sample_uid_list)
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
@@ -830,10 +829,8 @@ class SeqStackedBarPlotter():
             self.max_n_cols = 8
             self.max_n_rows = 7
             self.num_leg_cells = self.max_n_rows * self.max_n_cols
-            self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
-            general.output_js_color_objects_array(
-                output_directory=os.path.join(self.root_output_directory, 'html'),
-                colour_dict=self.colour_dict, js_file_name='color_obj_array_pre_med.js', function_name='getColDictObjArrPreMED')
+            self.colour_dict = general.set_seq_colour_dict_w_reference_c_dict(self.ordered_list_of_seqs_names, self.parent.colour_dict)
+            self._json_dump_colour_dict_to_html()
             # plotting vars
             self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
             self.samples_per_subplot = 50
@@ -841,6 +838,15 @@ class SeqStackedBarPlotter():
             # we add  1 to the n_subplots here for the legend at the bottom
             self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
             self.output_path_list = []
+
+        def _json_dump_colour_dict_to_html(self):
+            # now that we have made both the post-MED and pre-MED colour dicts we should json them out to the
+            # html directory so that they can be integrated when we are creating the post-MED and pre-MED rect
+            # arrays
+            # https://stackoverflow.com/questions/38987/how-to-merge-two-dictionaries-in-a-single-expression
+            master_col_dict = {**self.parent.colour_dict, **self.colour_dict}
+            with open(os.path.join(self.root_output_directory, 'html', 'seq_col_dict.json'), 'w') as f:
+                json.dump(master_col_dict, f)
 
         def _curate_output_count_table(self, rel_abund_df):
             self.smp_uid_to_smp_name_dict = {

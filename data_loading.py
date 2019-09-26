@@ -1262,11 +1262,11 @@ class InitialMothurWorker:
 
         self._set_absolute_num_seqs_after_inital_qc()
 
-        sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
-
         self._write_out_final_name_and_fasta_for_tax_screening()
 
         self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
+
+        sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
 
     def _write_out_final_name_and_fasta_for_tax_screening(self):
         name_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)

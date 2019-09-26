@@ -298,6 +298,41 @@ def set_seq_colour_dict(ordered_list_of_seqs):
 
     return temp_colour_dict
 
+def set_seq_colour_dict_w_reference_c_dict(ordered_list_of_seqs, existing_dict):
+    """This method has the same purpose as set_seq_colour_dict, but in this case takes into
+    account another colour dict that has already been created. The aim here is to create a second colour dict
+    that is in complete sync with the first colour dict. If there is an item shared in common between
+    the two dictionaries, we can guarantee that they are assigned the same colour"""
+    temp_colour_dict = {}
+    predefined_colour_dict = get_pre_def_colour_dict()
+
+    # first assign the colours of the items that are already in the other dict
+    for item, colour in existing_dict.items():
+        if item in ordered_list_of_seqs:
+            temp_colour_dict[item] = colour
+
+    # now check to see if any of the remaining ordered_list_of_seqs items are in the
+    # predefined_colour_dict. If they are then assign them this colour
+    items_to_check_still = [item for item in ordered_list_of_seqs if item not in temp_colour_dict]
+    for item in items_to_check_still:
+        if item in predefined_colour_dict:
+            temp_colour_dict[item] = predefined_colour_dict[item]
+
+    # now all of the remaining seqs need to be given any colours that are not already being used by the second
+    # dictionary, or otherwise they need to be given a grey colour
+    colour_palette, grey_palette = get_colour_lists()
+    items_to_check_still = [item for item in items_to_check_still if item not in predefined_colour_dict]
+    colour_palette = [colour for colour in colour_palette if colour not in existing_dict.values()]
+
+    for i, seq_name in enumerate(items_to_check_still):
+        if i < len(colour_palette):
+            temp_colour_dict[seq_name] = colour_palette[i]
+        else:
+            grey_index = i % len(grey_palette)
+            temp_colour_dict[seq_name] = grey_palette[grey_index]
+
+    return temp_colour_dict
+
 def make_js_function_to_return_json_file(function_name, json_path=None, json_file_as_str=None):
     temp_js_file_as_list = []
     temp_js_file_as_list.append('function ' + function_name + '(){')
