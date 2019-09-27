@@ -152,10 +152,19 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self.at_list_for_output = self._chunk_query_set_distinct_at_list_for_output_from_dss_uids()
         self.at_id_to_at_name  = {at.id:at.name for at in self.at_list_for_output}
         self.clades_for_dist_calcs = list(set([at.clade for at in self.at_list_for_output]))
-        self.output_dir = self._setup_output_dir(call_type, output_dir)
+        self.output_dir, self.html_dir = self._setup_output_dir(call_type, output_dir)
         # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only
         # i.e. rather than all instances of the type found in all samples (including samples outside of this output)
         self.local_abunds_only = local_abunds_only
+        # for the js dict
+        self.genera_annotation_dict = {
+            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
+            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
+        }
+        self.pc_coordinates_dict = {}
+        self.pc_variances_dict = {}
+        self.pc_availabaility_dict = {}
+        self.js_file_path = os.path.join(self.html_dir, 'btwn_profile_dist_uf.js')
 
     def _chunk_query_set_distinct_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
@@ -203,29 +212,64 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             pcoa_output = self._compute_pcoa(wu)
 
-            clade_pcoa_file_path = self._write_out_pcoa(ordered_at_names, pcoa_output, clade_in_question)
+            clade_pcoa_file_path, pcoa_coords_df = self._write_out_pcoa(ordered_at_names, pcoa_output, clade_in_question)
+
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
 
             self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
 
+        self._write_out_js_objects()
         self._write_output_paths_to_stdout()
+
+    def _write_out_js_objects(self):
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getBtwnSampleDistCoordsUF', 'python_obj': self.pc_coordinates_dict},
+             {'function_name': 'getBtwnSampleDistPCVariancesUF', 'python_obj': self.pc_variances_dict},
+             {'function_name': 'getBtwnSampleDistPCAvailableUF', 'python_obj': self.pc_availabaility_dict}],
+            js_outpath=self.js_file_path)
+
+    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
+        # set the variance dict
+        # and set the available pcs
+        pcoa_coords_df.set_index('analysis_type_uid', drop=True, inplace=True)
+        available_pcs = list(pcoa_coords_df)
+        if len(available_pcs) > 6:
+            available_pcs = available_pcs[:6]
+        self.pc_availabaility_dict[self.genera_annotation_dict[clade_in_question]] = available_pcs
+        variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+        self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
+        # set the coordinates data holder dict here
+        genera_pc_coords_dict = {}
+        for profile_uid in pcoa_coords_df['analysis_type_uid'][:-1]:
+            profile_pc_coords_dict = {}
+            for pc in available_pcs:
+                profile_pc_coords_dict[pc] = pcoa_coords_df.at[profile_uid, pc]
+            genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
+        self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
     def _write_out_pcoa(self, ordered_at_names, pcoa_output, clade_in_question):
         # rename the pcoa dataframe index as the sample names
         pcoa_output.samples['sample'] = ordered_at_names
         renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
         # now add the variance explained as a final row to the renamed_dataframe
-        renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
-            pcoa_output.proportion_explained.rename('proportion_explained'))
+        var_explained_list = [0]
+        var_explained_list.extend(pcoa_output.proportion_explained.values.tolist())
+
+        ser = pd.Series(var_explained_list, index=list(renamed_pcoa_dataframe), name='proportion_explained')
+        renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(ser)
         # now output the pcoa
         clade_pcoa_file_path = os.path.join(
             self.clade_output_dir,
             f'{self.date_time_string}.unifrac_profiles_PCoA_coords_{clade_in_question}.csv')
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
-        return clade_pcoa_file_path
+        return clade_pcoa_file_path, renamed_pcoa_dataframe
 
     def _compute_pcoa(self, wu):
         # compute the pcoa
         pcoa_output = pcoa(wu.data)
+        # analysis_type_uid
+        pcoa_output.samples['analysis_type_uid'] = wu.ids
+        pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
 
     def _write_out_dist_df(self, clade_abund_df, wu, clade_in_question):
@@ -272,13 +316,16 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def _setup_output_dir(self, call_type, output_dir):
         if call_type == 'stand_alone':
-            return os.path.abspath(
+            new_output_dir =  os.path.abspath(
                 os.path.join(
                     self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
                     'between_profiles'))
+            html_dir = new_output_dir
         else:
             # call_type == 'analysis':
-            return os.path.join(output_dir, 'between_profile_distances')
+            new_output_dir = os.path.join(output_dir, 'between_profile_distances')
+            html_dir = os.path.join(output_dir, 'html')
+        return new_output_dir, html_dir
 
     class TypeAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -486,8 +533,10 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         pcoa_output.samples['sample'] = ordered_sample_names
         renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
         # now add the variance explained as a final row to the renamed_dataframe
-        renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(
-            pcoa_output.proportion_explained.rename('proportion_explained'))
+        var_explained_list = [0]
+        var_explained_list.extend(pcoa_output.proportion_explained.values.tolist())
+        ser = pd.Series(var_explained_list, index=list(renamed_pcoa_dataframe), name='proportion_explained')
+        renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(ser)
         # now output the pcoa
         clade_pcoa_file_path = os.path.join(
             self.clade_output_dir,
@@ -497,6 +546,8 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def _compute_pcoa(self, wu):
         pcoa_output = pcoa(wu.data)
+        pcoa_output.samples['sample_uid'] = wu.ids
+        pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
 
     def _write_out_dist_df(self, clade_abund_df, wu, clade_in_question):
@@ -1043,7 +1094,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.pc_coordinates_dict = {}
         self.pc_variances_dict = {}
         self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'btwn_sample_dist_bc.js')
+        self.js_file_path = os.path.join(self.html_dir, 'btwn_profile_dist_bc.js')
 
     def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
@@ -1101,9 +1152,9 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def _write_out_js_objects(self):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name': 'getBtwnSampleDistCoords', 'python_obj': self.pc_coordinates_dict},
-             {'function_name': 'getBtwnSampleDistPCVariances', 'python_obj': self.pc_variances_dict},
-             {'function_name': 'getBtwnSampleDistPCAvailable', 'python_obj': self.pc_availabaility_dict}],
+            [{'function_name': 'getBtwnSampleDistCoordsBC', 'python_obj': self.pc_coordinates_dict},
+             {'function_name': 'getBtwnSampleDistPCVariancesBC', 'python_obj': self.pc_variances_dict},
+             {'function_name': 'getBtwnSampleDistPCAvailableBC', 'python_obj': self.pc_availabaility_dict}],
             js_outpath=self.js_file_path)
 
     def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
