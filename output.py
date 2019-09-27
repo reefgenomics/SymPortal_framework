@@ -1002,7 +1002,12 @@ class SequenceCountTableCreator:
     def _write_out_js_seq_data_files_post_med(self):
         '''Here we will want to put out two js files.
         One that contains the sample meta information and one that contains the rectangle information
-        for each sequence in each sample.'''
+        for each sequence in each sample. The sample meta information will be an object that has the sample
+        uid as key and for each of these there will be another object that has the various property and value
+        pairs. This js file will also contain another obeject that returns various arrays of sample uids that
+        have been sorted according to various parameters. The second js file will be the the rectangle array. This
+        is going to be sample uid as key and then as single array for each sample. In each of these samples we will
+        have objects, each one representing a rectange that will represent a sequence found in the sample.'''
 
         sample_meta_dict, index_of_first_seq = self._populate_sample_meta_info_dict()
 
@@ -1527,6 +1532,14 @@ class SequenceCountTableCreator:
             self._write_out_js_seq_data_file_pre_med()
 
         def _write_out_js_seq_data_file_pre_med(self):
+            '''Here we will want to put out one js file.
+            The js file will be the the rectangle array. This
+            is going to be sample uid as key and then as single array for each sample. In each of these samples we will
+            have objects, each one representing a rectange that will represent a sequence found in the sample.'''
+
+
+            self._make_pre_med_rect_array()
+
             # now create the .js file that we will use to read in the data locally
             # we will create a single file that will contain the
             # functions getSeqDataAbsolutePreMED and getSeqDataRelativePreMED
@@ -1546,6 +1559,69 @@ class SequenceCountTableCreator:
             js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path,
                                                                         function_name='getSeqDataRelativePreMED'))
             general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+
+        def _make_pre_med_rect_array(self):
+            # now we need to create the rectangle array
+            pre_med_rect_dict = {sample_uid: [] for sample_uid in
+                                  self.abs_count_df.index.values.tolist()}
+
+
+            # get the names of the sequences sorted according to their totalled abundance
+            # NB these are already sorted purely by abundance in the premed df
+            sorted_seq_names = list(self.abs_count_df)[1:]
+
+            # get the colour dict
+            with open(os.path.join(self.html_output_dir, 'seq_col_dict.json'), 'r') as f:
+                seq_colour_dict = json.load(f)
+
+            max_cumulative_abs = self._populate_pre_med_rect_dict(
+                pre_med_rect_dict, seq_colour_dict, sorted_seq_names)
+            # now we have the dictionary that holds the rectangle arrays populated
+            # and we have the maximum abundance
+            # now write these out as js file and functions to return.
+            js_file_path = os.path.join(self.html_output_dir, 'rect_array_preMED_by_sample.js')
+            general.write_out_js_file_to_return_python_objs_as_js_objs(
+                [{'function_name': 'getRectDataPreMEDBySample', 'python_obj': pre_med_rect_dict},
+                 {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
+                js_outpath=js_file_path)
+
+        def _populate_pre_med_rect_dict(self, post_med_rect_dict, seq_colour_dict,
+                                         sorted_seq_names):
+            max_cumulative_abs = 0
+            for sample_uid in self.abs_count_df.index:
+                new_rect_list = []
+                abs_series = self.abs_count_df.loc[sample_uid]
+                rel_series = self.abs_count_df.loc[sample_uid]
+                cumulative_count_abs = 0
+                cumulative_count_rel = 0
+                # we need the inverse cumulative as well for the modal plot
+                # this is just adding the cumulation value after the height has been assigned
+                cumulative_count_abs_inv = 0
+                cumulative_count_rel_inv = 0
+                for seq in sorted_seq_names:
+                    seq_abund_abs = abs_series.at[seq]
+                    seq_abund_rel = rel_series.at[seq]
+                    if seq_abund_abs:
+                        cumulative_count_abs += int(seq_abund_abs)
+                        cumulative_count_rel += float(seq_abund_rel)
+                        new_rect_list.append({
+                            "sample_name": abs_series['sample_name'],
+                            "seq_name": seq,
+                            "sample_uid": sample_uid,
+                            "y_abs": cumulative_count_abs,
+                            "y_rel": cumulative_count_rel,
+                            "y_abs_inv": cumulative_count_abs_inv,
+                            "y_rel_inv": cumulative_count_rel_inv,
+                            "height_rel": float(seq_abund_rel),
+                            "height_abs": int(seq_abund_abs),
+                            "fill": seq_colour_dict[seq]
+                        })
+                        cumulative_count_abs_inv += int(seq_abund_abs)
+                        cumulative_count_rel_inv += float(seq_abund_rel)
+                post_med_rect_dict[sample_uid] = new_rect_list
+                if cumulative_count_abs > max_cumulative_abs:
+                    max_cumulative_abs = cumulative_count_abs
+            return max_cumulative_abs
 
         def _output_pre_med_master_fasta(self):
             fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
