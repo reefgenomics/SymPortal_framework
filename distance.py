@@ -721,6 +721,8 @@ class BaseBrayCurtisDistPCoACreator:
             renamed_pcoa_dataframe['analysis_type_uid'] = renamed_pcoa_dataframe['analysis_type_uid'].astype('int')
 
         renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
+        return renamed_pcoa_dataframe
+
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list, cct_set_uid_list):
         if data_set_sample_uid_list:
@@ -948,7 +950,8 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self._generate_distance_file()
             self._add_obj_uids_to_dist_file_and_write()
             self._write_out_dist_file()
-            self._compute_pcoa_coords(clade=clade_in_question)
+            renamed_pcoa_dataframe = self._compute_pcoa_coords(clade=clade_in_question)
+            #TODO implement js output here
             self._append_output_files_to_output_list()
         self._write_output_paths_to_stdout()
 
@@ -1029,10 +1032,18 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self.clade_col_type_objects = None
             self.at_list_for_output = self._chunk_query_set_at_list_for_output_from_dss_uids()
         self.clades_of_ats = list(set([at.clade for at in self.at_list_for_output]))
-        self.output_dir = self._set_output_dir(output_dir=output_dir)
+        self.output_dir, self.html_dir = self._set_output_dir(output_dir=output_dir)
         self.is_sqrt_transf = is_sqrt_transf
         self.local = local_abunds_only
-
+        # for the js dict
+        self.genera_annotation_dict = {
+            'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium',
+            'E':'Effrenium', 'F':'Clade F', 'G':'Clade G', 'H':'Clade H', 'I':'Clade I'
+        }
+        self.pc_coordinates_dict = {}
+        self.pc_variances_dict = {}
+        self.pc_availabaility_dict = {}
+        self.js_file_path = os.path.join(self.html_dir, 'btwn_sample_dist_bc.js')
 
     def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
@@ -1059,10 +1070,12 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             new_output_dir = os.path.join(
                 self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
                 'between_profiles')
+            html_dir = new_output_dir
         else:
             # call_type == 'analysis':
             new_output_dir = os.path.join(output_dir, 'between_profile_distances')
-        return new_output_dir
+            html_dir = os.path.join(output_dir, 'html')
+        return new_output_dir, html_dir
 
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing ITS2 type profile pairwise distances and PCoA coordinates using the BrayCurtis method\n')
@@ -1077,9 +1090,40 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self._generate_distance_file()
             self._add_obj_uids_to_dist_file_and_write()
             self._write_out_dist_file()
-            self._compute_pcoa_coords(clade=clade_in_question)
+            pcoa_coords_df = self._compute_pcoa_coords(clade=clade_in_question)
+
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
+
             self._append_output_files_to_output_list()
+
+        self._write_out_js_objects()
         self._write_output_paths_to_stdout()
+
+    def _write_out_js_objects(self):
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getBtwnSampleDistCoords', 'python_obj': self.pc_coordinates_dict},
+             {'function_name': 'getBtwnSampleDistPCVariances', 'python_obj': self.pc_variances_dict},
+             {'function_name': 'getBtwnSampleDistPCAvailable', 'python_obj': self.pc_availabaility_dict}],
+            js_outpath=self.js_file_path)
+
+    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
+        # set the variance dict
+        # and set the available pcs
+        pcoa_coords_df.set_index('analysis_type_uid', drop=True, inplace=True)
+        available_pcs = list(pcoa_coords_df)
+        if len(available_pcs) > 6:
+            available_pcs = available_pcs[:6]
+        self.pc_availabaility_dict[self.genera_annotation_dict[clade_in_question]] = available_pcs
+        variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+        self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
+        # set the coordinates data holder dict here
+        genera_pc_coords_dict = {}
+        for profile_uid in pcoa_coords_df['analysis_type_uid'][:-1]:
+            profile_pc_coords_dict = {}
+            for pc in available_pcs:
+                profile_pc_coords_dict[pc] = pcoa_coords_df.at[profile_uid, pc]
+            genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
+        self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
     def _init_clade_dirs_and_paths(self, clade_in_question):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
