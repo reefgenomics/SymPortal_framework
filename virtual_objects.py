@@ -616,13 +616,13 @@ class VirtualAnalysisTypeManager():
             # objects that are being analysed, these abundance dataframes do not contain all CladeCollection objects
             # that were found to contain the VAT in question. This has two important effects.
             # Firstly, we cannot use the clade_collection_obj_set_profile_assignment set to get a total number of
-            # clade collections the type was found in to populate the 'ITS2 type abundance DB' item in the output
+            # clade collections the type was found in to populate the 'ITS2 profile abundance DB' item in the output
             # count table. Secondly, the abundances of the divs of the profiles as output in the count table will be
             # based on only the VCC objects of the output rather than from all instances of the VAT in the analysis.
             # Importantly, the distances between the types though will still be generated using all instances of the
             # analysis types unless the --local attribute is passed to the distance method.
             # We have implemented self.grand_tot_num_instances_of_vat_in_analysis above to be able to populate the
-            # 'ITS2 type abundance DB' info in the count table.
+            # 'ITS2 profile abundance DB' info in the count table.
             self.type_output_rel_abund_series = None
             self.type_output_abs_abund_series = None
 

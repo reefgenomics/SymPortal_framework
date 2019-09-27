@@ -168,7 +168,7 @@ class OutputTypeCountTable:
 
         prof_meta_only = self._write_out_meta_only_dfs_profiles(abund_row_indices)
 
-        self._write_out_js_profile_data_file(prof_meta_only)
+        self._write_out_js_profiles_data_file(prof_meta_only)
 
         self._write_out_additional_info_profiles()
 
@@ -177,46 +177,89 @@ class OutputTypeCountTable:
                                           list_to_write=self.additional_info_file_as_list)
         print(self.path_to_additional_info_file)
 
-    def _write_out_js_profile_data_file(self, prof_meta_only):
-        # We will need to have three javascript methods for the explorere here.
-        # one for the absolute abundances, one for the relative and one for the ITS2 type profile meta information
-        absolute_json_path = os.path.join(self.html_output_dir, 'profile.absolute.json')
-        relative_json_path = os.path.join(self.html_output_dir, 'profile.relative.json')
-        profile_meta_json_path = os.path.join(self.html_output_dir, 'profile.meta.json')
-        js_file_path = os.path.join(self.html_output_dir, 'profile_data.js')
+    def _write_out_js_profiles_data_file(self, prof_meta_only):
+        """Similar to the post-med js output we will want to be producing two js items.
+        We will want to produce meta info object and we will want to be producing the
+        profile rectangles."""
 
-        rows_to_keep_by_index = [0]
+        # js output path for profile meta
+        profile_meta_json_path = os.path.join(self.html_output_dir, 'profile_meta_info.json')
+        # get color dict
+        with open(os.path.join(self.html_output_dir, 'profile_col_dict.json'), 'r') as f:
+            prof_colour_dict = json.load(f)
+        # first the meta information
+        genera_annotation_dict = {'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium', 'E':'Effrenium', 'F':'Clade F', 'G':'Clade G', 'H':'Clade H', 'I':'Clade I'}
+        profile_meta_dict = {uid: {} for uid in prof_meta_only.index.values.tolist()}
+        for k in profile_meta_dict.keys():
+            profile_meta_dict['uid'] = k
+            profile_meta_dict['name'] = prof_meta_only.at[k, 'ITS2 type profile']
+            profile_meta_dict['genera'] = genera_annotation_dict[prof_meta_only.at[k, 'Clade']]
+            profile_meta_dict['maj_its2_seq'] = prof_meta_only.at[k, 'Majority ITS2 sequence']
+            profile_meta_dict['assoc_species'] = prof_meta_only.at[k, 'Associated species']
+            profile_meta_dict['local_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance local']
+            profile_meta_dict['db_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance DB']
+            profile_meta_dict['seq_uids'] = prof_meta_only.at[k, 'Sequence accession / SymPortal UID']
+            profile_meta_dict['seq_abund_string'] = prof_meta_only.at[k, 'Average defining sequence proportions and [stdev]']
+            profile_meta_dict['color'] = prof_colour_dict[k]
+
+        general.write_out_js_file_to_return_python_objs_as_js_objs({'function_name':'getProfileMetaInfo'},js_outpath=profile_meta_json_path)
+
+        self._make_profile_rect_array(prof_colour_dict, prof_meta_only)
+
+
+    def _make_profile_rect_array(self, prof_colour_dict, prof_meta_only):
+        # get rid of the meta information at the top of the df
+        rows_to_keep_by_index = []
         abundance_row_indices = list(range(self.number_of_header_rows_added, (
                 len(self.abs_abund_output_df.index.values.tolist()) - self.number_of_meta_rows_added)))
         rows_to_keep_by_index += abundance_row_indices
         absolute_df_abund_only = self.abs_abund_output_df.iloc[rows_to_keep_by_index, :]
         relative_df_abund_only = self.rel_abund_output_df.iloc[rows_to_keep_by_index, :]
-
-        # replace the top item of the index with sample_uid rather than 'ITS2 type profile UID'
-        new_index = absolute_df_abund_only.index.values.tolist()
-        new_index[0] = 'sample_uid'
-        absolute_df_abund_only.index = new_index
-        relative_df_abund_only.index = new_index
-        # add sample_name identifier to top row
-        absolute_df_abund_only.iat[0, 0] = 'sample_name'
-        relative_df_abund_only.iat[0, 0] = 'sample_name'
-        # add the index in as a column as the index is not output using .to_json
-        absolute_df_abund_only.insert(loc=0, column='sample_uid', value=absolute_df_abund_only.index.values.tolist())
-        relative_df_abund_only.insert(loc=0, column='sample_uid', value=relative_df_abund_only.index.values.tolist())
-        absolute_df_abund_only.drop(index='sample_uid', inplace=True)
-        relative_df_abund_only.drop(index='sample_uid', inplace=True)
-        absolute_df_abund_only.to_json(path_or_buf=absolute_json_path, orient='records')
-        relative_df_abund_only.to_json(path_or_buf=relative_json_path, orient='records')
-        prof_meta_only.to_json(path_or_buf=profile_meta_json_path, orient='records')
-        js_file = []
-        js_file.extend(
-            general.make_js_function_to_return_json_file(
-                json_path=absolute_json_path, function_name='getProfileDataAbsolute'))
-        js_file.extend(general.make_js_function_to_return_json_file(
-            json_path=relative_json_path, function_name='getProfileDataRelative'))
-        js_file.extend(general.make_js_function_to_return_json_file(json_path=profile_meta_json_path,
-                                                                    function_name='getProfileMeta'))
-        general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
+        # now we need to create the rect array for the profiles
+        profile_rect_dict = {sample_uid: [] for sample_uid in absolute_df_abund_only.index.values.tolist()}
+        max_cumulative_abs = 0
+        for sample_uid in absolute_df_abund_only.index:
+            new_rect_list = []
+            abs_series = absolute_df_abund_only.loc[sample_uid]
+            rel_series = relative_df_abund_only.loc[sample_uid]
+            cumulative_count_abs = 0
+            cumulative_count_rel = 0
+            # we need the inverse cumulative as well for the modal plot
+            # this is just adding the cumulation value after the height has been assigned
+            cumulative_count_abs_inv = 0
+            cumulative_count_rel_inv = 0
+            for profile_uid in prof_meta_only.index:
+                prof_abund_abs = abs_series.at[profile_uid]
+                prof_abund_rel = rel_series.at[profile_uid]
+                if prof_abund_abs:
+                    cumulative_count_abs += int(prof_abund_abs)
+                    cumulative_count_rel += float(prof_abund_rel)
+                    new_rect_list.append({
+                        "sample_name": abs_series['sample_name'],
+                        "profile_name": prof_meta_only.at[profile_uid, 'ITS2 type profile'],
+                        "sample_uid": sample_uid,
+                        "profile_uid": profile_uid,
+                        "y_abs": cumulative_count_abs,
+                        "y_rel": cumulative_count_rel,
+                        "y_abs_inv": cumulative_count_abs_inv,
+                        "y_rel_inv": cumulative_count_rel_inv,
+                        "height_rel": float(prof_abund_rel),
+                        "height_abs": int(prof_abund_abs),
+                        "fill": prof_colour_dict[profile_uid]
+                    })
+                    cumulative_count_abs_inv += int(prof_abund_abs)
+                    cumulative_count_rel_inv += float(prof_abund_rel)
+            profile_rect_dict[sample_uid] = new_rect_list
+            if cumulative_count_abs > max_cumulative_abs:
+                max_cumulative_abs = cumulative_count_abs
+        # now we have the dictionary that holds the rectangle arrays populated
+        # and we have the maximum abundance
+        # now write these out as js file and functions to return.
+        js_file_path = os.path.join(self.html_output_dir, 'rect_array_profile_by_sample.js')
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getRectDataProfileBySample', 'python_obj': profile_rect_dict},
+             {'function_name': 'getRectDataProfileBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
+            js_outpath=js_file_path)
 
     def _write_out_meta_only_dfs_profiles(self, abundance_row_indices):
         # now output the meta_only dfs
@@ -487,7 +530,7 @@ class OutputTypeCountTable:
 
     def _init_dfs(self):
         self.pre_headers = ['ITS2 type profile UID', 'Clade', 'Majority ITS2 sequence',
-                       'Associated species', 'ITS2 type abundance local', 'ITS2 type abundance DB', 'ITS2 type profile']
+                       'Associated species', 'ITS2 profile abundance local', 'ITS2 profile abundance DB', 'ITS2 type profile']
         self.number_of_header_rows_added += len(self.pre_headers)
         post_headers = ['Sequence accession / SymPortal UID', 'Average defining sequence proportions and [stdev]']
         self.number_of_meta_rows_added += len(post_headers)
@@ -1099,10 +1142,8 @@ class SequenceCountTableCreator:
             rel_series = self.output_df_relative_post_med.loc[sample_uid]
             cumulative_count_abs = 0
             cumulative_count_rel = 0
-            # we need the inverse cumulative as well for the modal plot
-            # this is just adding the cumulation value after the height has been assigned
-            cumulative_count_abs_inv = 0
-            cumulative_count_rel_inv = 0
+
+
             for seq in sorted_seq_names:
                 seq_abund_abs = abs_series.at[seq]
                 seq_abund_rel = rel_series.at[seq]
@@ -1113,17 +1154,14 @@ class SequenceCountTableCreator:
                         "sample_name": abs_series['sample_name'],
                         "seq_name": seq,
                         "sample_uid": sample_uid,
-                        "seq_uid": seq_name_to_uid_dict,
+                        "sequence_uid": seq_name_to_uid_dict,
                         "y_abs": cumulative_count_abs,
                         "y_rel": cumulative_count_rel,
-                        "y_abs_inv": cumulative_count_abs_inv,
-                        "y_rel_inv": cumulative_count_rel_inv,
                         "height_rel": float(seq_abund_rel),
                         "height_abs": int(seq_abund_abs),
                         "fill": seq_colour_dict[seq]
                     })
-                    cumulative_count_abs_inv += int(seq_abund_abs)
-                    cumulative_count_rel_inv += float(seq_abund_rel)
+
             post_med_rect_dict[sample_uid] = new_rect_list
             if cumulative_count_abs > max_cumulative_abs:
                 max_cumulative_abs = cumulative_count_abs
