@@ -1177,31 +1177,39 @@ class InitialMothurHandler:
             all_processes.append(p)
             p.start()
 
-        for p in all_processes:
-            p.join()
+        # Here process the queue as we go because it was getting too large and causing the
+        # p.join() to hang. We will put a 'DONE' in queue everytime a process finishes with the
+        # list of samples
 
         self._update_dss_obj_attributes()
 
+        for p in all_processes:
+            p.join()
+
     def _update_dss_obj_attributes(self):
-        self.output_queue_for_attribute_data.put('STOP')
+        done_count = 0
         dss_obj_uid_to_obj_dict = {dss_obj.id: dss_obj for dss_obj in
                                    DataSetSample.objects.filter(data_submission_from=self.parent.dataset_object)}
-        for dss_proxy in iter(self.output_queue_for_attribute_data.get, 'STOP'):
-            dss_obj = dss_obj_uid_to_obj_dict[dss_proxy.uid]
-            if dss_proxy.error_in_processing:
-                dss_obj.error_in_processing = dss_proxy.error_in_processing
-                dss_obj.error_reason = dss_proxy.error_reason
-                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
-                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
-                dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
-                dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
-                dss_obj.num_contigs = dss_proxy.num_contigs
-                dss_obj.save()
+        while done_count < self.parent.num_proc:
+            dss_proxy = self.output_queue_for_attribute_data.get()
+            if dss_proxy == 'DONE':
+                done_count += 1
             else:
-                dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
-                dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
-                dss_obj.num_contigs = dss_proxy.num_contigs
-                dss_obj.save()
+                dss_obj = dss_obj_uid_to_obj_dict[dss_proxy.uid]
+                if dss_proxy.error_in_processing:
+                    dss_obj.error_in_processing = dss_proxy.error_in_processing
+                    dss_obj.error_reason = dss_proxy.error_reason
+                    dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                    dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                    dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
+                    dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
+                    dss_obj.num_contigs = dss_proxy.num_contigs
+                    dss_obj.save()
+                else:
+                    dss_obj.post_qc_absolute_num_seqs = dss_proxy.post_qc_absolute_num_seqs
+                    dss_obj.post_qc_unique_num_seqs = dss_proxy.post_qc_unique_num_seqs
+                    dss_obj.num_contigs = dss_proxy.num_contigs
+                    dss_obj.save()
 
     def _worker_initial_mothur(self):
         """
@@ -1220,6 +1228,7 @@ class InitialMothurHandler:
                 initial_morthur_worker.start_initial_mothur_worker()
             except RuntimeError as e:
                 self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
+        self.output_queue_for_attribute_data.put('DONE')
         return
 
 
@@ -1626,39 +1635,43 @@ class SymNonSymTaxScreeningHandler:
             all_processes.append(p)
             p.start()
 
+        self._associate_info_to_dss_objects(data_loading_dataset_object)
+
         for p in all_processes:
             p.join()
-
-        self._associate_info_to_dss_objects(data_loading_dataset_object)
 
     def _associate_info_to_dss_objects(self, data_loading_dataset_object):
         # now save the collected data contained in the sample_attributes_holder_mp_dict to the relevant
         # dss_objs.
-        self.sample_attributes_mp_output_queue.put('STOP')
+        done_count = 0
         dss_uid_to_dss_obj_dict = {dss.id: dss for dss in
                                    DataSetSample.objects.filter(data_submission_from=data_loading_dataset_object)}
-        for dss_proxy in iter(self.sample_attributes_mp_output_queue.get, 'STOP'):
-            dss_obj = dss_uid_to_dss_obj_dict[dss_proxy.uid]
-            if dss_proxy.error_in_processing:  # if error occured
-                dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
-                dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
-                dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
-                dss_obj.size_violation_unique = dss_proxy.size_violation_unique
-                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
-                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
-                dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
-                dss_obj.error_in_processing = dss_proxy.error_in_processing
-                dss_obj.error_reason = dss_proxy.error_reason
-                dss_obj.save()
+        while done_count < self.num_proc:
+            dss_proxy = self.sample_attributes_mp_output_queue.get()
+            if dss_proxy == 'DONE':
+                done_count += 1
             else:
-                dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
-                dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
-                dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
-                dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
-                dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
-                dss_obj.size_violation_unique = dss_proxy.size_violation_unique
-                dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
-                dss_obj.save()
+                dss_obj = dss_uid_to_dss_obj_dict[dss_proxy.uid]
+                if dss_proxy.error_in_processing:  # if error occured
+                    dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
+                    dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
+                    dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
+                    dss_obj.size_violation_unique = dss_proxy.size_violation_unique
+                    dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                    dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                    dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
+                    dss_obj.error_in_processing = dss_proxy.error_in_processing
+                    dss_obj.error_reason = dss_proxy.error_reason
+                    dss_obj.save()
+                else:
+                    dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
+                    dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
+                    dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
+                    dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
+                    dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
+                    dss_obj.size_violation_unique = dss_proxy.size_violation_unique
+                    dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
+                    dss_obj.save()
 
     def _sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object,
                                           data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
@@ -1681,7 +1694,7 @@ class SymNonSymTaxScreeningHandler:
                 sym_non_sym_tax_screening_worker_object.identify_sym_non_sym_seqs()
             except RuntimeError as e:
                 self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
-
+        self.sample_attributes_mp_output_queue.put('DONE')
 
 class SymNonSymTaxScreeningWorker:
     def __init__(
