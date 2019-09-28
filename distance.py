@@ -223,9 +223,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def _write_out_js_objects(self):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name': 'getBtwnSampleDistCoordsUF', 'python_obj': self.pc_coordinates_dict},
-             {'function_name': 'getBtwnSampleDistPCVariancesUF', 'python_obj': self.pc_variances_dict},
-             {'function_name': 'getBtwnSampleDistPCAvailableUF', 'python_obj': self.pc_availabaility_dict}],
+            [{'function_name': 'getBtwnProfileDistCoordsUF', 'python_obj': self.pc_coordinates_dict},
+             {'function_name': 'getBtwnProfileDistPCVariancesUF', 'python_obj': self.pc_variances_dict},
+             {'function_name': 'getBtwnProfileDistPCAvailableUF', 'python_obj': self.pc_availabaility_dict}],
             js_outpath=self.js_file_path)
 
     def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
@@ -487,7 +487,16 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
         self.clades_for_dist_calcs = list(set([a.clade for a in self.clade_collections_from_data_set_samples]))
 
-        self.output_dir = self._setup_output_dir(call_type, output_dir)
+        self.output_dir, self.html_dir = self._setup_output_dir(call_type, output_dir)
+        # for the js dict
+        self.genera_annotation_dict = {
+            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
+            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
+        }
+        self.pc_coordinates_dict = {}
+        self.pc_variances_dict = {}
+        self.pc_availabaility_dict = {}
+        self.js_file_path = os.path.join(self.html_dir, 'btwn_sample_dist_uf.js')
 
     def _chunk_query_set_cc_obj_from_dss_uids(self):
         temp_clade_col_objs = []
@@ -522,11 +531,41 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             pcoa_output = self._compute_pcoa(wu)
 
-            clade_pcoa_file_path = self._write_out_pcoa(ordered_sample_names, pcoa_output, clade_in_question)
+            clade_pcoa_file_path, pcoa_coords_df = self._write_out_pcoa(ordered_sample_names, pcoa_output, clade_in_question)
+
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
 
             self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
 
+        self._write_out_js_objects()
         self._write_output_paths_to_stdout()
+
+    def _write_out_js_objects(self):
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getBtwnSampleDistCoordsUF', 'python_obj': self.pc_coordinates_dict},
+             {'function_name': 'getBtwnSampleDistPCVariancesUF', 'python_obj': self.pc_variances_dict},
+             {'function_name': 'getBtwnSampleDistPCAvailableUF', 'python_obj': self.pc_availabaility_dict}],
+            js_outpath=self.js_file_path)
+
+    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
+        # set the variance dict
+        # and set the available pcs
+        pcoa_coords_df.set_index('analysis_type_uid', drop=True, inplace=True)
+        available_pcs = list(pcoa_coords_df)
+        if len(available_pcs) > 6:
+            available_pcs = available_pcs[:6]
+        self.pc_availabaility_dict[self.genera_annotation_dict[clade_in_question]] = available_pcs
+        variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+        self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
+        # set the coordinates data holder dict here
+        genera_pc_coords_dict = {}
+        for profile_uid in pcoa_coords_df['analysis_type_uid'][:-1]:
+            profile_pc_coords_dict = {}
+            for pc in available_pcs:
+                profile_pc_coords_dict[pc] = pcoa_coords_df.at[profile_uid, pc]
+            genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
+        self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+
 
     def _write_out_pcoa(self, ordered_sample_names, pcoa_output, clade_in_question):
         # rename the pcoa dataframe index as the sample names
@@ -542,7 +581,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self.clade_output_dir,
             f'{self.date_time_string}.unifrac_sample_PCoA_coords_{clade_in_question}.csv')
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
-        return clade_pcoa_file_path
+        return clade_pcoa_file_path, renamed_pcoa_dataframe
 
     def _compute_pcoa(self, wu):
         pcoa_output = pcoa(wu.data)
@@ -598,11 +637,13 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 os.path.join(
                     self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'), 'between_samples'))
             os.makedirs(new_output_dir, exist_ok=True)
+            html_dir = new_output_dir
         else:
             # call_type == 'submission' or 'analysis':
             new_output_dir = os.path.join(output_dir, 'between_sample_distances')
             os.makedirs(new_output_dir, exist_ok=True)
-        return new_output_dir
+            html_dir = os.path.join(output_dir, 'html')
+        return new_output_dir, html_dir
 
     class SampleAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -970,6 +1011,11 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
         self.output_dir, self.html_dir = self._set_output_dir(output_dir=output_dir)
         self.is_sqrt_transf = is_sqrt_transf
+        # for the js dict
+        self.genera_annotation_dict = {
+            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
+            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
+        }
         self.pc_coordinates_dict = {}
         self.pc_variances_dict = {}
         self.pc_availabaility_dict = {}
@@ -990,7 +1036,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         else:
             # call_type == 'submission':
             new_output_dir = os.path.join(output_dir, 'between_sample_distances')
-            html_dir = html_dir = os.path.join(output_dir, 'html')
+            html_dir = os.path.join(output_dir, 'html')
         return new_output_dir, html_dir
 
     def compute_braycurtis_dists_and_pcoa_coords(self):
@@ -1010,7 +1056,16 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             pcoa_coords_df = self._compute_pcoa_coords(clade=clade_in_question)
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
             self._append_output_files_to_output_list()
+
+        self._write_out_js_objects()
         self._write_output_paths_to_stdout()
+
+    def _write_out_js_objects(self):
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getBtwnSampleDistCoordsBC', 'python_obj': self.pc_coordinates_dict},
+             {'function_name': 'getBtwnSampleDistPCVariancesBC', 'python_obj': self.pc_variances_dict},
+             {'function_name': 'getBtwnSampleDistPCAvailableBC', 'python_obj': self.pc_availabaility_dict}],
+            js_outpath=self.js_file_path)
 
     def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
         # set the variance dict
@@ -1178,9 +1233,9 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def _write_out_js_objects(self):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name': 'getBtwnSampleDistCoordsBC', 'python_obj': self.pc_coordinates_dict},
-             {'function_name': 'getBtwnSampleDistPCVariancesBC', 'python_obj': self.pc_variances_dict},
-             {'function_name': 'getBtwnSampleDistPCAvailableBC', 'python_obj': self.pc_availabaility_dict}],
+            [{'function_name': 'getBtwnProfileDistCoordsBC', 'python_obj': self.pc_coordinates_dict},
+             {'function_name': 'getBtwnProfileDistPCVariancesBC', 'python_obj': self.pc_variances_dict},
+             {'function_name': 'getBtwnProfileDistPCAvailableBC', 'python_obj': self.pc_availabaility_dict}],
             js_outpath=self.js_file_path)
 
     def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
