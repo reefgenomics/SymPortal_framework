@@ -1052,7 +1052,7 @@ class SequenceCountTableCreator:
         is going to be sample uid as key and then as single array for each sample. In each of these samples we will
         have objects, each one representing a rectange that will represent a sequence found in the sample.'''
 
-        sample_meta_dict, index_of_first_seq = self._populate_sample_meta_info_dict()
+        sample_meta_dict, index_of_first_seq, sample_clade_proportion_dict = self._populate_sample_meta_info_dict()
 
         # here we have the dictionary that will become the sample meta information
 
@@ -1063,7 +1063,9 @@ class SequenceCountTableCreator:
 
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name':'getSampleMetaInfo', 'python_obj':sample_meta_dict},
-             {'function_name':'getSampleSortedArrays', 'python_obj':sorted_sample_arrays}], js_outpath=js_file_path)
+             {'function_name':'getSampleSortedArrays', 'python_obj':sorted_sample_arrays},
+             {'function_name':'getSampleProportions', 'python_obj': sample_clade_proportion_dict}],
+            js_outpath=js_file_path)
 
         self._make_post_med_rect_array(index_of_first_seq)
 
@@ -1170,6 +1172,12 @@ class SequenceCountTableCreator:
     def _populate_sample_meta_info_dict(self):
         # first lets produce the meta information.
         # dictionary of where the sample UID is the key to a second dictionary that contains the other properties
+        # We also want to produce a dictionary where genera is key to another dict, where there are
+        # key values that are samples, which then have a dict as value
+        # that is k, v pairs that are the absolute and relative abundnce of that sample and clade
+        # These will be used when annotating the sample information in the betwn sample distance
+        # plots for tooltips and in the info section at the bottom.
+        sample_clade_proportion_dict = defaultdict(dict)
         sample_meta_dict = {uid: {} for uid in self.output_df_absolute_post_med.index.values.tolist()}
         taxa_fields = ['host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species']
         index_of_first_seq = list(self.output_df_absolute_post_med).index('collection_depth') + 1
@@ -1196,12 +1204,15 @@ class SequenceCountTableCreator:
             sample_meta_dict['collection_date'] = self.output_df_absolute_post_med.loc[k, 'collection_date']
             sample_meta_dict['collection_depth'] = self.output_df_absolute_post_med.loc[k, 'collection_depth']
 
-            self._populate_clade_proportion_string(k, sample_meta_dict, index_of_first_seq)
-        return sample_meta_dict, index_of_first_seq
+            self._pop_clade_prop_string_and_prop_dict(k, sample_meta_dict, index_of_first_seq, sample_clade_proportion_dict)
 
-    def _populate_clade_proportion_string(self, k, sample_meta_dict, index_of_first_seq):
+        return sample_meta_dict, index_of_first_seq, sample_clade_proportion_dict
+
+    def _pop_clade_prop_string_and_prop_dict(self, k, sample_meta_dict, index_of_first_seq, sample_clade_proportion_dict):
         # get the clade breakdown from the abundances of the sequences
-
+        # both absolute and relative
+        genera_annotation_dict = {'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
+                                  'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'}
         prop_counting_dict = {clade: 0 for clade in list('ABCDEFGHI')}
         for seq_index in range(len(list(self.output_df_absolute_post_med)))[index_of_first_seq:]:
             seq_abund = self.output_df_absolute_post_med.at[k, seq_index]
@@ -1214,7 +1225,13 @@ class SequenceCountTableCreator:
         # now turn these into proportions and a string semicolon seperated
         tot_seqs = sum(prop_counting_dict.values())
         props = [prop_counting_dict[clade] / tot_seqs for clade in list('ABCDEFGHI')]
-        sample_meta_dict['clade_prop'] = ';'.join([f'{prop:.2f}' for prop in props])
+        sample_meta_dict['clade_prop_string'] = ';'.join([f'{prop:.2f}' for prop in props])
+        sample_meta_dict['clade_abs_abund_string'] = ';'.join([prop_counting_dict[clade] for clade in list('ABCDEFGHI')])
+        for clade_key, value in prop_counting_dict.items():
+            if value:
+                # then there were some sequences from this clade
+                sample_clade_proportion_dict[genera_annotation_dict[clade_key]][k] = {'absolute':value, 'relative':value/tot_seqs}
+
 
     def _append_meta_info_to_df(self):
         # Now append the meta infromation for each of the data_sets that make up the output contents
