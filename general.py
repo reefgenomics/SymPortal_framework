@@ -6,6 +6,7 @@ import pandas as pd
 from plumbum import local
 import json
 import numpy as np
+import random
 
 def return_list_of_file_names_in_directory(directory_to_list):
     """
@@ -354,7 +355,7 @@ def write_out_js_file_to_return_python_objs_as_js_objs(list_of_func_obj_dicts, j
         obj_as_json = json.dumps(python_obj_dict['python_obj'])
 
         temp_js_file_as_list.append('function ' + python_obj_dict['function_name'] + '(){')
-        temp_js_file_as_list.append("\treturn " + obj_as_json)
+        temp_js_file_as_list.append("\treturn " + obj_as_json + ';')
         temp_js_file_as_list.append("}")
 
     with open(js_outpath, 'w') as f:
@@ -462,3 +463,50 @@ def get_colour_list():
         "#00B57F",
         "#545C46", "#866097", "#365D25", "#252F99", "#00CCFF", "#674E60", "#FC009C", "#92896B"]
     return colour_list
+
+def create_colour_list(
+        sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_iterations=10000, avoid_black_and_white=True):
+    new_colours = []
+    min_dist = []
+    attempt = 0
+    while len(new_colours) < num_cols:
+        attempt += 1
+        # Check to see if we have run out of iteration attempts to find a colour that fits into the colour space
+        if attempt > time_out_iterations:
+            sys.exit('Colour generation timed out. We have tried {} iterations of colour generation '
+                     'and have not been able to find a colour that fits into your defined colour space.\n'
+                     'Please lower the number of colours you are trying to find, '
+                     'the minimum distance between them, or both.'.format(attempt))
+        if mix_col:
+            r = int((random.randint(0, 255) + mix_col[0]) / 2)
+            g = int((random.randint(0, 255) + mix_col[1]) / 2)
+            b = int((random.randint(0, 255) + mix_col[2]) / 2)
+        else:
+            r = random.randint(0, 255)
+            g = random.randint(0, 255)
+            b = random.randint(0, 255)
+
+        # now check to see whether the new colour is within a given distance
+        # if the avoids are true also
+        good_dist = True
+        if sq_dist_cutoff:
+            dist_list = []
+            for i in range(len(new_colours)):
+                distance = (new_colours[i][0] - r)**2 + (new_colours[i][1] - g)**2 + (new_colours[i][2] - b)**2
+                dist_list.append(distance)
+                if distance < sq_dist_cutoff:
+                    good_dist = False
+                    break
+            # now check against black and white
+            d_to_black = (r - 0)**2 + (g - 0)**2 + (b - 0)**2
+            d_to_white = (r - 255)**2 + (g - 255)**2 + (b - 255)**2
+            if avoid_black_and_white:
+                if d_to_black < sq_dist_cutoff or d_to_white < sq_dist_cutoff:
+                    good_dist = False
+            if dist_list:
+                min_dist.append(min(dist_list))
+        if good_dist:
+            new_colours.append((r, g, b))
+            attempt = 0
+
+    return new_colours

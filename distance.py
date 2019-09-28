@@ -1070,7 +1070,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
         # set the variance dict
         # and set the available pcs
-        pcoa_coords_df.set_index('analysis_type_uid', drop=True, inplace=True)
+        pcoa_coords_df.set_index('sample_uid', drop=True, inplace=True)
         available_pcs = list(pcoa_coords_df)
         if len(available_pcs) > 6:
             available_pcs = available_pcs[:6]
@@ -1079,11 +1079,11 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
-        for profile_uid in pcoa_coords_df['analysis_type_uid'][:-1]:
+        for sample_uid in pcoa_coords_df.index.values.tolist()[:-1]:
             profile_pc_coords_dict = {}
             for pc in available_pcs:
-                profile_pc_coords_dict[pc] = pcoa_coords_df.at[profile_uid, pc]
-            genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
+                profile_pc_coords_dict[pc] = pcoa_coords_df.at[sample_uid, pc]
+            genera_pc_coords_dict[sample_uid] = profile_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
 
@@ -1250,7 +1250,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
-        for profile_uid in pcoa_coords_df['analysis_type_uid'][:-1]:
+        for profile_uid in pcoa_coords_df.index.values.tolist()[:-1]:
             profile_pc_coords_dict = {}
             for pc in available_pcs:
                 profile_pc_coords_dict[pc] = pcoa_coords_df.at[profile_uid, pc]

@@ -10,7 +10,7 @@ from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
 from collections import defaultdict
 import pandas as pd
-import random
+
 import os
 import numpy as np
 import sys
@@ -22,52 +22,7 @@ from dbApp.models import ReferenceSequence
 plt.ioff()
 
 
-def create_colour_list(
-        sq_dist_cutoff=None, mix_col=None, num_cols=50, time_out_iterations=10000, avoid_black_and_white=True):
-    new_colours = []
-    min_dist = []
-    attempt = 0
-    while len(new_colours) < num_cols:
-        attempt += 1
-        # Check to see if we have run out of iteration attempts to find a colour that fits into the colour space
-        if attempt > time_out_iterations:
-            sys.exit('Colour generation timed out. We have tried {} iterations of colour generation '
-                     'and have not been able to find a colour that fits into your defined colour space.\n'
-                     'Please lower the number of colours you are trying to find, '
-                     'the minimum distance between them, or both.'.format(attempt))
-        if mix_col:
-            r = int((random.randint(0, 255) + mix_col[0]) / 2)
-            g = int((random.randint(0, 255) + mix_col[1]) / 2)
-            b = int((random.randint(0, 255) + mix_col[2]) / 2)
-        else:
-            r = random.randint(0, 255)
-            g = random.randint(0, 255)
-            b = random.randint(0, 255)
 
-        # now check to see whether the new colour is within a given distance
-        # if the avoids are true also
-        good_dist = True
-        if sq_dist_cutoff:
-            dist_list = []
-            for i in range(len(new_colours)):
-                distance = (new_colours[i][0] - r)**2 + (new_colours[i][1] - g)**2 + (new_colours[i][2] - b)**2
-                dist_list.append(distance)
-                if distance < sq_dist_cutoff:
-                    good_dist = False
-                    break
-            # now check against black and white
-            d_to_black = (r - 0)**2 + (g - 0)**2 + (b - 0)**2
-            d_to_white = (r - 255)**2 + (g - 255)**2 + (b - 255)**2
-            if avoid_black_and_white:
-                if d_to_black < sq_dist_cutoff or d_to_white < sq_dist_cutoff:
-                    good_dist = False
-            if dist_list:
-                min_dist.append(min(dist_list))
-        if good_dist:
-            new_colours.append((r, g, b))
-            attempt = 0
-
-    return new_colours
 
 class DistScatterPlotter:
     def __init__(self, csv_path, date_time_str):
@@ -233,7 +188,7 @@ class SubPlotter:
             bottom = 0
             # for each sequence, create a rect patch
             # the rect will be 1 in width and centered about the ind value.
-            non_zero_indices = self.parent_plotter.output_count_table_as_df.loc[sample_uid].nonzero()[0]
+            non_zero_indices = self.parent_plotter.output_count_table_as_df.loc[sample_uid].to_numpy().nonzero()[0]
             current_sample_series = self.parent_plotter.output_count_table_as_df.loc[sample_uid]
             non_zero_sample_series = current_sample_series.iloc[non_zero_indices]
             sample_total = non_zero_sample_series.sum()
@@ -389,16 +344,11 @@ class TypeStackedBarPlotter:
         self.type_uid_to_type_name_dict = None
         self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
         self.colour_dict = self._set_colour_dict()
-        self._json_dump_col_dict_for_html()
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
         self.samples_per_subplot = 50
         self.number_of_subplots = self._infer_num_subplots()
         self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
         self.output_path_list = []
-
-    def _json_dump_col_dict_for_html(self):
-        with open(os.path.join(self.output_directory, 'html', 'profile_col_dict.json'), 'w') as f:
-            json.dump(self.colour_dict, f)
 
     def plot_stacked_bar_profiles(self):
         print('\n\nPlotting ITS2 type profile abundances')
@@ -494,29 +444,13 @@ class TypeStackedBarPlotter:
 
 
     def _set_colour_dict(self):
-        colour_palette_pas = ['#%02x%02x%02x' % rgb_tup for rgb_tup in
-                              create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=1000, num_cols=50,
-                                                 time_out_iterations=10000)]
+        """The colour dict was created when making the profile rectagle array for the
+        javascript output. We need to maintain syncronisity so we will read this in.
+        JSON automatically sets key values to strings so we will need to convert the strings back to ints"""
+        with open(os.path.join(self.output_directory, 'html', 'prof_color_dict.json'), 'r') as f:
+            str_color_dict = json.load(fp=f)
 
-        grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
-
-        # We will use the col headers of the df as the its2 type profile order for plotting but we
-        # we should colour according to the abundance of the its2 type profiles
-        # as we don't want to run out of colours by the time we get to profiles that are very abundant.
-        # The sorted_type_prof_names_by_local_abund object has the names of the its2 type profile in order of abundance
-        # we will use the index order as the order of samples to plot
-
-        # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
-        # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
-
-        colour_dict = {}
-        for i in range(len(self.sorted_type_prof_uids_by_local_abund)):
-            if i < self.num_leg_cells:
-                colour_dict[self.sorted_type_prof_uids_by_local_abund[i]] = colour_palette_pas[i]
-            else:
-                grey_index = i % len(grey_palette)
-                colour_dict[self.sorted_type_prof_uids_by_local_abund[i]] = grey_palette[grey_index]
-        return  colour_dict
+        return {int(k):v for k, v in str_color_dict.items()}
 
 
 class SeqStackedBarPlotter():
@@ -830,7 +764,6 @@ class SeqStackedBarPlotter():
             self.max_n_rows = 7
             self.num_leg_cells = self.max_n_rows * self.max_n_cols
             self.colour_dict = general.set_seq_colour_dict_w_reference_c_dict(self.ordered_list_of_seqs_names, self.parent.colour_dict)
-            self._json_dump_colour_dict_to_html()
             # plotting vars
             self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
             self.samples_per_subplot = 50
@@ -838,15 +771,6 @@ class SeqStackedBarPlotter():
             # we add  1 to the n_subplots here for the legend at the bottom
             self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
             self.output_path_list = []
-
-        def _json_dump_colour_dict_to_html(self):
-            # now that we have made both the post-MED and pre-MED colour dicts we should json them out to the
-            # html directory so that they can be integrated when we are creating the post-MED and pre-MED rect
-            # arrays
-            # https://stackoverflow.com/questions/38987/how-to-merge-two-dictionaries-in-a-single-expression
-            master_col_dict = {**self.parent.colour_dict, **self.colour_dict}
-            with open(os.path.join(self.root_output_directory, 'html', 'seq_col_dict.json'), 'w') as f:
-                json.dump(master_col_dict, f)
 
         def _curate_output_count_table(self, rel_abund_df):
             self.smp_uid_to_smp_name_dict = {

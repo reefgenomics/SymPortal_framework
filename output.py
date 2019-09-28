@@ -183,29 +183,62 @@ class OutputTypeCountTable:
         profile rectangles."""
 
         # js output path for profile meta
-        profile_meta_json_path = os.path.join(self.html_output_dir, 'profile_meta_info.json')
-        # get color dict
-        with open(os.path.join(self.html_output_dir, 'profile_col_dict.json'), 'r') as f:
-            prof_colour_dict = json.load(f)
+        profile_meta_js_path = os.path.join(self.html_output_dir, 'profile_meta_info.js')
+
+        sorted_profile_uids_by_local_abund = prof_meta_only.sort_values(
+            'ITS2 profile abundance local', ascending=False).index.values.tolist()
+        # make color dict
+        prof_colour_dict = self._set_colour_dict(sorted_profile_uids_by_local_abund)
+        with open(os.path.join(self.html_output_dir, 'prof_color_dict.json'), 'w') as f:
+            json.dump(fp=f, obj=prof_colour_dict)
         # first the meta information
-        genera_annotation_dict = {'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium', 'E':'Effrenium', 'F':'Clade F', 'G':'Clade G', 'H':'Clade H', 'I':'Clade I'}
+        genera_annotation_dict = {
+            'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium',
+            'E':'Effrenium', 'F':'Clade F', 'G':'Clade G', 'H':'Clade H', 'I':'Clade I'}
         profile_meta_dict = {uid: {} for uid in prof_meta_only.index.values.tolist()}
         for k in profile_meta_dict.keys():
-            profile_meta_dict['uid'] = k
-            profile_meta_dict['name'] = prof_meta_only.at[k, 'ITS2 type profile']
-            profile_meta_dict['genera'] = genera_annotation_dict[prof_meta_only.at[k, 'Clade']]
-            profile_meta_dict['maj_its2_seq'] = prof_meta_only.at[k, 'Majority ITS2 sequence']
-            profile_meta_dict['assoc_species'] = prof_meta_only.at[k, 'Associated species']
-            profile_meta_dict['local_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance local']
-            profile_meta_dict['db_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance DB']
-            profile_meta_dict['seq_uids'] = prof_meta_only.at[k, 'Sequence accession / SymPortal UID']
-            profile_meta_dict['seq_abund_string'] = prof_meta_only.at[k, 'Average defining sequence proportions and [stdev]']
-            profile_meta_dict['color'] = prof_colour_dict[k]
+            profile_meta_dict[k]['uid'] = k
+            profile_meta_dict[k]['name'] = prof_meta_only.at[k, 'ITS2 type profile']
+            profile_meta_dict[k]['genera'] = genera_annotation_dict[prof_meta_only.at[k, 'Clade']]
+            profile_meta_dict[k]['maj_its2_seq'] = prof_meta_only.at[k, 'Majority ITS2 sequence']
+            profile_meta_dict[k]['assoc_species'] = prof_meta_only.at[k, 'Associated species']
+            profile_meta_dict[k]['local_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance local']
+            profile_meta_dict[k]['db_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance DB']
+            profile_meta_dict[k]['seq_uids'] = prof_meta_only.at[k, 'Sequence accession / SymPortal UID']
+            profile_meta_dict[k]['seq_abund_string'] = prof_meta_only.at[k, 'Average defining sequence proportions and [stdev]']
+            profile_meta_dict[k]['color'] = prof_colour_dict[k]
 
-        general.write_out_js_file_to_return_python_objs_as_js_objs({'function_name':'getProfileMetaInfo'},js_outpath=profile_meta_json_path)
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name':'getProfileMetaInfo', 'python_obj':profile_meta_dict}],
+        js_outpath=profile_meta_js_path)
 
         self._make_profile_rect_array(prof_colour_dict, prof_meta_only)
 
+
+    def _set_colour_dict(self, sorted_profile_uids_by_local_abund,):
+        colour_palette_pas = ['#%02x%02x%02x' % rgb_tup for rgb_tup in
+                              general.create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=1000, num_cols=50,
+                                                 time_out_iterations=10000)]
+
+        grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
+
+        # We will use the col headers of the df as the its2 type profile order for plotting but we
+        # we should colour according to the abundance of the its2 type profiles
+        # as we don't want to run out of colours by the time we get to profiles that are very abundant.
+        # The sorted_type_prof_names_by_local_abund object has the names of the its2 type profile in order of abundance
+        # we will use the index order as the order of samples to plot
+
+        # create the colour dictionary that will be used for plotting by assigning a colour from the colour_palette
+        # to the most abundant seqs first and after that cycle through the grey_pallette assigning colours
+
+        colour_dict = {}
+        for i in range(len(sorted_profile_uids_by_local_abund)):
+            if i < len(colour_palette_pas):
+                colour_dict[sorted_profile_uids_by_local_abund[i]] = colour_palette_pas[i]
+            else:
+                grey_index = i % len(grey_palette)
+                colour_dict[sorted_profile_uids_by_local_abund] = grey_palette[grey_index]
+        return  colour_dict
 
     def _make_profile_rect_array(self, prof_colour_dict, prof_meta_only):
         # get rid of the meta information at the top of the df
@@ -1077,14 +1110,10 @@ class SequenceCountTableCreator:
         df_to_sort = self.output_df_absolute_post_med.copy()
         df_to_sort = df_to_sort.iloc[:-1]
         sorted_sample_arrays = {}
-        sorted_sample_arrays['sample_name'] = df_to_sort.sort_value('raw_contigs', ascending=True,
-                                                                    inplace=True).index.values.tolist()
-        sorted_sample_arrays['raw_contigs'] = df_to_sort.sort_value('raw_contigs', ascending=True,
-                                                                    inplace=True).index.values.tolist()
-        sorted_sample_arrays['post_med_absolute'] = df_to_sort.sort_value('post_med_absolute', ascending=True,
-                                                                          inplace=True).index.values.tolist()
-        sorted_sample_arrays['post_med_unique'] = df_to_sort.sort_value('post_med_unique', ascending=True,
-                                                                        inplace=True).index.values.tolist()
+        sorted_sample_arrays['sample_name'] = df_to_sort.sort_values('raw_contigs', ascending=True).index.values.tolist()
+        sorted_sample_arrays['raw_contigs'] = df_to_sort.sort_values('raw_contigs', ascending=True).index.values.tolist()
+        sorted_sample_arrays['post_med_absolute'] = df_to_sort.sort_values('post_med_absolute', ascending=True).index.values.tolist()
+        sorted_sample_arrays['post_med_unique'] = df_to_sort.sort_values('post_med_unique', ascending=True).index.values.tolist()
         df_to_sort['taxa_string'] = [';'.join(i) for i in zip(
             df_to_sort["host_phylum"].map(str),
             df_to_sort["host_class"].map(str),
@@ -1092,17 +1121,13 @@ class SequenceCountTableCreator:
             df_to_sort["host_family"].map(str),
             df_to_sort["host_genus"].map(str),
             df_to_sort["host_species"].map(str))]
-        sorted_sample_arrays['taxa_string'] = df_to_sort.sort_value('taxa_string', ascending=True,
-                                                                    inplace=True).index.values.tolist()
+        sorted_sample_arrays['taxa_string'] = df_to_sort.sort_values('taxa_string', ascending=True).index.values.tolist()
         df_to_sort['lat_lon_str'] = [';'.join(i) for i in zip(
             df_to_sort["collection_latitude"].map(str),
             df_to_sort["collection_longitude"].map(str))]
-        sorted_sample_arrays['lat_lon'] = df_to_sort.sort_value('lat_lon_str', ascending=True,
-                                                                inplace=True).index.values.tolist()
-        sorted_sample_arrays['collection_date'] = df_to_sort.sort_value('collection_date', ascending=True,
-                                                                        inplace=True).index.values.tolist()
-        sorted_sample_arrays['collection_depth'] = df_to_sort.sort_value('collection_depth', ascending=True,
-                                                                         inplace=True).index.values.tolist()
+        sorted_sample_arrays['lat_lon'] = df_to_sort.sort_values('lat_lon_str', ascending=True).index.values.tolist()
+        sorted_sample_arrays['collection_date'] = df_to_sort.sort_values('collection_date', ascending=True).index.values.tolist()
+        sorted_sample_arrays['collection_depth'] = df_to_sort.sort_values('collection_depth', ascending=True).index.values.tolist()
         return sorted_sample_arrays
 
     def _make_post_med_rect_array(self, index_of_first_seq):
@@ -1116,6 +1141,13 @@ class SequenceCountTableCreator:
             abundance_dict[col] = sum(self.output_df_absolute_post_med[col][:-1])
         # get the names of the sequences sorted according to their totalled abundance
         sorted_seq_names = [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
+        # The col_dict output happens before the plotting where the col dict is
+        # created so we will have to create the col
+        # dict here and then read it back in for making the pre_seq rect array.
+        # We will then read these in for the plotting.
+        seq_colour_dict = general.set_seq_colour_dict(sorted_seq_names)
+        with open(os.path.join(self.html_output_dir, 'color_dict_post_med.json'), 'w') as f:
+            json.dump(fp=f, obj=seq_colour_dict)
         # also gonna be handy to have a seq_name to uid dict
         seq_name_to_uid_dict = {
             seq_name: uid for seq_name, uid in
@@ -1123,8 +1155,6 @@ class SequenceCountTableCreator:
                 list(self.output_df_absolute_post_med)[index_of_first_seq:],
                 self.output_df_absolute_post_med.iloc[-1, index_of_first_seq:]
             )}
-        with open(os.path.join(self.html_output_dir, 'seq_col_dict.json'), 'r') as f:
-            seq_colour_dict = json.load(f)
         max_cumulative_abs = self._populate_post_med_rect_dict(post_med_rect_dict, seq_colour_dict,
                                                                seq_name_to_uid_dict, sorted_seq_names)
         # now we have the dictionary that holds the rectangle arrays populated
@@ -1156,7 +1186,7 @@ class SequenceCountTableCreator:
                         "sample_name": abs_series['sample_name'],
                         "seq_name": seq,
                         "sample_uid": sample_uid,
-                        "sequence_uid": seq_name_to_uid_dict,
+                        "sequence_uid": seq_name_to_uid_dict[seq],
                         "y_abs": cumulative_count_abs,
                         "y_rel": cumulative_count_rel,
                         "height_rel": float(seq_abund_rel),
@@ -1178,31 +1208,31 @@ class SequenceCountTableCreator:
         # These will be used when annotating the sample information in the betwn sample distance
         # plots for tooltips and in the info section at the bottom.
         sample_clade_proportion_dict = defaultdict(dict)
-        sample_meta_dict = {uid: {} for uid in self.output_df_absolute_post_med.index.values.tolist()}
+        sample_meta_dict = {uid: {} for uid in self.output_df_absolute_post_med.index.values.tolist()[:-1]}
         taxa_fields = ['host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species']
         index_of_first_seq = list(self.output_df_absolute_post_med).index('collection_depth') + 1
         for k in sample_meta_dict.keys():
-            sample_meta_dict['uid'] = k
-            sample_meta_dict['sample_name'] = self.output_df_absolute_post_med.loc[k, 'sample_name']
-            sample_meta_dict['raw_contigs'] = self.output_df_absolute_post_med.loc[k, 'raw_contigs']
-            sample_meta_dict['post_taxa_id_absolute_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+            sample_meta_dict[k]['uid'] = k
+            sample_meta_dict[k]['sample_name'] = self.output_df_absolute_post_med.loc[k, 'sample_name']
+            sample_meta_dict[k]['raw_contigs'] = self.output_df_absolute_post_med.loc[k, 'raw_contigs']
+            sample_meta_dict[k]['post_taxa_id_absolute_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
                 k, 'post_taxa_id_absolute_symbiodinium_seqs']
-            sample_meta_dict['post_taxa_id_unique_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+            sample_meta_dict[k]['post_taxa_id_unique_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
                 k, 'post_taxa_id_unique_symbiodinium_seqs']
-            sample_meta_dict['post_taxa_id_absolute_non_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+            sample_meta_dict[k]['post_taxa_id_absolute_non_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
                 k, 'post_taxa_id_absolute_non_symbiodinium_seqs']
-            sample_meta_dict['post_taxa_id_unique_non_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
+            sample_meta_dict[k]['post_taxa_id_unique_non_symbiodinium_seqs'] = self.output_df_absolute_post_med.loc[
                 k, 'post_taxa_id_unique_non_symbiodinium_seqs']
-            sample_meta_dict['post_med_absolute'] = self.output_df_absolute_post_med.loc[k, 'post_med_absolute']
-            sample_meta_dict['post_med_unique'] = self.output_df_absolute_post_med.loc[k, 'post_med_unique']
-            sample_meta_dict['sample_type'] = self.output_df_absolute_post_med.loc[k, 'sample_type']
+            sample_meta_dict[k]['post_med_absolute'] = self.output_df_absolute_post_med.loc[k, 'post_med_absolute']
+            sample_meta_dict[k]['post_med_unique'] = self.output_df_absolute_post_med.loc[k, 'post_med_unique']
+            sample_meta_dict[k]['sample_type'] = self.output_df_absolute_post_med.loc[k, 'sample_type']
 
             taxa_string = ';'.join([self.output_df_absolute_post_med.loc[k, taxa_field] for taxa_field in taxa_fields])
-            sample_meta_dict['taxa_string'] = taxa_string
-            sample_meta_dict['lat'] = self.output_df_absolute_post_med.loc[k, 'collection_latitude']
-            sample_meta_dict['lon'] = self.output_df_absolute_post_med.loc[k, 'collection_longitude']
-            sample_meta_dict['collection_date'] = self.output_df_absolute_post_med.loc[k, 'collection_date']
-            sample_meta_dict['collection_depth'] = self.output_df_absolute_post_med.loc[k, 'collection_depth']
+            sample_meta_dict[k]['taxa_string'] = taxa_string
+            sample_meta_dict[k]['lat'] = str(self.output_df_absolute_post_med.loc[k, 'collection_latitude'])
+            sample_meta_dict[k]['lon'] = str(self.output_df_absolute_post_med.loc[k, 'collection_longitude'])
+            sample_meta_dict[k]['collection_date'] = self.output_df_absolute_post_med.loc[k, 'collection_date']
+            sample_meta_dict[k]['collection_depth'] = self.output_df_absolute_post_med.loc[k, 'collection_depth']
 
             self._pop_clade_prop_string_and_prop_dict(k, sample_meta_dict, index_of_first_seq, sample_clade_proportion_dict)
 
@@ -1214,7 +1244,7 @@ class SequenceCountTableCreator:
         genera_annotation_dict = {'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
                                   'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'}
         prop_counting_dict = {clade: 0 for clade in list('ABCDEFGHI')}
-        for seq_index in range(len(list(self.output_df_absolute_post_med)))[index_of_first_seq:]:
+        for seq_index in list(self.output_df_absolute_post_med)[index_of_first_seq:]:
             seq_abund = self.output_df_absolute_post_med.at[k, seq_index]
             if seq_index[0] in list('ABCDEFGHI'):
                 prop_counting_dict[seq_index[0]] += seq_abund
@@ -1224,9 +1254,12 @@ class SequenceCountTableCreator:
                 raise RuntimeError('Unrecognised clade identifier in seq name')
         # now turn these into proportions and a string semicolon seperated
         tot_seqs = sum(prop_counting_dict.values())
-        props = [prop_counting_dict[clade] / tot_seqs for clade in list('ABCDEFGHI')]
-        sample_meta_dict['clade_prop_string'] = ';'.join([f'{prop:.2f}' for prop in props])
-        sample_meta_dict['clade_abs_abund_string'] = ';'.join([prop_counting_dict[clade] for clade in list('ABCDEFGHI')])
+        if tot_seqs:
+            props = [prop_counting_dict[clade] / tot_seqs for clade in list('ABCDEFGHI')]
+        else:
+            props = [0 for clade in list('ABCDEFGHI')]
+        sample_meta_dict[k]['clade_prop_string'] = ';'.join([f'{prop:.2f}' for prop in props])
+        sample_meta_dict[k]['clade_abs_abund_string'] = ';'.join([str(prop_counting_dict[clade]) for clade in list('ABCDEFGHI')])
         for clade_key, value in prop_counting_dict.items():
             if value:
                 # then there were some sequences from this clade
@@ -1595,26 +1628,6 @@ class SequenceCountTableCreator:
 
             self._make_pre_med_rect_array()
 
-            # now create the .js file that we will use to read in the data locally
-            # we will create a single file that will contain the
-            # functions getSeqDataAbsolutePreMED and getSeqDataRelativePreMED
-            # to make this file we will first write out each of the dataframes to json. We will then read in the json
-            # files and wrap them in the appropriate text to turn them into functioning functions. We will then write
-            # these into a single .js file called seq_data.js
-            absolute_json_path = os.path.join(self.html_output_dir, 'seq.absolute.preMED.json')
-            relative_json_path = os.path.join(self.html_output_dir, 'seq.relative.preMED.json')
-            js_file_path = os.path.join(self.html_output_dir, 'seq_data.preMED.js')
-            general.json_out_df(
-                path_to_json_file=absolute_json_path, df_to_json=self.abs_count_df, remove_last_row=False)
-            general.json_out_df(
-                path_to_json_file=relative_json_path, df_to_json=self.rel_count_df, remove_last_row=False)
-            js_file = []
-            js_file.extend(general.make_js_function_to_return_json_file(json_path=absolute_json_path,
-                                                                        function_name='getSeqDataAbsolutePreMED'))
-            js_file.extend(general.make_js_function_to_return_json_file(json_path=relative_json_path,
-                                                                        function_name='getSeqDataRelativePreMED'))
-            general.write_list_to_destination(destination=js_file_path, list_to_write=js_file)
-
         def _make_pre_med_rect_array(self):
             # now we need to create the rectangle array
             pre_med_rect_dict = {sample_uid: [] for sample_uid in
@@ -1626,8 +1639,11 @@ class SequenceCountTableCreator:
             sorted_seq_names = list(self.abs_count_df)[1:]
 
             # get the colour dict
-            with open(os.path.join(self.html_output_dir, 'seq_col_dict.json'), 'r') as f:
-                seq_colour_dict = json.load(f)
+            with open(os.path.join(self.html_output_dir, 'color_dict_post_med.json'), 'r') as f:
+                c_dict_post_med = json.load(f)
+            seq_colour_dict = general.set_seq_colour_dict_w_reference_c_dict(sorted_seq_names, c_dict_post_med)
+            with open(os.path.join(self.html_output_dir, 'color_dict_pre_med.json'), 'w') as f:
+                json.dump(fp=f, obj=seq_colour_dict)
 
             max_cumulative_abs = self._populate_pre_med_rect_dict(
                 pre_med_rect_dict, seq_colour_dict, sorted_seq_names)
@@ -1649,10 +1665,7 @@ class SequenceCountTableCreator:
                 rel_series = self.abs_count_df.loc[sample_uid]
                 cumulative_count_abs = 0
                 cumulative_count_rel = 0
-                # we need the inverse cumulative as well for the modal plot
-                # this is just adding the cumulation value after the height has been assigned
-                cumulative_count_abs_inv = 0
-                cumulative_count_rel_inv = 0
+
                 for seq in sorted_seq_names:
                     seq_abund_abs = abs_series.at[seq]
                     seq_abund_rel = rel_series.at[seq]
@@ -1665,14 +1678,11 @@ class SequenceCountTableCreator:
                             "sample_uid": sample_uid,
                             "y_abs": cumulative_count_abs,
                             "y_rel": cumulative_count_rel,
-                            "y_abs_inv": cumulative_count_abs_inv,
-                            "y_rel_inv": cumulative_count_rel_inv,
                             "height_rel": float(seq_abund_rel),
                             "height_abs": int(seq_abund_abs),
                             "fill": seq_colour_dict[seq]
                         })
-                        cumulative_count_abs_inv += int(seq_abund_abs)
-                        cumulative_count_rel_inv += float(seq_abund_rel)
+
                 post_med_rect_dict[sample_uid] = new_rect_list
                 if cumulative_count_abs > max_cumulative_abs:
                     max_cumulative_abs = cumulative_count_abs
