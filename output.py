@@ -239,7 +239,7 @@ class OutputTypeCountTable:
                 colour_dict[sorted_profile_uids_by_local_abund[i]] = colour_palette_pas[i]
             else:
                 grey_index = i % len(grey_palette)
-                colour_dict[sorted_profile_uids_by_local_abund] = grey_palette[grey_index]
+                colour_dict[sorted_profile_uids_by_local_abund[i]] = grey_palette[grey_index]
         return  colour_dict
 
     def _make_profile_rect_array(self, prof_colour_dict, prof_meta_only):
