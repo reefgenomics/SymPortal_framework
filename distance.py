@@ -164,7 +164,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self.pc_coordinates_dict = {}
         self.pc_variances_dict = {}
         self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'btwn_profile_dist_uf.js')
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
     def _chunk_query_set_distinct_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
@@ -496,7 +496,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self.pc_coordinates_dict = {}
         self.pc_variances_dict = {}
         self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'btwn_sample_dist_uf.js')
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
     def _chunk_query_set_cc_obj_from_dss_uids(self):
         temp_clade_col_objs = []
@@ -1019,7 +1019,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.pc_coordinates_dict = {}
         self.pc_variances_dict = {}
         self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'btwn_sample_dist_bc.js')
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
     def _chunk_query_set_cc_list_from_dss_uids(self):
         temp_cc_list_for_output = []
@@ -1175,7 +1175,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.pc_coordinates_dict = {}
         self.pc_variances_dict = {}
         self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'btwn_profile_dist_bc.js')
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
     def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()

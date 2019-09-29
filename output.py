@@ -183,7 +183,7 @@ class OutputTypeCountTable:
         profile rectangles."""
 
         # js output path for profile meta
-        profile_meta_js_path = os.path.join(self.html_output_dir, 'profile_meta_info.js')
+        profile_meta_js_path = os.path.join(self.html_output_dir, 'study_data.js')
 
         sorted_profile_uids_by_local_abund = prof_meta_only.sort_values(
             'ITS2 profile abundance local', ascending=False).index.values.tolist()
@@ -288,7 +288,7 @@ class OutputTypeCountTable:
         # now we have the dictionary that holds the rectangle arrays populated
         # and we have the maximum abundance
         # now write these out as js file and functions to return.
-        js_file_path = os.path.join(self.html_output_dir, 'rect_array_profile_by_sample.js')
+        js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataProfileBySample', 'python_obj': profile_rect_dict},
              {'function_name': 'getRectDataProfileBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
@@ -1095,7 +1095,7 @@ class SequenceCountTableCreator:
         # next we want to produce arrays that are the order of the sample uids according to various sortings
         sorted_sample_arrays = self._populate_sorted_sample_uid_arrays()
 
-        js_file_path = os.path.join(self.html_output_dir, 'sample_meta_info.js')
+        js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
 
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getSampleMetaInfo', 'python_obj': sample_meta_dict},
@@ -1167,7 +1167,7 @@ class SequenceCountTableCreator:
         # now we have the dictionary that holds the rectangle arrays populated
         # and we have the maximum abundance
         # now write these out as js file and functions to return.
-        js_file_path = os.path.join(self.html_output_dir, 'rect_array_postMED_by_sample.js')
+        js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataPostMEDBySample', 'python_obj': post_med_rect_dict},
              {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
@@ -1658,7 +1658,7 @@ class SequenceCountTableCreator:
             # now we have the dictionary that holds the rectangle arrays populated
             # and we have the maximum abundance
             # now write these out as js file and functions to return.
-            js_file_path = os.path.join(self.html_output_dir, 'rect_array_preMED_by_sample.js')
+            js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
             general.write_out_js_file_to_return_python_objs_as_js_objs(
                 [{'function_name': 'getRectDataPreMEDBySample', 'python_obj': pre_med_rect_dict},
                  {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],

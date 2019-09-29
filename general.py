@@ -358,9 +358,16 @@ def write_out_js_file_to_return_python_objs_as_js_objs(list_of_func_obj_dicts, j
         temp_js_file_as_list.append("\treturn " + obj_as_json + ';')
         temp_js_file_as_list.append("}")
 
-    with open(js_outpath, 'w') as f:
-        for line in temp_js_file_as_list:
-            f.write(f'{line}\n')
+    if os.path.isfile(js_outpath):
+        # study_data.js already exists so append to it
+        with open(js_outpath, 'a') as f:
+            for line in temp_js_file_as_list:
+                f.write(f'{line}\n')
+    else:
+        # study_data.js doesn't exist yet so create and write to it
+        with open(js_outpath, 'w') as f:
+            for line in temp_js_file_as_list:
+                f.write(f'{line}\n')
 
 def make_json_object_array_from_python_dictionary(p_dict):
     json_str = ''
