@@ -29,7 +29,7 @@ class DataLoading:
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
     def __init__(
-            self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord,
+            self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
             distance_method, debug=False):
         self.parent = parent_work_flow_obj
         # check and generate the sample_meta_info_df first before creating the DataSet object
@@ -60,6 +60,7 @@ class DataLoading:
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
+        self.no_output = no_output
         self.distance_method = distance_method
         # this is the path of the file we will use to deposit a backup copy of the reference sequences
         self.seq_dump_file_path = self._setup_sequence_dump_file_path()
@@ -156,13 +157,14 @@ class DataLoading:
 
         self._write_data_set_info_to_stdout()
 
-        self._output_seqs_count_table()
+        if not self.no_output:
+            self._output_seqs_count_table()
 
-        self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
+            self._write_sym_non_sym_and_size_violation_dirs_to_stdout()
 
-        self._output_seqs_stacked_bar_plots()
+            self._output_seqs_stacked_bar_plots()
 
-        self._do_sample_ordination()
+            self._do_sample_ordination()
 
     def _make_new_dataset_object(self):
         self.dataset_object = DataSet(

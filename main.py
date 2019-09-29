@@ -459,7 +459,7 @@ class SymPortalWorkFlowManager:
         self.data_loading_object = data_loading.DataLoading(
             parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
-            no_ord=self.args.no_ordinations, distance_method=self.args.distance_method, debug=self.args.debug)
+            no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method, debug=self.args.debug)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given(self):
