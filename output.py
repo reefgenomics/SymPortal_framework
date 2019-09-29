@@ -191,6 +191,8 @@ class OutputTypeCountTable:
         prof_colour_dict = self._set_colour_dict(sorted_profile_uids_by_local_abund)
         with open(os.path.join(self.html_output_dir, 'prof_color_dict.json'), 'w') as f:
             json.dump(fp=f, obj=prof_colour_dict)
+
+
         # first the meta information
         genera_annotation_dict = {
             'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium',
@@ -268,17 +270,15 @@ class OutputTypeCountTable:
                     cumulative_count_abs += int(prof_abund_abs)
                     cumulative_count_rel += float(prof_abund_rel)
                     new_rect_list.append({
-                        "sample_name": abs_series['sample_name'],
+
                         "profile_name": prof_meta_only.at[profile_uid, 'ITS2 type profile'],
-                        "sample_uid": sample_uid,
-                        "profile_uid": profile_uid,
                         "y_abs": cumulative_count_abs,
-                        "y_rel": cumulative_count_rel,
+                        "y_rel": f'{cumulative_count_rel:.3f}',
                         "y_abs_inv": cumulative_count_abs_inv,
-                        "y_rel_inv": cumulative_count_rel_inv,
-                        "height_rel": float(prof_abund_rel),
+                        "y_rel_inv": f'{cumulative_count_rel_inv:.3f}',
+                        "height_rel": f'{float(prof_abund_rel):.3f}',
                         "height_abs": int(prof_abund_abs),
-                        "fill": prof_colour_dict[profile_uid]
+
                     })
                     cumulative_count_abs_inv += int(prof_abund_abs)
                     cumulative_count_rel_inv += float(prof_abund_rel)
@@ -291,7 +291,8 @@ class OutputTypeCountTable:
         js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataProfileBySample', 'python_obj': profile_rect_dict},
-             {'function_name': 'getRectDataProfileBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
+             {'function_name': 'getRectDataProfileBySampleMaxSeq', 'python_obj': max_cumulative_abs},
+             {'function_name': 'getProfColor', 'python_obj': prof_colour_dict}],
             js_outpath=js_file_path)
 
     def _write_out_meta_only_dfs_profiles(self, abundance_row_indices):
@@ -1189,15 +1190,11 @@ class SequenceCountTableCreator:
                     cumulative_count_abs += int(seq_abund_abs)
                     cumulative_count_rel += float(seq_abund_rel)
                     new_rect_list.append({
-                        "sample_name": abs_series['sample_name'],
                         "seq_name": seq,
-                        "sample_uid": sample_uid,
-                        "sequence_uid": seq_name_to_uid_dict[seq],
                         "y_abs": cumulative_count_abs,
-                        "y_rel": cumulative_count_rel,
-                        "height_rel": float(seq_abund_rel),
+                        "y_rel": f'{cumulative_count_rel:.3f}',
+                        "height_rel": f'{float(seq_abund_rel):.3f}',
                         "height_abs": int(seq_abund_abs),
-                        "fill": seq_colour_dict[seq]
                     })
 
             post_med_rect_dict[sample_uid] = new_rect_list
@@ -1652,6 +1649,8 @@ class SequenceCountTableCreator:
             seq_colour_dict = general.set_seq_colour_dict_w_reference_c_dict(sorted_seq_names, c_dict_post_med)
             with open(os.path.join(self.html_output_dir, 'color_dict_pre_med.json'), 'w') as f:
                 json.dump(fp=f, obj=seq_colour_dict)
+            # merge the two colour dictionaries and add to the html output
+            combi_color_dict = {**c_dict_post_med, **seq_colour_dict}
 
             max_cumulative_abs = self._populate_pre_med_rect_dict(
                 pre_med_rect_dict, seq_colour_dict, sorted_seq_names)
@@ -1661,7 +1660,8 @@ class SequenceCountTableCreator:
             js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
             general.write_out_js_file_to_return_python_objs_as_js_objs(
                 [{'function_name': 'getRectDataPreMEDBySample', 'python_obj': pre_med_rect_dict},
-                 {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
+                 {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
+                 {'function_name': 'getSeqColor', 'python_obj': combi_color_dict}],
                 js_outpath=js_file_path)
 
         def _populate_pre_med_rect_dict(self, post_med_rect_dict, seq_colour_dict,
@@ -1681,14 +1681,11 @@ class SequenceCountTableCreator:
                         cumulative_count_abs += int(seq_abund_abs)
                         cumulative_count_rel += float(seq_abund_rel)
                         new_rect_list.append({
-                            "sample_name": abs_series['sample_name'],
                             "seq_name": seq,
-                            "sample_uid": sample_uid,
                             "y_abs": cumulative_count_abs,
-                            "y_rel": cumulative_count_rel,
-                            "height_rel": float(seq_abund_rel),
+                            "y_rel": f'{cumulative_count_rel:.3f}',
+                            "height_rel": f'{float(seq_abund_rel):.3f}',
                             "height_abs": int(seq_abund_abs),
-                            "fill": seq_colour_dict[seq]
                         })
 
                 post_med_rect_dict[sample_uid] = new_rect_list
