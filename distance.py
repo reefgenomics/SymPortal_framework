@@ -243,7 +243,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         for profile_uid in pcoa_coords_df['analysis_type_uid'][:-1]:
             profile_pc_coords_dict = {}
             for pc in available_pcs:
-                profile_pc_coords_dict[pc] = pcoa_coords_df.at[profile_uid, pc]
+                profile_pc_coords_dict[pc] = f'{pcoa_coords_df.at[profile_uid, pc]:.3f}'
             genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
@@ -560,10 +560,10 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
         for sample_uid in pcoa_coords_df.index.values.tolist()[:-1]:
-            profile_pc_coords_dict = {}
+            sample_pc_coords_dict = {}
             for pc in available_pcs:
-                profile_pc_coords_dict[pc] = pcoa_coords_df.at[sample_uid, pc]
-            genera_pc_coords_dict[sample_uid] = profile_pc_coords_dict
+                sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
+            genera_pc_coords_dict[sample_uid] = sample_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
 
@@ -1080,10 +1080,10 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
         for sample_uid in pcoa_coords_df.index.values.tolist()[:-1]:
-            profile_pc_coords_dict = {}
+            sample_pc_coords_dict = {}
             for pc in available_pcs:
-                profile_pc_coords_dict[pc] = pcoa_coords_df.at[sample_uid, pc]
-            genera_pc_coords_dict[sample_uid] = profile_pc_coords_dict
+                sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
+            genera_pc_coords_dict[sample_uid] = sample_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
 
@@ -1253,7 +1253,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         for profile_uid in pcoa_coords_df.index.values.tolist()[:-1]:
             profile_pc_coords_dict = {}
             for pc in available_pcs:
-                profile_pc_coords_dict[pc] = pcoa_coords_df.at[profile_uid, pc]
+                profile_pc_coords_dict[pc] = f'{pcoa_coords_df.at[profile_uid, pc]:.3f}'
             genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
