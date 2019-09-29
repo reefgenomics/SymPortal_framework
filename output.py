@@ -1670,7 +1670,7 @@ class SequenceCountTableCreator:
             for sample_uid in self.abs_count_df.index:
                 new_rect_list = []
                 abs_series = self.abs_count_df.loc[sample_uid]
-                rel_series = self.abs_count_df.loc[sample_uid]
+                rel_series = self.rel_count_df.loc[sample_uid]
                 cumulative_count_abs = 0
                 cumulative_count_rel = 0
 
