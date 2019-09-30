@@ -728,8 +728,6 @@ class TreeCreatorForUniFrac:
         self.ref_seq_objs = self.parent._chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list=set_of_ref_seq_uids)
         self.num_seqs = len(self.ref_seq_objs)
         self.fasta_unaligned_path = os.path.join(self.parent.clade_output_dir, f'clade_{self.clade}_seqs.unaligned.fasta')
-        if len(general.read_defined_file_to_list(self.fasta_unaligned_path)) < 5:
-            raise InsufficientSequencesInAlignment
         self.fasta_aligned_path = self.fasta_unaligned_path.replace('unaligned', 'aligned')
         # self.iqtree = local['iqtree']
         self.tree_out_path_unrooted = self.fasta_aligned_path + '.treefile'
@@ -741,6 +739,9 @@ class TreeCreatorForUniFrac:
         # write out the sequences unaligned
         print(f'Writing out {self.num_seqs} unaligned sequences')
         self._write_out_unaligned_seqs()
+
+        if len(general.read_defined_file_to_list(self.fasta_unaligned_path)) < 5:
+            raise InsufficientSequencesInAlignment
 
         # align the sequences
         print(f'Aligning {self.num_seqs} sequences')
