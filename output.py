@@ -212,10 +212,11 @@ class OutputTypeCountTable:
             profile_meta_dict[k]['color'] = prof_colour_dict[k]
 
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name':'getProfileMetaInfo', 'python_obj':profile_meta_dict}],
+            [{'function_name':'getProfileMetaInfo', 'python_obj':profile_meta_dict},
+             {'function_name':'getProfileUIDSortedLocalAbund', 'python_obj':sorted_profile_uids_by_local_abund}],
         js_outpath=profile_meta_js_path)
 
-        self._make_profile_rect_array(prof_colour_dict, prof_meta_only)
+        self._make_profile_rect_array(prof_colour_dict, prof_meta_only, sorted_profile_uids_by_local_abund)
 
 
     def _set_colour_dict(self, sorted_profile_uids_by_local_abund,):
@@ -243,7 +244,7 @@ class OutputTypeCountTable:
                 colour_dict[sorted_profile_uids_by_local_abund[i]] = grey_palette[grey_index]
         return  colour_dict
 
-    def _make_profile_rect_array(self, prof_colour_dict, prof_meta_only):
+    def _make_profile_rect_array(self, prof_colour_dict, prof_meta_only, sorted_profile_uids_by_local_abund):
         # get rid of the meta information at the top of the df
         rows_to_keep_by_index = []
         abundance_row_indices = list(range(self.number_of_header_rows_added, (
@@ -264,7 +265,7 @@ class OutputTypeCountTable:
             # this is just adding the cumulation value after the height has been assigned
             cumulative_count_abs_inv = 0
             cumulative_count_rel_inv = 0
-            for profile_uid in prof_meta_only.index:
+            for profile_uid in sorted_profile_uids_by_local_abund:
                 prof_abund_abs = abs_series.at[profile_uid]
                 prof_abund_rel = rel_series.at[profile_uid]
                 if prof_abund_abs:
