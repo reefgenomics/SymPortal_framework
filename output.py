@@ -198,6 +198,7 @@ class OutputTypeCountTable:
             'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium',
             'E':'Effrenium', 'F':'Clade F', 'G':'Clade G', 'H':'Clade H', 'I':'Clade I'}
         profile_meta_dict = {uid: {} for uid in prof_meta_only.index.values.tolist()}
+        profile_order = [int(uid) for uid in prof_meta_only.index.values.tolist()]
         for k in profile_meta_dict.keys():
             profile_meta_dict[k]['uid'] = k
             profile_meta_dict[k]['name'] = prof_meta_only.at[k, 'ITS2 type profile']
@@ -211,7 +212,8 @@ class OutputTypeCountTable:
             profile_meta_dict[k]['color'] = prof_colour_dict[k]
 
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name':'getProfileMetaInfo', 'python_obj':profile_meta_dict}],
+            [{'function_name':'getProfileMetaInfo', 'python_obj':profile_meta_dict},
+             {'function_name':'getProfileOrder', 'python_obj':profile_order}],
         js_outpath=profile_meta_js_path)
 
         self._make_profile_rect_array(prof_colour_dict, prof_meta_only)
@@ -1180,7 +1182,7 @@ class SequenceCountTableCreator:
              {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
             js_outpath=js_file_path)
 
-    def _populate_post_med_rect_dict(self, post_med_rect_dict, seq_colour_dict, seq_name_to_uid_dict, sorted_seq_names):
+    def _populate_post_med_rect_dict(self, post_med_rect_dict, sorted_seq_names):
         max_cumulative_abs = 0
         for sample_uid in self.df_abs_no_meta_rows.index:
             new_rect_list = []
