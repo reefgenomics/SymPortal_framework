@@ -15,6 +15,7 @@ import general, django_general
 import itertools
 from scipy.spatial.distance import braycurtis
 from datetime import datetime
+from exceptions import InsufficientSequencesInAlignment
 
 
 class BaseUnifracDistPCoACreator:
@@ -198,7 +199,12 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             # and the AnalysisType objects or possibly the DataSetSample objects uids are in the rows
             clade_abund_df, set_of_ref_seq_uids = self._create_profile_abundance_df(clade_in_question)
 
-            tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
+            try:
+                tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
+            except InsufficientSequencesInAlignment:
+                print(f"There are insufficient sequences in clade {clade_in_question}.")
+                print("Distance information will not be computed")
+                continue
 
             if str(tree).count(')') == 1:
                 print(f'There are no internal nodes on the rooted tree. '
@@ -300,8 +306,10 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         print(
             f'Generating phylogentic tree from {len(set_of_ref_seq_uids)} DIV its2 '
             f'sequences found in its2 type profiles of clade: {clade_in_question}')
+
         tree_creator = TreeCreatorForUniFrac(
             parent=self, set_of_ref_seq_uids=set_of_ref_seq_uids, clade=clade_in_question)
+
         tree_creator.make_tree()
         tree = tree_creator.rooted_tree
         return tree
@@ -517,7 +525,12 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             # and the CladeCollection object uids are in the rows
             clade_abund_df, set_of_ref_seq_uids = self._create_sample_abundance_df(clade_in_question)
 
-            tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
+            try:
+                tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
+            except InsufficientSequencesInAlignment:
+                print(f"There are insufficient sequences in clade {clade_in_question}.")
+                print("Distance information will not be computed")
+                continue
 
             if str(tree).count(')') == 1:
                 print(f'There are no internal nodes on the rooted tree. '
@@ -715,6 +728,8 @@ class TreeCreatorForUniFrac:
         self.ref_seq_objs = self.parent._chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list=set_of_ref_seq_uids)
         self.num_seqs = len(self.ref_seq_objs)
         self.fasta_unaligned_path = os.path.join(self.parent.clade_output_dir, f'clade_{self.clade}_seqs.unaligned.fasta')
+        if len(general.read_defined_file_to_list(self.fasta_unaligned_path)) < 5:
+            raise InsufficientSequencesInAlignment
         self.fasta_aligned_path = self.fasta_unaligned_path.replace('unaligned', 'aligned')
         # self.iqtree = local['iqtree']
         self.tree_out_path_unrooted = self.fasta_aligned_path + '.treefile'
