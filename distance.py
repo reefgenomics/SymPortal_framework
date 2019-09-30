@@ -246,7 +246,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
-        for profile_uid in pcoa_coords_df['analysis_type_uid'][:-1]:
+        for profile_uid in pcoa_coords_df.index.values.tolist()[:-1]:
             profile_pc_coords_dict = {}
             for pc in available_pcs:
                 profile_pc_coords_dict[pc] = f'{pcoa_coords_df.at[profile_uid, pc]:.3f}'
