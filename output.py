@@ -823,6 +823,9 @@ class SequenceCountTableCreator:
         # dataframes without the meta rows at the bottom for making the javascript objects
         self.df_abs_no_meta_rows = None
         self.df_rel_no_meta_rows = None
+        # variables to hold sample uid orders for the js output
+        self.profile_based_sample_ordered_uids = None
+        self.similarity_based_sample_ordered_uids = None
 
     def _init_core_vars(self, symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
                         output_dir, sorted_sample_uid_list, time_date_str):
@@ -1113,6 +1116,9 @@ class SequenceCountTableCreator:
         # we will create a copy of the df so that we can mess it up without affecting the output df
         df_to_sort = self.df_abs_no_meta_rows.copy()
         sorted_sample_arrays = {}
+        if self.profile_based_sample_ordered_uids:
+            sorted_sample_arrays['profile_based'] = self.profile_based_sample_ordered_uids
+        sorted_sample_arrays['similarity'] = self.similarity_based_sample_ordered_uids
         sorted_sample_arrays['sample_name'] = df_to_sort.sort_values('raw_contigs',
                                                                      ascending=True).index.values.tolist()
         sorted_sample_arrays['raw_contigs'] = df_to_sort.sort_values('raw_contigs',
@@ -1213,7 +1219,7 @@ class SequenceCountTableCreator:
         self.df_abs_no_meta_rows = self.output_df_absolute_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1)]
         self.df_rel_no_meta_rows = self.output_df_relative_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1)]
         sample_clade_proportion_dict = defaultdict(dict)
-        sample_meta_dict = {uid: {} for uid in self.df_abs_no_meta_rows.index.values.tolist()}
+        sample_meta_dict = {int(uid): {} for uid in self.df_abs_no_meta_rows.index.values.tolist()}
         taxa_fields = ['host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species']
         index_of_first_seq = list(self.df_abs_no_meta_rows).index('collection_depth') + 1
         for k in sample_meta_dict.keys():
@@ -1387,17 +1393,23 @@ class SequenceCountTableCreator:
 
     def _create_ordered_output_dfs_from_series(self):
         """Put together the pandas series that hold sequences abundance outputs for each sample in order of the samples
-        either according to a predefined ordered list or by an order that will be generated below."""
+        either according to a predefined ordered list or by an order that will be generated below.
+        For the javascript outputs we want to capture these sample orders. Ideally it would be good
+        to have both the profile-based order and the similarity order. If a sorted_sample_uid_list
+        is provided then this is the sample-based. If this is not provided (because there is not an analysis
+        associated with this output) then we can only get the similarity output."""
         if self.sorted_sample_uid_list:
             sys.stdout.write('\nValidating sorted sample list and ordering dataframe accordingly\n')
             self._check_sorted_sample_list_is_valid()
-
+            self.profile_based_sample_ordered_uids = self.sorted_sample_uid_list
+            # even though we have the profile order of samples, still calculate the similarity order
+            self.similarity_based_sample_ordered_uids = self._generate_ordered_sample_list()
             self._create_ordered_output_dfs_from_series_with_sorted_sample_list()
 
         else:
             sys.stdout.write('\nGenerating ordered sample list and ordering dataframe accordingly\n')
             self.sorted_sample_uid_list = self._generate_ordered_sample_list()
-
+            self.similarity_based_sample_ordered_uids = self.sorted_sample_uid_list
             self._create_ordered_output_dfs_from_series_with_sorted_sample_list()
 
     def _generate_ordered_sample_list(self):
