@@ -1166,13 +1166,8 @@ class SequenceCountTableCreator:
         seq_colour_dict = general.set_seq_colour_dict(sorted_seq_names)
         with open(os.path.join(self.html_output_dir, 'color_dict_post_med.json'), 'w') as f:
             json.dump(fp=f, obj=seq_colour_dict)
-        # also gonna be handy to have a seq_name to uid dict
-        seq_name_to_uid_dict = {
-            seq_name: int(uid) for seq_name, uid in
-            self.output_df_absolute_post_med.loc['seq_accession'].iloc[index_of_first_seq:].items()
-        }
-        max_cumulative_abs = self._populate_post_med_rect_dict(post_med_rect_dict, seq_colour_dict,
-                                                               seq_name_to_uid_dict, sorted_seq_names)
+
+        max_cumulative_abs = self._populate_post_med_rect_dict(post_med_rect_dict, sorted_seq_names)
         # now we have the dictionary that holds the rectangle arrays populated
         # and we have the maximum abundance
         # now write these out as js file and functions to return.
