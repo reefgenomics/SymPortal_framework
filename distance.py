@@ -135,7 +135,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     def __init__(
             self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None,
              output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None,
-            cct_set_uid_list=None, is_sqrt_transf=False, local_abunds_only=False):
+            cct_set_uid_list=None, is_sqrt_transf=True, local_abunds_only=False):
 
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
@@ -482,7 +482,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def __init__(
             self, symportal_root_directory, num_processors, call_type, date_time_string=None,
-            output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=False):
+            output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=True):
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
@@ -1014,7 +1014,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def __init__(
             self, symportal_root_directory, date_time_string=None, data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=False):
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=True):
         super().__init__(
             symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='samples')
 
@@ -1162,7 +1162,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def __init__(
             self, symportal_root_directory, data_analysis_obj, date_time_string=None, data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=False, local_abunds_only=False):
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=True, local_abunds_only=False):
         super().__init__(
             symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='profiles')
 
