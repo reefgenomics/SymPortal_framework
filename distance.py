@@ -273,10 +273,41 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     def _compute_pcoa(self, wu):
         # compute the pcoa
         pcoa_output = pcoa(wu.data)
+        self._rescale_pcoa(pcoa_output)
         # analysis_type_uid
         pcoa_output.samples['analysis_type_uid'] = wu.ids
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
+
+    def _rescale_pcoa(self, pcoa_output):
+        # work through the magnitudes of order and see what the bigest scaler we can work with is
+        # whilst still remaining below 1
+        query = 0.1
+        scaler = 10
+        while 1:
+            if pcoa_output.samples.max().max() > query:
+                # then we cannot multiply by the scaler
+                # revert back and break
+                scaler /= 10
+                break
+            else:
+                # then we can safely multiply by the scaler
+                # increase by order of magnitude and test again
+                # we also need to test the negative if it is negative
+                min_val = pcoa_output.samples.min().min()
+                if min_val < 0:
+                    if min_val > (-1 * query):
+                        scaler *= 10
+                        query /= 10
+                    else:
+                        scaler /= 10
+                        break
+                else:
+                    scaler *= 10
+                    query /= 10
+        # now scale the df by the scaler unless it is 1
+        if scaler != 1:
+            pcoa_output.samples = pcoa_output.samples * scaler
 
     def _write_out_dist_df(self, clade_abund_df, wu, clade_in_question):
         # get the names of the at types to ouput in the df so that the user can relate distances
@@ -596,8 +627,39 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
+    def _rescale_pcoa(self, pcoa_output):
+        # work through the magnitudes of order and see what the bigest scaler we can work with is
+        # whilst still remaining below 1
+        query = 0.1
+        scaler = 10
+        while 1:
+            if pcoa_output.samples.max().max() > query:
+                # then we cannot multiply by the scaler
+                # revert back and break
+                scaler /= 10
+                break
+            else:
+                # then we can safely multiply by the scaler
+                # increase by order of magnitude and test again
+                # we also need to test the negative if it is negative
+                min_val = pcoa_output.samples.min().min()
+                if min_val < 0:
+                    if min_val > (-1 * query):
+                        scaler *= 10
+                        query /= 10
+                    else:
+                        scaler /= 10
+                        break
+                else:
+                    scaler *= 10
+                    query /= 10
+        # now scale the df by the scaler unless it is 1
+        if scaler != 1:
+            pcoa_output.samples = pcoa_output.samples * scaler
+
     def _compute_pcoa(self, wu):
         pcoa_output = pcoa(wu.data)
+        self._rescale_pcoa(pcoa_output)
         pcoa_output.samples['sample_uid'] = wu.ids
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
