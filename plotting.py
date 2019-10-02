@@ -418,7 +418,7 @@ class TypeStackedBarPlotter:
         sp_output_df = sp_output_df.iloc[:index_to_drop_from]
 
         # now make a dict of sample id to sample name so that we can work with uids
-        self.smp_uid_to_smp_name_dict = {int(smp_uid): smp_name for smp_uid, smp_name in zip(sp_output_df.iloc[3:, 0], sp_output_df.iloc[3:, 1])}
+        self.smp_uid_to_smp_name_dict = {int(smp_uid): str(smp_name) for smp_uid, smp_name in zip(sp_output_df.iloc[3:, 0], sp_output_df.iloc[3:, 1])}
 
         # now make a dict of of type id to type name so that we can also work eith uids for the types
         # as there could be types with identical names
