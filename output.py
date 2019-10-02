@@ -1121,14 +1121,14 @@ class SequenceCountTableCreator:
         if self.profile_based_sample_ordered_uids:
             sorted_sample_arrays['profile_based'] = self.profile_based_sample_ordered_uids
         sorted_sample_arrays['similarity'] = self.similarity_based_sample_ordered_uids
-        sorted_sample_arrays['sample_name'] = df_to_sort.sort_values('raw_contigs',
+        sorted_sample_arrays['sample_name'] = df_to_sort.sort_values('sample_name',
                                                                      ascending=True).index.values.tolist()
         sorted_sample_arrays['raw_contigs'] = df_to_sort.sort_values('raw_contigs',
-                                                                     ascending=True).index.values.tolist()
+                                                                     ascending=False).index.values.tolist()
         sorted_sample_arrays['post_med_absolute'] = df_to_sort.sort_values('post_med_absolute',
-                                                                           ascending=True).index.values.tolist()
+                                                                           ascending=False).index.values.tolist()
         sorted_sample_arrays['post_med_unique'] = df_to_sort.sort_values('post_med_unique',
-                                                                         ascending=True).index.values.tolist()
+                                                                         ascending=False).index.values.tolist()
         df_to_sort['taxa_string'] = [';'.join(i) for i in zip(
             df_to_sort["host_phylum"].map(str),
             df_to_sort["host_class"].map(str),
