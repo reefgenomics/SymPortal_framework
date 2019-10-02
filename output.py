@@ -1129,23 +1129,41 @@ class SequenceCountTableCreator:
                                                                            ascending=False).index.values.tolist()
         sorted_sample_arrays['post_med_unique'] = df_to_sort.sort_values('post_med_unique',
                                                                          ascending=False).index.values.tolist()
-        df_to_sort['taxa_string'] = [';'.join(i) for i in zip(
-            df_to_sort["host_phylum"].map(str),
-            df_to_sort["host_class"].map(str),
-            df_to_sort["host_order"].map(str),
-            df_to_sort["host_family"].map(str),
-            df_to_sort["host_genus"].map(str),
-            df_to_sort["host_species"].map(str))]
-        sorted_sample_arrays['taxa_string'] = df_to_sort.sort_values('taxa_string',
-                                                                     ascending=True).index.values.tolist()
-        df_to_sort['lat_lon_str'] = [';'.join(i) for i in zip(
-            df_to_sort["collection_latitude"].map(str),
-            df_to_sort["collection_longitude"].map(str))]
-        sorted_sample_arrays['lat_lon'] = df_to_sort.sort_values('lat_lon_str', ascending=True).index.values.tolist()
-        sorted_sample_arrays['collection_date'] = df_to_sort.sort_values('collection_date',
+        # Check to see if there is any taxa information else don't put this into the sorted lists
+        # Go through each of the taxa keys and check to see if there is any data for them. Store false if not
+        taxa_keys = ["host_phylum", "host_class", "host_order", "host_family", "host_genus", "host_species"]
+        taxa_to_output_dict = {taxa_k: True for taxa_k in taxa_keys}
+        for t_k in taxa_keys:
+            values = df_to_sort[t_k].values.tolist()
+            if values.count('NoData') == len(values):
+                taxa_to_output_dict[t_k] = False
+        if list(taxa_to_output_dict.values()).count(False) != len(taxa_keys):
+            # Then at least some of the taxa should be output
+            # Get a list of lists that will be what we make the string from
+            taxa_l_l = [df_to_sort[t_k] for t_k in taxa_keys if taxa_to_output_dict[t_k]]
+            df_to_sort['taxa_string'] = [';'.join(i) for i in zip(*taxa_l_l)]
+            sorted_sample_arrays['taxa_string'] = df_to_sort.sort_values('taxa_string',
                                                                          ascending=True).index.values.tolist()
-        sorted_sample_arrays['collection_depth'] = df_to_sort.sort_values('collection_depth',
-                                                                          ascending=True).index.values.tolist()
+        # if all lats have the default value of 999 then do not output lat_lon_str
+        lat_count = len([False for lat in df_to_sort['collection_latitude'].values.tolist() if lat > 90])
+        if lat_count != len(df_to_sort['collection_latitude'].values.tolist()):
+            df_to_sort['lat_lon_str'] = [';'.join(i) for i in zip(
+                df_to_sort["collection_latitude"].map(str),
+                df_to_sort["collection_longitude"].map(str))]
+            sorted_sample_arrays['lat_lon'] = df_to_sort.sort_values('lat_lon_str',
+                                                                     ascending=True).index.values.tolist()
+
+        # if all collection_date are the default value of NoData then do not output
+        if df_to_sort['collection_date'].values.tolist().count('NoData') != len(
+                df_to_sort['collection_date'].values.tolist()):
+            sorted_sample_arrays['collection_date'] = df_to_sort.sort_values('collection_date',
+                                                                             ascending=True).index.values.tolist()
+
+        # if all collection_depth are the default value of NoData then do not output
+        if df_to_sort['collection_date'].values.tolist().count('NoData') != len(
+                df_to_sort['collection_date'].values.tolist()):
+            sorted_sample_arrays['collection_depth'] = df_to_sort.sort_values('collection_depth',
+                                                                                  ascending=True).index.values.tolist()
         return sorted_sample_arrays
 
     def _make_post_med_rect_array(self, index_of_first_seq):
