@@ -261,10 +261,6 @@ class OutputTypeCountTable:
             rel_series = relative_df_abund_only.loc[sample_uid]
             cumulative_count_abs = 0
             cumulative_count_rel = 0
-            # we need the inverse cumulative as well for the modal plot
-            # this is just adding the cumulation value after the height has been assigned
-            cumulative_count_abs_inv = 0
-            cumulative_count_rel_inv = 0
             for profile_uid in sorted_profile_uids_by_local_abund:
                 prof_abund_abs = abs_series.at[profile_uid]
                 prof_abund_rel = rel_series.at[profile_uid]
@@ -276,14 +272,10 @@ class OutputTypeCountTable:
                         "profile_name": prof_meta_only.at[profile_uid, 'ITS2 type profile'],
                         "y_abs": cumulative_count_abs,
                         "y_rel": f'{cumulative_count_rel:.3f}',
-                        "y_abs_inv": cumulative_count_abs_inv,
-                        "y_rel_inv": f'{cumulative_count_rel_inv:.3f}',
                         "height_rel": f'{float(prof_abund_rel):.3f}',
                         "height_abs": int(prof_abund_abs),
 
                     })
-                    cumulative_count_abs_inv += int(prof_abund_abs)
-                    cumulative_count_rel_inv += float(prof_abund_rel)
             profile_rect_dict[sample_uid] = new_rect_list
             if cumulative_count_abs > max_cumulative_abs:
                 max_cumulative_abs = cumulative_count_abs
