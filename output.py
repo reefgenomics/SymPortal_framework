@@ -1231,7 +1231,7 @@ class SequenceCountTableCreator:
         index_of_first_seq = list(self.df_abs_no_meta_rows).index('collection_depth') + 1
         for k in sample_meta_dict.keys():
             sample_meta_dict[k]['uid'] = k
-            sample_meta_dict[k]['sample_name'] = self.df_abs_no_meta_rows.at[k, 'sample_name']
+            sample_meta_dict[k]['name'] = self.df_abs_no_meta_rows.at[k, 'sample_name']
             sample_meta_dict[k]['raw_contigs'] = self.df_abs_no_meta_rows.at[k, 'raw_contigs']
             sample_meta_dict[k]['post_taxa_id_absolute_symbiodinium_seqs'] = self.df_abs_no_meta_rows.at[
                 k, 'post_taxa_id_absolute_symbiodinium_seqs']
