@@ -1,5 +1,5 @@
 from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
-                          DataAnalysis, DataSetSampleSequencePM)
+                          DataAnalysis, DataSetSampleSequencePM, CladeCollectionType)
 from multiprocessing import Queue, Process, Manager
 import sys
 from django import db
@@ -178,27 +178,71 @@ class OutputTypeCountTable:
         print(self.path_to_additional_info_file)
 
     def _write_out_js_profiles_data_file(self, prof_meta_only):
-        """Similar to the post-med js output we will want to be producing two js items.
-        We will want to produce meta info object and we will want to be producing the
-        profile rectangles."""
+        """Here we produce the javascript objects that return the data required for viewing in the DataExplorer.
+        We will produce the profile meta info object that will hold the meta information for each of the
+        resolved ITS2 type profiles. The first level of keys will be profile UIDs.
+        We will also output the data for drawing the rectangles, including the maximum sequence abundance of
+        an individual sample. And we will output a colour dictionary of profile UID to colour.
+        Finally we will output analysis meta information. We should also put out the corresponding data submission
+        meta information. These will both be displayed in the
+        ."""
 
+        prof_colour_dict, sorted_profile_uids_by_local_abund = self._output_profile_meta_information(prof_meta_only)
+
+        self._make_profile_rect_array(prof_colour_dict, prof_meta_only, sorted_profile_uids_by_local_abund)
+
+        self._output_data_analysis_meta_info(prof_meta_only, sorted_profile_uids_by_local_abund)
+
+    def _output_data_analysis_meta_info(self, prof_meta_only, sorted_profile_uids_by_local_abund):
+        # Here output the DataAnalysis information for the DataExplorer
+        # Details that we would like to output
+        # UID
+        # NAME
+        # TIMESTAMP
+        # TOTAL SAMPLES IN ANALYSIS
+        # Number of unique profiles local
+        # number of profile instances local
+        # number of unique profiles total analysis
+        # number of profile instances total analysis
+        num_samples_in_analysis = len(DataSetSample.objects.filter(data_submission_from__in=self.data_analysis_obj.list_of_data_set_uids))
+        total_local_abund = sum(prof_meta_only['ITS2 profile abundance local'].astype(int).values)
+        unique_types_in_analysis = list(AnalysisType.objects.filter(data_analysis_from=self.data_analysis_obj))
+        num_unique_profiles_in_analysis = len(unique_types_in_analysis)
+        num_profile_instances = len(self._chunk_query_cct_objs_from_at_objs(unique_types_in_analysis))
+        data_analysis_meta_info_dict = {
+            "uid": str(self.data_analysis_obj.id), "name": self.data_analysis_obj.name,
+            "time_stamp": self.data_analysis_obj.time_stamp,
+            "samples_in_output": len(self.data_set_sample_uid_set_to_output),
+            "samples_in_analysis": str(num_samples_in_analysis),
+            "unique_profile_local": str(len(sorted_profile_uids_by_local_abund)),
+            "instance_profile_local": str(total_local_abund),
+            "unique_profile_analysis": str(num_unique_profiles_in_analysis),
+            "instances_profile_analysis": str(num_profile_instances)}
+        da_meta_js_path = os.path.join(self.html_output_dir, 'study_data.js')
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getDataAnalysisMetaInfo', 'python_obj': data_analysis_meta_info_dict}],
+            js_outpath=da_meta_js_path)
+
+    def _chunk_query_cct_objs_from_at_objs(self, da_obj_list):
+        cct_obj_list = []
+        for at_obj in general.chunks(da_obj_list):
+            cct_obj_list.extend(list(CladeCollectionType.objects.filter(analysis_type_of__in=at_obj)))
+        return cct_obj_list
+
+    def _output_profile_meta_information(self, prof_meta_only):
         # js output path for profile meta
         profile_meta_js_path = os.path.join(self.html_output_dir, 'study_data.js')
-
         sorted_profile_uids_by_local_abund = prof_meta_only.sort_values(
             'ITS2 profile abundance local', ascending=False).index.values.tolist()
         # make color dict
         prof_colour_dict = self._set_colour_dict(sorted_profile_uids_by_local_abund)
         with open(os.path.join(self.html_output_dir, 'prof_color_dict.json'), 'w') as f:
             json.dump(fp=f, obj=prof_colour_dict)
-
-
         # first the meta information
         genera_annotation_dict = {
-            'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium',
-            'E':'Effrenium', 'F':'Clade F', 'G':'Clade G', 'H':'Clade H', 'I':'Clade I'}
+            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
+            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'}
         profile_meta_dict = {uid: {} for uid in prof_meta_only.index.values.tolist()}
-
         for k in profile_meta_dict.keys():
             profile_meta_dict[k]['uid'] = k
             profile_meta_dict[k]['name'] = prof_meta_only.at[k, 'ITS2 type profile']
@@ -208,16 +252,13 @@ class OutputTypeCountTable:
             profile_meta_dict[k]['local_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance local']
             profile_meta_dict[k]['db_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance DB']
             profile_meta_dict[k]['seq_uids'] = prof_meta_only.at[k, 'Sequence accession / SymPortal UID']
-            profile_meta_dict[k]['seq_abund_string'] = prof_meta_only.at[k, 'Average defining sequence proportions and [stdev]']
+            profile_meta_dict[k]['seq_abund_string'] = prof_meta_only.at[
+                k, 'Average defining sequence proportions and [stdev]']
             profile_meta_dict[k]['color'] = prof_colour_dict[k]
-
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name':'getProfileMetaInfo', 'python_obj':profile_meta_dict},
-             {'function_name':'getProfileUIDSortedLocalAbund', 'python_obj':sorted_profile_uids_by_local_abund}],
-        js_outpath=profile_meta_js_path)
-
-        self._make_profile_rect_array(prof_colour_dict, prof_meta_only, sorted_profile_uids_by_local_abund)
-
+            [{'function_name': 'getProfileMetaInfo', 'python_obj': profile_meta_dict}],
+            js_outpath=profile_meta_js_path)
+        return prof_colour_dict, sorted_profile_uids_by_local_abund
 
     def _set_colour_dict(self, sorted_profile_uids_by_local_abund,):
         colour_palette_pas = ['#%02x%02x%02x' % rgb_tup for rgb_tup in
