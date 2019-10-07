@@ -204,7 +204,7 @@ class OutputTypeCountTable:
         # number of profile instances local
         # number of unique profiles total analysis
         # number of profile instances total analysis
-        num_samples_in_analysis = len(DataSetSample.objects.filter(data_submission_from__in=self.data_analysis_obj.list_of_data_set_uids))
+        num_samples_in_analysis = len(DataSetSample.objects.filter(data_submission_from__in=[int(_) for _ in self.data_analysis_obj.list_of_data_set_uids.split(',')]))
         total_local_abund = sum(prof_meta_only['ITS2 profile abundance local'].astype(int).values)
         unique_types_in_analysis = list(AnalysisType.objects.filter(data_analysis_from=self.data_analysis_obj))
         num_unique_profiles_in_analysis = len(unique_types_in_analysis)
