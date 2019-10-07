@@ -1118,14 +1118,18 @@ class SequenceCountTableCreator:
         self.output_paths_list.append(self.path_to_seq_output_abund_and_meta_df_relative)
 
     def _write_out_js_seq_data_files_post_med(self):
-        '''Here we will want to put out two js files.
-        One that contains the sample meta information and one that contains the rectangle information
-        for each sequence in each sample. The sample meta information will be an object that has the sample
+        '''Here we will want to create four js methods files.
+        1 - sample meta information,
+        2 - rectangle information
+        3 - sorted sample UIDs according to orders of various properties.
+        4 - the DataSubmission meta information.
+
+        The sample meta information will be an object that has the sample
         uid as key and for each of these there will be another object that has the various property and value
-        pairs. This js file will also contain another obeject that returns various arrays of sample uids that
-        have been sorted according to various parameters. The second js file will be the the rectangle array. This
-        is going to be sample uid as key and then as single array for each sample. In each of these samples we will
-        have objects, each one representing a rectange that will represent a sequence found in the sample.'''
+        pairs.
+        Rectangle array will be sample uid as key and then as single array for each sample. In each of these samples we will
+        have objects, each one representing a rectange that will represent a sequence found in the sample.
+        '''
 
         sample_meta_dict, index_of_first_seq, sample_clade_proportion_dict = self._populate_sample_meta_info_dict()
 
@@ -1143,6 +1147,34 @@ class SequenceCountTableCreator:
             js_outpath=js_file_path)
 
         self._make_post_med_rect_array(index_of_first_seq)
+
+        self._output_data_set_meta_info(js_file_path)
+
+    def _output_data_set_meta_info(self, js_file_path):
+        #  here make the DataSet meta info object
+        # It is of course possible that we will be working with samples from multiple data sets
+        # so when populating this information we will need to look to see how many datasets we were working with
+        # Items to output
+        # Dataset names
+        # Dataset UIDs
+        # Dataset time stamps
+        # Number of samples
+        # Average sequencing depth
+        # Average Symbiodiniaceae seqs
+        # self.ds_objs_to_output
+        data_set_meta_info = {
+            "num_associated_data_sets": str(len(self.ds_objs_to_output)),
+            "ds_names": ';'.join(ds.name for ds in self.ds_objs_to_output),
+            "ds_uids": ';'.join(str(ds.id) for ds in self.ds_objs_to_output),
+            "ds_time_stamps": ';'.join(ds.time_stamp for ds in self.ds_objs_to_output),
+            "num_samples": str(len(self.list_of_dss_objects)),
+            "seq_depth_av": str(int(self.df_abs_no_meta_rows['raw_contigs'].mean())),
+            'sym_seqs_absolute_av': str(int(self.df_abs_no_meta_rows['post_med_absolute'].mean())),
+            "sym_seqs_unique_av": str(int(self.df_abs_no_meta_rows['post_med_unique'].mean()))
+        }
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getDataSetMetaData', 'python_obj': data_set_meta_info}],
+            js_outpath=js_file_path)
 
     def _populate_sorted_sample_uid_arrays(self):
         # we should be able to make these quickly from the output_df_absolute by doing sorts
