@@ -110,7 +110,7 @@ class OutputTypeCountTable:
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.relative.abund_and_meta.txt')
         self.js_output_path_dict[
-            "profile_relative_meta_meta_count"] = self.path_to_relative_count_table_profiles_abund_and_meta
+            "profile_relative_abund_meta_count"] = self.path_to_relative_count_table_profiles_abund_and_meta
 
         self.path_to_relative_count_table_profiles_abund_only = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
