@@ -31,7 +31,7 @@ class BaseUnifracDistPCoACreator:
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
             data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list,
             cct_set_uid_list=cct_set_uid_list)
-        self.output_file_paths = []
+        self.output_path_list = []
 
         self.symportal_root_dir = symportal_root_directory
         self.call_type = call_type
@@ -39,7 +39,7 @@ class BaseUnifracDistPCoACreator:
             self.date_time_string = date_time_string
         else:
             self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.output_file_paths = []
+        self.output_path_list = []
         self.clade_output_dir = None
         self.is_sqrt_transf = is_sqrt_transf
 
@@ -121,7 +121,7 @@ class BaseUnifracDistPCoACreator:
 
     def _write_output_paths_to_stdout(self):
         print('UniFrac and PCoA computation complete. Ouput files:')
-        for output_path in self.output_file_paths:
+        for output_path in self.output_path_list:
             print(output_path)
 
 
@@ -222,7 +222,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
 
-            self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
+            self.output_path_list.extend([clade_dist_file_path, clade_pcoa_file_path])
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
@@ -579,7 +579,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
 
-            self.output_file_paths.extend([clade_dist_file_path, clade_pcoa_file_path])
+            self.output_path_list.extend([clade_dist_file_path, clade_pcoa_file_path])
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
@@ -609,7 +609,6 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
             genera_pc_coords_dict[sample_uid] = sample_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
-
 
     def _write_out_pcoa(self, ordered_sample_names, pcoa_output, clade_in_question):
         # rename the pcoa dataframe index as the sample names
@@ -837,7 +836,7 @@ class BaseBrayCurtisDistPCoACreator:
             self.date_time_string = date_time_string
         else:
             self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.output_file_paths = []
+        self.output_path_list = []
         self.clade_output_dir = None
         # path to the .csv file that will hold the PCoA coordinates
         self.clade_pcoa_coord_file_path = None
@@ -1054,11 +1053,11 @@ class BaseBrayCurtisDistPCoACreator:
 
     def _write_output_paths_to_stdout(self):
         print('\n\nBrayCurtis distances and PCoA computation complete. Output files:')
-        for output_path in self.output_file_paths:
+        for output_path in self.output_path_list:
             print(output_path)
 
     def _append_output_files_to_output_list(self):
-        self.output_file_paths.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
+        self.output_path_list.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
 
 
 class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):

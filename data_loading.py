@@ -224,7 +224,7 @@ class DataLoading:
             data_set_uid_list=[self.dataset_object.id], call_type='submission',
             output_dir=self.output_directory, is_sqrt_transf=self.is_sqrt_transf)
         bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
-        self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_file_paths)
+        self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_path_list)
 
     def _do_unifrac_dist_pcoa(self):
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
@@ -232,7 +232,7 @@ class DataLoading:
             data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
             symportal_root_directory=self.symportal_root_directory, is_sqrt_transf=self.is_sqrt_transf)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
-        self.output_path_list.extend(unifrac_dict_pcoa_creator.output_file_paths)
+        self.output_path_list.extend(unifrac_dict_pcoa_creator.output_path_list)
 
     def _output_seqs_stacked_bar_plots(self):
         """Plot up the post- and pre-MED seqs as both .png and .svg"""

@@ -72,7 +72,7 @@ class OutputTypeCountTable:
         self.additional_info_file_as_list = []
         self.species_set = set()
         self.species_ref_dict = self._set_species_ref_dict()
-        self.output_file_paths_list = []
+        self.output_path_list_list = []
         self.output_dir = os.path.join(
             symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id), self.date_time_str)
         self.profiles_output_dir = os.path.join(self.output_dir, 'its2_type_profiles')
@@ -81,7 +81,7 @@ class OutputTypeCountTable:
         os.makedirs(self.html_output_dir, exist_ok=True)
         os.makedirs(self.profiles_output_dir, exist_ok=True)
         self._init_output_paths()
-        self.output_file_paths_list.extend([
+        self.output_path_list_list.extend([
             self.path_to_relative_count_table_profiles_abund_and_meta,
             self.path_to_absolute_count_table_profiles_abund_and_meta])
 

@@ -285,7 +285,7 @@ class SymPortalWorkFlowManager:
     def _plot_type_distances_from_distance_object(self):
         """Search for the path of the .csv file that holds the PC coordinates and pass this into plotting"""
         sys.stdout.write('\n\nPlotting ITS2 type profile distances\n')
-        for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
+        for pcoa_path in [path for path in self.distance_object.output_path_list if path.endswith('.csv')]:
             try:
                 local_plotter = plotting.DistScatterPlotterTypes(
                     csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
@@ -297,7 +297,7 @@ class SymPortalWorkFlowManager:
     def _plot_sample_distances_from_distance_object(self):
         """Search for the path of the .csv file that holds the PC coordinates and pass this into plotting"""
         sys.stdout.write('\n\nPlotting sample distances\n')
-        for pcoa_path in [path for path in self.distance_object.output_file_paths if path.endswith('.csv')]:
+        for pcoa_path in [path for path in self.distance_object.output_path_list if path.endswith('.csv')]:
             try:
                 local_plotter = plotting.DistScatterPlotterSamples(
                     csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
