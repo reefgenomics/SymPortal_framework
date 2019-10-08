@@ -327,14 +327,14 @@ class LegendPlotter:
 
 class TypeStackedBarPlotter:
     """Class for plotting the type count table output"""
-    def __init__(self, type_relative_abund_count_table_path, output_directory, time_date_str=None):
+    def __init__(self, type_relative_abund_count_table_path, output_directory, date_time_str=None):
         self.type_rel_abund_count_table_path = type_relative_abund_count_table_path
         self.output_directory = output_directory
-        if time_date_str:
-            self.time_date_str = time_date_str
+        if date_time_str:
+            self.date_time_str = date_time_str
         else:
-            self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.fig_output_base = os.path.join(self.output_directory, 'its2_type_profiles', f'{self.time_date_str}')
+            self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.fig_output_base = os.path.join(self.output_directory, 'its2_type_profiles', f'{self.date_time_str}')
         self.max_n_cols = 5
         self.max_n_rows = 10
         self.num_leg_cells = self.max_n_cols * self.max_n_rows
@@ -457,17 +457,17 @@ class SeqStackedBarPlotter():
     """Class for plotting the sequence count table output"""
     def __init__(
             self, seq_relative_abund_count_table_path_post_med, seq_relative_abund_df_pre_med, output_directory,
-            time_date_str=None, ordered_sample_uid_list=None):
+            date_time_str=None, ordered_sample_uid_list=None):
         self.seq_relative_abund_count_table_path_post_med = seq_relative_abund_count_table_path_post_med
         self.seq_relative_abund_df_pre_med = seq_relative_abund_df_pre_med
         self.root_output_directory = output_directory
         self.post_med_output_directory = os.path.join(self.root_output_directory, 'post_med_seqs')
         self.pre_med_output_directory = os.path.join(self.root_output_directory, 'pre_med_seqs')
-        if time_date_str:
-            self.time_date_str = time_date_str
+        if date_time_str:
+            self.date_time_str = date_time_str
         else:
-            self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.fig_output_base = os.path.join(self.post_med_output_directory, f'{self.time_date_str}')
+            self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.fig_output_base = os.path.join(self.post_med_output_directory, f'{self.date_time_str}')
         self.smp_uid_to_smp_name_dict = None
         self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
         self.ordered_list_of_seqs_names = self._set_ordered_list_of_seqs_names()
@@ -755,7 +755,7 @@ class SeqStackedBarPlotter():
         def __init__(self, parent):
             self.parent = parent
             self.root_output_directory = self.parent.root_output_directory
-            self.fig_output_base = os.path.join(self.parent.pre_med_output_directory, f'{self.parent.time_date_str}')
+            self.fig_output_base = os.path.join(self.parent.pre_med_output_directory, f'{self.parent.date_time_str}')
             self.smp_uid_to_smp_name_dict = None
             self.output_count_table_as_df = self._curate_output_count_table(self.parent.seq_relative_abund_df_pre_med)
             self.ordered_list_of_seqs_names = list(self.output_count_table_as_df)

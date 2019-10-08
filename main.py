@@ -73,8 +73,12 @@ class SymPortalWorkFlowManager:
         self.output_type_count_table_obj = None
         self.type_stacked_bar_plotter = None
 
-        # for dist and pcoa outputs
-
+        # these will be used in all but the data loading. in the dataloading an output dir and html dir
+        # are created as part of the dataloading object.
+        self.output_dir = None
+        self.html_dir = None
+        self.js_output_path_dict = {}
+        self.js_file_path = None
         # Variable that will hold the plotting class object
         self.distance_object = None
 
@@ -272,14 +276,14 @@ class SymPortalWorkFlowManager:
         self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(
             output_directory=self.output_seq_count_table_obj.output_dir,
             seq_relative_abund_count_table_path_post_med=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
-            time_date_str=self.output_seq_count_table_obj.time_date_str, seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
+            date_time_str=self.output_seq_count_table_obj.date_time_str, seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
     def _plot_type_stacked_bar_from_type_output_table(self):
         self.type_stacked_bar_plotter = plotting.TypeStackedBarPlotter(
             output_directory=self.output_type_count_table_obj.output_dir,
             type_relative_abund_count_table_path=self.output_type_count_table_obj.path_to_relative_count_table_profiles_abund_and_meta,
-            time_date_str=self.output_type_count_table_obj.date_time_str)
+            date_time_str=self.output_type_count_table_obj.date_time_str)
         self.type_stacked_bar_plotter.plot_stacked_bar_profiles()
 
     def _plot_type_distances_from_distance_object(self):
@@ -288,7 +292,7 @@ class SymPortalWorkFlowManager:
         for pcoa_path in [path for path in self.distance_object.output_path_list if path.endswith('.csv')]:
             try:
                 local_plotter = plotting.DistScatterPlotterTypes(
-                    csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
+                    csv_path=pcoa_path, date_time_str=self.distance_object.date_time_str)
                 local_plotter.make_type_dist_scatter_plot()
             except RuntimeError:
                 # The error message is printed to stdout at the source
@@ -300,7 +304,7 @@ class SymPortalWorkFlowManager:
         for pcoa_path in [path for path in self.distance_object.output_path_list if path.endswith('.csv')]:
             try:
                 local_plotter = plotting.DistScatterPlotterSamples(
-                    csv_path=pcoa_path, date_time_str=self.distance_object.date_time_string)
+                    csv_path=pcoa_path, date_time_str=self.distance_object.date_time_str)
                 local_plotter.make_sample_dist_scatter_plot()
             except RuntimeError:
                 # The error message is printed to stdout at the source
@@ -308,8 +312,12 @@ class SymPortalWorkFlowManager:
 
     # DATA ANALYSIS
     def _perform_data_analysis(self):
+
         self._verify_name_arg_given()
         self.create_new_data_analysis_obj()
+        self.output_dir = os.path.join(
+            self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
+        self._set_html_dir_and_js_out_path_from_output_dir()
         self._start_data_analysis()
 
         if not self.args.no_output:
@@ -318,8 +326,23 @@ class SymPortalWorkFlowManager:
                 self._do_data_analysis_ordinations()
             else:
                 print('Ordinations skipped at user\'s request')
+
+            # here output the js_output_path item for the DataExplorer
+            self._output_js_output_path_dict()
         else:
             print('\nOutputs skipped at user\'s request\n')
+
+    def _output_js_output_path_dict(self):
+        """Out put the dict that holds the output files so that we can list them in the DataExplorer"""
+        # covert the full paths to relative paths and then write out dict
+        # https://stackoverflow.com/questions/8693024/how-to-remove-a-path-prefix-in-python
+        new_dict = {}
+        for k, v in self.js_output_path_dict.items():
+            new_dict[k] = os.path.relpath(v, self.output_dir)
+
+        general.write_out_js_file_to_return_python_objs_as_js_objs(
+            [{'function_name': 'getDataFilePaths', 'python_obj': new_dict}],
+            js_outpath=self.js_file_path)
 
     def _start_data_analysis(self):
         # Perform the analysis
@@ -347,7 +370,7 @@ class SymPortalWorkFlowManager:
             output_directory=self.output_seq_count_table_obj.output_dir,
             seq_relative_abund_count_table_path_post_med=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
             ordered_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            time_date_str=self.output_seq_count_table_obj.time_date_str, seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
+            date_time_str=self.output_seq_count_table_obj.date_time_str, seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
     def _do_data_analysis_ordinations(self):
@@ -370,22 +393,20 @@ class SymPortalWorkFlowManager:
 
     def _start_analysis_unifrac_sample_distances(self):
         self.distance_object = distance.SampleUnifracDistPCoACreator(
-            symportal_root_directory=self.symportal_root_directory,
             num_processors=self.args.num_proc, call_type='analysis',
-            date_time_string=self.output_type_count_table_obj.date_time_str,
+            date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir,
-            is_sqrt_transf=self.args.sqrt)
+            output_dir=self.output_dir,
+            is_sqrt_transf=self.args.sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_analysis_braycurtis_sample_distances(self):
         self.distance_object = distance.SampleBrayCurtisDistPCoACreator(
-            symportal_root_directory=self.symportal_root_directory,
             call_type='analysis',
-            date_time_string=self.output_type_count_table_obj.date_time_str,
+            date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir,
-            is_sqrt_transf=self.args.sqrt)
+            output_dir=self.output_dir,
+            is_sqrt_transf=self.args.sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _perform_data_analysis_type_distances(self):
@@ -399,24 +420,24 @@ class SymPortalWorkFlowManager:
 
     def _start_analysis_unifrac_type_distances(self):
         self.distance_object = distance.TypeUnifracDistPCoACreator(
-            symportal_root_directory=self.symportal_root_directory,
             num_processors=self.args.num_proc, call_type='analysis',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.output_type_count_table_obj.date_time_str,
+            date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir,
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local)
+            output_dir=self.output_dir,
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_analysis_braycurtis_type_distances(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
-            symportal_root_directory=self.symportal_root_directory,
             call_type='analysis',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=self.output_type_count_table_obj.date_time_str,
+            date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            output_dir=self.output_type_count_table_obj.output_dir,
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local)
+            output_dir=self.output_dir,
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _make_data_analysis_output_seq_tables(self):
@@ -425,21 +446,23 @@ class SymPortalWorkFlowManager:
             num_proc=self.args.num_proc,
             symportal_root_dir=self.symportal_root_directory,
             ds_uids_output_str=self.data_analysis_object.list_of_data_set_uids,
-            output_dir=self.output_type_count_table_obj.output_dir,
+            output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
-            time_date_str=self.output_type_count_table_obj.date_time_str)
+            date_time_str=self.date_time_str,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _make_data_analysis_output_type_tables(self):
         # Write out the AnalysisType count table
         self.output_type_count_table_obj = output.OutputTypeCountTable(
             call_type='analysis', num_proc=self.args.num_proc,
-            symportal_root_directory=self.symportal_root_directory,
             within_clade_cutoff=self.within_clade_cutoff,
             data_set_uids_to_output=self.sp_data_analysis.list_of_data_set_uids,
             virtual_object_manager=self.sp_data_analysis.virtual_object_manager,
-            data_analysis_obj=self.sp_data_analysis.data_analysis_obj)
+            data_analysis_obj=self.sp_data_analysis.data_analysis_obj,
+            output_dir=self.output_dir, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
+            date_time_str=self.date_time_str)
         self.output_type_count_table_obj.output_types()
 
     def create_new_data_analysis_obj(self):
@@ -474,6 +497,9 @@ class SymPortalWorkFlowManager:
 
     # STAND_ALONE SEQUENCE OUTPUT
     def perform_stand_alone_sequence_output(self):
+        self.output_dir = os.path.abspath(
+            os.path.join(self.symportal_root_directory, 'outputs', 'non_analysis', self.date_time_str))
+        self._set_html_dir_and_js_out_path_from_output_dir()
         if self.args.print_output_seqs_sample_set:
             self._stand_alone_sequence_output_data_set_sample()
         else:
@@ -481,24 +507,36 @@ class SymPortalWorkFlowManager:
         self.number_of_samples = len(self.output_seq_count_table_obj.sorted_sample_uid_list)
         self._plot_if_not_too_many_samples(self._plot_sequence_stacked_bar_from_seq_output_table)
         self._print_all_outputs_complete()
+        self._output_js_output_path_dict()
+
+    def _set_html_dir_and_js_out_path_from_output_dir(self):
+        self.html_dir = os.path.join(self.output_dir, 'html')
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+        os.makedirs(self.output_dir, exist_ok=True)
+        os.makedirs(self.html_dir, exist_ok=True)
 
     def _stand_alone_sequence_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
             ds_uids_output_str=self.args.print_output_seqs,
-            num_proc=self.args.num_proc)
+            num_proc=self.args.num_proc, output_dir=self.output_dir, date_time_str=self.date_time_str,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _stand_alone_sequence_output_data_set_sample(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
             dss_uids_output_str=self.args.print_output_seqs_sample_set,
-            num_proc=self.args.num_proc)
+            num_proc=self.args.num_proc, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
+            output_dir=self.output_dir, date_time_str=self.date_time_str)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     # STAND_ALONE TYPE OUTPUT
     def perform_stand_alone_type_output(self):
         self._set_data_analysis_obj_from_arg_analysis_uid()
+        self.output_dir = os.path.join(
+            self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
+        self._set_html_dir_and_js_out_path_from_output_dir()
         if self.args.print_output_types_sample_set:
             self._stand_alone_type_output_data_set_sample()
             self._stand_alone_seq_output_from_type_output_data_set_sample()
@@ -514,6 +552,7 @@ class SymPortalWorkFlowManager:
         if not self.args.no_ordinations:
             self._do_data_analysis_ordinations()
         self._print_all_outputs_complete()
+        self._output_js_output_path_dict()
 
     def _stand_alone_seq_output_from_type_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
@@ -521,10 +560,10 @@ class SymPortalWorkFlowManager:
             num_proc=self.args.num_proc,
             symportal_root_dir=self.symportal_root_directory,
             ds_uids_output_str=self.args.print_output_types,
-            output_dir=self.output_type_count_table_obj.output_dir,
+            output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
-            time_date_str=self.output_type_count_table_obj.date_time_str)
+            date_time_str=self.date_time_str, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _stand_alone_seq_output_from_type_output_data_set_sample(self):
@@ -533,10 +572,10 @@ class SymPortalWorkFlowManager:
             num_proc=self.args.num_proc,
             symportal_root_dir=self.symportal_root_directory,
             dss_uids_output_str=self.args.print_output_types_sample_set,
-            output_dir=self.output_type_count_table_obj.output_dir,
+            output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
-            time_date_str=self.output_type_count_table_obj.date_time_str)
+            date_time_str=self.date_time_str, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _stand_alone_type_output_data_set(self):
@@ -544,8 +583,9 @@ class SymPortalWorkFlowManager:
         self._check_ds_were_part_of_analysis(ds_uid_list)
         self.output_type_count_table_obj = output.OutputTypeCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
-            call_type='stand_alone', symportal_root_directory=self.symportal_root_directory,
-            data_set_uids_to_output=set(ds_uid_list), data_analysis_obj=self.data_analysis_object)
+            call_type='stand_alone', date_time_str=self.date_time_str,
+            data_set_uids_to_output=set(ds_uid_list), data_analysis_obj=self.data_analysis_object,
+            output_dir=self.output_dir, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.output_type_count_table_obj.output_types()
 
     def _check_ds_were_part_of_analysis(self, ds_uid_list):
@@ -559,7 +599,8 @@ class SymPortalWorkFlowManager:
         self._check_dss_were_part_of_analysis(dss_uid_list)
         self.output_type_count_table_obj = output.OutputTypeCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
-            call_type='stand_alone', symportal_root_directory=self.symportal_root_directory,
+            call_type='stand_alone', output_dir=self.output_dir, html_dir=self.html_dir,
+            js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str,
             data_set_sample_uid_set_to_output=set(dss_uid_list), data_analysis_obj=self.data_analysis_object)
         self.output_type_count_table_obj.output_types()
 
@@ -594,9 +635,13 @@ class SymPortalWorkFlowManager:
         self.run_type_distances_dependent_on_methods()
         self._plot_type_distances_from_distance_object()
         self._print_all_outputs_complete()
+        self._output_js_output_path_dict()
 
     def run_type_distances_dependent_on_methods(self):
         """Start an instance of the correct distance class running."""
+        self.output_dir = os.path.join(
+                    self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
+        self._set_html_dir_and_js_out_path_from_output_dir()
         if self.args.distance_method == 'unifrac':
             if self.args.between_type_distances_sample_set:
                 self._start_type_unifrac_data_set_samples()
@@ -616,31 +661,31 @@ class SymPortalWorkFlowManager:
     def _start_type_braycurtis_cct_set(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
-            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            symportal_root_directory=self.symportal_root_directory,
+            date_time_str=self.date_time_str,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in self.args.between_type_distances_cct_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=False
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=False, html_dir=self.html_dir,
+            output_dir=self.output_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _start_type_braycurtis_data_sets(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
-            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            symportal_root_directory=self.symportal_root_directory,
+            date_time_str=self.date_time_str,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in self.args.between_type_distances.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
+            output_dir=self.output_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _start_type_braycurtis_data_set_samples(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
-            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            symportal_root_directory=self.symportal_root_directory,
+            date_time_str=self.date_time_str,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
+            js_output_path_dict=self.js_output_path_dict, output_dir=self.output_dir
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -649,11 +694,12 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.TypeUnifracDistPCoACreator(
             call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
+            date_time_str=self.date_time_str,
+            num_processors=self.args.num_proc,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in
                                self.args.between_type_distances_cct_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=False
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=False, html_dir=self.html_dir, output_dir=self.output_dir,
+            js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -661,11 +707,12 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.TypeUnifracDistPCoACreator(
             call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
+            date_time_str=self.date_time_str,
+            num_processors=self.args.num_proc,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in
                                self.args.between_type_distances.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -673,19 +720,24 @@ class SymPortalWorkFlowManager:
         self.distance_object = distance.TypeUnifracDistPCoACreator(
             call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
-            date_time_string=str(datetime.now()).replace(' ', '_').replace(':', '-'),
-            num_processors=self.args.num_proc, symportal_root_directory=self.symportal_root_directory,
+            date_time_str=self.date_time_str,
+            num_processors=self.args.num_proc,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local
+            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     # SAMPLE STAND_ALONE DISTANCES
     def _perform_sample_distance_stand_alone(self):
+        self.output_dir = os.path.join(
+            self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
+        self._set_html_dir_and_js_out_path_from_output_dir()
         self._run_sample_distances_dependent_on_methods()
         self._plot_sample_distances_from_distance_object()
         self._print_all_outputs_complete()
+        self._output_js_output_path_dict()
 
     def _run_sample_distances_dependent_on_methods(self):
         """Start an instance of the correct distance class running."""
@@ -710,8 +762,8 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_sample_uid_list=dss_uid_list,
             num_processors=self.args.num_proc,
-            symportal_root_directory=self.symportal_root_directory,
-            is_sqrt_transf=self.args.sqrt)
+            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_sample_unifrac_data_sets(self):
@@ -720,26 +772,28 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_uid_list=ds_uid_list,
             num_processors=self.args.num_proc,
-            symportal_root_directory=self.symportal_root_directory,
-            is_sqrt_transf=self.args.sqrt)
+            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_sample_braycurtis_data_set_samples(self):
         dss_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.between_sample_distances_sample_set.split(',')]
         self.distance_object = distance.SampleBrayCurtisDistPCoACreator(
-            symportal_root_directory=self.symportal_root_directory, date_time_string=self.date_time_str,
+            date_time_str=self.date_time_str,
             data_set_sample_uid_list=dss_uid_list,
             call_type='stand_alone',
-            is_sqrt_transf=self.args.sqrt)
+            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
+            js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _start_sample_braycurtis_data_sets(self):
         ds_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.between_sample_distances.split(',')]
         self.distance_object = distance.SampleBrayCurtisDistPCoACreator(
-            symportal_root_directory=self.symportal_root_directory, date_time_string=self.date_time_str,
+            date_time_str=self.date_time_str,
             data_set_uid_list=ds_uid_list,
             call_type='stand_alone',
-            is_sqrt_transf=self.args.sqrt)
+            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
+            js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     #VACUUM DB

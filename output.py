@@ -32,7 +32,7 @@ class OutputTypeCountTable:
     Do class on a vat by vat basis
     """
     def __init__(
-            self, num_proc, within_clade_cutoff, call_type, symportal_root_directory, data_set_uids_to_output=None, data_set_sample_uid_set_to_output=None,
+            self, num_proc, within_clade_cutoff, call_type, output_dir, html_dir, js_output_path_dict, date_time_str, data_set_uids_to_output=None, data_set_sample_uid_set_to_output=None,
             data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None):
 
         self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output = self._init_dss_and_ds_uids(
@@ -46,10 +46,7 @@ class OutputTypeCountTable:
             num_proc, within_clade_cutoff)
 
         self.vcc_uids_to_output = self._set_vcc_uids_to_output()
-        if call_type == 'analysis':
-            self.date_time_str = self.data_analysis_obj.time_stamp
-        elif call_type == 'stand_alone':
-            self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.date_time_str = date_time_str
 
         self.clades_of_output = set()
         # A sorting of the vats of the output only by the len of the vccs of the output that they associate with
@@ -72,45 +69,66 @@ class OutputTypeCountTable:
         self.additional_info_file_as_list = []
         self.species_set = set()
         self.species_ref_dict = self._set_species_ref_dict()
-        self.output_path_list_list = []
-        self.output_dir = os.path.join(
-            symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_obj.id), self.date_time_str)
+        self.output_path_list = []
+        self.output_dir = output_dir
         self.profiles_output_dir = os.path.join(self.output_dir, 'its2_type_profiles')
-        self.html_output_dir = os.path.join(self.output_dir, 'html')
+        self.html_dir = html_dir
         os.makedirs(self.output_dir, exist_ok=True)
-        os.makedirs(self.html_output_dir, exist_ok=True)
         os.makedirs(self.profiles_output_dir, exist_ok=True)
+        # dict that will hold the output file types and paths for the DataExplorer
+        self.js_output_path_dict = js_output_path_dict
         self._init_output_paths()
-        self.output_path_list_list.extend([
+        self.output_path_list.extend([
             self.path_to_relative_count_table_profiles_abund_and_meta,
             self.path_to_absolute_count_table_profiles_abund_and_meta])
+
 
     def _init_output_paths(self):
         self.path_to_absolute_count_table_profiles_abund_and_meta = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.absolute.abund_and_meta.txt')
+        self.js_output_path_dict[
+            "profile_absolute_abund_meta_count"] = self.path_to_absolute_count_table_profiles_abund_and_meta
+
         self.path_to_absolute_count_table_profiles_abund_only = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.absolute.abund_only.txt')
+        self.js_output_path_dict[
+            "profile_absolute_abund_only_count"] = self.path_to_absolute_count_table_profiles_abund_only
+
         self.path_to_absolute_count_table_profiles_meta_only = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.absolute.meta_only.txt')
+        self.js_output_path_dict[
+            "profile_absolute_meta_only_count"] = self.path_to_absolute_count_table_profiles_meta_only
+
         self.path_to_relative_count_table_profiles_abund_and_meta = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.relative.abund_and_meta.txt')
+        self.js_output_path_dict[
+            "profile_relative_meta_meta_count"] = self.path_to_relative_count_table_profiles_abund_and_meta
+
         self.path_to_relative_count_table_profiles_abund_only = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.relative.abund_only.txt')
+        self.js_output_path_dict[
+            "profile_relative_abund_only_count"] = self.path_to_relative_count_table_profiles_abund_only
+
         self.path_to_relative_count_table_profiles_meta_only = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
                              f'{self.date_time_str}.profiles.relative.meta_only.txt')
+        self.js_output_path_dict[
+            "profile_relative_meta_only_count"] = self.path_to_relative_count_table_profiles_meta_only
+
         self.path_to_additional_info_file = os.path.join(self.profiles_output_dir, 'additional_info.txt')
+        self.js_output_path_dict[
+            "profile_additional_info_file"] = self.path_to_additional_info_file
 
     def _set_vcc_uids_to_output(self):
         list_of_sets_of_vcc_uids_in_vdss = [
@@ -218,7 +236,7 @@ class OutputTypeCountTable:
             "instance_profile_local": str(total_local_abund),
             "unique_profile_analysis": str(num_unique_profiles_in_analysis),
             "instances_profile_analysis": str(num_profile_instances)}
-        da_meta_js_path = os.path.join(self.html_output_dir, 'study_data.js')
+        da_meta_js_path = os.path.join(self.html_dir, 'study_data.js')
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getDataAnalysisMetaInfo', 'python_obj': data_analysis_meta_info_dict}],
             js_outpath=da_meta_js_path)
@@ -231,12 +249,12 @@ class OutputTypeCountTable:
 
     def _output_profile_meta_information(self, prof_meta_only):
         # js output path for profile meta
-        profile_meta_js_path = os.path.join(self.html_output_dir, 'study_data.js')
+        profile_meta_js_path = os.path.join(self.html_dir, 'study_data.js')
         sorted_profile_uids_by_local_abund = prof_meta_only.sort_values(
             'ITS2 profile abundance local', ascending=False).index.values.tolist()
         # make color dict
         prof_colour_dict = self._set_colour_dict(sorted_profile_uids_by_local_abund)
-        with open(os.path.join(self.html_output_dir, 'prof_color_dict.json'), 'w') as f:
+        with open(os.path.join(self.html_dir, 'prof_color_dict.json'), 'w') as f:
             json.dump(fp=f, obj=prof_colour_dict)
         # first the meta information
         genera_annotation_dict = {
@@ -323,7 +341,7 @@ class OutputTypeCountTable:
         # now we have the dictionary that holds the rectangle arrays populated
         # and we have the maximum abundance
         # now write these out as js file and functions to return.
-        js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
+        js_file_path = os.path.join(self.html_dir, 'study_data.js')
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataProfileBySample', 'python_obj': profile_rect_dict},
              {'function_name': 'getRectDataProfileBySampleMaxSeq', 'python_obj': max_cumulative_abs},
@@ -847,13 +865,15 @@ class SequenceCountTableCreator:
     Either way, after initial init, we will work on a sample by sample basis.
     """
     def __init__(
-            self, symportal_root_dir, call_type, num_proc, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
-            sorted_sample_uid_list=None, analysis_obj=None, time_date_str=None):
+            self, symportal_root_dir, call_type, num_proc, html_dir, js_output_path_dict, date_time_str, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
+            sorted_sample_uid_list=None, analysis_obj=None):
         self._init_core_vars(
             symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
-            output_dir, sorted_sample_uid_list, time_date_str)
+            output_dir, sorted_sample_uid_list, date_time_str, html_dir)
         self._init_seq_abundance_collection_objects()
         self._init_vars_for_putting_together_the_dfs()
+        # dict that will hold the file type to file path of output files for the DataExplorer
+        self.js_output_path_dict = js_output_path_dict
         self._init_output_paths()
         # dataframes without the meta rows at the bottom for making the javascript objects
         self.df_abs_no_meta_rows = None
@@ -862,8 +882,9 @@ class SequenceCountTableCreator:
         self.profile_based_sample_ordered_uids = None
         self.similarity_based_sample_ordered_uids = None
 
+
     def _init_core_vars(self, symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
-                        output_dir, sorted_sample_uid_list, time_date_str):
+                        output_dir, sorted_sample_uid_list, date_time_str, html_dir):
         self._check_either_dss_or_dsss_uids_provided(dss_uids_output_str, ds_uids_output_str)
         if dss_uids_output_str:
             dss_uids_for_query = [int(a) for a in dss_uids_output_str.split(',')]
@@ -881,11 +902,9 @@ class SequenceCountTableCreator:
         self.ref_seqs_in_datasets = self._chunk_query_set_rs_objs_from_dss_objs()
 
         self.num_proc = num_proc
-        if time_date_str:
-            self.time_date_str = time_date_str
-        else:
-            self.time_date_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self._set_output_dirs(call_type, ds_uids_output_str, output_dir, symportal_root_dir)
+
+        self.date_time_str = date_time_str
+        self._set_output_dirs(call_type, ds_uids_output_str, output_dir, symportal_root_dir, html_dir)
         self.sorted_sample_uid_list = sorted_sample_uid_list
         self.analysis_obj = analysis_obj
         self.call_type = call_type
@@ -930,22 +949,20 @@ class SequenceCountTableCreator:
         if data_set_sample_ids_to_output_string is not None and data_set_uids_to_output_as_comma_sep_string is not None:
             raise RuntimeError('Provide either dss uids or ds uids for outputing sequence count tables')
 
-    def _set_output_dirs(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir):
+    def _set_output_dirs(self, call_type, data_set_uids_to_output_as_comma_sep_string, output_dir, symportal_root_dir, html_dir):
         """Set both the standard output_dir where the count tables will be output and the directory to output
         the resources for the browser based data explorer"""
         if call_type == 'submission':
             self.output_dir = os.path.abspath(os.path.join(
-                symportal_root_dir, 'outputs', 'loaded_data_sets', data_set_uids_to_output_as_comma_sep_string, self.time_date_str))
-        elif call_type == 'stand_alone':
-            self.output_dir = os.path.abspath(os.path.join(symportal_root_dir, 'outputs', 'non_analysis', self.time_date_str))
+                symportal_root_dir, 'outputs', 'loaded_data_sets', data_set_uids_to_output_as_comma_sep_string, self.date_time_str))
         else:  # call_type == 'analysis
             self.output_dir = output_dir
         # the directory where all count tables and plots that are of the post-med seqs will be output.
         self.post_med_output_dir = os.path.join(self.output_dir, 'post_med_seqs')
-        self.html_output_dir = os.path.join(self.output_dir, 'html')
+        self.html_dir = html_dir
         os.makedirs(self.post_med_output_dir, exist_ok=True)
         os.makedirs(self.output_dir, exist_ok=True)
-        os.makedirs(self.html_output_dir, exist_ok=True)
+
 
     def _init_seq_abundance_collection_objects(self):
         """Output objects from first worker to be used by second worker"""
@@ -986,58 +1003,88 @@ class SequenceCountTableCreator:
     def _set_non_analysis_seq_table_output_paths(self):
         self._set_non_analysis_abs_count_tab_output_paths()
         self._set_non_analysis_rel_count_tab_output_paths()
-        self.output_fasta_path = os.path.join(self.post_med_output_dir, f'{self.time_date_str}.seqs.fasta')
-        self.additional_info_file_path = os.path.join(self.post_med_output_dir, f'{self.time_date_str}.additional_info.txt')
+        self.output_fasta_path = os.path.join(self.post_med_output_dir, f'{self.date_time_str}.seqs.fasta')
+        self.additional_info_file_path = os.path.join(self.post_med_output_dir, f'{self.date_time_str}.additional_info.txt')
 
     def _set_analysis_seq_table_output_paths(self):
         self._set_analysis_abs_count_tab_output_paths()
         self._set_analysis_rel_count_tab_output_paths()
         self.output_fasta_path = os.path.join(
-            self.post_med_output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.fasta')
+            self.post_med_output_dir, f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.seqs.fasta')
+        self.js_output_path_dict["post_med_fasta"] = self.output_fasta_path
         self.additional_info_file_path = os.path.join(
             self.post_med_output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.additional_info.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.additional_info.txt')
+        self.js_output_path_dict["post_med_additional_info"] = self.additional_info_file_path
 
     def _set_analysis_rel_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
             self.post_med_output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_and_meta.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.seqs.relative.abund_and_meta.txt')
+        self.js_output_path_dict["post_med_relative_abund_meta_count"] = self.path_to_seq_output_abund_and_meta_df_relative
+
         self.path_to_seq_output_abund_only_df_relative = os.path.join(
             self.post_med_output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.abund_only.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.seqs.relative.abund_only.txt')
+        self.js_output_path_dict["post_med_relative_abund_only_count"] = self.path_to_seq_output_abund_only_df_relative
+
+
         self.path_to_seq_output_meta_only_df_relative = os.path.join(
             self.post_med_output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.relative.meta_only.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.seqs.relative.meta_only.txt')
+        self.js_output_path_dict["post_med_relative_meta_only_count"] = self.path_to_seq_output_meta_only_df_relative
 
     def _set_analysis_abs_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
             self.post_med_output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.seqs.absolute.abund_and_meta.txt')
+        self.js_output_path_dict["post_med_absolute_abund_meta_count"] = self.path_to_seq_output_abund_and_meta_df_absolute
+
         self.path_to_seq_output_abund_only_df_absolute = os.path.join(
             self.post_med_output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.abund_only.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.seqs.absolute.abund_only.txt')
+        self.js_output_path_dict["post_med_absolute_abund_only_count"] = self.path_to_seq_output_abund_only_df_absolute
+
         self.path_to_seq_output_meta_only_df_absolute = os.path.join(
             self.post_med_output_dir,
-            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.time_date_str}.seqs.absolute.meta_only.txt')
+            f'{self.analysis_obj.id}_{self.analysis_obj.name}_{self.date_time_str}.seqs.absolute.meta_only.txt')
+        self.js_output_path_dict["post_med_absolute_meta_only_count"] = self.path_to_seq_output_meta_only_df_absolute
 
     def _set_non_analysis_rel_count_tab_output_paths(self):
         self.path_to_seq_output_abund_and_meta_df_relative = os.path.join(
-            self.post_med_output_dir, f'{self.time_date_str}.seqs.relative.abund_and_meta.txt')
+            self.post_med_output_dir, f'{self.date_time_str}.seqs.relative.abund_and_meta.txt')
+        self.js_output_path_dict[
+            "post_med_relative_abund_meta_count"] = self.path_to_seq_output_abund_and_meta_df_relative
+
         self.path_to_seq_output_abund_only_df_relative = os.path.join(
-            self.post_med_output_dir, f'{self.time_date_str}.seqs.relative.abund_only.txt')
+            self.post_med_output_dir, f'{self.date_time_str}.seqs.relative.abund_only.txt')
+        self.js_output_path_dict[
+            "post_med_relative_abund_only_count"] = self.path_to_seq_output_abund_only_df_relative
+
         self.path_to_seq_output_meta_only_df_relative = os.path.join(
-            self.post_med_output_dir, f'{self.time_date_str}.seqs.relative.meta_only.txt')
+            self.post_med_output_dir, f'{self.date_time_str}.seqs.relative.meta_only.txt')
+        self.js_output_path_dict[
+            "post_med_relative_meta_only_count"] = self.path_to_seq_output_meta_only_df_relative
+
 
     def _set_non_analysis_abs_count_tab_output_paths(self):
         # Path to output table that contains both the meta info and the abundance info
         self.path_to_seq_output_abund_and_meta_df_absolute = os.path.join(
-            self.post_med_output_dir, f'{self.time_date_str}.seqs.absolute.abund_and_meta.txt')
+            self.post_med_output_dir, f'{self.date_time_str}.seqs.absolute.abund_and_meta.txt')
+        self.js_output_path_dict[
+            "post_med_absolute_abund_meta_count"] = self.path_to_seq_output_abund_and_meta_df_absolute
+
         # Path to output table that contains only the abundance info
         self.path_to_seq_output_abund_only_df_absolute = os.path.join(
-            self.post_med_output_dir, f'{self.time_date_str}.seqs.absolute.abund_only.txt')
+            self.post_med_output_dir, f'{self.date_time_str}.seqs.absolute.abund_only.txt')
+        self.js_output_path_dict[
+            "post_med_absolute_abund_only_count"] = self.path_to_seq_output_abund_only_df_absolute
+
         # Path to output table that contains only the meta info
         self.path_to_seq_output_meta_only_df_absolute = os.path.join(
-            self.post_med_output_dir, f'{self.time_date_str}.seqs.absolute.meta_only.txt')
+            self.post_med_output_dir, f'{self.date_time_str}.seqs.absolute.meta_only.txt')
+        self.js_output_path_dict[
+            "post_med_absolute_meta_only_count"] = self.path_to_seq_output_meta_only_df_absolute
 
     def _make_output_tables_pre_med(self):
         pre_med_output = self.PreMedSeqOutput(parent=self)
@@ -1138,7 +1185,7 @@ class SequenceCountTableCreator:
         # next we want to produce arrays that are the order of the sample uids according to various sortings
         sorted_sample_arrays = self._populate_sorted_sample_uid_arrays()
 
-        js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
+        js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getSampleMetaInfo', 'python_obj': sample_meta_dict},
@@ -1247,14 +1294,14 @@ class SequenceCountTableCreator:
         # dict here and then read it back in for making the pre_seq rect array.
         # We will then read these in for the plotting.
         seq_colour_dict = general.set_seq_colour_dict(sorted_seq_names)
-        with open(os.path.join(self.html_output_dir, 'color_dict_post_med.json'), 'w') as f:
+        with open(os.path.join(self.html_dir, 'color_dict_post_med.json'), 'w') as f:
             json.dump(fp=f, obj=seq_colour_dict)
 
         max_cumulative_abs = self._populate_post_med_rect_dict(post_med_rect_dict, sorted_seq_names)
         # now we have the dictionary that holds the rectangle arrays populated
         # and we have the maximum abundance
         # now write these out as js file and functions to return.
-        js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
+        js_file_path = os.path.join(self.html_dir, 'study_data.js')
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataPostMEDBySample', 'python_obj': post_med_rect_dict},
              {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
@@ -1405,7 +1452,7 @@ class SequenceCountTableCreator:
 
     def _append_meta_info_to_additional_info_file_stand_alone(self):
         meta_info_string_items = [
-            f'Stand_alone output by {self.output_user} on {self.time_date_str}; '
+            f'Stand_alone output by {self.output_user} on {self.date_time_str}; '
             f'Number of data_set objects as part of output = {len(self.ds_objs_to_output)}']
         temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute_post_med)[0]],
                                 name='meta_info_summary')
@@ -1674,7 +1721,7 @@ class SequenceCountTableCreator:
             # the directory one above the pre_med_dir that contins the main data_loading outputs
             self.root_output_dir = self.parent.output_dir
             # the directory that will house the ouputs for html
-            self.html_output_dir = os.path.join(self.parent.output_dir, 'html')
+            self.html_dir = self.parent.html_dir
 
             # dict that will have dss uid as key and an abundance dictionary as value
             self.master_sample_uid_to_abund_dict = {}
@@ -1688,12 +1735,16 @@ class SequenceCountTableCreator:
             # The directories for the output tables
             self.parent.pre_med_absolute_df_path = os.path.join(self.pre_med_dir, 'pre_med_absolute_abundance_df.csv')
             self.parent.pre_med_relative_df_path = os.path.join(self.pre_med_dir, 'pre_med_relative_abundance_df.csv')
-
+            self.fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
+            self.parent.js_output_path_dict["pre_med_absolute_count"] = self.parent.pre_med_absolute_df_path
+            self.parent.js_output_path_dict["pre_med_relative_count"] = self.parent.pre_med_relative_df_path
+            self.parent.js_output_path_dict["pre_med_fasta"] = self.fasta_out_path
             # The dictionary that will be used to create the master fasta file for all pre_med_seqs
             self.master_fasta_dict = {}
 
             # dictionary to keep track of the id to dss name so we can output name in the dataframe as well.
             self.sample_uid_to_name_dict = {}
+
 
 
         def make_pre_med_count_tables(self):
@@ -1736,10 +1787,10 @@ class SequenceCountTableCreator:
             sorted_seq_names = list(self.abs_count_df)[1:]
 
             # get the colour dict
-            with open(os.path.join(self.html_output_dir, 'color_dict_post_med.json'), 'r') as f:
+            with open(os.path.join(self.html_dir, 'color_dict_post_med.json'), 'r') as f:
                 c_dict_post_med = json.load(f)
             seq_colour_dict = general.set_seq_colour_dict_w_reference_c_dict(sorted_seq_names, c_dict_post_med)
-            with open(os.path.join(self.html_output_dir, 'color_dict_pre_med.json'), 'w') as f:
+            with open(os.path.join(self.html_dir, 'color_dict_pre_med.json'), 'w') as f:
                 json.dump(fp=f, obj=seq_colour_dict)
             # merge the two colour dictionaries and add to the html output
             combi_color_dict = {**c_dict_post_med, **seq_colour_dict}
@@ -1749,7 +1800,7 @@ class SequenceCountTableCreator:
             # now we have the dictionary that holds the rectangle arrays populated
             # and we have the maximum abundance
             # now write these out as js file and functions to return.
-            js_file_path = os.path.join(self.html_output_dir, 'study_data.js')
+            js_file_path = os.path.join(self.html_dir, 'study_data.js')
             general.write_out_js_file_to_return_python_objs_as_js_objs(
                 [{'function_name': 'getRectDataPreMEDBySample', 'python_obj': pre_med_rect_dict},
                  {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
@@ -1786,13 +1837,13 @@ class SequenceCountTableCreator:
             return max_cumulative_abs
 
         def _output_pre_med_master_fasta(self):
-            fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
+
             fasta_out = []
             for seq_name, seq in self.master_fasta_dict.items():
                 fasta_out.append(f'>{seq_name}')
                 fasta_out.append(f'{seq}')
 
-            general.write_list_to_destination(fasta_out_path, fasta_out)
+            general.write_list_to_destination(self.fasta_out_path, fasta_out)
 
         def _write_out_dfs_as_csv(self):
             print('\nWriting out pre-med sequence count tables: \n')

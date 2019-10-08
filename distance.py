@@ -23,8 +23,8 @@ class BaseUnifracDistPCoACreator:
     These classes are used for generating UniFrac distances between either ITS2 type profiles
     or Samples."""
     def __init__(
-            self, num_proc, output_dir, data_set_uid_list, data_set_sample_uid_list, cct_set_uid_list,
-            symportal_root_directory, call_type, date_time_string, is_sqrt_transf):
+            self, num_proc, output_dir, data_set_uid_list, js_output_path_dict, html_dir, data_set_sample_uid_list, cct_set_uid_list,
+            call_type, date_time_str, is_sqrt_transf):
 
         self.num_proc = num_proc
         self.output_dir = output_dir
@@ -33,15 +33,24 @@ class BaseUnifracDistPCoACreator:
             cct_set_uid_list=cct_set_uid_list)
         self.output_path_list = []
 
-        self.symportal_root_dir = symportal_root_directory
+
         self.call_type = call_type
-        if date_time_string:
-            self.date_time_string = date_time_string
-        else:
-            self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
-        self.output_path_list = []
+
+        self.date_time_str = date_time_str
+
         self.clade_output_dir = None
         self.is_sqrt_transf = is_sqrt_transf
+        self.html_dir = html_dir
+        # for the js dict
+        self.genera_annotation_dict = {
+            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
+            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
+        }
+        self.pc_coordinates_dict = {}
+        self.pc_variances_dict = {}
+        self.pc_availabaility_dict = {}
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+        self.js_output_path_dict = js_output_path_dict
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list, cct_set_uid_list):
         if data_set_sample_uid_list:
@@ -133,14 +142,16 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
      to work out the average relative abundances of the DIVs.
     """
     def __init__(
-            self, symportal_root_directory, num_processors, call_type, data_analysis_obj, date_time_string=None,
-             output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None,
+            self, num_processors, call_type, data_analysis_obj, js_output_path_dict, html_dir,
+            output_dir, date_time_str=None, data_set_uid_list=None, data_set_sample_uid_list=None,
             cct_set_uid_list=None, is_sqrt_transf=True, local_abunds_only=False):
 
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
-            data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list, cct_set_uid_list=cct_set_uid_list, symportal_root_directory=symportal_root_directory, call_type=call_type,
-            date_time_string=date_time_string, is_sqrt_transf=is_sqrt_transf)
+            data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
+            cct_set_uid_list=cct_set_uid_list, call_type=call_type,
+            date_time_str=date_time_str, is_sqrt_transf=is_sqrt_transf, js_output_path_dict=js_output_path_dict,
+            html_dir=html_dir)
 
         self.data_analysis_obj = data_analysis_obj
         self.cct_set_uid_list = cct_set_uid_list
@@ -153,19 +164,11 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self.at_list_for_output = self._chunk_query_set_distinct_at_list_for_output_from_dss_uids()
         self.at_id_to_at_name  = {at.id:at.name for at in self.at_list_for_output}
         self.clades_for_dist_calcs = list(set([at.clade for at in self.at_list_for_output]))
-        self.output_dir, self.html_dir = self._setup_output_dir(call_type, output_dir)
+        self.output_dir = os.path.join(output_dir, 'between_profile_distances')
         # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only
         # i.e. rather than all instances of the type found in all samples (including samples outside of this output)
         self.local_abunds_only = local_abunds_only
-        # for the js dict
-        self.genera_annotation_dict = {
-            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
-            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
-        }
-        self.pc_coordinates_dict = {}
-        self.pc_variances_dict = {}
-        self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+
 
     def _chunk_query_set_distinct_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
@@ -224,6 +227,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             self.output_path_list.extend([clade_dist_file_path, clade_pcoa_file_path])
 
+            self.js_output_path_dict[f"btwn_profile_unifrac_{clade_in_question}_dist"] = clade_dist_file_path
+            self.js_output_path_dict[f"btwn_profile_unifrac_{clade_in_question}_pcoa"] = clade_dist_file_path
+
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
 
@@ -266,7 +272,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         # now output the pcoa
         clade_pcoa_file_path = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_string}.unifrac_profiles_PCoA_coords_{clade_in_question}.csv')
+            f'{self.date_time_str}.unifrac_profiles_PCoA_coords_{clade_in_question}.csv')
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
@@ -320,7 +326,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         # write out the df
         clade_dist_file_path = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_string}_unifrac_btwn_profile_distances_{clade_in_question}.dist')
+            f'{self.date_time_str}_unifrac_btwn_profile_distances_{clade_in_question}.dist')
         dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
         return clade_dist_file_path, ordered_at_names
 
@@ -353,18 +359,6 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         set_of_ref_seq_uids = tadfg.reference_seq_uid_set
         return clade_abund_df, set_of_ref_seq_uids
 
-    def _setup_output_dir(self, call_type, output_dir):
-        if call_type == 'stand_alone':
-            new_output_dir =  os.path.abspath(
-                os.path.join(
-                    self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
-                    'between_profiles'))
-            html_dir = new_output_dir
-        else:
-            # call_type == 'analysis':
-            new_output_dir = os.path.join(output_dir, 'between_profile_distances')
-            html_dir = os.path.join(output_dir, 'html')
-        return new_output_dir, html_dir
 
     class TypeAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -512,13 +506,13 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """
 
     def __init__(
-            self, symportal_root_directory, num_processors, call_type, date_time_string=None,
-            output_dir=None, data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=True):
+            self, num_processors, html_dir, js_output_path_dict, call_type, output_dir, date_time_str,
+             data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=True):
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
-            symportal_root_directory=symportal_root_directory, call_type=call_type,
-            date_time_string=date_time_string, is_sqrt_transf=is_sqrt_transf, cct_set_uid_list=None)
+            call_type=call_type,
+            date_time_str=date_time_str, is_sqrt_transf=is_sqrt_transf, cct_set_uid_list=None, html_dir=html_dir, js_output_path_dict=js_output_path_dict)
 
         self.clade_collections_from_data_set_samples = self._chunk_query_set_cc_obj_from_dss_uids()
         self.cc_id_to_sample_name_dict = {cc_obj.id: cc_obj.data_set_sample_from.name for cc_obj in self.clade_collections_from_data_set_samples}
@@ -526,16 +520,9 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
         self.clades_for_dist_calcs = list(set([a.clade for a in self.clade_collections_from_data_set_samples]))
 
-        self.output_dir, self.html_dir = self._setup_output_dir(call_type, output_dir)
-        # for the js dict
-        self.genera_annotation_dict = {
-            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
-            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
-        }
-        self.pc_coordinates_dict = {}
-        self.pc_variances_dict = {}
-        self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+        self.output_dir = os.path.join(output_dir, 'between_sample_distances')
+        os.makedirs(self.output_dir, exist_ok=True)
+
 
     def _chunk_query_set_cc_obj_from_dss_uids(self):
         temp_clade_col_objs = []
@@ -581,6 +568,9 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             self.output_path_list.extend([clade_dist_file_path, clade_pcoa_file_path])
 
+            self.js_output_path_dict[f"btwn_sample_unifrac_{clade_in_question}_dist"] = clade_dist_file_path
+            self.js_output_path_dict[f"btwn_sample_unifrac_{clade_in_question}_pcoa"] = clade_dist_file_path
+
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
 
@@ -622,7 +612,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         # now output the pcoa
         clade_pcoa_file_path = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_string}.unifrac_sample_PCoA_coords_{clade_in_question}.csv')
+            f'{self.date_time_str}.unifrac_sample_PCoA_coords_{clade_in_question}.csv')
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
@@ -675,7 +665,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         # write out the df
         clade_dist_file_path = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_string}_unifrac_btwn_sample_distances_{clade_in_question}.dist')
+            f'{self.date_time_str}_unifrac_btwn_sample_distances_{clade_in_question}.dist')
         dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
         return clade_dist_file_path, ordered_sample_names
 
@@ -704,20 +694,6 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         clade_abund_df = sadfg.abundance_df
         set_of_ref_seq_uids = sadfg.reference_seq_uid_set
         return clade_abund_df, set_of_ref_seq_uids
-
-    def _setup_output_dir(self, call_type, output_dir):
-        if call_type == 'stand_alone':
-            new_output_dir = os.path.abspath(
-                os.path.join(
-                    self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'), 'between_samples'))
-            os.makedirs(new_output_dir, exist_ok=True)
-            html_dir = new_output_dir
-        else:
-            # call_type == 'submission' or 'analysis':
-            new_output_dir = os.path.join(output_dir, 'between_sample_distances')
-            os.makedirs(new_output_dir, exist_ok=True)
-            html_dir = os.path.join(output_dir, 'html')
-        return new_output_dir, html_dir
 
     class SampleAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -829,13 +805,11 @@ class TreeCreatorForUniFrac:
 
 # BrayCurtis classes
 class BaseBrayCurtisDistPCoACreator:
-    def __init__(self, symportal_root_directory, call_type, date_time_string, profiles_or_samples):
-        self.symportal_root_dir = symportal_root_directory
+    def __init__(self, call_type, date_time_str, profiles_or_samples, js_output_path_dict, html_dir):
         self.call_type = call_type
-        if date_time_string:
-            self.date_time_string = date_time_string
-        else:
-            self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        
+        self.date_time_str = date_time_str
+        
         self.output_path_list = []
         self.clade_output_dir = None
         # path to the .csv file that will hold the PCoA coordinates
@@ -850,12 +824,22 @@ class BaseBrayCurtisDistPCoACreator:
         self.objs_of_clade = None
         self.clade_rs_uid_to_normalised_abund_clade_dict = {}
         self.clade_within_clade_distances_dict = {}
+        self.js_output_path_dict = js_output_path_dict
+        self.html_dir = html_dir
+        self.genera_annotation_dict = {
+            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
+            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
+        }
+        self.pc_coordinates_dict = {}
+        self.pc_variances_dict = {}
+        self.pc_availabaility_dict = {}
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
     def _compute_pcoa_coords(self, clade):
         # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
         # a twoD list and then convert to a numpy array
         self.clade_pcoa_coord_file_path = os.path.join(
-            self.clade_output_dir, f'{self.date_time_string}.bray_curtis_{self.profiles_or_samples}_PCoA_coords_{clade}.csv')
+            self.clade_output_dir, f'{self.date_time_str}.bray_curtis_{self.profiles_or_samples}_PCoA_coords_{clade}.csv')
         raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path)
 
         temp_two_d_list = []
@@ -891,7 +875,6 @@ class BaseBrayCurtisDistPCoACreator:
 
         renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
         return renamed_pcoa_dataframe
-
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list, cct_set_uid_list):
         if data_set_sample_uid_list:
@@ -1075,10 +1058,12 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     """
 
     def __init__(
-            self, symportal_root_directory, date_time_string=None, data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=True):
+            self, js_output_path_dict, html_dir, output_dir, date_time_str=None,
+            data_set_sample_uid_list=None,
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None,  is_sqrt_transf=True):
         super().__init__(
-            symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='samples')
+            call_type=call_type, date_time_str=date_time_str,
+            profiles_or_samples='samples', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
 
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
             data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list, cct_set_uid_list=cct_set_uid_list)
@@ -1086,35 +1071,16 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.cc_list_for_output = self._chunk_query_set_cc_list_from_dss_uids()
 
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
-        self.output_dir, self.html_dir = self._set_output_dir(output_dir=output_dir)
+        self.output_dir = os.path.join(output_dir, 'between_sample_distances')
+        os.makedirs(self.output_dir, exist_ok=True)
         self.is_sqrt_transf = is_sqrt_transf
-        # for the js dict
-        self.genera_annotation_dict = {
-            'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
-            'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
-        }
-        self.pc_coordinates_dict = {}
-        self.pc_variances_dict = {}
-        self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+
 
     def _chunk_query_set_cc_list_from_dss_uids(self):
         temp_cc_list_for_output = []
         for uid_list in general.chunks(self.data_set_sample_uid_list):
             temp_cc_list_for_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return temp_cc_list_for_output
-
-    def _set_output_dir(self, output_dir):
-        if self.call_type == 'stand_alone':
-            new_output_dir = os.path.join(
-                self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
-                'between_samples')
-            html_dir = new_output_dir
-        else:
-            # call_type == 'submission':
-            new_output_dir = os.path.join(output_dir, 'between_sample_distances')
-            html_dir = os.path.join(output_dir, 'html')
-        return new_output_dir, html_dir
 
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing sample pairwise distances and PCoA coordinates using the BrayCurtis method\n')
@@ -1133,6 +1099,8 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             pcoa_coords_df = self._compute_pcoa_coords(clade=clade_in_question)
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
             self._append_output_files_to_output_list()
+            self.js_output_path_dict[f"btwn_sample_braycurtis_{clade_in_question}_dist"] = self.clade_dist_file_path
+            self.js_output_path_dict[f"btwn_sample_braycurtis_{clade_in_question}_pcoa"] =  self.clade_pcoa_coord_file_path
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
@@ -1167,7 +1135,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def _init_clade_dirs_and_paths(self, clade_in_question):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
         self.clade_dist_file_path = os.path.join(
-            self.clade_output_dir, f'{self.date_time_string}.bray_curtis_sample_distances_{clade_in_question}.dist')
+            self.clade_output_dir, f'{self.date_time_str}.bray_curtis_sample_distances_{clade_in_question}.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self, dss_obj_to_cct_obj_dict):
@@ -1223,10 +1191,11 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     """
 
     def __init__(
-            self, symportal_root_directory, data_analysis_obj, date_time_string=None, data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, output_dir=None, is_sqrt_transf=True, local_abunds_only=False):
+            self, data_analysis_obj, js_output_path_dict, html_dir, output_dir, date_time_str, data_set_sample_uid_list=None,
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, is_sqrt_transf=True, local_abunds_only=False):
         super().__init__(
-            symportal_root_directory=symportal_root_directory, call_type=call_type, date_time_string=date_time_string, profiles_or_samples='profiles')
+            call_type=call_type, date_time_str=date_time_str,
+            profiles_or_samples='profiles', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
 
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
             data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list, cct_set_uid_list=cct_set_uid_list)
@@ -1241,18 +1210,10 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self.clade_col_type_objects = None
             self.at_list_for_output = self._chunk_query_set_at_list_for_output_from_dss_uids()
         self.clades_of_ats = list(set([at.clade for at in self.at_list_for_output]))
-        self.output_dir, self.html_dir = self._set_output_dir(output_dir=output_dir)
+        self.output_dir = os.path.join(output_dir, 'between_profile_distances')
         self.is_sqrt_transf = is_sqrt_transf
         self.local = local_abunds_only
-        # for the js dict
-        self.genera_annotation_dict = {
-            'A':'Symbiodinium', 'B':'Breviolum', 'C':'Cladocopium', 'D':'Durusdinium',
-            'E':'Effrenium', 'F':'Clade F', 'G':'Clade G', 'H':'Clade H', 'I':'Clade I'
-        }
-        self.pc_coordinates_dict = {}
-        self.pc_variances_dict = {}
-        self.pc_availabaility_dict = {}
-        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+
 
     def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
@@ -1274,18 +1235,6 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
                 cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
         return list(temp_at_set)
 
-    def _set_output_dir(self, output_dir):
-        if self.call_type == 'stand_alone':
-            new_output_dir = os.path.join(
-                self.symportal_root_dir, 'outputs', 'ordination', self.date_time_string.replace('.','_'),
-                'between_profiles')
-            html_dir = new_output_dir
-        else:
-            # call_type == 'analysis':
-            new_output_dir = os.path.join(output_dir, 'between_profile_distances')
-            html_dir = os.path.join(output_dir, 'html')
-        return new_output_dir, html_dir
-
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing ITS2 type profile pairwise distances and PCoA coordinates using the BrayCurtis method\n')
         for clade_in_question in self.clades_of_ats:
@@ -1304,6 +1253,10 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
 
             self._append_output_files_to_output_list()
+            self.js_output_path_dict[
+                f"btwn_profile_braycurtis_{clade_in_question}_dist"] = self.clade_dist_file_path
+            self.js_output_path_dict[
+                f"btwn_profile_braycurtis_{clade_in_question}_pcoa"] = self.clade_pcoa_coord_file_path
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
@@ -1338,7 +1291,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
         self.clade_dist_file_path = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_string}.bray_curtis_within_clade_profile_distances_{clade_in_question}.dist')
+            f'{self.date_time_str}.bray_curtis_within_clade_profile_distances_{clade_in_question}.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_profiles(self):

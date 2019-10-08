@@ -50,8 +50,14 @@ class DataLoading:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
 
         self.temp_working_directory = self._setup_temp_working_directory()
-        self.date_time_string = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.output_directory = self._setup_output_directory()
+        # directory for the data_explorer outputs
+        self.html_dir = os.path.join(self.output_directory, 'html')
+        self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+        os.makedirs(self.html_dir, exist_ok=True)
+        # dictionary that will hold the outputfile type to full path of the outputfile
+        self.js_output_path_dict = {}
         if self.datasheet_path:
             self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
         else:
@@ -167,6 +173,11 @@ class DataLoading:
 
             self._do_sample_ordination()
 
+            # finally write out the dict that hold the output file paths for the DataExplorer
+            general.write_out_js_file_to_return_python_objs_as_js_objs(
+                [{'function_name': 'getDataFilePaths', 'python_obj': self.js_output_path_dict}],
+                js_outpath=self.js_file_path)
+
     def _make_new_dataset_object(self):
         self.dataset_object = DataSet(
             name=self.parent.args.name, time_stamp=self.parent.date_time_str, reference_fasta_database_used=self.parent.reference_db,
@@ -197,7 +208,7 @@ class DataLoading:
                         sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
                         try:
                             dist_scatter_plotter_samples = DistScatterPlotterSamples(csv_path=output_path,
-                                                                                     date_time_str=self.date_time_string)
+                                                                                     date_time_str=self.date_time_str)
                             dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
                         except RuntimeError:
                             # The error message is printed to stdout at the source
@@ -220,17 +231,19 @@ class DataLoading:
 
     def _do_braycurtis_dist_pcoa(self):
         bray_curtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
-            date_time_string=self.date_time_string, symportal_root_directory=self.symportal_root_directory,
+            date_time_str=self.date_time_str,
             data_set_uid_list=[self.dataset_object.id], call_type='submission',
-            output_dir=self.output_directory, is_sqrt_transf=self.is_sqrt_transf)
+            output_dir=self.output_directory, is_sqrt_transf=self.is_sqrt_transf, html_dir=self.html_dir,
+            js_output_path_dict=self.js_output_path_dict)
         bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_path_list)
 
     def _do_unifrac_dist_pcoa(self):
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
-            call_type='submission', date_time_string=self.date_time_string, output_dir=self.output_directory,
+            call_type='submission', date_time_str=self.date_time_str, output_dir=self.output_directory,
             data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
-            symportal_root_directory=self.symportal_root_directory, is_sqrt_transf=self.is_sqrt_transf)
+            is_sqrt_transf=self.is_sqrt_transf,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_path_list)
 
@@ -245,7 +258,7 @@ class DataLoading:
                 self.seq_stacked_bar_plotter = SeqStackedBarPlotter(
                     output_directory=self.output_directory,
                     seq_relative_abund_count_table_path_post_med=self.seq_abundance_relative_output_path_post_med,
-                    time_date_str=self.date_time_string,
+                    date_time_str=self.date_time_str,
                     seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med)
                 self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
@@ -255,7 +268,9 @@ class DataLoading:
         self.sequence_count_table_creator = SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='submission',
             ds_uids_output_str=str(self.dataset_object.id),
-            num_proc=self.num_proc, time_date_str=self.date_time_string)
+            num_proc=self.num_proc, date_time_str=self.date_time_str,
+            html_dir=self.html_dir,
+            js_output_path_dict=self.js_output_path_dict)
         self.sequence_count_table_creator.make_seq_output_tables()
         self.seq_abund_relative_df_post_med = self.sequence_count_table_creator.output_df_relative_post_med
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
@@ -533,8 +548,8 @@ class DataLoading:
         os.makedirs(back_up_dir, exist_ok=True)
         symclade_current_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade.fa'))
 
-        symclade_backup_path = os.path.join(back_up_dir, f'symClade_{self.date_time_string}.fa')
-        symclade_backup_readme_path = os.path.join(back_up_dir, f'symClade_{self.date_time_string}.readme')
+        symclade_backup_path = os.path.join(back_up_dir, f'symClade_{self.date_time_str}.fa')
+        symclade_backup_readme_path = os.path.join(back_up_dir, f'symClade_{self.date_time_str}.readme')
         # then write a copy to it.
         shutil.copy(symclade_current_path, symclade_backup_path)
         # Then write out a very breif readme
@@ -1096,13 +1111,13 @@ class DataLoading:
 
     def _setup_output_directory(self):
         output_directory = os.path.join(self.symportal_root_directory,
-                                        'outputs', 'loaded_data_sets', f'{self.dataset_object.id}', self.date_time_string)
+                                        'outputs', 'loaded_data_sets', f'{self.dataset_object.id}', self.date_time_str)
         os.makedirs(output_directory, exist_ok=True)
         return output_directory
 
     def _setup_sequence_dump_file_path(self):
         seq_dump_file_path = os.path.join(
-            self.symportal_root_directory,'dbBackUp', 'seq_dumps', f'seq_dump_{self.date_time_string}')
+            self.symportal_root_directory,'dbBackUp', 'seq_dumps', f'seq_dump_{self.date_time_str}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 
