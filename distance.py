@@ -670,7 +670,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     def _compute_pcoa(self, wu):
         pcoa_output = pcoa(wu.data)
         self._rescale_pcoa(pcoa_output)
-        pcoa_output.samples['sample_uid'] = wu.ids
+        pcoa_output.samples['sample_uid'] = [self.cc_id_to_sample_id[int(cc_id)] for cc_id in wu.ids]
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
 
