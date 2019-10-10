@@ -194,6 +194,14 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             print(f'Calculating UniFrac Distances for clade: {clade_in_question}')
 
+            analysis_type_objs_of_clade = [at for at in self.at_list_for_output if at.clade == clade_in_question]
+
+            if len(analysis_type_objs_of_clade) < 2:
+                print(f'There are insufficient samples in clade {clade_in_question} to calculate distances '
+                      f'({len(analysis_type_objs_of_clade)}).'
+                      f'\nNo distances will be calculated for this clade.')
+                continue
+
             self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
 
             os.makedirs(self.clade_output_dir, exist_ok=True)
@@ -534,6 +542,15 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         for clade_in_question in self.clades_for_dist_calcs:
 
             print(f'Calculating UniFrac Distances for clade: {clade_in_question}')
+
+            clade_collections_of_clade = [
+                cc for cc in self.clade_collections_from_data_set_samples if cc.clade == clade_in_question]
+
+            if len(clade_collections_of_clade) < 2:
+                print(f'There are insufficient samples in clade {clade_in_question} to calculate distances '
+                      f'({len(clade_collections_of_clade)}).'
+                      f'\nNo distances will be calculated for this clade.')
+                continue
 
             self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
 
@@ -1085,12 +1102,11 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing sample pairwise distances and PCoA coordinates using the BrayCurtis method\n')
         for clade_in_question in self.clades_of_ccs:
-            self._init_clade_dirs_and_paths(clade_in_question)
-
             dss_obj_to_cct_obj_dict = {cc_obj.data_set_sample_from : cc_obj for cc_obj in self.cc_list_for_output if cc_obj.clade == clade_in_question}
             self.objs_of_clade = list(dss_obj_to_cct_obj_dict.keys())
             if len(self.objs_of_clade) < 2:
                 continue
+            self._init_clade_dirs_and_paths(clade_in_question)
             self._create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(dss_obj_to_cct_obj_dict)
             self._compute_braycurtis_btwn_obj_pairs()
             self._generate_distance_file()
@@ -1238,11 +1254,10 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing ITS2 type profile pairwise distances and PCoA coordinates using the BrayCurtis method\n')
         for clade_in_question in self.clades_of_ats:
-            self._init_clade_dirs_and_paths(clade_in_question)
-
             self.objs_of_clade = [at for at in self.at_list_for_output if at.clade==clade_in_question]
             if len(self.objs_of_clade) < 2:
                 continue
+            self._init_clade_dirs_and_paths(clade_in_question)
             self._create_rs_uid_to_normalised_abund_dict_for_each_obj_profiles()
             self._compute_braycurtis_btwn_obj_pairs()
             self._generate_distance_file()
