@@ -268,7 +268,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             profile_pc_coords_dict = {}
             for pc in available_pcs:
                 profile_pc_coords_dict[pc] = f'{pcoa_coords_df.at[profile_uid, pc]:.3f}'
-            genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
+            genera_pc_coords_dict[int(profile_uid)] = profile_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
     def _write_out_pcoa(self, ordered_at_names, pcoa_output, clade_in_question):
@@ -618,7 +618,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             sample_pc_coords_dict = {}
             for pc in available_pcs:
                 sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
-            genera_pc_coords_dict[sample_uid] = sample_pc_coords_dict
+            genera_pc_coords_dict[int(sample_uid)] = sample_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
     def _write_out_pcoa(self, ordered_sample_names, pcoa_output, clade_in_question):
@@ -1152,7 +1152,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             sample_pc_coords_dict = {}
             for pc in available_pcs:
                 sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
-            genera_pc_coords_dict[sample_uid] = sample_pc_coords_dict
+            genera_pc_coords_dict[int(sample_uid)] = sample_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
 
@@ -1307,7 +1307,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             profile_pc_coords_dict = {}
             for pc in available_pcs:
                 profile_pc_coords_dict[pc] = f'{pcoa_coords_df.at[profile_uid, pc]:.3f}'
-            genera_pc_coords_dict[profile_uid] = profile_pc_coords_dict
+            genera_pc_coords_dict[int(profile_uid)] = profile_pc_coords_dict
         self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
     def _init_clade_dirs_and_paths(self, clade_in_question):
