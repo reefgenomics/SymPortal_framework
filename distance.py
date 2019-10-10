@@ -130,8 +130,12 @@ class BaseUnifracDistPCoACreator:
 
     def _write_output_paths_to_stdout(self):
         print('UniFrac and PCoA computation complete. Ouput files:')
-        for output_path in self.output_path_list:
-            print(output_path)
+        if self.output_path_list:
+            print('Output files:')
+            for output_path in self.output_path_list:
+                print(output_path)
+        else:
+            print("There are no output files")
 
 
 class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
@@ -1053,8 +1057,12 @@ class BaseBrayCurtisDistPCoACreator:
 
     def _write_output_paths_to_stdout(self):
         print('\n\nBrayCurtis distances and PCoA computation complete. Output files:')
-        for output_path in self.output_path_list:
-            print(output_path)
+        if self.output_path_list:
+            print('Output files:')
+            for output_path in self.output_path_list:
+                print(output_path)
+        else:
+            print("There are no output files")
 
     def _append_output_files_to_output_list(self):
         self.output_path_list.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
