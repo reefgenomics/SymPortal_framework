@@ -628,8 +628,6 @@ class DataLoading:
 
     def _generate_stability_file_and_data_set_sample_objects_without_datasheet(self, end_index):
 
-        self._make_new_dataset_object()
-
         self.make_dot_stability_file_inferred(end_index)
 
         self._create_data_set_sample_objects_in_bulk_without_datasheet()
