@@ -821,6 +821,9 @@ class SequenceCollection:
         if alternative_fasta_file_path:
             self.file_path = alternative_fasta_file_path
         fasta_file = read_defined_file_to_list(self.file_path)
+        # Check if fasta file is empty
+        if not fasta_file:
+            raise RuntimeError('empty fasta')
         for i in range(0, len(fasta_file), 2):
             list_of_nucleotide_sequence_objects.append(
                 NucleotideSequence(sequence=fasta_file[i+1], name=fasta_file[i][1:])

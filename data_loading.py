@@ -1343,6 +1343,9 @@ class InitialMothurWorker:
             if str(e) == 'error in make.contigs':
                 self.log_qc_error_and_continue(errorreason='Error in make.contigs')
                 raise RuntimeError({'sample_name': self.sample_name})
+            if str(e) == 'empty fasta':
+                self.log_qc_error_and_continue(errorreason='Error in make.contigs')
+                raise RuntimeError({'sample_name': self.sample_name})
 
     def _set_absolute_num_seqs_after_make_contigs(self):
         number_of_contig_seqs_absolute = len(
