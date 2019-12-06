@@ -227,7 +227,13 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                       f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
-            wu = self._perform_unifrac(clade_abund_df, tree)
+            try:
+                wu = self._perform_unifrac(clade_abund_df, tree)
+            except ValueError as e:
+                if 'must be rooted' in str(e):
+                    print('WARNING a tree rooting error occured')
+                    print(f"Distance information will not be computed for clade {clade_in_question}")
+                    continue
 
             clade_dist_file_path, ordered_at_names = self._write_out_dist_df(clade_abund_df, wu, clade_in_question)
 
