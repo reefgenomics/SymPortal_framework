@@ -173,9 +173,15 @@ class DataLoading:
 
             self._do_sample_ordination()
 
-            # finally write out the dict that hold the output file paths for the DataExplorer
+            # finally write out the dict that holds the output file paths for the DataExplorer
+            # covert the full paths to relative paths and then write out dict
+            # https://stackoverflow.com/questions/8693024/how-to-remove-a-path-prefix-in-python
+            new_dict = {}
+            for k, v in self.js_output_path_dict.items():
+                new_dict[k] = os.path.relpath(v, self.output_directory)
+
             general.write_out_js_file_to_return_python_objs_as_js_objs(
-                [{'function_name': 'getDataFilePaths', 'python_obj': self.js_output_path_dict}],
+                [{'function_name': 'getDataFilePaths', 'python_obj': new_dict}],
                 js_outpath=self.js_file_path)
 
     def _make_new_dataset_object(self):
