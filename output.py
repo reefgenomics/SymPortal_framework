@@ -1801,9 +1801,16 @@ class SequenceCountTableCreator:
             # and we have the maximum abundance
             # now write these out as js file and functions to return.
             js_file_path = os.path.join(self.html_dir, 'study_data.js')
+            # For the time being we are going to no longer output the pre_med_rect_dict data
+            # as it very slow to render online using d3 and takes up a huge amount of space.
+            # However, if we want to reimpleent its output in the future we can simply uncomment the below
+            # general.write_out_js_file_to_return_python_objs_as_js_objs(
+            #     [{'function_name': 'getRectDataPreMEDBySample', 'python_obj': pre_med_rect_dict},
+            #      {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
+            #      {'function_name': 'getSeqColor', 'python_obj': combi_color_dict}],
+            #     js_outpath=js_file_path)
             general.write_out_js_file_to_return_python_objs_as_js_objs(
-                [{'function_name': 'getRectDataPreMEDBySample', 'python_obj': pre_med_rect_dict},
-                 {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
+                [{'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
                  {'function_name': 'getSeqColor', 'python_obj': combi_color_dict}],
                 js_outpath=js_file_path)
 
