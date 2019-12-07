@@ -46,6 +46,7 @@ import sp_config
 import data_analysis
 import pickle
 import general
+import django_general
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
@@ -99,9 +100,6 @@ class SymPortalWorkFlowManager:
         parser.add_argument('--name', help='A name for your input or analysis', default='noName')
         parser.add_argument('--description', help='An optional description', default='No description')
         parser.add_argument('--data_analysis_id', type=int, help='The ID of the data_analysis you wish to output from')
-        group.add_argument(
-            '--vacuum_database', action='store_true',
-            help='Vacuuming the database will free up memory from objects that have been deleted recently')
         parser.add_argument('--bootstrap', type=int, help='Number of bootstrap iterations to perform', default=100)
         parser.add_argument(
             '--data_sheet',
@@ -212,6 +210,17 @@ class SymPortalWorkFlowManager:
             '--between_sample_distances_sample_set', metavar='DataSetSample UIDs',
             help='Use this function to output pairwise distances between samples clade '
                  'separated from a given collection of DataSetSample objects')
+        group.add_argument(
+            '--vacuum_database', action='store_true',
+            help='Vacuuming the database will free up memory from objects that have been deleted recently')
+        group.add_argument('--apply_data_sheet', metavar='DataSet UID',
+                           help='Use this function to apply the meta info in a datasheet to '
+                                'the DataSetSamples of a given DataSet. Provide the UID of the DataSet to which the '
+                                'info should be applied and give the path to the datasheet that contains the '
+                                'information using the --data_sheet flag. The sample names in the datasheet must match '
+                                'the DataSetSample names exactly. Unpopulated columns in the datasheet will be ignored.'
+                                ' I.e. existing meta-information will not be removed from the DataSetSampes if '
+                                'information is missing in the datasheet.')
 
 
     def start_work_flow(self):
@@ -247,8 +256,12 @@ class SymPortalWorkFlowManager:
             self.perform_display_data_sets()
         elif self.args.display_analyses:
             self.perform_display_analysis_types()
-        elif self.args.vacuumDatabase:
+        elif self.args.vacuum_database:
             self.perform_vacuum_database()
+
+        # Apply datasheet
+        elif self.args.apply_data_sheet:
+            self.apply_datasheet_to_dataset_samples()
 
     # GENERAL
     def _plot_if_not_too_many_samples(self, plotting_function, num_samples=None, max_num_samples=1000):
@@ -795,6 +808,15 @@ class SymPortalWorkFlowManager:
             is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
+
+    # APPLY DATASHEET TO DATASETSAMPLES
+    def apply_datasheet_to_dataset_samples(self):
+        try:
+            adtdss = django_general.ApplyDatasheetToDataSetSamples(data_set_uid=self.args.apply_data_sheet, data_sheet_path=self.args.data_sheet)
+        except RuntimeError as e:
+            print(e)
+            return
+        adtdss.apply_datasheet()
 
     #VACUUM DB
     def perform_vacuum_database(self):

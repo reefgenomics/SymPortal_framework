@@ -54,6 +54,47 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
+    # TEST ANNOTATION OF DATASET WITH DATASHEET
+    def test_annotation_of_dataset_with_data_sheet_good(self):
+        print('\n\nTesting: test_annotation_of_dataset_with_data_sheet_good')
+        dss_uid = 1
+        path_to_datasheet = os.path.join(
+            self.symportal_testing_root_dir,
+            'test_datasheet_for_standalone_application_testing.csv')
+        custom_args_list = ['--apply_data_sheet', str(dss_uid), '--data_sheet', path_to_datasheet]
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
+    def test_annotation_of_dataset_with_data_sheet_bad_lat(self):
+        print('\n\nTesting: test_annotation_of_dataset_with_data_sheet_bad_lat')
+        dss_uid = 1
+        path_to_datasheet = os.path.join(
+            self.symportal_testing_root_dir,
+            'test_datasheet_for_standalone_application_testing_bad_lat.csv')
+        custom_args_list = ['--apply_data_sheet', str(dss_uid), '--data_sheet', path_to_datasheet]
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
+    def test_annotation_of_dataset_with_data_sheet_blanks(self):
+        print('\n\nTesting: test_annotation_of_dataset_with_data_sheet_blanks')
+        dss_uid = 1
+        path_to_datasheet = os.path.join(
+            self.symportal_testing_root_dir,
+            'test_datasheet_for_standalone_application_testing_blanks.csv')
+        custom_args_list = ['--apply_data_sheet', str(dss_uid), '--data_sheet', path_to_datasheet]
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
+    def test_annotation_of_dataset_with_data_sheet_wrong_name(self):
+        print('\n\nTesting: test_annotation_of_dataset_with_data_sheet_bad_name')
+        dss_uid = 1
+        path_to_datasheet = os.path.join(
+            self.symportal_testing_root_dir,
+            'test_datasheet_for_standalone_application_testing_wrong_name.csv')
+        custom_args_list = ['--apply_data_sheet', str(dss_uid), '--data_sheet', path_to_datasheet]
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
     # TEST DATA ANALYSIS
     def test_data_analysis_work_flow(self):
         print('\n\nTesting: data_analysis_work_flow\n\n')
