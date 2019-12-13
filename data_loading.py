@@ -36,6 +36,7 @@ class DataLoading:
         self.sample_meta_info_df = None
         self.user_input_path = user_input_path
         self.datasheet_path = datasheet_path
+        self._check_mothur_version()
         if self.datasheet_path:
             self._create_and_check_datasheet()
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
@@ -183,6 +184,15 @@ class DataLoading:
             general.write_out_js_file_to_return_python_objs_as_js_objs(
                 [{'function_name': 'getDataFilePaths', 'python_obj': new_dict}],
                 js_outpath=self.js_file_path)
+
+    def _check_mothur_version(self):
+        mothur_version_cmd = subprocess.run(
+            ['mothur', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
+        for line in decode_utf8_binary_to_list(mothur_version_cmd.stdout):
+            if "1.39.5" in line:
+                return
+        raise RuntimeError('Are you sure you are running version 1.39.5 of mothur?')
 
     def _make_new_dataset_object(self):
         self.dataset_object = DataSet(
