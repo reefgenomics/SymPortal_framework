@@ -870,6 +870,9 @@ class DataLoading:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
 
+        # drop any cells in which the sample name is null
+        self.sample_meta_info_df = self.sample_meta_info_df[~pd.isnull(self.sample_meta_info_df['sample_name'])]
+
         self._check_datasheet_df_vals_unique()
 
         self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].astype(str)
