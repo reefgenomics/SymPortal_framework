@@ -239,7 +239,7 @@ class DataLoading:
             self._do_braycurtis_dist_pcoa()
 
     def _write_data_set_info_to_stdout(self):
-        print(f'\n\nData loading complete. DataSet UID: {self.dataset_object.id}')
+        print(f'\n\nData loading complete. DataSet UID: {self.dataset_object.id}; Name: {self.dataset_object.name}')
 
     @staticmethod
     def this_is_pcoa_path(output_path):
