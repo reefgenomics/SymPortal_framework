@@ -125,12 +125,12 @@ class SymPortalWorkFlowManager:
             '--submitting_user_email',
             help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
                  'than the one listed in sp_config', default='not supplied')
-        parser.add_argument('--sqrt',
-                            help="When passed, sequence abunances will be square root transformed before "
+        parser.add_argument('--no_sqrt',
+                            help="When passed, sequence abunances will not be square root transformed before "
                                  "distance metrics are calculated. This can be applied to either BrayCurtis- or"
                                  " UniFrac-based distance calculations. This flag can be passed when calculating"
                                  " either between sample or between ITS2 type profile distances. "
-                                 "[True]", action='store_true', default=True)
+                                 "[False]", action='store_true', default=False)
         parser.add_argument('--local',
                              help="When passed, only the DataSetSamples of the current output will be used"
                                              " in calculating ITS2 type profile similarities. If false, similarity"
@@ -413,7 +413,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            is_sqrt_transf=self.args.sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            no_sqrt_transf=self.args.no_sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_analysis_braycurtis_sample_distances(self):
@@ -422,7 +422,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            is_sqrt_transf=self.args.sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            no_sqrt_transf=self.args.no_sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _perform_data_analysis_type_distances(self):
@@ -441,7 +441,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -452,7 +452,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -498,7 +498,8 @@ class SymPortalWorkFlowManager:
         self.data_loading_object = data_loading.DataLoading(
             parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
-            no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method, debug=self.args.debug, is_sqrt_transf=self.args.sqrt)
+            no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
+            debug=self.args.debug, no_sqrt_transf=self.args.no_sqrt)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given(self):
@@ -679,7 +680,7 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in self.args.between_type_distances_cct_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=False, html_dir=self.html_dir,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=False, html_dir=self.html_dir,
             output_dir=self.output_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
@@ -689,7 +690,7 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in self.args.between_type_distances.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
             output_dir=self.output_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
@@ -700,7 +701,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict, output_dir=self.output_dir
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
@@ -714,7 +715,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in
                                self.args.between_type_distances_cct_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=False, html_dir=self.html_dir, output_dir=self.output_dir,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=False, html_dir=self.html_dir, output_dir=self.output_dir,
             js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
@@ -727,7 +728,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in
                                self.args.between_type_distances.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
@@ -740,7 +741,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
-            is_sqrt_transf=self.args.sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
+            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
@@ -778,7 +779,7 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_sample_uid_list=dss_uid_list,
             num_processors=self.args.num_proc,
-            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir,
+            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -788,7 +789,7 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_uid_list=ds_uid_list,
             num_processors=self.args.num_proc,
-            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir,
+            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -798,7 +799,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=dss_uid_list,
             call_type='stand_alone',
-            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
+            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -808,7 +809,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_uid_list=ds_uid_list,
             call_type='stand_alone',
-            is_sqrt_transf=self.args.sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
+            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 

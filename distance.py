@@ -24,7 +24,7 @@ class BaseUnifracDistPCoACreator:
     or Samples."""
     def __init__(
             self, num_proc, output_dir, data_set_uid_list, js_output_path_dict, html_dir, data_set_sample_uid_list, cct_set_uid_list,
-            call_type, date_time_str, is_sqrt_transf):
+            call_type, date_time_str, no_sqrt_transf):
 
         self.num_proc = num_proc
         self.output_dir = output_dir
@@ -39,7 +39,7 @@ class BaseUnifracDistPCoACreator:
         self.date_time_str = date_time_str
 
         self.clade_output_dir = None
-        self.is_sqrt_transf = is_sqrt_transf
+        self.no_sqrt_transf = no_sqrt_transf
         self.html_dir = html_dir
         # for the js dict
         self.genera_annotation_dict = {
@@ -148,13 +148,13 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     def __init__(
             self, num_processors, call_type, data_analysis_obj, js_output_path_dict, html_dir,
             output_dir, date_time_str=None, data_set_uid_list=None, data_set_sample_uid_list=None,
-            cct_set_uid_list=None, is_sqrt_transf=True, local_abunds_only=False):
+            cct_set_uid_list=None, no_sqrt_transf=True, local_abunds_only=False):
 
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
             cct_set_uid_list=cct_set_uid_list, call_type=call_type,
-            date_time_str=date_time_str, is_sqrt_transf=is_sqrt_transf, js_output_path_dict=js_output_path_dict,
+            date_time_str=date_time_str, no_sqrt_transf=no_sqrt_transf, js_output_path_dict=js_output_path_dict,
             html_dir=html_dir)
 
         self.data_analysis_obj = data_analysis_obj
@@ -408,12 +408,13 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
                 self.reference_seq_uid_set.update(ref_seq_uids_of_analysis_type)
 
-                if self.parent.is_sqrt_transf:
+                if not self.parent.no_sqrt_transf:
                     df = general.sqrt_transform_abundance_df(df)
+                else:
+                    print('\n Not applying sqrt transformation at users request.')
 
                 # A dictionary that will hold the abundance of the reference sequences in the given AnalysisType
                 # object. Key is RefSeq_obj uid and value is abundance normalised to 10000 reads.
-                normalised_abundance_of_divs_dict = None
                 if self.parent.local_abunds_only:  # Calculate the UniFrac using only the ccts from the specified samples
                     normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
                         at_obj, df, ref_seq_uids_of_analysis_type)
@@ -525,12 +526,12 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def __init__(
             self, num_processors, html_dir, js_output_path_dict, call_type, output_dir, date_time_str,
-             data_set_uid_list=None, data_set_sample_uid_list=None, is_sqrt_transf=True):
+             data_set_uid_list=None, data_set_sample_uid_list=None, no_sqrt_transf=True):
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
             call_type=call_type,
-            date_time_str=date_time_str, is_sqrt_transf=is_sqrt_transf, cct_set_uid_list=None, html_dir=html_dir, js_output_path_dict=js_output_path_dict)
+            date_time_str=date_time_str, no_sqrt_transf=no_sqrt_transf, cct_set_uid_list=None, html_dir=html_dir, js_output_path_dict=js_output_path_dict)
 
         self.clade_collections_from_data_set_samples = self._chunk_query_set_cc_obj_from_dss_uids()
         self.cc_id_to_sample_name_dict = {cc_obj.id: cc_obj.data_set_sample_from.name for cc_obj in self.clade_collections_from_data_set_samples}
@@ -749,7 +750,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
                 self.reference_seq_uid_set.update([dsss.reference_sequence_of.id for dsss in list_of_dsss_in_cc])
 
-                if self.parent.is_sqrt_transf:
+                if not self.parent.no_sqrt_transf:
                     normalised_abund_dict = self._make_norm_abund_dict_sqrt(list_of_dsss_in_cc)
                 else:
                     normalised_abund_dict = self._make_norm_abund_dict_no_sqrt(list_of_dsss_in_cc)
@@ -1091,7 +1092,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def __init__(
             self, js_output_path_dict, html_dir, output_dir, date_time_str=None,
             data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None,  is_sqrt_transf=True):
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None,  no_sqrt_transf=True):
         super().__init__(
             call_type=call_type, date_time_str=date_time_str,
             profiles_or_samples='samples', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
@@ -1104,7 +1105,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
         self.output_dir = os.path.join(output_dir, 'between_sample_distances')
         os.makedirs(self.output_dir, exist_ok=True)
-        self.is_sqrt_transf = is_sqrt_transf
+        self.no_sqrt_transf = no_sqrt_transf
 
 
     def _chunk_query_set_cc_list_from_dss_uids(self):
@@ -1177,7 +1178,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             list_of_dsss_in_cc = list(DataSetSampleSequence.objects.filter(
                 clade_collection_found_in=clade_col))
 
-            if self.is_sqrt_transf:
+            if not self.no_sqrt_transf:
                 total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dsss_in_cc])
                 rel_abund_dict = {dsss.id: dsss.abundance/total_seqs_ind_clade_col for dsss in list_of_dsss_in_cc}
                 dsss_uid_to_sqrt_rel_abund_dict = {
@@ -1222,7 +1223,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
     def __init__(
             self, data_analysis_obj, js_output_path_dict, html_dir, output_dir, date_time_str, data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, is_sqrt_transf=True, local_abunds_only=False):
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, no_sqrt_transf=True, local_abunds_only=False):
         super().__init__(
             call_type=call_type, date_time_str=date_time_str,
             profiles_or_samples='profiles', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
@@ -1241,7 +1242,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self.at_list_for_output = self._chunk_query_set_at_list_for_output_from_dss_uids()
         self.clades_of_ats = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = os.path.join(output_dir, 'between_profile_distances')
-        self.is_sqrt_transf = is_sqrt_transf
+        self.no_sqrt_transf = no_sqrt_transf
         self.local = local_abunds_only
 
 
@@ -1332,7 +1333,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
             df = pd.DataFrame(at.get_ratio_list())
 
-            if self.is_sqrt_transf:
+            if not self.no_sqrt_transf:
                 df = general.sqrt_transform_abundance_df(df)
 
             if self.local:
