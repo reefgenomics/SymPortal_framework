@@ -31,6 +31,11 @@ class SymPortalTester:
         self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
         self.work_flow_manager.start_work_flow()
 
+    def _test_data_loading_work_flow_no_datasheet(self):
+        custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc), '--debug']
+        self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
+        self.work_flow_manager.start_work_flow()
+
     def _test_data_analysis_work_flow(self):
         custom_args_list = ['--analyse', str(self.work_flow_manager.data_set_object.id), '--name', self.name,
                             '--num_proc', str(self.num_proc)]

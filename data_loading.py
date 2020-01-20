@@ -30,7 +30,7 @@ class DataLoading:
 
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, debug=False, no_sqrt_transf=False):
+            distance_method, debug=False, is_sqrt_transf=True):
         self.parent = parent_work_flow_obj
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
@@ -140,7 +140,7 @@ class DataLoading:
         # we will use this sequence stacked bar plotter when plotting the pre_MED seqs so that the plotting
         # can be put in the same order
         self.seq_stacked_bar_plotter = None
-        self.no_sqrt_transf = no_sqrt_transf
+        self.is_sqrt_transf = is_sqrt_transf
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
@@ -249,7 +249,7 @@ class DataLoading:
         bray_curtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
             date_time_str=self.date_time_str,
             data_set_uid_list=[self.dataset_object.id], call_type='submission',
-            output_dir=self.output_directory, no_sqrt_transf=self.no_sqrt_transf, html_dir=self.html_dir,
+            output_dir=self.output_directory, is_sqrt_transf=self.is_sqrt_transf, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_path_list)
@@ -258,7 +258,7 @@ class DataLoading:
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
             call_type='submission', date_time_str=self.date_time_str, output_dir=self.output_directory,
             data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
-            no_sqrt_transf=self.no_sqrt_transf,
+            is_sqrt_transf=self.is_sqrt_transf,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_path_list)
@@ -651,33 +651,84 @@ class DataLoading:
     def make_dot_stability_file_inferred(self, end_index):
         """Search for the fastq files that contain the inferred sample names. NB this is not so simple
         as names that are subset of other names will match more than one set of fastq files. To avoid this happening"""
+        print('\nDeducing read direction for the inferred sample names')
         sample_fastq_pairs = []
         for sample_name in self.list_of_samples_names:
+            print(f'Sample {sample_name}')
             temp_list = []
             temp_list.append(sample_name.replace('-', '[dS]'))
             fwd_file_path = None
             rev_file_path = None
-            # This is aimed at matching R1.fastq.gz, R2.fq.gz, 1.fq, 2.fastq, .../asdfads_R1_001.fastq.gz etc.
-            compiled_reg_ex = re.compile('\.([R12]+)\.f[ast]*q(\.gz)?')
             for file_path in return_list_of_file_paths_in_directory(self.user_input_path):
                 if sample_name == ntpath.basename(file_path)[:-end_index]:
-                    read_direction_match = re.search(compiled_reg_ex, file_path)
-                    if read_direction_match is not None:
-                        read_direction_str = read_direction_match.group(1)
-                        if read_direction_str in ['1', 'R1']:
-                            fwd_file_path = file_path
-                        if read_direction_str in ['2', 'R2']:
-                            rev_file_path = file_path
-                    else:
+                    # When here we know which sample the file_path belongs to
+                    # but we still need to deduce whether this is the fwd or rev read
+                    # If R1 or R2 are in the read, then that is relatively easy
+                    # But it may be that there is only a 1 or a 2 in the read.
+                    # To test for this we will parse through each of the 1's or 2's
+                    # and see if the partner read exists
+
+                    # First search for the simple case of R1 or R2 being present.
+                    if 'R1' in file_path or 'R2' in file_path:
                         if 'R1' in file_path:
                             fwd_file_path = file_path
+                            self._print_sample_direction_path(direction='fwd', file_path=file_path)
                         if 'R2' in file_path:
                             rev_file_path = file_path
+                            self._print_sample_direction_path(direction='rev', file_path=file_path)
+                    else:
+                        seq_direction_result = self._check_seq_file_path_for_seq_direction(file_path=file_path)
+                        if seq_direction_result =='rev':
+                            rev_file_path = file_path
+                            self._print_sample_direction_path(direction='rev', file_path=file_path)
+                        elif seq_direction_result =='fwd':
+                            fwd_file_path = file_path
+                            self._print_sample_direction_path(direction='fwd', file_path=file_path)
+                        else:
+                            raise RuntimeError(f'Unable to deduce read direction of {file_path}')
+                # if we have already found a fwd_file_path and rev_file_path
+                # then we can break out of the search
+                if fwd_file_path and rev_file_path:
+                    break
             temp_list.append(fwd_file_path)
             temp_list.append(rev_file_path)
+            if None in temp_list:
+                raise RuntimeError(f'Error in deducing directionality of {sample_name}')
             sample_fastq_pairs.append('\t'.join(temp_list))
         write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
+
+
+    def _check_seq_file_path_for_seq_direction(self, file_path):
+        """ This will try to deduce whether a given sequencing file is of a given direction"""
+        file_name_list = list(ntpath.basename(file_path))
+
+        # for each of the either '1' or '2' s in the file name
+        # swap them out for the opposite number and check to see if this
+        # file exists. If it does, then we assume that this is the '1' or '2' that we
+        # are investigating is the indicator of seq direction
+        for char_index, char_element in enumerate(reversed(file_name_list)):
+            if char_element == '1':
+                search_list = list(reversed(file_name_list))
+                search_list[char_index] = '2'
+                search_filename = ''.join(reversed(search_list))
+                search_path = os.path.join(os.path.dirname(file_path), search_filename)
+                if os.path.exists(search_path):
+                    return 'fwd'
+            elif char_element == '2':
+                search_list = list(reversed(file_name_list))
+                search_list[char_index] = '1'
+                search_filename = ''.join(reversed(search_list))
+                search_path = os.path.join(os.path.dirname(file_path), search_filename)
+                if os.path.exists(search_path):
+                    return 'rev'
+        return False
+
+    def _print_sample_direction_path(self, direction, file_path):
+        if direction == 'fwd':
+            print(f'R1 = {file_path}')
+        else:
+            print(f'R2 = {file_path}')
 
     def _create_data_set_sample_objects_in_bulk_without_datasheet(self):
         list_of_sample_objects = []
