@@ -30,7 +30,7 @@ class DataLoading:
 
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, debug=False, is_sqrt_transf=True):
+            distance_method, debug=False, no_sqrt_transf=False):
         self.parent = parent_work_flow_obj
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
@@ -140,7 +140,7 @@ class DataLoading:
         # we will use this sequence stacked bar plotter when plotting the pre_MED seqs so that the plotting
         # can be put in the same order
         self.seq_stacked_bar_plotter = None
-        self.is_sqrt_transf = is_sqrt_transf
+        self.no_sqrt_transf = no_sqrt_transf
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
@@ -249,7 +249,7 @@ class DataLoading:
         bray_curtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
             date_time_str=self.date_time_str,
             data_set_uid_list=[self.dataset_object.id], call_type='submission',
-            output_dir=self.output_directory, is_sqrt_transf=self.is_sqrt_transf, html_dir=self.html_dir,
+            output_dir=self.output_directory, no_sqrt_transf=self.no_sqrt_transf, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_path_list)
@@ -258,7 +258,7 @@ class DataLoading:
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
             call_type='submission', date_time_str=self.date_time_str, output_dir=self.output_directory,
             data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
-            is_sqrt_transf=self.is_sqrt_transf,
+            no_sqrt_transf=self.no_sqrt_transf,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_path_list)
