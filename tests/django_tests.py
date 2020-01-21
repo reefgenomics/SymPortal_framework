@@ -25,6 +25,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         cls.symportal_testing_root_dir = os.path.abspath(os.path.dirname(__file__))
         cls.symportal_root_dir = os.path.abspath(os.path.join(cls.symportal_testing_root_dir, '..'))
         cls.test_data_dir_path = os.path.join(cls.symportal_testing_root_dir, 'data', 'smith_subsampled_data')
+        cls.test_data_dir_path_lite = os.path.join(cls.test_data_dir_path, 'lite')
         cls.data_sheet_file_path = os.path.join(cls.test_data_dir_path, 'test_data_submission_input.csv')
         cls.num_proc = 6
         cls.name = 'testing'
@@ -38,27 +39,59 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         test_spwfm.start_work_flow()
 
     def test_data_loading_work_flow_no_output(self):
-        print('\n\nTesting: data_loading_work_flow\n\n')
+        print('\n\nTesting: data_loading_work_flow_no_output\n\n')
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc),
                             '--data_sheet', self.data_sheet_file_path, '--no_output']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     def test_data_loading_work_flow_no_datasheet(self):
-        print('\n\nTesting: data_loading_work_flow\n\n')
+        print('\n\nTesting: data_loading_work_flow_no_datasheet\n\n')
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc)]
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
     # TEST DATA LOADING only one sample with numerical name
     def test_data_loading_work_flow_number_only(self):
-        print('\n\nTesting: data_loading_work_flow\n\n')
+        print('\n\nTesting: data_loading_work_flow_number_only\n\n')
         test_data_dir_path_num_only = os.path.join(self.test_data_dir_path, 'num_only')
         data_sheet_file_path = os.path.join(test_data_dir_path_num_only, 'test_data_submission_input_lite_num_only.csv')
         custom_args_list = ['--load', test_data_dir_path_num_only, '--name', self.name, '--num_proc', str(self.num_proc),
                             '--data_sheet', data_sheet_file_path, '--distance_method', 'braycurtis']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
+
+    # TEST DATA LOADING using a datasheet that contains absolute paths
+    def test_data_loading_work_flow_datasheet_w_abs_paths(self):
+        """For this test we will use the 'lite' dataset and include the A02 sample
+        that has its fwd and rev reads in two seperate directories. We will also use a datasheet
+        that has the full paths for both of these reads in it. We have to make this datasheet at run time
+        as we don't know the absolute directory of this test dir on the users machine."""
+        print('\n\nTesting: data_loading_work_flow_datasheet_w_abs_paths\n\n')
+        # Read in the test_data_submission_input_list.csv datasheet and add the A02 sample
+        with open(os.path.join(self.test_data_dir_path_lite, 'test_data_submission_input_lite.csv'), 'r') as f:
+            lines = [line.split(',') for line in f]
+        # add the new sample with the absolute directories in the datasheet
+        lines.append(
+            ['A02',
+             os.path.join(self.test_data_dir_path_lite, 'test_sub_dir_one', 'A02.1_subsampled.fastq'),
+             os.path.join(self.test_data_dir_path_lite, 'test_sub_dir_two', 'A02.2_subsampled.fastq'),
+             'coral','cnidaria','anthozoa','scleractinia','poritidae',
+             'porites','lobata','24.339216','53.059163','18.06.86','0-12'])
+        new_datasheet_path = os.path.join(self.test_data_dir_path_lite, 'test_data_submission_input_lite_w_abs_paths.csv')
+        # write out the new csv
+        with open(new_datasheet_path, 'w') as f:
+            for line_list in lines:
+                csv_line = ",".join(line_list)
+                f.write(f'{csv_line}\n')
+
+        custom_args_list = ['--load', self.test_data_dir_path_lite, '--name', self.name, '--num_proc',
+                            str(self.num_proc),
+                            '--data_sheet', new_datasheet_path, '--distance_method', 'braycurtis']
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
+
 
     # TEST ANNOTATION OF DATASET WITH DATASHEET
     def test_annotation_of_dataset_with_data_sheet_good(self):

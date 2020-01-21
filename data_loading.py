@@ -650,7 +650,10 @@ class DataLoading:
 
     def make_dot_stability_file_inferred(self, end_index):
         """Search for the fastq files that contain the inferred sample names. NB this is not so simple
-        as names that are subset of other names will match more than one set of fastq files. To avoid this happening"""
+        as names that are subset of other names will match more than one set of fastq files.
+        After identifying the sample direction, write absolute paths of each of the seq files
+        as though they are coming from the temp_working_directory. This is where the raw sequencing files
+        will be copied over to."""
         print('\nDeducing read direction for the inferred sample names')
         sample_fastq_pairs = []
         for sample_name in self.list_of_samples_names:
@@ -690,6 +693,10 @@ class DataLoading:
                 # then we can break out of the search
                 if fwd_file_path and rev_file_path:
                     break
+            # Change the current paths so that they don't originate from the temp_working_directory
+            # path but rather from the temp working directory
+            fwd_file_path = os.path.join(self.temp_working_directory, ntpath.basename(fwd_file_path))
+            rev_file_path = os.path.join(self.temp_working_directory, ntpath.basename(rev_file_path))
             temp_list.append(fwd_file_path)
             temp_list.append(rev_file_path)
             if None in temp_list:
@@ -795,15 +802,27 @@ class DataLoading:
         self._create_data_set_sample_objects_in_bulk_with_datasheet()
 
     def make_dot_stability_file_datasheet(self):
-        # from data_sheet
+        """Create the .stability file that mothur will use to make contigs.
+        This file is the sample name a tab, the fwd full path, a tab, the rev full path.
+        The paths should refer to the files that will have been copied over to the temp_working_directory.
+        As such the file paths will be the file name of the current file path value in the info_df
+        joined with the temp_working_directory."""
         sample_fastq_pairs = []
         for sample_name in self.sample_meta_info_df.index.values.tolist():
             temp_list = []
             temp_list.append(sample_name.replace('-', '[dS]'))
-            temp_list.append(os.path.join(self.temp_working_directory,
-                                          self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name']))
-            temp_list.append(os.path.join(self.temp_working_directory,
-                                          self.sample_meta_info_df.loc[sample_name, 'fastq_rev_file_name']))
+            temp_list.append(
+                os.path.join(
+                    self.temp_working_directory,
+                    ntpath.basename(self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name'])
+                )
+            )
+            temp_list.append(
+                os.path.join(
+                    self.temp_working_directory,
+                    ntpath.basename(self.sample_meta_info_df.loc[sample_name, 'fastq_rev_file_name'])
+                )
+            )
             sample_fastq_pairs.append('\t'.join(temp_list))
         write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
@@ -1086,21 +1105,44 @@ class DataLoading:
         return sign * (int(degree) + float(minute) / 60 + float(second) / 3600)
 
     def _check_seq_files_exist(self):
-        # check that files exist
+        """
+        Check that all of the sequencing files provided in the datasheet exist.
+        If filenames are given in the datasheet then convert these to full paths
+        before checking for their existence. This way, all locations of seq files
+        are full paths.
+        """
         file_not_found_list = []
         for df_ind in self.sample_meta_info_df.index.values.tolist():
             fwd_file = self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name']
             rev_file = self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name']
-            if not os.path.exists(os.path.join(self.user_input_path, fwd_file)):
-                if os.path.exists(os.path.join(self.user_input_path, fwd_file + '.gz')):
-                    self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name'] = fwd_file + '.gz'
+            if '/' not in fwd_file:
+                fwd_file_path = os.path.join(self.user_input_path, fwd_file)
+                self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name'] = fwd_file_path
+            else:
+                fwd_file_path = fwd_file
+            if '/' not in rev_file:
+                rev_file_path = os.path.join(self.user_input_path, rev_file)
+                self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name'] = rev_file_path
+            else:
+                rev_file_path = rev_file
+
+            # Check for the fwd read
+            if not os.path.exists(fwd_file_path):
+                # Take into account that the user might have supplied fastq.gz files but
+                # used a .fastq extension. If this is the case. Correct in the df.
+                if os.path.exists(fwd_file_path + '.gz'):
+                    self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name'] = fwd_file_path + '.gz'
                 else:
-                    file_not_found_list.append(fwd_file)
-            if not os.path.exists(os.path.join(self.user_input_path, rev_file)):
-                if os.path.exists(os.path.join(self.user_input_path, rev_file + '.gz')):
-                    self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name'] = rev_file + '.gz'
+                    file_not_found_list.append(fwd_file_path)
+            # Check for rev read
+            if not os.path.exists(rev_file_path):
+                # Take into account that the user might have supplied fastq.gz files but
+                # used a .fastq extension. If this is the case. Correct in the df.
+                if os.path.exists(rev_file_path + '.gz'):
+                    self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name'] = rev_file_path + '.gz'
                 else:
-                    file_not_found_list.append(rev_file)
+                    file_not_found_list.append(rev_file_path)
+
         if file_not_found_list:
             print('Some of the sequencing files listed in your datasheet cannot be found:')
             for file_name in file_not_found_list:
@@ -1152,15 +1194,30 @@ class DataLoading:
     def _copy_fastq_files_from_input_dir_to_temp_wkd(self):
         """Need to take into account that there may be other non fastq files in the dir. Also need to take into account
         that they could be .fq files rather than fastq. also need to take into account that it could be fastq.gz and
-        fq.gz rather than fastq and fq."""
-        list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
-        count = 0
-        for file_path in list_of_files_in_user_input_dir:
-            if 'fastq' in file_path or 'fq' in file_path:
-                    count += 1
-                    shutil.copy(file_path, self.temp_working_directory)
-        if count < 2:
-            raise RuntimeError(f'{count} files to analyse found in the target directory')
+        fq.gz rather than fastq and fq.
+
+        Previously we were only allowing files that were all contained in the user_input_path directory.
+        However, we are now introducing functionality that allows full paths to be specified in the datasheet
+        and these paths should be copied over to the temp_working directory.
+        """
+        if self.datasheet_path:
+            # If working form datasheet this is as easy as copying over the specified file paths
+            for sample_name in self.sample_meta_info_df.index.values.tolist():
+                # copy over the fwd read
+                shutil.copy(self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name'], self.temp_working_directory)
+                # copy over the rev read
+                shutil.copy(self.sample_meta_info_df.loc[sample_name, 'fastq_rev_file_name'],
+                            self.temp_working_directory)
+        else:
+            # If not working from datasheet then we transfer over all files of the right extension
+            list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
+            count = 0
+            for file_path in list_of_files_in_user_input_dir:
+                if 'fastq' in file_path or 'fq' in file_path:
+                        count += 1
+                        shutil.copy(file_path, self.temp_working_directory)
+            if count < 2:
+                raise RuntimeError(f'{count} files to analyse found in the target directory')
 
     def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):
@@ -1190,16 +1247,21 @@ class DataLoading:
         return seq_dump_file_path
 
     def _setup_temp_working_directory(self):
-        # working directory will be housed in a temp folder within the directory in which the sequencing data
-        # is currently housed
+        """
+        Create a working directory that will be housed in a temp folder within the self.user_input_path directory
+        We will copy all sequencing files over to this directory before undertaking QC. This temporary directory
+        will be deleted upon completion of data loading.
+        """
         if '.' in self.user_input_path.split('/')[-1]:
             # then this path points to a file rather than a directory and we should pass through the path only
             self.temp_working_directory = os.path.abspath(
-                f'{os.path.dirname(self.user_input_path)}/tempData/{self.dataset_object.id}')
+                os.path.join(
+                    os.path.dirname(self.user_input_path), 'tempData', str(self.dataset_object.id)
+                )
+            )
         else:
             # then we assume that we are pointing to a directory and we can directly use that to make the wkd
-            self.temp_working_directory = os.path.abspath(
-                f'{self.user_input_path}/tempData/{self.dataset_object.id}')
+            self.temp_working_directory = os.path.abspath(os.path.join(self.user_input_path, 'tempData', str(self.dataset_object.id)))
         self._create_temp_wkd()
         return self.temp_working_directory
 
