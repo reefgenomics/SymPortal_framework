@@ -26,6 +26,7 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         cls.symportal_root_dir = os.path.abspath(os.path.join(cls.symportal_testing_root_dir, '..'))
         cls.test_data_dir_path = os.path.join(cls.symportal_testing_root_dir, 'data', 'smith_subsampled_data')
         cls.test_data_dir_path_lite = os.path.join(cls.test_data_dir_path, 'lite')
+        cls.data_sheet_file_path_lite = os.path.join(cls.test_data_dir_path_lite, 'test_data_submission_input_lite.csv')
         cls.data_sheet_file_path = os.path.join(cls.test_data_dir_path, 'test_data_submission_input.csv')
         cls.num_proc = 6
         cls.name = 'testing'
@@ -45,9 +46,17 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
-    def test_data_loading_work_flow_no_datasheet(self):
+    def test_data_loading_work_flow_no_datasheet_zero_byte(self):
         print('\n\nTesting: data_loading_work_flow_no_datasheet\n\n')
-        custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc)]
+        custom_args_list = ['--load', self.test_data_dir_path_lite, '--name', self.name, '--num_proc',
+                            str(self.num_proc), '--no_output']
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+
+    def test_data_loading_work_flow_w_datasheet_zero_byte(self):
+        print('\n\nTesting: data_loading_work_flow_no_datasheet\n\n')
+        custom_args_list = ['--load', self.test_data_dir_path_lite, '--name', self.name, '--data_sheet',
+                            self.data_sheet_file_path_lite ,'--num_proc', str(self.num_proc), '--no_output']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
@@ -56,7 +65,8 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         print('\n\nTesting: data_loading_work_flow_number_only\n\n')
         test_data_dir_path_num_only = os.path.join(self.test_data_dir_path, 'num_only')
         data_sheet_file_path = os.path.join(test_data_dir_path_num_only, 'test_data_submission_input_lite_num_only.csv')
-        custom_args_list = ['--load', test_data_dir_path_num_only, '--name', self.name, '--num_proc', str(self.num_proc),
+        custom_args_list = ['--load', test_data_dir_path_num_only, '--name', self.name,
+                            '--num_proc', str(self.num_proc),
                             '--data_sheet', data_sheet_file_path, '--distance_method', 'braycurtis']
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()

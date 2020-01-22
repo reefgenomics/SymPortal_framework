@@ -62,6 +62,8 @@ class DataLoading:
         if self.datasheet_path:
             self._generate_stability_file_and_data_set_sample_objects_with_datasheet()
         else:
+            # Dictionary where sample name is value and seq file full paths in fwd, rev order are in list
+            self.sample_name_to_seq_files_dict = dict()
             self._generate_stability_file_and_data_set_sample_objects_without_datasheet(end_index)
         self.list_of_dss_objects = DataSetSample.objects.filter(data_submission_from=self.dataset_object)
         self.output_path_list = []
@@ -693,15 +695,23 @@ class DataLoading:
                 # then we can break out of the search
                 if fwd_file_path and rev_file_path:
                     break
-            # Change the current paths so that they don't originate from the temp_working_directory
-            # path but rather from the temp working directory
-            fwd_file_path = os.path.join(self.temp_working_directory, ntpath.basename(fwd_file_path))
-            rev_file_path = os.path.join(self.temp_working_directory, ntpath.basename(rev_file_path))
-            temp_list.append(fwd_file_path)
-            temp_list.append(rev_file_path)
-            if None in temp_list:
-                raise RuntimeError(f'Error in deducing directionality of {sample_name}')
-            sample_fastq_pairs.append('\t'.join(temp_list))
+            # Only add the files to the sample_fastq_pairs if they are above the minium size requirement
+            # Check that both files meet the required minimum file size
+            if os.path.getsize(fwd_file_path) > 300 and os.path.getsize(rev_file_path) > 300:
+                # If so, add them to the dictionary
+                self.sample_name_to_seq_files_dict[sample_name] = [fwd_file_path, rev_file_path]
+                # Change the current paths so that they don't originate from the temp_working_directory
+                # path but rather from the temp working directory
+                fwd_file_path = os.path.join(self.temp_working_directory, ntpath.basename(fwd_file_path))
+                rev_file_path = os.path.join(self.temp_working_directory, ntpath.basename(rev_file_path))
+                temp_list.append(fwd_file_path)
+                temp_list.append(rev_file_path)
+                if None in temp_list:
+                    raise RuntimeError(f'Error in deducing directionality of {sample_name}')
+                sample_fastq_pairs.append('\t'.join(temp_list))
+        # Reinit the list_of_samples_names so from the sample_name_to_seq_files_dict so that
+        # the samples that had files that were below the 300 byte size threshold are removed form the list
+        self.list_of_samples_names = list(self.sample_name_to_seq_files_dict.keys())
         write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
 
@@ -1110,8 +1120,11 @@ class DataLoading:
         If filenames are given in the datasheet then convert these to full paths
         before checking for their existence. This way, all locations of seq files
         are full paths.
+        Also check for size of file and require a 300B minimum. Remove from the sample from the data sheet if
+        smaller than this.
         """
         file_not_found_list = []
+        rows_to_drop = []
         for df_ind in self.sample_meta_info_df.index.values.tolist():
             fwd_file = self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name']
             rev_file = self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name']
@@ -1132,6 +1145,7 @@ class DataLoading:
                 # used a .fastq extension. If this is the case. Correct in the df.
                 if os.path.exists(fwd_file_path + '.gz'):
                     self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name'] = fwd_file_path + '.gz'
+                    fwd_file_path = self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name']
                 else:
                     file_not_found_list.append(fwd_file_path)
             # Check for rev read
@@ -1140,8 +1154,18 @@ class DataLoading:
                 # used a .fastq extension. If this is the case. Correct in the df.
                 if os.path.exists(rev_file_path + '.gz'):
                     self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name'] = rev_file_path + '.gz'
+                    rev_file_path = self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name']
                 else:
                     file_not_found_list.append(rev_file_path)
+
+            # Check file size
+            if os.path.getsize(fwd_file_path) < 300 or os.path.getsize(rev_file_path) < 300:
+                print(f'WARNING: At least one of the seq files for sample {df_ind} is less than 300 bytes in size')
+                print(f'{df_ind} will be removed from your datasheet and analysis')
+                rows_to_drop.append(df_ind)
+
+        # drop the rows that had size violations
+        self.sample_meta_info_df.drop(index=rows_to_drop, inplace=True)
 
         if file_not_found_list:
             print('Some of the sequencing files listed in your datasheet cannot be found:')
@@ -1210,14 +1234,9 @@ class DataLoading:
                             self.temp_working_directory)
         else:
             # If not working from datasheet then we transfer over all files of the right extension
-            list_of_files_in_user_input_dir = return_list_of_file_paths_in_directory(self.user_input_path)
-            count = 0
-            for file_path in list_of_files_in_user_input_dir:
-                if 'fastq' in file_path or 'fq' in file_path:
-                        count += 1
-                        shutil.copy(file_path, self.temp_working_directory)
-            if count < 2:
-                raise RuntimeError(f'{count} files to analyse found in the target directory')
+            for file_path, fwd_rev_list in self.sample_name_to_seq_files_dict.items():
+                shutil.copy(fwd_rev_list[0], self.temp_working_directory)
+                shutil.copy(fwd_rev_list[1], self.temp_working_directory)
 
     def _determine_if_single_file_or_paired_input(self):
         for file in os.listdir(self.user_input_path):
