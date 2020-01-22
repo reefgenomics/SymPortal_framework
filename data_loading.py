@@ -1525,7 +1525,7 @@ class InitialMothurWorker:
 
 
     def log_qc_error_and_continue(self, errorreason):
-        print('Error in processing sample: {}'.format(self.sample_name))
+        print('{}: Error in processing sample'.format(self.sample_name))
         self.dss_att_holder.unique_num_sym_seqs = 0
         self.dss_att_holder.absolute_num_sym_seqs = 0
         self.dss_att_holder.initial_processing_complete = True

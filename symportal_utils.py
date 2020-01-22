@@ -751,7 +751,7 @@ class MothurAnalysis:
             write_list_to_destination(self.pcr_oligo_file_path, oligo_file)
 
     def _pcr_validate_attributes_are_set(self):
-        sys.stdout.write(f'\nValidating PCR attributes are set\n')
+        sys.stdout.write(f'\n{self.name}: Validating PCR attributes are set\n')
         if self.fasta_path is None:
             raise RuntimeError('Fasta_path is None. A valid fasta_path is required to perform the pcr method.')
         if self.pcr_fwd_primer is None or self.pcr_rev_primer is None:
@@ -761,7 +761,7 @@ class MothurAnalysis:
                 raise RuntimeError('Please set fwd_primer.')
             elif self.pcr_rev_primer is None:
                 raise RuntimeError('Please set fwd_primer.')
-        sys.stdout.write(f'\nPCR attributes: OK\n')
+        sys.stdout.write(f'\n{self.name}: PCR attributes: OK\n')
 
 
 class SequenceCollection:
