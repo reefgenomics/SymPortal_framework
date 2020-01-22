@@ -709,6 +709,9 @@ class DataLoading:
                 if None in temp_list:
                     raise RuntimeError(f'Error in deducing directionality of {sample_name}')
                 sample_fastq_pairs.append('\t'.join(temp_list))
+            else:
+                print(f'WARNING: At least one of the seq files for sample {sample_name} is less than 300 bytes in size')
+                print(f'{sample_name} will not be included in the dataloading')
         # Reinit the list_of_samples_names so from the sample_name_to_seq_files_dict so that
         # the samples that had files that were below the 300 byte size threshold are removed form the list
         self.list_of_samples_names = list(self.sample_name_to_seq_files_dict.keys())
