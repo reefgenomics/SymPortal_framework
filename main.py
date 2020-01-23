@@ -140,6 +140,9 @@ class SymPortalWorkFlowManager:
                                   "distances. It will have no effect when calculating between sample distances. "
                                   "[False]",
                              action='store_true', default=False)
+        parser.add_argument('--no_pre_med_seqs',
+                            help="When passed, DataSetSampleSequencePM objects will not be created"
+                                 "[False]", action='store_true', default=False)
 
     def _define_mutually_exclusive_args(self, group):
         group.add_argument(
@@ -289,7 +292,8 @@ class SymPortalWorkFlowManager:
         self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(
             output_directory=self.output_seq_count_table_obj.output_dir,
             seq_relative_abund_count_table_path_post_med=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
-            date_time_str=self.output_seq_count_table_obj.date_time_str, seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
+            no_pre_med_seqs=self.args.no_pre_med_seqs, date_time_str=self.output_seq_count_table_obj.date_time_str,
+            seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
     def _plot_type_stacked_bar_from_type_output_table(self):
@@ -372,7 +376,6 @@ class SymPortalWorkFlowManager:
         self.number_of_samples = len(self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output)
 
         if not self.args.no_figures:
-            #
             self._plot_if_not_too_many_samples(self._plot_type_stacked_bar_from_type_output_table)
 
             self._plot_if_not_too_many_samples(self._plot_sequence_stacked_bar_with_ordered_dss_uids_from_type_output)
@@ -386,7 +389,8 @@ class SymPortalWorkFlowManager:
             output_directory=self.output_seq_count_table_obj.output_dir,
             seq_relative_abund_count_table_path_post_med=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
             ordered_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            date_time_str=self.output_seq_count_table_obj.date_time_str, seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
+            no_pre_med_seqs=self.args.no_pre_med_seqs, date_time_str=self.output_seq_count_table_obj.date_time_str,
+            seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
     def _do_data_analysis_ordinations(self):
@@ -461,6 +465,7 @@ class SymPortalWorkFlowManager:
             call_type='analysis',
             num_proc=self.args.num_proc,
             symportal_root_dir=self.symportal_root_directory,
+            no_pre_med_seqs=self.args.no_pre_med_seqs,
             ds_uids_output_str=self.data_analysis_object.list_of_data_set_uids,
             output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
@@ -499,7 +504,7 @@ class SymPortalWorkFlowManager:
             parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
-            debug=self.args.debug, no_sqrt_transf=self.args.no_sqrt)
+            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, no_sqrt_transf=self.args.no_sqrt)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given(self):
@@ -535,6 +540,7 @@ class SymPortalWorkFlowManager:
     def _stand_alone_sequence_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
+            no_pre_med_seqs=self.args.no_pre_med_seqs,
             ds_uids_output_str=self.args.print_output_seqs,
             num_proc=self.args.num_proc, output_dir=self.output_dir, date_time_str=self.date_time_str,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
@@ -543,6 +549,7 @@ class SymPortalWorkFlowManager:
     def _stand_alone_sequence_output_data_set_sample(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='stand_alone',
+            no_pre_med_seqs=self.args.no_pre_med_seqs,
             dss_uids_output_str=self.args.print_output_seqs_sample_set,
             num_proc=self.args.num_proc, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
             output_dir=self.output_dir, date_time_str=self.date_time_str)
@@ -576,6 +583,7 @@ class SymPortalWorkFlowManager:
             call_type='analysis',
             num_proc=self.args.num_proc,
             symportal_root_dir=self.symportal_root_directory,
+            no_pre_med_seqs=self.args.no_pre_med_seqs,
             ds_uids_output_str=self.args.print_output_types,
             output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
@@ -588,6 +596,7 @@ class SymPortalWorkFlowManager:
             call_type='analysis',
             num_proc=self.args.num_proc,
             symportal_root_dir=self.symportal_root_directory,
+            no_pre_med_seqs=self.args.no_pre_med_seqs,
             dss_uids_output_str=self.args.print_output_types_sample_set,
             output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,

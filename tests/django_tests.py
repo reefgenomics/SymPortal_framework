@@ -39,6 +39,17 @@ class SPIntegrativeTestingJSONOnly(TransactionTestCase):
         test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
         test_spwfm.start_work_flow()
 
+    def test_data_loading_work_flow_no_pre_med_seqs(self):
+        print('\n\nTesting: data_loading_work_flow\n\n')
+        custom_args_list = ['--load', self.test_data_dir_path_lite, '--name', self.name, '--num_proc', str(self.num_proc),
+                            '--data_sheet', self.data_sheet_file_path_lite, '--no_pre_med_seqs']
+        test_spwfm = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm.start_work_flow()
+        custom_args_list = ['--analyse', f'{str(test_spwfm.data_set_object.id)}', '--name', self.name,
+                            '--num_proc', str(self.num_proc)]
+        test_spwfm_0 = main.SymPortalWorkFlowManager(custom_args_list)
+        test_spwfm_0.start_work_flow()
+
     def test_data_loading_work_flow_no_output(self):
         print('\n\nTesting: data_loading_work_flow_no_output\n\n')
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc),

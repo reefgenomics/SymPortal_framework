@@ -13,6 +13,7 @@ import sp_config
 import virtual_objects
 import general
 import plotting
+from exceptions import NoDataSetSampleSequencePMObjects
 
 
 class OutputTypeCountTable:
@@ -865,7 +866,8 @@ class SequenceCountTableCreator:
     Either way, after initial init, we will work on a sample by sample basis.
     """
     def __init__(
-            self, symportal_root_dir, call_type, num_proc, html_dir, js_output_path_dict, date_time_str, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
+            self, symportal_root_dir, call_type, num_proc, html_dir, js_output_path_dict, date_time_str,
+            no_pre_med_seqs, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
             sorted_sample_uid_list=None, analysis_obj=None):
         self._init_core_vars(
             symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
@@ -881,9 +883,12 @@ class SequenceCountTableCreator:
         # variables to hold sample uid orders for the js output
         self.profile_based_sample_ordered_uids = None
         self.similarity_based_sample_ordered_uids = None
+        # False by default. If true do not output premed seq info
+        self.no_pre_med_seqs = no_pre_med_seqs
 
 
-    def _init_core_vars(self, symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
+    def _init_core_vars(self, symportal_root_dir, analysis_obj, call_type, dss_uids_output_str,
+                        ds_uids_output_str, num_proc,
                         output_dir, sorted_sample_uid_list, date_time_str, html_dir):
         self._check_either_dss_or_dsss_uids_provided(dss_uids_output_str, ds_uids_output_str)
         if dss_uids_output_str:
@@ -1093,7 +1098,15 @@ class SequenceCountTableCreator:
 
     def make_seq_output_tables(self):
         self._make_output_tables_post_med()
-        self._make_output_tables_pre_med()
+        if not self.no_pre_med_seqs:
+            try:
+                self._make_output_tables_pre_med()
+            except NoDataSetSampleSequencePMObjects:
+                print('\n There were no DataSetSampleSequencePM objects detected for one of the samples'
+                      ' so we will assume that these objects were not generated during data loading. As such,'
+                      ' there will be no pre med sequence outputs.')
+        else:
+            print('\n\nPre med sequence objects not generatred. Skipping output.\n\n')
 
     def _make_output_tables_post_med(self):
         print('\n\nOutputting sequence abundance count tables\n')
@@ -1904,6 +1917,16 @@ class SequenceCountTableCreator:
                 sys.stdout.write(f'\rcounting pre-MED sequences for {dss_obj.name}: {count} out of {num_samples} samples')
                 self.sample_uid_to_name_dict[dss_obj.id] = dss_obj.name
                 dsspm_objs_of_sample = DataSetSampleSequencePM.objects.filter(data_set_sample_from=dss_obj)
+                dss_objs_of_sample = DataSetSampleSequence.objects.filter(data_set_sample_from=dss_obj)
+                # Check to see that there are DataSetSampleSequencePM associated with the sample
+                # If there are no sequenecs associated with the sample, then we will assume that
+                # DataSetSampleSequencePM objects were not generated during the loading of this dataset
+                # and we will raise a NoDataSetSampleSequencePMObjects exception that will allow us to skip generation
+                # of this output.
+                # Also check that there are data set sample sequences. Else there could be no DataSetSamplePM objects
+                # due to the fact that there were no symbiodiniaceae sequences in this sample.
+                if len(dsspm_objs_of_sample) < 1 and len(dss_objs_of_sample) > 1:
+                    raise NoDataSetSampleSequencePMObjects(f'No DataSetSampleSequence objects found')
                 # total_seqs = dss_obj.non_sym_absolute_num_seqs
                 sample_temp_abundance_dict = {}
                 for dsspm_obj in dsspm_objs_of_sample:

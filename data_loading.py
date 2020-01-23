@@ -30,7 +30,7 @@ class DataLoading:
 
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, debug=False, no_sqrt_transf=False):
+            distance_method, no_pre_med_seqs, debug=False, no_sqrt_transf=False):
         self.parent = parent_work_flow_obj
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
@@ -71,6 +71,7 @@ class DataLoading:
         self.no_ord = no_ord
         self.no_output = no_output
         self.distance_method = distance_method
+        self.no_pre_med_seqs = no_pre_med_seqs
         # this is the path of the file we will use to deposit a backup copy of the reference sequences
         self.seq_dump_file_path = self._setup_sequence_dump_file_path()
         self.dataset_object.working_directory = self.temp_working_directory
@@ -78,6 +79,7 @@ class DataLoading:
         # This is the directory that sequences that have undergone QC for each sample will be written out as
         # .names and .fasta pairs BEFORE MED decomposition
         # We will delete the directory if it already exists
+
         self.pre_med_sequence_output_directory_path = self._create_pre_med_write_out_directory_path()
         self.num_proc = num_proc
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
@@ -156,8 +158,10 @@ class DataLoading:
         self._do_med_decomposition()
 
         self._create_data_set_sample_sequences_from_med_nodes()
-
-        self._create_data_set_sample_sequence_pre_med_objs()
+        if not self.no_pre_med_seqs:
+            self._create_data_set_sample_sequence_pre_med_objs()
+        else:
+            print('\n\nSkipping generation of pre med seq objects at users request\n\n')
 
         self._print_sample_successful_or_failed_summary()
 
@@ -204,8 +208,9 @@ class DataLoading:
         self.parent.data_set_object = self.dataset_object
 
     def _write_sym_non_sym_and_size_violation_dirs_to_stdout(self):
-        print(f'\nPre-MED Symbiodiniaceae sequences written out to:\n'
-              f'{self.pre_med_sequence_output_directory_path}')
+        if not self.no_pre_med_seqs:
+            print(f'\nPre-MED Symbiodiniaceae sequences written out to:\n'
+                  f'{self.pre_med_sequence_output_directory_path}')
         print(f'\nNon-Symbiodiniaceae and size violation sequences written out to:\n'
               f'{self.non_symb_and_size_violation_base_dir_path}')
 
@@ -276,7 +281,7 @@ class DataLoading:
                 self.seq_stacked_bar_plotter = SeqStackedBarPlotter(
                     output_directory=self.output_directory,
                     seq_relative_abund_count_table_path_post_med=self.seq_abundance_relative_output_path_post_med,
-                    date_time_str=self.date_time_str,
+                    no_pre_med_seqs=self.no_pre_med_seqs, date_time_str=self.date_time_str,
                     seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med)
                 self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
@@ -285,7 +290,7 @@ class DataLoading:
         sys.stdout.write('\nGenerating count tables for post- and pre-MED sequence abundances\n')
         self.sequence_count_table_creator = SequenceCountTableCreator(
             symportal_root_dir=self.symportal_root_directory, call_type='submission',
-            ds_uids_output_str=str(self.dataset_object.id),
+            no_pre_med_seqs=self.no_pre_med_seqs, ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, date_time_str=self.date_time_str,
             html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
@@ -2610,7 +2615,11 @@ class DataSetSampleSequencePMCreator:
         return general.return_list_of_directory_paths_in_directory(self.parent.pre_med_sequence_output_directory_path)
 
     def make_data_set_sample_pm_objects(self):
+        num_samples_to_process = len(self.list_of_pre_med_sample_dirs)
+        count = 0
         for sample_pm_dir in self.list_of_pre_med_sample_dirs:
+            count += 1
+            print(f'processing sample {count} of {num_samples_to_process}')
             # get list of the fasta files (one per clade) that we will need to process
             # we can deduce the .names file from the fasta file simply by changing the extension
             sample_list_of_fasta_file_paths = [f_path for f_path in general.return_list_of_file_paths_in_directory(sample_pm_dir) if '.fasta' in f_path]

@@ -457,7 +457,7 @@ class SeqStackedBarPlotter():
     """Class for plotting the sequence count table output"""
     def __init__(
             self, seq_relative_abund_count_table_path_post_med, seq_relative_abund_df_pre_med, output_directory,
-            date_time_str=None, ordered_sample_uid_list=None):
+            no_pre_med_seqs, date_time_str=None, ordered_sample_uid_list=None):
         self.seq_relative_abund_count_table_path_post_med = seq_relative_abund_count_table_path_post_med
         self.seq_relative_abund_df_pre_med = seq_relative_abund_df_pre_med
         self.root_output_directory = output_directory
@@ -484,10 +484,13 @@ class SeqStackedBarPlotter():
         # we add  1 to the n_subplots here for the legend at the bottom
         self.f, self.axarr = plt.subplots(self.number_of_subplots + 1, 1, figsize=(10, 3 * self.number_of_subplots))
         self.output_path_list = []
+        self.no_pre_med_seqs = no_pre_med_seqs
 
     def plot_stacked_bar_seqs(self):
         self._plot_stacked_bar_seqs_post_med()
-        self._plot_stacked_bar_seqs_pre_med()
+        if not self.no_pre_med_seqs:
+            if self.seq_relative_abund_df_pre_med: # This will be None if the premed seq output was not done.
+                self._plot_stacked_bar_seqs_pre_med()
 
     def _plot_stacked_bar_seqs_post_med(self):
         print('\n\nPlotting sequence abundances')
