@@ -17,6 +17,7 @@ class DataSet(models.Model):
     submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
     working_directory = models.CharField(max_length=300, default='None')
     time_stamp = models.CharField(max_length=100, default='None')
+    loading_complete_time_stamp = models.CharField(max_length=100, default='None')
 
     def __str__(self):
         return self.name
@@ -88,6 +89,7 @@ class DataAnalysis(models.Model):
     time_stamp = models.CharField(max_length=100, default='None')
     submitting_user = models.CharField(max_length=100, default='no_user_defined')
     submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
+    analysis_complete_time_stamp = models.CharField(max_length=100, default='None')
 
     def get_clade_collections(self):
         list_of_uids = [int(x) for x in self.list_of_data_set_uids.split(',')]

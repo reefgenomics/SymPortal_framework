@@ -191,6 +191,13 @@ class DataLoading:
                 [{'function_name': 'getDataFilePaths', 'python_obj': new_dict}],
                 js_outpath=self.js_file_path)
 
+        print('\n\nDATA LOADING COMPLETE')
+        print(f'DataSet id: {self.dataset_object.id}')
+        print(f'DataSet name: {self.dataset_object.name}')
+        self.dataset_object.loading_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.dataset_object.save()
+        print(f'DataSet loading_complete_time_stamp: {self.dataset_object.loading_complete_time_stamp}\n\n\n')
+
     def _check_mothur_version(self):
         mothur_version_cmd = subprocess.run(
             ['mothur', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE

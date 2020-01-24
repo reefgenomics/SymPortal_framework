@@ -347,10 +347,17 @@ class SymPortalWorkFlowManager:
             # here output the js_output_path item for the DataExplorer
             self._output_js_output_path_dict()
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: {self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
+            self.data_analysis_object.loading_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
+            self.data_analysis_object.save()
+            print(f'DataSet analysis_complete_time_stamp: {self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
 
         else:
             print('\nOutputs skipped at user\'s request\n')
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: {self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
+            self.data_analysis_object.loading_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':',
+                                                                                                                  '-')
+            self.data_analysis_object.save()
+            print(f'DataSet analysis_complete_time_stamp: {self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
 
     def _output_js_output_path_dict(self):
         """Out put the dict that holds the output files so that we can list them in the DataExplorer"""
