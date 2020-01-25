@@ -330,7 +330,7 @@ class SymPortalWorkFlowManager:
     # DATA ANALYSIS
     def _perform_data_analysis(self):
 
-        self._verify_name_arg_given()
+        self._verify_name_arg_given_analysis()
         self.create_new_data_analysis_obj()
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
@@ -358,6 +358,10 @@ class SymPortalWorkFlowManager:
                                                                                                                   '-')
             self.data_analysis_object.save()
             print(f'DataSet analysis_complete_time_stamp: {self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
+
+    def _verify_name_arg_given_analysis(self):
+        if self.args.name == 'noName':
+            sys.exit('Please provide a name using --name')
 
     def _output_js_output_path_dict(self):
         """Out put the dict that holds the output files so that we can list them in the DataExplorer"""
@@ -503,7 +507,7 @@ class SymPortalWorkFlowManager:
 
     # DATA LOADING
     def perform_data_loading(self):
-        self._verify_name_arg_given()
+        self._verify_name_arg_given_load()
         self._execute_data_loading()
 
     def _execute_data_loading(self):
@@ -514,7 +518,7 @@ class SymPortalWorkFlowManager:
             no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, no_sqrt_transf=self.args.no_sqrt)
         self.data_loading_object.load_data()
 
-    def _verify_name_arg_given(self):
+    def _verify_name_arg_given_load(self):
         """If no name arg is provided use the folder name of the self.args.load argument"""
         if self.args.name == 'noName':
             if self.args.load.endswith('/'):
