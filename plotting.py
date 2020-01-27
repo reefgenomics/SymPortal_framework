@@ -489,7 +489,7 @@ class SeqStackedBarPlotter():
     def plot_stacked_bar_seqs(self):
         self._plot_stacked_bar_seqs_post_med()
         if not self.no_pre_med_seqs:
-            if self.seq_relative_abund_df_pre_med: # This will be None if the premed seq output was not done.
+            if self.seq_relative_abund_df_pre_med is not None: # This will be None if the premed seq output was not done.
                 self._plot_stacked_bar_seqs_pre_med()
 
     def _plot_stacked_bar_seqs_post_med(self):
