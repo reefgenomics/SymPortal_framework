@@ -268,8 +268,8 @@ class OutputTypeCountTable:
             profile_meta_dict[k]['genera'] = genera_annotation_dict[prof_meta_only.at[k, 'Clade']]
             profile_meta_dict[k]['maj_its2_seq'] = prof_meta_only.at[k, 'Majority ITS2 sequence']
             profile_meta_dict[k]['assoc_species'] = prof_meta_only.at[k, 'Associated species']
-            profile_meta_dict[k]['local_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance local']
-            profile_meta_dict[k]['db_abund'] = prof_meta_only.at[k, 'ITS2 profile abundance DB']
+            profile_meta_dict[k]['local_abund'] = str(prof_meta_only.at[k, 'ITS2 profile abundance local'])
+            profile_meta_dict[k]['db_abund'] = str(prof_meta_only.at[k, 'ITS2 profile abundance DB'])
             profile_meta_dict[k]['seq_uids'] = prof_meta_only.at[k, 'Sequence accession / SymPortal UID']
             profile_meta_dict[k]['seq_abund_string'] = prof_meta_only.at[
                 k, 'Average defining sequence proportions and [stdev]']
