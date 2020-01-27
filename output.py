@@ -1317,7 +1317,8 @@ class SequenceCountTableCreator:
         js_file_path = os.path.join(self.html_dir, 'study_data.js')
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataPostMEDBySample', 'python_obj': post_med_rect_dict},
-             {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs}],
+             {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
+             {'function_name': 'getSeqColorPostMED', 'python_obj': seq_colour_dict}],
             js_outpath=js_file_path)
 
     def _populate_post_med_rect_dict(self, post_med_rect_dict, sorted_seq_names):
