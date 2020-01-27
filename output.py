@@ -363,6 +363,11 @@ class OutputTypeCountTable:
         profile_meta_only.to_csv(self.path_to_absolute_count_table_profiles_meta_only, sep="\t", header=True,
                                  index=False)
         print(self.path_to_absolute_count_table_profiles_meta_only)
+        # Make cols numerical
+        profile_meta_only['ITS2 profile abundance local'] = profile_meta_only['ITS2 profile abundance local'].astype(
+            int)
+        profile_meta_only['ITS2 profile abundance DB'] = profile_meta_only['ITS2 profile abundance DB'].astype(
+            int)
         return profile_meta_only
 
     def _write_out_abund_only_dfs_profiles(self):
