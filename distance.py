@@ -246,7 +246,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self.output_path_list.extend([clade_dist_file_path, clade_pcoa_file_path])
 
             self.js_output_path_dict[f"btwn_profile_unifrac_{clade_in_question}_dist"] = clade_dist_file_path
-            self.js_output_path_dict[f"btwn_profile_unifrac_{clade_in_question}_pcoa"] = clade_dist_file_path
+            self.js_output_path_dict[f"btwn_profile_unifrac_{clade_in_question}_pcoa"] = clade_pcoa_file_path
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
