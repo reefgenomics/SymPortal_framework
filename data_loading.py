@@ -21,6 +21,7 @@ import ntpath
 import re
 import math
 from numpy import NaN
+from collections import defaultdict
 
 
 class DataLoading:
@@ -1304,6 +1305,145 @@ class DataLoading:
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)
         os.makedirs(self.temp_working_directory)
+
+class FastDataSetSampleSequencePMCreator:
+    #TODO work with the ref_seq_uid_to_ref_seq_name_dicts on a cladal level
+    # TODO do the matching on a cladal level.
+    def __init__(self, pre_med_sequence_output_directory_path, dataset_object):
+        # dictionaries to save us having to do lots of database look ups
+        self.pre_med_sequence_output_directory_path = pre_med_sequence_output_directory_path
+        self.dataset_object = dataset_object
+        self.ref_seq_uid_to_ref_seq_name_dict = {
+            ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
+        self.ref_seq_sequence_to_ref_seq_id_dict = {
+            ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
+        self.list_of_pre_med_sample_dirs = self._populate_list_of_pre_med_sample_dirs()
+        # This is a dict that will have three levels.
+        # The first set of keys will be the clades.
+        # The second set of keys will be nucleotide sequences
+        # The third set of keys will be DataSetSample objects and the
+        # absolute abundnace of the sequence as the value.
+        self.consolidated_sequence_to_sample_and_abund_dict = dict()
+        self._populated_consolidated_seq_to_sample_and_abund_dict()
+        # Now work through the consolidated dictionary matching sequences to reference sequences
+        # sequences for which reference sequences have been found will be represented in a new dictionary
+        # for which the key will be a reference sequence object that the match was found and the value
+        # will be the same dict value that was in the original consolidated dicitonary
+        # If a match is not found, then move these sequences into a second dictionary for the non matches
+        # This is the dictionary where the matched sequence info will go
+        self.ref_seq_match_obj_to_seq_sample_abundance_dict = dict()
+        # This is the dictionary where the non matched sequences will be put
+        self.no_match_consolidated_seq_to_sample_and_abund_dict = dict()
+        self._associate_pre_med_sequences_to_ref_seq_objs()
+
+    def _associate_pre_med_sequences_to_ref_seq_objs(self):
+        for clade, seq_dict in self.consolidated_sequence_to_sample_and_abund_dict.items():
+            for nuc_seq_obj in seq_dict.keys():
+                if not self._assign_node_sequence_to_existing_ref_seq(nuc_seq_obj):
+                    self._assign_nuc_seq_obj_to_new_ref_seq_obj(nuc_seq_obj)
+
+    def _assign_node_sequence_to_existing_ref_seq(self, nuc_seq_obj):
+        """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
+        This takes into account whether the seq_in_q could be a subset or super set of one of the
+        ref_seq.sequences.
+        Will return false if no ref_seq match is found
+        """
+        if self._nuc_seq_obj_exactly_matches_reference_sequence_sequence(nuc_seq_obj):
+            return self._associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(nuc_seq_obj)
+        elif self._nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(nuc_seq_obj):
+            # This was a seq shorter than refseq but we can associate
+            return self._associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(nuc_seq_obj)
+        else:
+            return self._search_for_super_set_match_and_associate_if_found_else_return_false(
+                nuc_seq_obj)
+
+
+    def _nuc_seq_obj_exactly_matches_reference_sequence_sequence(self, nuc_seq_obj):
+        return nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(self, nuc_seq_obj):
+        self.nuc_sequence_name_to_ref_seq_id_dict[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            nuc_seq_obj.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict[nuc_seq_obj.sequence]]
+        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
+        return True
+
+    def _print_succesful_association_details_to_stdout(
+            self, nuc_seq_obj, name_of_reference_sequence):
+        sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade '
+                         f'{self.current_pre_med_sample_seq_collection.clade}: '
+                         f'Assigning pre-MED sequence {nuc_seq_obj.name} '
+                         f'to existing reference sequence {name_of_reference_sequence}')
+
+    def _nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(self, nuc_seq_obj):
+        return 'A' + nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+
+    def _associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(self, nuc_seq_obj):
+        self.nuc_sequence_name_to_ref_seq_id_dict[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            'A' + nuc_seq_obj.sequence]
+        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+            self.ref_seq_sequence_to_ref_seq_id_dict['A' + nuc_seq_obj.sequence]]
+        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
+        return True
+
+    def _search_for_super_set_match_and_associate_if_found_else_return_false(self, nuc_seq_obj):
+        # or if the seq in question is bigger than a refseq sequence and is a super set of it
+        # In either of these cases we should consider this a match and use the refseq matched to.
+        # This might be very coputationally expensive but lets give it a go
+        for ref_seq_sequence in self.ref_seq_sequence_to_ref_seq_id_dict.keys():
+            if nuc_seq_obj.sequence in ref_seq_sequence or \
+                    ref_seq_sequence in nuc_seq_obj.sequence:
+                # Then this is a match
+                self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = \
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
+                name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
+                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]]
+                self._print_succesful_association_details_to_stdout(nuc_seq_obj,
+                                                                    name_of_reference_sequence)
+                return True
+        return False
+
+    def _populate_list_of_pre_med_sample_dirs(self):
+        return general.return_list_of_directory_paths_in_directory(
+            self.pre_med_sequence_output_directory_path)
+
+    def _populated_consolidated_seq_to_sample_and_abund_dict(self):
+        """Go through the list_of_pre_med_sample_dirs. There will be one per sample.
+        Get the list of sequences and their abundances using the fasta a name file pairs.
+        Get the sample from the fasta name. Get the current dictionary represented by the sequence key
+        and add the sample in question-abunance k, v pairing to it. Then move on to next sample."""
+        count = 0
+        num_samples_to_process = len(self.list_of_pre_med_sample_dirs)
+        for sample_pm_dir in self.list_of_pre_med_sample_dirs:
+            count += 1
+            print(f'processing sample {count} of {num_samples_to_process}')
+            current_dss_obj = None
+            # get list of the fasta files (one per clade) that we will need to process
+            # we can deduce the .names file from the fasta file simply by changing the extension
+            sample_list_of_fasta_file_paths = [
+                f_path for f_path in general.return_list_of_file_paths_in_directory(sample_pm_dir) if
+                '.fasta' in f_path]
+            for f_path in sample_list_of_fasta_file_paths:
+                fasta_dict = general.create_dict_from_fasta(fasta_path=f_path)
+                names_dict = general.create_seq_name_to_abundance_dict_from_name_file(
+                    name_file_path=f_path.replace('.fasta', '.names'))
+                clade = f_path.split('/')[-1].split('_')[3]
+                # we only need to get the datasetsample object if we haven't already
+                if current_dss_obj is None:
+                    sample_name = '_'.join(f_path.split('/')[-1].split('_')[4:]).replace('.fasta', '')
+                    current_dss_obj = DataSetSample.objects.get(
+                        data_submission_from=self.dataset_object, name=sample_name)
+                # Check to see whether a dictionary entry already exists for this clade
+                # and if not create a default dict to use
+                if clade not in self.consolidated_sequence_to_sample_and_abund_dict.keys():
+                    self.consolidated_sequence_to_sample_and_abund_dict[clade] = defaultdict(dict)
+                # for each sequence of the fasta log it in the consolidated dictionary
+                clade_dict_to_add_to = self.consolidated_sequence_to_sample_and_abund_dict[clade]
+                for seq_name, seq_seq in fasta_dict.items():
+                    clade_dict_to_add_to[seq_seq][current_dss_obj] = names_dict[seq_name]
 
 class DSSAttributeAssignmentHolder:
     """
