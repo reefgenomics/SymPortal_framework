@@ -1336,85 +1336,6 @@ class FastDataSetSampleSequencePMCreator:
         self.no_match_consolidated_seq_to_sample_and_abund_dict = defaultdict(dict)
         self._associate_pre_med_sequences_to_ref_seq_objs()
 
-    def _associate_pre_med_sequences_to_ref_seq_objs(self):
-        print('Processing pre-MED seqs for each clade')
-        for clade, seq_dict in self.consolidated_sequence_to_sample_and_abund_dict.items():
-            print(f'Processing clade {clade}')
-            seq_matcher = self.SeqMatcher(
-                clade=clade, seq_dict=seq_dict, rs_dict=self.ref_seq_sequence_to_ref_seq_obj_dict[clade],
-                match_dict=self.ref_seq_match_obj_to_seq_sample_abundance_dict[clade],
-                non_match_dict=self.no_match_consolidated_seq_to_sample_and_abund_dict[clade]
-            )
-            seq_matcher.match_and_make_ref_seqs()
-
-
-    def _assign_sequence_to_existing_ref_seq(self, nuc_seq, clade):
-        """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
-        This takes into account whether the seq_in_q could be a subset or super set of one of the
-        ref_seq.sequences.
-        Will return false if no ref_seq match is found
-        """
-
-
-
-        if self._nuc_seq_obj_exactly_matches_reference_sequence_sequence(nuc_seq_obj):
-            return self._associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(nuc_seq_obj)
-        elif self._nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(nuc_seq_obj):
-            # This was a seq shorter than refseq but we can associate
-            return self._associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(nuc_seq_obj)
-        else:
-            return self._search_for_super_set_match_and_associate_if_found_else_return_false(
-                nuc_seq_obj)
-
-
-    def _nuc_seq_obj_exactly_matches_reference_sequence_sequence(self, nuc_seq_obj):
-        return nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_obj_dict
-
-    def _associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(self, nuc_seq_obj):
-        self.nuc_sequence_name_to_ref_seq_id_dict[
-            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_obj_dict[
-            nuc_seq_obj.sequence]
-        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
-            self.ref_seq_sequence_to_ref_seq_obj_dict[nuc_seq_obj.sequence]]
-        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
-        return True
-
-    def _print_succesful_association_details_to_stdout(
-            self, nuc_seq_obj, name_of_reference_sequence):
-        sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade '
-                         f'{self.current_pre_med_sample_seq_collection.clade}: '
-                         f'Assigning pre-MED sequence {nuc_seq_obj.name} '
-                         f'to existing reference sequence {name_of_reference_sequence}')
-
-    def _nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(self, nuc_seq_obj):
-        return 'A' + nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_obj_dict
-
-    def _associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(self, nuc_seq_obj):
-        self.nuc_sequence_name_to_ref_seq_id_dict[
-            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_obj_dict[
-            'A' + nuc_seq_obj.sequence]
-        name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
-            self.ref_seq_sequence_to_ref_seq_obj_dict['A' + nuc_seq_obj.sequence]]
-        self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
-        return True
-
-    def _search_for_super_set_match_and_associate_if_found_else_return_false(self, nuc_seq_obj):
-        # or if the seq in question is bigger than a refseq sequence and is a super set of it
-        # In either of these cases we should consider this a match and use the refseq matched to.
-        # This might be very coputationally expensive but lets give it a go
-        for ref_seq_sequence in self.ref_seq_sequence_to_ref_seq_obj_dict.keys():
-            if nuc_seq_obj.sequence in ref_seq_sequence or \
-                    ref_seq_sequence in nuc_seq_obj.sequence:
-                # Then this is a match
-                self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = \
-                    self.ref_seq_sequence_to_ref_seq_obj_dict[ref_seq_sequence]
-                name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
-                    self.ref_seq_sequence_to_ref_seq_obj_dict[ref_seq_sequence]]
-                self._print_succesful_association_details_to_stdout(nuc_seq_obj,
-                                                                    name_of_reference_sequence)
-                return True
-        return False
-
     def _populate_list_of_pre_med_sample_dirs(self):
         return general.return_list_of_directory_paths_in_directory(
             self.pre_med_sequence_output_directory_path)
@@ -1455,6 +1376,17 @@ class FastDataSetSampleSequencePMCreator:
                 clade_dict_to_add_to = self.consolidated_sequence_to_sample_and_abund_dict[clade]
                 for seq_name, seq_seq in fasta_dict.items():
                     clade_dict_to_add_to[seq_seq][current_dss_obj] = names_dict[seq_name]
+
+    def _associate_pre_med_sequences_to_ref_seq_objs(self):
+        print('Processing pre-MED seqs for each clade')
+        for clade, seq_dict in self.consolidated_sequence_to_sample_and_abund_dict.items():
+            print(f'Processing clade {clade}')
+            seq_matcher = self.SeqMatcher(
+                clade=clade, seq_dict=seq_dict, rs_dict=self.ref_seq_sequence_to_ref_seq_obj_dict[clade],
+                match_dict=self.ref_seq_match_obj_to_seq_sample_abundance_dict[clade],
+                non_match_dict=self.no_match_consolidated_seq_to_sample_and_abund_dict[clade]
+            )
+            seq_matcher.match_and_make_ref_seqs()
 
     class SeqMatcher:
         def __init__(self, clade, rs_dict, seq_dict, match_dict, non_match_dict):
