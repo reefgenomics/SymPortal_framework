@@ -1406,8 +1406,6 @@ class FastDataSetSampleSequencePMCreator:
             self.non_match_dict = non_match_dict
             # The consolidation path that we will follow to consolidate the non refseq match sequences
             self.consolidation_path_list = []
-            # The dictionary that will hold the non-match sequences that have been consolidated
-            self.non_match_consolidated_dict = {}
 
         def match_and_make_ref_seqs(self):
             self._assign_sequence_to_match_or_non_match_dicts()
@@ -1532,10 +1530,15 @@ class FastDataSetSampleSequencePMCreator:
             # len of the longest element
             finish_n = len(seq_list[-1])
             # Go from smallest n to largest n-1
+            print('Making consolidation path for non-ReferenceSequence matching sequences')
             for n in range(start_n, finish_n):
                 small_query_seqs = [seq for seq in seq_list if len(seq) == n]
                 super_seqs = [seq for seq in seq_list if len(seq) > n]
+                count = 0
+                tot = len(small_query_seqs)
                 for q_seq in small_query_seqs:
+                    count += 1
+                    sys.stdout.write(f'\rseq {count} out of {tot} for level n={n} of {finish_n}')
                     matches = []
                     for super_seq in super_seqs:
                         if (q_seq in super_seq) or ('A' + q_seq in super_seq):
@@ -1566,7 +1569,7 @@ class FastDataSetSampleSequencePMCreator:
                 for dss_obj, abundance in small_seq_dict.items():
                     try:
                         # If the DataSetSample object is in both dicts, then combine the abundances
-                        # and a sincle k, v pair of the DataSetSample object and new abunance
+                        # and a single k, v pair of the DataSetSample object and new abunance
                         # to the match dict
                         new_abund = super_seq_dict[dss_obj] + abundance
                         new_combined_dict[dss_obj] = new_abund
@@ -1575,11 +1578,12 @@ class FastDataSetSampleSequencePMCreator:
                         # add the current k, v pair
                         new_combined_dict[dss_obj] = abundance
 
-                # finally we will need to add the k,v pairs in the current_match_dict
-                self.non_match_consolidated_dict[super_seq] = {
+                # finally update the k,v dict for the super_seq and delete the entry for the
+                self.non_match_dict[super_seq] = {
                     **new_combined_dict,
-                    **{k: v for k, v in super_seq_dict if k not in small_seq_dict}
+                    **{k: v for k, v in super_seq_dict.items() if k not in small_seq_dict}
                 }
+                del self.non_match_dict[small_seq]
 
         def _make_new_reference_sequences_and_populate_match_dict(self, testing=True):
             """Here we are going to make reference sequences for the non_match representative sequences.
@@ -1597,17 +1601,18 @@ class FastDataSetSampleSequencePMCreator:
             if testing:
                 # first sanity check to see that non of the consolidated sequences fit into any of the other
                 # consolidated sequences
-                for seq_one, seq_two in itertools.combinations(self.non_match_consolidated_dict.keys(), 2):
+                for seq_one, seq_two in itertools.combinations(self.non_match_dict.keys(), 2):
                     if (seq_one in seq_two) or (seq_two in seq_one) or ('A' + seq_one in seq_two) or ('A' + seq_two in seq_one):
                         raise RuntimeError('Consolidated sequences can be further consolidated')
 
             # For each consolidated sequences, create a ReferenceSequence after checking to see that the sequence
             # does not already fit into one of the
-            for c_seq in self.non_match_consolidated_dict.keys():
+            new_ref_seq_count = 0
+            for c_seq in self.non_match_dict.keys():
                 if testing:
-                    if (c_seq in self.rs_dict()) or ('A' + c_seq in c_seq):
+                    if (c_seq in self.rs_dict) or ('A' + c_seq in self.rs_dict):
                         raise RuntimeError(
-                            'Consolidated sequenecs is already found in the ReferenceSequence object collection')
+                            'Consolidated sequence is already found in the ReferenceSequence object collection')
                     for rs_seq in self.rs_dict.keys():
                         if (c_seq in rs_seq) or (rs_seq in c_seq):
                             raise RuntimeError(
@@ -1617,7 +1622,9 @@ class FastDataSetSampleSequencePMCreator:
                 # add the reference sequence object as the representative to the match dict
                 new_reference_sequence_obj = ReferenceSequence(clade=self.clade, sequence=c_seq)
                 new_reference_sequence_obj.save()
-                self.match_dict[new_reference_sequence_obj] = self.non_match_consolidated_dict[c_seq]
+                self.match_dict[new_reference_sequence_obj] = self.non_match_dict[c_seq]
+                new_ref_seq_count += 1
+            print(f'{new_ref_seq_count} new ReferenceSequence objects were created for clade {self.clade}')
 
         def _create_data_set_sample_sequence_pm_objects(self):
             """Finally now that we have a reference sqeuence object representing
@@ -1630,6 +1637,7 @@ class FastDataSetSampleSequencePMCreator:
                                                     abundance=abundance,
                                                     data_set_sample_from=dss_obj)
                     data_set_sample_sequence_pre_med_list.append(dsspm)
+            print(f'Creating {len(data_set_sample_sequence_pre_med_list)} new DataSetSampleSequencePM objects for clade {self.clade}')
             DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
 
 class DSSAttributeAssignmentHolder:
