@@ -376,11 +376,11 @@ class VirutalAnalysisTypeInit:
         basal_set = set()
         found_c15_a = False
         for rs in self.vat.footprint_as_ref_seq_objs_set:
-            if rs.name == 'C3':
+            if str(rs) == 'C3':
                 basal_set.add('C3')
-            elif rs.name == 'C1':
+            elif str(rs) == 'C1':
                 basal_set.add('C1')
-            elif 'C15' in rs.name and not found_c15_a:
+            elif 'C15' in str(rs) and not found_c15_a:
                 basal_set.add('C15')
                 found_c15_a = True
 
@@ -402,7 +402,7 @@ class VirutalAnalysisTypeInit:
                     if ref_seq.id == ref_seq_id:
                         ordered_list_of_co_dom_ref_seq_obj.append(ref_seq)
 
-            co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
+            co_dom_name_part = '/'.join(str(rs) for rs in ordered_list_of_co_dom_ref_seq_obj)
 
             list_of_remaining_ref_seq_objs = []
             for ref_seq_id in list(at_df):
@@ -411,7 +411,7 @@ class VirutalAnalysisTypeInit:
                         list_of_remaining_ref_seq_objs.append(ref_seq)
 
             if list_of_remaining_ref_seq_objs:
-                co_dom_name_part += '-{}'.format('-'.join([rs.name for rs in list_of_remaining_ref_seq_objs]))
+                co_dom_name_part += '-{}'.format('-'.join([str(rs) for rs in list_of_remaining_ref_seq_objs]))
             self.vat.name = co_dom_name_part
         else:
             ordered_list_of_ref_seqs = []
@@ -661,7 +661,7 @@ class VirtualAnalysisTypeManager():
                             ordered_list_of_co_dom_ref_seq_obj.append(ref_seq)
 
                 if not use_rs_ids_rather_than_names:
-                    co_dom_name_part = '/'.join(rs.name for rs in ordered_list_of_co_dom_ref_seq_obj)
+                    co_dom_name_part = '/'.join(str(rs) for rs in ordered_list_of_co_dom_ref_seq_obj)
                 else:
                     co_dom_name_part = '/'.join(str(rs.id) for rs in ordered_list_of_co_dom_ref_seq_obj)
 
@@ -673,7 +673,7 @@ class VirtualAnalysisTypeManager():
 
                 if list_of_remaining_ref_seq_objs:
                     if not use_rs_ids_rather_than_names:
-                        co_dom_name_part += '-{}'.format('-'.join([rs.name for rs in list_of_remaining_ref_seq_objs]))
+                        co_dom_name_part += '-{}'.format('-'.join([str(rs) for rs in list_of_remaining_ref_seq_objs]))
                         self.name = co_dom_name_part
                         return co_dom_name_part
                     else:

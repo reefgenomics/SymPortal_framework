@@ -1936,7 +1936,7 @@ class SequenceCountTableCreator:
                 # total_seqs = dss_obj.non_sym_absolute_num_seqs
                 sample_temp_abundance_dict = {}
                 for dsspm_obj in dsspm_objs_of_sample:
-                    if dsspm_obj.reference_sequence_of.name not in self.master_fasta_dict:
+                    if str(dsspm_obj.reference_sequence_of) not in self.master_fasta_dict:
                         self.master_fasta_dict[str(dsspm_obj.reference_sequence_of)] = dsspm_obj.reference_sequence_of.sequence
                     sample_temp_abundance_dict[str(dsspm_obj.reference_sequence_of)] = dsspm_obj.abundance
                     self.master_sequence_count_dict[str(dsspm_obj.reference_sequence_of)] += dsspm_obj.abundance / dss_obj.absolute_num_sym_seqs
@@ -1972,7 +1972,7 @@ class SequenceCountTableCollectAbundanceHandler:
         self.input_dss_mp_queue = Queue()
         self._populate_input_dss_mp_queue()
         self.ref_seq_names_clade_annotated = [
-        ref_seq.name if ref_seq.has_name else str(ref_seq.id) + '_{}'.format(ref_seq.clade) for
+        ref_seq.name if ref_seq.has_name else str(ref_seq) for
             ref_seq in self.seq_count_table_creator.ref_seqs_in_datasets]
 
         # We were previously creating an MP dictionary for every proc used. We were then collecting them afterwards
@@ -2096,7 +2096,7 @@ class SequenceCountTableCollectAbundanceWorker:
             clade_summary_relative_dict[
                 dsss.reference_sequence_of.clade] += dsss.abundance / self.total_abundance_of_sequences_in_sample
         else:
-            name_unit = dsss.reference_sequence_of.name
+            name_unit = str(dsss.reference_sequence_of)
         return name_unit
 
     def _generate_empty_seq_name_to_abund_dicts(self):

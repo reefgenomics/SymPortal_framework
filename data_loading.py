@@ -22,6 +22,7 @@ import re
 import math
 from numpy import NaN
 from collections import defaultdict
+import itertools
 
 
 class DataLoading:
@@ -1313,10 +1314,8 @@ class FastDataSetSampleSequencePMCreator:
         # dictionaries to save us having to do lots of database look ups
         self.pre_med_sequence_output_directory_path = pre_med_sequence_output_directory_path
         self.dataset_object = dataset_object
-        self.ref_seq_uid_to_ref_seq_name_dict = {
-            ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
-        self.ref_seq_sequence_to_ref_seq_id_dict = {
-            ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
+        self.ref_seq_sequence_to_ref_seq_obj_dict = {
+            ref_seq.sequence: ref_seq for ref_seq in ReferenceSequence.objects.all()}
         self.list_of_pre_med_sample_dirs = self._populate_list_of_pre_med_sample_dirs()
         # This is a dict that will have three levels.
         # The first set of keys will be the clades.
@@ -1331,23 +1330,33 @@ class FastDataSetSampleSequencePMCreator:
         # will be the same dict value that was in the original consolidated dicitonary
         # If a match is not found, then move these sequences into a second dictionary for the non matches
         # This is the dictionary where the matched sequence info will go
-        self.ref_seq_match_obj_to_seq_sample_abundance_dict = dict()
+        # Each of these two dictionaries will be set within a layer of clade keys
+        self.ref_seq_match_obj_to_seq_sample_abundance_dict = defaultdict(dict)
         # This is the dictionary where the non matched sequences will be put
-        self.no_match_consolidated_seq_to_sample_and_abund_dict = dict()
+        self.no_match_consolidated_seq_to_sample_and_abund_dict = defaultdict(dict)
         self._associate_pre_med_sequences_to_ref_seq_objs()
 
     def _associate_pre_med_sequences_to_ref_seq_objs(self):
+        print('Processing pre-MED seqs for each clade')
         for clade, seq_dict in self.consolidated_sequence_to_sample_and_abund_dict.items():
-            for nuc_seq_obj in seq_dict.keys():
-                if not self._assign_node_sequence_to_existing_ref_seq(nuc_seq_obj):
-                    self._assign_nuc_seq_obj_to_new_ref_seq_obj(nuc_seq_obj)
+            print(f'Processing clade {clade}')
+            seq_matcher = self.SeqMatcher(
+                clade=clade, seq_dict=seq_dict, rs_dict=self.ref_seq_sequence_to_ref_seq_obj_dict[clade],
+                match_dict=self.ref_seq_match_obj_to_seq_sample_abundance_dict[clade],
+                non_match_dict=self.no_match_consolidated_seq_to_sample_and_abund_dict[clade]
+            )
+            seq_matcher.match_and_make_ref_seqs()
 
-    def _assign_node_sequence_to_existing_ref_seq(self, nuc_seq_obj):
+
+    def _assign_sequence_to_existing_ref_seq(self, nuc_seq, clade):
         """ We use this to look to see if there is an equivalent ref_seq Sequence for the sequence in question
         This takes into account whether the seq_in_q could be a subset or super set of one of the
         ref_seq.sequences.
         Will return false if no ref_seq match is found
         """
+
+
+
         if self._nuc_seq_obj_exactly_matches_reference_sequence_sequence(nuc_seq_obj):
             return self._associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(nuc_seq_obj)
         elif self._nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(nuc_seq_obj):
@@ -1359,14 +1368,14 @@ class FastDataSetSampleSequencePMCreator:
 
 
     def _nuc_seq_obj_exactly_matches_reference_sequence_sequence(self, nuc_seq_obj):
-        return nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+        return nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_obj_dict
 
     def _associate_nuc_seq_to_ref_seq_by_exact_match_and_return_true(self, nuc_seq_obj):
         self.nuc_sequence_name_to_ref_seq_id_dict[
-            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_obj_dict[
             nuc_seq_obj.sequence]
         name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
-            self.ref_seq_sequence_to_ref_seq_id_dict[nuc_seq_obj.sequence]]
+            self.ref_seq_sequence_to_ref_seq_obj_dict[nuc_seq_obj.sequence]]
         self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
         return True
 
@@ -1378,14 +1387,14 @@ class FastDataSetSampleSequencePMCreator:
                          f'to existing reference sequence {name_of_reference_sequence}')
 
     def _nuc_seq_obj_matches_reference_sequence_sequence_plus_adenine(self, nuc_seq_obj):
-        return 'A' + nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_id_dict
+        return 'A' + nuc_seq_obj.sequence in self.ref_seq_sequence_to_ref_seq_obj_dict
 
     def _associate_nuc_seq_to_ref_seq_by_adenine_match_and_return_true(self, nuc_seq_obj):
         self.nuc_sequence_name_to_ref_seq_id_dict[
-            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_id_dict[
+            nuc_seq_obj.name] = self.ref_seq_sequence_to_ref_seq_obj_dict[
             'A' + nuc_seq_obj.sequence]
         name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
-            self.ref_seq_sequence_to_ref_seq_id_dict['A' + nuc_seq_obj.sequence]]
+            self.ref_seq_sequence_to_ref_seq_obj_dict['A' + nuc_seq_obj.sequence]]
         self._print_succesful_association_details_to_stdout(nuc_seq_obj, name_of_reference_sequence)
         return True
 
@@ -1393,14 +1402,14 @@ class FastDataSetSampleSequencePMCreator:
         # or if the seq in question is bigger than a refseq sequence and is a super set of it
         # In either of these cases we should consider this a match and use the refseq matched to.
         # This might be very coputationally expensive but lets give it a go
-        for ref_seq_sequence in self.ref_seq_sequence_to_ref_seq_id_dict.keys():
+        for ref_seq_sequence in self.ref_seq_sequence_to_ref_seq_obj_dict.keys():
             if nuc_seq_obj.sequence in ref_seq_sequence or \
                     ref_seq_sequence in nuc_seq_obj.sequence:
                 # Then this is a match
                 self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = \
-                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]
+                    self.ref_seq_sequence_to_ref_seq_obj_dict[ref_seq_sequence]
                 name_of_reference_sequence = self.ref_seq_uid_to_ref_seq_name_dict[
-                    self.ref_seq_sequence_to_ref_seq_id_dict[ref_seq_sequence]]
+                    self.ref_seq_sequence_to_ref_seq_obj_dict[ref_seq_sequence]]
                 self._print_succesful_association_details_to_stdout(nuc_seq_obj,
                                                                     name_of_reference_sequence)
                 return True
@@ -1412,14 +1421,16 @@ class FastDataSetSampleSequencePMCreator:
 
     def _populated_consolidated_seq_to_sample_and_abund_dict(self):
         """Go through the list_of_pre_med_sample_dirs. There will be one per sample.
-        Get the list of sequences and their abundances using the fasta a name file pairs.
+        Get the list of sequences and their abundances using the fasta and name file pairs.
         Get the sample from the fasta name. Get the current dictionary represented by the sequence key
         and add the sample in question-abunance k, v pairing to it. Then move on to next sample."""
         count = 0
         num_samples_to_process = len(self.list_of_pre_med_sample_dirs)
+        print('Populating the consolidated sequence to sample and abundance dictionary\n'
+              'for pre-MED sequence processing')
         for sample_pm_dir in self.list_of_pre_med_sample_dirs:
             count += 1
-            print(f'processing sample {count} of {num_samples_to_process}')
+            print(f'Processing pre-MED seqs for sample {count} of {num_samples_to_process}')
             current_dss_obj = None
             # get list of the fasta files (one per clade) that we will need to process
             # we can deduce the .names file from the fasta file simply by changing the extension
@@ -1444,6 +1455,242 @@ class FastDataSetSampleSequencePMCreator:
                 clade_dict_to_add_to = self.consolidated_sequence_to_sample_and_abund_dict[clade]
                 for seq_name, seq_seq in fasta_dict.items():
                     clade_dict_to_add_to[seq_seq][current_dss_obj] = names_dict[seq_name]
+
+    class SeqMatcher:
+        def __init__(self, clade, rs_dict, seq_dict, match_dict, non_match_dict):
+            # The current clade we are working with
+            self.clade = clade
+            # Dict of nucleotide sequence to ref seq obj for all ref seq objs of this clade
+            self.rs_dict = rs_dict
+            # dict of sequences as keys and dictionaries as value where dict
+            # is DataSetSample object as key and the absolute abundance of the sequence as value
+            self.seq_dict = seq_dict
+            # This dict will be ref seq object to the DataSetSample abundance info from self.seq_dict
+            self.match_dict = match_dict
+            # This dict will be the same structure as self.seq_dict but for the no matches
+            self.non_match_dict = non_match_dict
+            # The consolidation path that we will follow to consolidate the non refseq match sequences
+            self.consolidation_path_list = []
+            # The dictionary that will hold the non-match sequences that have been consolidated
+            self.non_match_consolidated_dict = {}
+
+        def match_and_make_ref_seqs(self):
+            self._assign_sequence_to_match_or_non_match_dicts()
+            self._consolidate_non_match_seqs()
+            self._make_new_reference_sequences_and_populate_match_dict()
+            self._create_data_set_sample_sequence_pm_objects()
+
+        def _assign_sequence_to_match_or_non_match_dicts(self):
+            """Here we go through each of the sequences for the given clade and attempt to match them
+            to a ReferenceSequence object either through an exact match of the sequences, the sequence + A or
+            as a sub or super set match. If we find a match then we use the matching ReferenceSequence object
+            as key and the original value dictionary containing the information about DataSetSample and abundance
+            as the value. If we are unable to find a match then we add the information to the non_match dictionary
+            that we will consolidate the subset and superset matches in the next step of processing.
+
+            TODO we should be able to multiprocess this if we are careful. We can split up the list of nuc_seqs
+            and give copies of the ReferenceSequences to each process. We can then carefully merge the resulting
+            match dictionaries taking into account the need to check when merging the same ReferenceSequence
+            representatives that they may contain the same DataSetSample objects and the abundances will need to
+            be summed for these.
+            """
+            print('Attempting to match sequences to ReferenceSequence objects')
+            count = 0
+            tot = len(self.seq_dict.keys())
+            match_count = 0
+            non_match_count = 0
+            for nuc_seq in self.seq_dict.keys():
+                count += 1
+                sys.stdout.write(f'\rsequence {count} out of {tot}: match {match_count}; no-match {non_match_count}')
+                matching_ref_seq_obj = None
+                try:
+                    # Try to match the exact sequence
+                    matching_ref_seq_obj = self.rs_dict[nuc_seq]
+                except KeyError:
+                    try:
+                        # If no exact match found look for a match plus the adenine
+                        matching_ref_seq_obj = self.rs_dict['A' + nuc_seq.sequence]
+                    except KeyError:
+                        # Finally try to find a super or sub match
+                        for rs_seq, rs_obj in self.rs_dict.items():
+                            if nuc_seq in rs_seq or rs_seq in nuc_seq:
+                                # Then this is a match
+                                matching_ref_seq_obj = rs_obj
+                                # Check to see if the rs_obj is already representing in the match
+                                # dict, and if so combine the value dictionaries
+                                try:
+                                    # We need to be careful here as it could be that the same DataSetSample
+                                    # object could have had both sequenecs that we are dealing with here.
+                                    # In this case we will need to add together the abundance for that sample
+                                    current_match_dict = self.match_dict[rs_obj]
+                                    seq_dict_to_add = self.seq_dict[nuc_seq]
+                                    new_combined_dict = dict()
+                                    for dss_obj, abundance in seq_dict_to_add.items():
+                                        try:
+                                            # If the DataSetSample object is in both dicts, then combine the abundances
+                                            # and a sincle k, v pair of the DataSetSample object and new abunance
+                                            # to the match dict
+                                            new_abund = current_match_dict[dss_obj] + abundance
+                                            new_combined_dict[dss_obj] = new_abund
+                                        except KeyError:
+                                            # If the DataSetSample objects is not in both dicts then simply
+                                            # add the current k, v pair
+                                            new_combined_dict[dss_obj] = abundance
+                                    # finally we will need to add the k,v pairs in the current_match_dict
+                                    self.match_dict[rs_obj] = {
+                                        **new_combined_dict,
+                                        **{k:v for k, v in current_match_dict if k not in seq_dict_to_add}
+                                    }
+                                except KeyError:
+                                    # If the rs_obj is not already representing then we can simply
+                                    # add the seq_dict info as the value to the rs_obj key in the match dict
+                                    self.match_dict[rs_obj] = self.seq_dict[nuc_seq]
+                                break
+                finally:
+                    # If no match found add to non_matching dict
+                    if matching_ref_seq_obj is None:
+                        self.non_match_dict[nuc_seq] = self.seq_dict[nuc_seq]
+                        non_match_count += 1
+                    else:
+                        match_count += 1
+
+        def _consolidate_non_match_seqs(self):
+            """Here we are going to make what I am calling a consolidation path.
+            This path will be a list of tuples in a particular order so that we can consolidate
+            the non_match sequences into via super and sub set matches. I.e. consolidating the
+            DataSetSample and abundance information of shorter sequences
+            with the corresponding information for those sequences that are supersets of the short sequences.
+            We will only be doing this for the non_match dictionary as the matched dictionary has already taken
+            subsets and supersets into account.
+
+            To do this we will go in order of the shortest sequences first (n) and for each of these
+            sequences search through all of the sequences that are larger than them for a superset match.
+            We will also search for a match of the sequence + A.
+            A short sequence may match multiple longer sequences. We will chose to match the longer sequence
+            that is associated with the greaterst number of DataSetSample objects.
+            To associate a match we will create a tuple of the sequence and its match.
+            When we have created all of these matches we will then be able to follow this path of tuples
+            to do the consolidation.
+
+            TODO this should be multiprocessable. We can give copies of the dictionaries and assign different n
+            values to each of the threads. We can then put together the list of tuples for each n in order of asscending
+            n values to create the consolidation path."""
+
+            self._make_consolidation_path()
+
+            # At this point we have the consolidation_path_list populated
+            # We can now follow this path and create a new dictionary which has the representative sequences
+            self._consolidate_non_match_seqs_using_consolidation_path()
+
+            # At this point we have a
+
+        def _make_consolidation_path(self):
+            # First get a list of the sequences to work with sorted by order of length
+            seq_list = sorted(list(self.non_match_dict.keys()), key=len)
+            # len of the shortest element
+            start_n = len(seq_list[0])
+            # len of the longest element
+            finish_n = len(seq_list[-1])
+            # Go from smallest n to largest n-1
+            for n in range(start_n, finish_n):
+                small_query_seqs = [seq for seq in seq_list if len(seq) == n]
+                super_seqs = [seq for seq in seq_list if len(seq) > n]
+                for q_seq in small_query_seqs:
+                    matches = []
+                    for super_seq in super_seqs:
+                        if (q_seq in super_seq) or ('A' + q_seq in super_seq):
+                            matches.append(super_seq)
+                    if matches:
+                        if len(matches) > 1:
+                            # Here we create a list of tuples where the match sequence and the number of
+                            # DataSetSamples that contained that sample.
+                            # We then sort it according to the number of DataSetSamples
+                            # so that we can get the sequences that was found in the maximum number of DataSetSamples
+                            # Finally, we use this sequences as the consolidation representative for the
+                            # consolidation path
+                            representative_seq = sorted(
+                                [(match_seq, len(self.non_match_dict[match_seq].keys())) for match_seq in matches],
+                                key=lambda x: x[1], reverse=True)[0][0]
+                            self.consolidation_path_list.append((q_seq, representative_seq))
+                        else:
+                            self.consolidation_path_list.append((q_seq, matches[0]))
+                    else:
+                        # If there are no matches then there is no entry required in the consolidation path
+                        pass
+
+        def _consolidate_non_match_seqs_using_consolidation_path(self):
+            for small_seq, super_seq in self.consolidation_path_list:
+                small_seq_dict = self.non_match_dict[small_seq]
+                super_seq_dict = self.non_match_dict[super_seq]
+                new_combined_dict = dict()
+                for dss_obj, abundance in small_seq_dict.items():
+                    try:
+                        # If the DataSetSample object is in both dicts, then combine the abundances
+                        # and a sincle k, v pair of the DataSetSample object and new abunance
+                        # to the match dict
+                        new_abund = super_seq_dict[dss_obj] + abundance
+                        new_combined_dict[dss_obj] = new_abund
+                    except KeyError:
+                        # If the DataSetSample objects is not in both dicts then simply
+                        # add the current k, v pair
+                        new_combined_dict[dss_obj] = abundance
+
+                # finally we will need to add the k,v pairs in the current_match_dict
+                self.non_match_consolidated_dict[super_seq] = {
+                    **new_combined_dict,
+                    **{k: v for k, v in super_seq_dict if k not in small_seq_dict}
+                }
+
+        def _make_new_reference_sequences_and_populate_match_dict(self, testing=True):
+            """Here we are going to make reference sequences for the non_match representative sequences.
+            Essentially we want to end up with the same dictionary that we have for the match sequences,
+            i.e. a reference sequence representing the DataSetSample and abundance information so that we can
+            evenutally get to the business of creating the DataSetSampleSequencePM objects.
+
+            We will make implement a santiy check at this point that can be removed once we have completed testing
+            This will check to make sure that none of the seqeunces of the reference sequences we are about to make
+            match or fit into any of the existing reference sequences. We will also check that none of the sequences
+            match of fit into any of the other sequences. This will be very slow but worth the price considering
+            that we don't want to pollute the referenceSequence pool of the database.
+            """
+
+            if testing:
+                # first sanity check to see that non of the consolidated sequences fit into any of the other
+                # consolidated sequences
+                for seq_one, seq_two in itertools.combinations(self.non_match_consolidated_dict.keys(), 2):
+                    if (seq_one in seq_two) or (seq_two in seq_one) or ('A' + seq_one in seq_two) or ('A' + seq_two in seq_one):
+                        raise RuntimeError('Consolidated sequences can be further consolidated')
+
+            # For each consolidated sequences, create a ReferenceSequence after checking to see that the sequence
+            # does not already fit into one of the
+            for c_seq in self.non_match_consolidated_dict.keys():
+                if testing:
+                    if (c_seq in self.rs_dict()) or ('A' + c_seq in c_seq):
+                        raise RuntimeError(
+                            'Consolidated sequenecs is already found in the ReferenceSequence object collection')
+                    for rs_seq in self.rs_dict.keys():
+                        if (c_seq in rs_seq) or (rs_seq in c_seq):
+                            raise RuntimeError(
+                                'Consolidated sequence is already found in the ReferenceSequence object collection')
+                # Create the new reference sequence. Unfortunately creating the reference squences one by one
+                # will likely slow us down quite a lot but I see know way around it given that we need to associate
+                # add the reference sequence object as the representative to the match dict
+                new_reference_sequence_obj = ReferenceSequence(clade=self.clade, sequence=c_seq)
+                new_reference_sequence_obj.save()
+                self.match_dict[new_reference_sequence_obj] = self.non_match_consolidated_dict[c_seq]
+
+        def _create_data_set_sample_sequence_pm_objects(self):
+            """Finally now that we have a reference sqeuence object representing
+            each of the initial sequences that were found in the DataSetSample objects
+            we can create the DataSetSamplePM objects."""
+            data_set_sample_sequence_pre_med_list = []
+            for rs_rep_obj, dss_abund_dict in self.match_dict.items():
+                for dss_obj, abundance in dss_abund_dict.items():
+                    dsspm = DataSetSampleSequencePM(reference_sequence_of=rs_rep_obj,
+                                                    abundance=abundance,
+                                                    data_set_sample_from=dss_obj)
+                    data_set_sample_sequence_pre_med_list.append(dsspm)
+            DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
 
 class DSSAttributeAssignmentHolder:
     """
@@ -2699,15 +2946,13 @@ class DataSetSampleSequenceCreatorWorker:
     def _assign_node_sequence_to_new_ref_seq(self, node_nucleotide_sequence_object):
         new_ref_seq = ReferenceSequence(clade=self.clade, sequence=node_nucleotide_sequence_object.sequence)
         new_ref_seq.save()
-        new_ref_seq.name = str(new_ref_seq.id)
-        new_ref_seq.save()
         self.ref_seq_sequence_to_ref_seq_id_dict[new_ref_seq.sequence] = new_ref_seq.id
         self.node_sequence_name_to_ref_seq_id[node_nucleotide_sequence_object.name] = new_ref_seq.id
-        self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
+        self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = str(new_ref_seq)
 
         sys.stdout.write(f'\r{self.sample_name} clade {self.clade}: '
                          f'Assigning MED node {node_nucleotide_sequence_object.name} '
-                         f'to new reference sequence {new_ref_seq.name}')
+                         f'to new reference sequence {str(new_ref_seq)}')
 
 
 class DataSetSampleCreatorHandler:
@@ -2716,7 +2961,7 @@ class DataSetSampleCreatorHandler:
     def __init__(self):
         # dictionaries to save us having to do lots of database look ups
         self.ref_seq_uid_to_ref_seq_name_dict = {
-            ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
+            ref_seq.id: str(ref_seq) for ref_seq in ReferenceSequence.objects.all()}
         self.ref_seq_sequence_to_ref_seq_id_dict = {
             ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
 
@@ -2751,7 +2996,7 @@ class DataSetSampleSequencePMCreator:
         # dictionaries to save us having to do lots of database look ups
         self.parent = parent
         self.ref_seq_uid_to_ref_seq_name_dict = {
-            ref_seq.id: ref_seq.name for ref_seq in ReferenceSequence.objects.all()}
+            ref_seq.id: str(ref_seq) for ref_seq in ReferenceSequence.objects.all()}
         self.ref_seq_sequence_to_ref_seq_id_dict = {
             ref_seq.sequence: ref_seq.id for ref_seq in ReferenceSequence.objects.all()}
         self.list_of_pre_med_sample_dirs = self._populate_list_of_pre_med_sample_dirs()
@@ -2923,15 +3168,13 @@ class DataSetSampleSequencePMCreator:
     def _assign_nuc_seq_obj_to_new_ref_seq_obj(self, nuc_seq_obj):
         new_ref_seq = ReferenceSequence(clade=self.current_pre_med_sample_seq_collection.clade, sequence=nuc_seq_obj.sequence)
         new_ref_seq.save()
-        new_ref_seq.name = str(new_ref_seq.id)
-        new_ref_seq.save()
         self.ref_seq_sequence_to_ref_seq_id_dict[new_ref_seq.sequence] = new_ref_seq.id
         self.nuc_sequence_name_to_ref_seq_id_dict[nuc_seq_obj.name] = new_ref_seq.id
-        self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = new_ref_seq.name
+        self.ref_seq_uid_to_ref_seq_name_dict[new_ref_seq.id] = str(new_ref_seq)
 
         sys.stdout.write(f'\r{self.current_pre_med_sample_seq_collection.sample_name} clade {self.current_pre_med_sample_seq_collection.clade}: '
                          f'Assigning pre-MED seq {nuc_seq_obj.name} '
-                         f'to new reference sequence {new_ref_seq.name}')
+                         f'to new reference sequence {str(new_ref_seq)}')
 
     class PreMEDSampleSeqCollection:
         def __init__(self, clade, fasta_dict, names_dict, sample_name):
