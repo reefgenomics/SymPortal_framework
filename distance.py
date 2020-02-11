@@ -1142,7 +1142,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def __init__(
             self, js_output_path_dict, html_dir, output_dir, date_time_str=None,
             data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None,  no_sqrt_transf=True):
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None):
         super().__init__(
             call_type=call_type, date_time_str=date_time_str,
             profiles_or_samples='samples', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
@@ -1155,7 +1155,6 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
         self.output_dir = os.path.join(output_dir, 'between_sample_distances')
         os.makedirs(self.output_dir, exist_ok=True)
-        self.no_sqrt_transf = no_sqrt_transf
 
 
     def _chunk_query_set_cc_list_from_dss_uids(self):
@@ -1172,36 +1171,57 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             if len(self.objs_of_clade) < 2:
                 continue
             self._init_clade_dirs_and_paths(clade_in_question)
-            self._create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(dss_obj_to_cct_obj_dict)
-            self._compute_braycurtis_btwn_obj_pairs()
-            self._generate_distance_file()
-            self._add_obj_uids_to_dist_file_and_write()
-            pcoa_coords_df = self._compute_pcoa_coords(clade=clade_in_question)
-            self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
+            self._create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(dss_obj_to_cct_obj_dict, sqrt=True)
+            self._create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(dss_obj_to_cct_obj_dict, sqrt=False)
+            self._compute_braycurtis_btwn_obj_pairs(sqrt=True)
+            self._compute_braycurtis_btwn_obj_pairs(sqrt=False)
+            self._generate_distance_file(sqrt=True)
+            self._generate_distance_file(sqrt=False)
+            self._add_obj_uids_to_dist_file_and_write(sqrt=True)
+            self._add_obj_uids_to_dist_file_and_write(sqrt=False)
+            pcoa_coords_df_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=True)
+            pcoa_coords_df_no_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=False)
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df_sqrt, sqrt=True)
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df_no_sqrt, sqrt=False)
             self._append_output_files_to_output_list()
-            self.js_output_path_dict[f"btwn_sample_braycurtis_{clade_in_question}_dist"] = self.clade_dist_file_path
-            self.js_output_path_dict[f"btwn_sample_braycurtis_{clade_in_question}_pcoa"] =  self.clade_pcoa_coord_file_path
+            self.js_output_path_dict[
+                f"btwn_sample_braycurtis_{clade_in_question}_dist_sqrt"] = self.clade_dist_file_path_sqrt
+            self.js_output_path_dict[
+                f"btwn_sample_braycurtis_{clade_in_question}_pcoa_sqrt"] =  self.clade_pcoa_coord_file_path_sqrt
+            self.js_output_path_dict[
+                f"btwn_sample_braycurtis_{clade_in_question}_dist_no_sqrt"] = self.clade_dist_file_path_no_sqrt
+            self.js_output_path_dict[
+                f"btwn_sample_braycurtis_{clade_in_question}_pcoa_no_sqrt"] = self.clade_pcoa_coord_file_path_no_sqrt
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
 
     def _write_out_js_objects(self):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name': 'getBtwnSampleDistCoordsBC', 'python_obj': self.pc_coordinates_dict},
-             {'function_name': 'getBtwnSampleDistPCVariancesBC', 'python_obj': self.pc_variances_dict},
-             {'function_name': 'getBtwnSampleDistPCAvailableBC', 'python_obj': self.pc_availabaility_dict}],
+            [{'function_name': 'getBtwnSampleDistCoordsBCSqrt', 'python_obj': self.pc_coordinates_dict_sqrt},
+             {'function_name': 'getBtwnSampleDistPCVariancesBCSqrt', 'python_obj': self.pc_variances_dict_sqrt},
+             {'function_name': 'getBtwnSampleDistPCAvailableBCSqrt', 'python_obj': self.pc_availabaility_dict_sqrt},
+             {'function_name': 'getBtwnSampleDistCoordsBCNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
+             {'function_name': 'getBtwnSampleDistPCVariancesBCNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
+             {'function_name': 'getBtwnSampleDistPCAvailableBCNoSqrt', 'python_obj': self.pc_availabaility_dict_no_sqrt}
+             ],
             js_outpath=self.js_file_path)
 
-    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
+    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df, sqrt):
         # set the variance dict
         # and set the available pcs
         pcoa_coords_df.set_index('sample_uid', drop=True, inplace=True)
         available_pcs = list(pcoa_coords_df)
         if len(available_pcs) > 6:
             available_pcs = available_pcs[:6]
-        self.pc_availabaility_dict[self.genera_annotation_dict[clade_in_question]] = available_pcs
-        variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
-        self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
+        if sqrt:
+            self.pc_availabaility_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
+            variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+            self.pc_variances_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
+        else:
+            self.pc_availabaility_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
+            variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+            self.pc_variances_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
         for sample_uid in pcoa_coords_df.index.values.tolist()[:-1]:
@@ -1209,16 +1229,23 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             for pc in available_pcs:
                 sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
             genera_pc_coords_dict[int(sample_uid)] = sample_pc_coords_dict
-        self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+        if sqrt:
+            self.self.pc_coordinates_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+        else:
+            self.pc_coordinates_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
 
     def _init_clade_dirs_and_paths(self, clade_in_question):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
-        self.clade_dist_file_path = os.path.join(
-            self.clade_output_dir, f'{self.date_time_str}.bray_curtis_sample_distances_{clade_in_question}.dist')
+
+        self.clade_dist_file_path_sqrt = os.path.join(
+            self.clade_output_dir, f'{self.date_time_str}.bray_curtis_sample_distances_{clade_in_question}_sqrt.dist')
+
+        self.clade_dist_file_path_no_sqrt = os.path.join(
+            self.clade_output_dir, f'{self.date_time_str}.bray_curtis_sample_distances_{clade_in_question}_no_sqrt.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
-    def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self, dss_obj_to_cct_obj_dict):
+    def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self, dss_obj_to_cct_obj_dict, sqrt):
         # Go through each of the clade collections and create a dict
         # that has key as ref_seq_uid and relative abundance of that sequence
         # we can then store these dict in a dict where the key is the sample ID.
@@ -1227,7 +1254,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             list_of_dsss_in_cc = list(DataSetSampleSequence.objects.filter(
                 clade_collection_found_in=clade_col))
 
-            if not self.no_sqrt_transf:
+            if sqrt:
                 total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dsss_in_cc])
                 rel_abund_dict = {dsss.id: dsss.abundance/total_seqs_ind_clade_col for dsss in list_of_dsss_in_cc}
                 dsss_uid_to_sqrt_rel_abund_dict = {
@@ -1236,12 +1263,13 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
                 for dsss in list_of_dsss_in_cc:
                     temp_dict[dsss.reference_sequence_of.id] = (dsss_uid_to_sqrt_rel_abund_dict[dsss.id] / sqr_total) * 10000
+                self.clade_rs_uid_to_normalised_abund_clade_dict_sqrt[dss_obj.id] = temp_dict
             else:
                 total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dsss_in_cc])
                 for dsss in list_of_dsss_in_cc:
                     temp_dict[dsss.reference_sequence_of.id] = (dsss.abundance / total_seqs_ind_clade_col)*10000
+                self.clade_rs_uid_to_normalised_abund_clade_dict_no_sqrt[dss_obj.id] = temp_dict
 
-            self.clade_rs_uid_to_normalised_abund_clade_dict[dss_obj.id] = temp_dict
 
     @staticmethod
     def _infer_is_dataset_of_datasetsample(smpl_id_list_str, data_set_string):
