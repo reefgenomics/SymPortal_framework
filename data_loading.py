@@ -23,7 +23,7 @@ import math
 from numpy import NaN
 from collections import defaultdict
 import itertools
-
+import time
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -147,6 +147,10 @@ class DataLoading:
         # can be put in the same order
         self.seq_stacked_bar_plotter = None
         self.no_sqrt_transf = no_sqrt_transf
+        # Timers
+        # The timers for meausring how long it takes to create the DataSetSampleSequencePM
+        self.pre_med_seq_start_time = None
+        self.pre_med_seq_stop_time = None
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
@@ -361,10 +365,13 @@ class DataLoading:
 
     def _create_data_set_sample_sequence_pre_med_objs(self):
         print('\n\nCreating DataSetSampleSequencePM objects')
+        self.pre_med_seq_start_time = time.time()
         data_set_sample_pre_med_obj_creator = FastDataSetSampleSequencePMCreator(
             dataset_object=self.dataset_object,
             pre_med_sequence_output_directory_path=self.pre_med_sequence_output_directory_path)
         data_set_sample_pre_med_obj_creator.make_data_set_sample_pm_objects()
+        self.pre_med_seq_stop_time = time.time()
+        print(f'\n\nCreation of DataSetSampleSequencePM objects took {self.pre_med_seq_stop_time-self.pre_med_seq_start_time}s')
 
     def _do_med_decomposition(self):
         self.perform_med_handler_instance = PerformMEDHandler(
