@@ -574,12 +574,12 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def __init__(
             self, num_processors, html_dir, js_output_path_dict, call_type, output_dir, date_time_str,
-             data_set_uid_list=None, data_set_sample_uid_list=None, no_sqrt_transf=True):
+             data_set_uid_list=None, data_set_sample_uid_list=None):
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
             call_type=call_type,
-            date_time_str=date_time_str, no_sqrt_transf=no_sqrt_transf, cct_set_uid_list=None, html_dir=html_dir, js_output_path_dict=js_output_path_dict)
+            date_time_str=date_time_str, cct_set_uid_list=None, html_dir=html_dir, js_output_path_dict=js_output_path_dict)
 
         self.clade_collections_from_data_set_samples = self._chunk_query_set_cc_obj_from_dss_uids()
         self.cc_id_to_sample_name_dict = {cc_obj.id: cc_obj.data_set_sample_from.name for cc_obj in self.clade_collections_from_data_set_samples}
@@ -617,7 +617,8 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
             # First step is to create an abundance dataframe where the sequences are in the columns
             # and the CladeCollection object uids are in the rows
-            clade_abund_df, set_of_ref_seq_uids = self._create_sample_abundance_df(clade_in_question)
+            clade_abund_df_no_sqrt, clade_abund_df_sqrt, set_of_ref_seq_uids = self._create_sample_abundance_df(
+                clade_in_question)
 
             try:
                 tree = self._create_tree(clade_in_question, set_of_ref_seq_uids)
@@ -632,41 +633,66 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                       f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
-            wu = self._perform_unifrac(clade_abund_df, tree)
+            wu_no_sqrt = self._perform_unifrac(clade_abund_df_no_sqrt, tree)
+            wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
 
-            clade_dist_file_path, ordered_sample_names = self._write_out_dist_df(clade_abund_df, wu, clade_in_question)
+            clade_dist_file_path_no_sqrt, ordered_sample_names_no_sqrt = self._write_out_dist_df(
+                clade_abund_df_no_sqrt, wu_no_sqrt, clade_in_question, sqrt=False)
+            clade_dist_file_path_sqrt, ordered_sample_names_sqrt = self._write_out_dist_df(
+                clade_abund_df_sqrt, wu_sqrt, clade_in_question, sqrt=True)
 
-            pcoa_output = self._compute_pcoa(wu)
+            pcoa_output_no_sqrt = self._compute_pcoa(wu_no_sqrt)
+            pcoa_output_sqrt = self._compute_pcoa(wu_sqrt)
 
-            clade_pcoa_file_path, pcoa_coords_df = self._write_out_pcoa(ordered_sample_names, pcoa_output, clade_in_question)
+            clade_pcoa_file_path_no_sqrt, pcoa_coords_df_no_sqrt = self._write_out_pcoa(
+                ordered_sample_names_no_sqrt, pcoa_output_no_sqrt, clade_in_question, sqrt=False)
+            clade_pcoa_file_path_sqrt, pcoa_coords_df_sqrt = self._write_out_pcoa(
+                ordered_sample_names_sqrt, pcoa_output_sqrt, clade_in_question, sqrt=True)
 
-            self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df_no_sqrt, sqrt=False)
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df_sqrt, sqrt=True)
 
-            self.output_path_list.extend([clade_dist_file_path, clade_pcoa_file_path])
+            self.output_path_list.extend([clade_dist_file_path_no_sqrt, clade_pcoa_file_path_no_sqrt,
+                                          clade_dist_file_path_sqrt, clade_pcoa_file_path_sqrt])
 
-            self.js_output_path_dict[f"btwn_sample_unifrac_{clade_in_question}_dist"] = clade_dist_file_path
-            self.js_output_path_dict[f"btwn_sample_unifrac_{clade_in_question}_pcoa"] = clade_dist_file_path
+            self.js_output_path_dict[
+                f"btwn_sample_unifrac_{clade_in_question}_dist_no_sqrt"] = clade_dist_file_path_no_sqrt
+            self.js_output_path_dict[
+                f"btwn_sample_unifrac_{clade_in_question}_pcoa_no_sqrt"] = clade_dist_file_path_no_sqrt
+            self.js_output_path_dict[
+                f"btwn_sample_unifrac_{clade_in_question}_dist_sqrt"] = clade_dist_file_path_sqrt
+            self.js_output_path_dict[
+                f"btwn_sample_unifrac_{clade_in_question}_pcoa_sqrt"] = clade_dist_file_path_sqrt
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
 
     def _write_out_js_objects(self):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name': 'getBtwnSampleDistCoordsUF', 'python_obj': self.pc_coordinates_dict},
-             {'function_name': 'getBtwnSampleDistPCVariancesUF', 'python_obj': self.pc_variances_dict},
-             {'function_name': 'getBtwnSampleDistPCAvailableUF', 'python_obj': self.pc_availabaility_dict}],
-            js_outpath=self.js_file_path)
+            [{'function_name': 'getBtwnSampleDistCoordsUFNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
+             {'function_name': 'getBtwnSampleDistPCVariancesUFNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
+             {'function_name': 'getBtwnSampleDistPCAvailableUFNoSqrt', 'python_obj': self.pc_availabaility_dict_no_sqrt},
+             {'function_name': 'getBtwnSampleDistCoordsUFSqrt', 'python_obj': self.pc_coordinates_dict_sqrt},
+             {'function_name': 'getBtwnSampleDistPCVariancesUFSqrt', 'python_obj': self.pc_variances_dict_sqrt},
+             {'function_name': 'getBtwnSampleDistPCAvailableUFSqrt', 'python_obj': self.pc_availabaility_dict_sqrt}
+             ], js_outpath=self.js_file_path)
 
-    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
+    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df, sqrt):
         # set the variance dict
         # and set the available pcs
         pcoa_coords_df.set_index('sample_uid', drop=True, inplace=True)
         available_pcs = list(pcoa_coords_df)
         if len(available_pcs) > 6:
             available_pcs = available_pcs[:6]
-        self.pc_availabaility_dict[self.genera_annotation_dict[clade_in_question]] = available_pcs
-        variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
-        self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
+        if sqrt:
+            self.pc_availabaility_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
+            variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+            self.pc_variances_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
+        else:
+            self.pc_availabaility_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
+            variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+            self.pc_variances_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
+
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
         for sample_uid in pcoa_coords_df.index.values.tolist()[:-1]:
@@ -674,9 +700,13 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             for pc in available_pcs:
                 sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
             genera_pc_coords_dict[int(sample_uid)] = sample_pc_coords_dict
-        self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
-    def _write_out_pcoa(self, ordered_sample_names, pcoa_output, clade_in_question):
+        if sqrt:
+            self.pc_coordinates_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+        else:
+            self.pc_coordinates_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+
+    def _write_out_pcoa(self, ordered_sample_names, pcoa_output, clade_in_question, sqrt):
         # rename the pcoa dataframe index as the sample names
         pcoa_output.samples['sample'] = ordered_sample_names
         renamed_pcoa_dataframe = pcoa_output.samples.set_index('sample')
@@ -686,9 +716,14 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         ser = pd.Series(var_explained_list, index=list(renamed_pcoa_dataframe), name='proportion_explained')
         renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(ser)
         # now output the pcoa
-        clade_pcoa_file_path = os.path.join(
-            self.clade_output_dir,
-            f'{self.date_time_str}.unifrac_sample_PCoA_coords_{clade_in_question}.csv')
+        if sqrt:
+            clade_pcoa_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_str}.unifrac_sample_PCoA_coords_{clade_in_question}_sqrt.csv')
+        else:
+            clade_pcoa_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_str}.unifrac_sample_PCoA_coords_{clade_in_question}_no_sqrt.csv')
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
@@ -729,7 +764,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
 
-    def _write_out_dist_df(self, clade_abund_df, wu, clade_in_question):
+    def _write_out_dist_df(self, clade_abund_df, wu, clade_in_question, sqrt):
         # get the names of the samples that contained the CladeCollections
         # to ouput in the df so that the user can relate distances
         ordered_sample_names = list(self.cc_id_to_sample_name_dict[cc_uid] for cc_uid in clade_abund_df.index)
@@ -739,9 +774,14 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         dist_df['sample_uid'] = ordered_sample_uids
         dist_df = dist_df[list(dist_df)[-1:] + list(dist_df)[:-1]]
         # write out the df
-        clade_dist_file_path = os.path.join(
-            self.clade_output_dir,
-            f'{self.date_time_str}_unifrac_btwn_sample_distances_{clade_in_question}.dist')
+        if sqrt:
+            clade_dist_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_str}_unifrac_btwn_sample_distances_{clade_in_question}_sqrt.dist')
+        else:
+            clade_dist_file_path = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_str}_unifrac_btwn_sample_distances_{clade_in_question}_no_sqrt.dist')
         dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
         return clade_dist_file_path, ordered_sample_names
 
@@ -767,9 +807,10 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         print(f'Generating abundance dataframe for its2 type profile in clade: {clade_in_question}')
         sadfg = self.SampleAbundanceDFGenerator(parent=self, clade=clade_in_question)
         sadfg.generate_abundance_dataframe_for_clade()
-        clade_abund_df = sadfg.abundance_df
+        clade_abund_df_no_sqrt = sadfg.abundance_df_no_sqrt
+        clade_abund_df_sqrt = sadfg.abundance_df_sqrt
         set_of_ref_seq_uids = sadfg.reference_seq_uid_set
-        return clade_abund_df, set_of_ref_seq_uids
+        return clade_abund_df_no_sqrt, clade_abund_df_sqrt, set_of_ref_seq_uids
 
     class SampleAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -783,10 +824,11 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self.reference_seq_uid_set = set()
 
             # Type uid is the key and the value is a dictionary of abundances normalised to 10000
-            self.seq_abundance_dict = {}
-
+            self.seq_abundance_dict_no_sqrt = {}
+            self.seq_abundance_dict_sqrt = {}
             # This will be the dataframe that we populate and can be returned from the class
-            self.abundance_df = None
+            self.abundance_df_no_sqrt = None
+            self.abundance_df_sqrt = None
 
             self.clade_collections_of_clade = [
                 cc for cc in self.parent.clade_collections_from_data_set_samples if cc.clade == self.clade]
@@ -798,17 +840,19 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
                 self.reference_seq_uid_set.update([dsss.reference_sequence_of.id for dsss in list_of_dsss_in_cc])
 
-                if not self.parent.no_sqrt_transf:
-                    normalised_abund_dict = self._make_norm_abund_dict_sqrt(list_of_dsss_in_cc)
-                else:
-                    normalised_abund_dict = self._make_norm_abund_dict_no_sqrt(list_of_dsss_in_cc)
 
-                self.seq_abundance_dict[cc_obj.id] = normalised_abund_dict
+                normalised_abund_dict_sqrt = self._make_norm_abund_dict_sqrt(list_of_dsss_in_cc)
+                normalised_abund_dict_no_sqrt = self._make_norm_abund_dict_no_sqrt(list_of_dsss_in_cc)
+
+                self.seq_abundance_dict_no_sqrt[cc_obj.id] = normalised_abund_dict_no_sqrt
+                self.seq_abundance_dict_sqrt[cc_obj.id] = normalised_abund_dict_sqrt
 
             # Here we have the self.seq_abundance_dict populated and we can use this dict of dicts to build
             # the dataframe
-            self.abundance_df = pd.DataFrame.from_dict(self.seq_abundance_dict, orient='index')
-            self.abundance_df[pd.isna(self.abundance_df)] = 0
+            self.abundance_df_no_sqrt = pd.DataFrame.from_dict(self.seq_abundance_dict_no_sqrt, orient='index')
+            self.abundance_df_no_sqrt[pd.isna(self.abundance_df_no_sqrt)] = 0
+            self.abundance_df_sqrt = pd.DataFrame.from_dict(self.seq_abundance_dict_sqrt, orient='index')
+            self.abundance_df_sqrt[pd.isna(self.abundance_df_sqrt)] = 0
 
         def _make_norm_abund_dict_no_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
             total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
