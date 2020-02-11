@@ -44,9 +44,9 @@ import argparse
 import data_loading
 import sp_config
 import data_analysis
-import pickle
 import general
 import django_general
+from shutil import which
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
@@ -113,13 +113,13 @@ class SymPortalWorkFlowManager:
 
         parser.add_argument(
             '--distance_method',
-            help='Either \'unifrac\', \'braycurtis\', or \'all\' [all]. The method to use when '
+            help='Either \'unifrac\', \'braycurtis\', or \'both\' [both]. The method to use when '
                  'calculating distances between its2 type profiles or samples. '
                  '\n\'unifrac\' - ouput only unifrac-derived distance matrices'
                  '\n\'braycurtis\' - output only braycurtis-derived distance matrices'
                  '\n\'all\' - output both unifrac- and braycurtis-derived distance matrices '
                  'mafft and iqtree will be checked for in your PATH. If not found, only braycurtis-derived distances '
-                 'will be output', default='all')
+                 'will be output', default='both')
         # when run as remote
         parser.add_argument(
             '--submitting_user_name',
@@ -130,19 +130,6 @@ class SymPortalWorkFlowManager:
             '--submitting_user_email',
             help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
                  'than the one listed in sp_config', default='not supplied')
-        parser.add_argument('--no_sqrt',
-                            help="When passed, sequence abunances will not be square root transformed before "
-                                 "distance metrics are calculated. This can be applied to either BrayCurtis- or"
-                                 " UniFrac-based distance calculations. This flag can be passed when calculating"
-                                 " either between sample or between ITS2 type profile distances. "
-                                 "[False]", action='store_true', default=False)
-        parser.add_argument('--dist_transformation', help="Either \'none\', \'sqrt\', or \'both\' [both]."
-                '\n\'none\' - no transformation will be applied to the sequence count data when producing distance'
-                ' matrices.'
-                '\n\'sqrt\' - a square root transformation will be applied to the sequence count data when '
-                'producing distance matrices.'
-                '\n\'both\' - two sets of distance matrices will be output. One with no transofmation applied to '
-                'the sequence count data, and one with the sqrt transformation applied.', default='both')
         parser.add_argument('--local',
                              help="When passed, only the DataSetSamples of the current output will be used"
                                              " in calculating ITS2 type profile similarities. If false, similarity"
@@ -440,7 +427,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            no_sqrt_transf=self.args.no_sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
     def _start_analysis_braycurtis_sample_distances(self):
@@ -449,7 +436,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            no_sqrt_transf=self.args.no_sqrt, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
     def _perform_data_analysis_type_distances(self):
@@ -468,7 +455,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local,
+            local_abunds_only=self.args.local,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -479,7 +466,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local,
+            local_abunds_only=self.args.local,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -527,7 +514,7 @@ class SymPortalWorkFlowManager:
             parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, no_sqrt_transf=self.args.no_sqrt)
+            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given_load(self):
@@ -677,7 +664,8 @@ class SymPortalWorkFlowManager:
 
     # ITS2 TYPE PROFILE STAND_ALONE DISTANCES
     def perform_type_distance_stand_alone(self):
-        """Generate the within clade pairwise distances between ITS2 type profiles either using a BrayCurtis- or Unifrac-based
+        """Generate the within clade pairwise distances between ITS2 type profiles
+        either using a BrayCurtis- or Unifrac-based
         method. Also calculate the PCoA and plot as scatter plot for each."""
         self._verify_data_analysis_uid_provided()
         self._set_data_analysis_obj_from_arg_analysis_uid()
@@ -691,6 +679,22 @@ class SymPortalWorkFlowManager:
         self.output_dir = os.path.join(
                     self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
         self._set_html_dir_and_js_out_path_from_output_dir()
+
+        if self.args.distance_method == 'both':
+            if self._check_if_required_packages_found_in_path():
+                # then do both distance outputs
+                if self.args.between_type_distances_sample_set:
+                    self._start_type_braycurtis_data_set_samples()
+                    self._start_type_unifrac_data_set_samples()
+                elif self.args.between_type_distances_cct_set:
+                    self._start_type_braycurtis_cct_set()
+                    self._start_type_unifrac_cct_set()
+                else:
+                    self._start_type_braycurtis_data_sets()
+                    self._start_type_unifrac_data_sets()
+            else:
+                self.args.distance_method = 'braycurtis'
+
         if self.args.distance_method == 'unifrac':
             if self.args.between_type_distances_sample_set:
                 self._start_type_unifrac_data_set_samples()
@@ -706,13 +710,19 @@ class SymPortalWorkFlowManager:
             else:
                 self._start_type_braycurtis_data_sets()
 
+    def _check_if_required_packages_found_in_path(self):
+        """For creating unifrac-derived distances we need
+        both iqtree and mafft to be install in the users PATH.
+        Here we will check for them. If either of them are not found we will return False"""
+        return which('iqtree') and which('mafft')
+
     # BRAYCURTIS between its2 type profile distance methods
     def _start_type_braycurtis_cct_set(self):
         self.distance_object = distance.TypeBrayCurtisDistPCoACreator(
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in self.args.between_type_distances_cct_set.split(',')],
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=False, html_dir=self.html_dir,
+            local_abunds_only=False, html_dir=self.html_dir,
             output_dir=self.output_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
@@ -722,7 +732,7 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in self.args.between_type_distances.split(',')],
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
+            local_abunds_only=self.args.local, html_dir=self.html_dir,
             output_dir=self.output_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
@@ -733,7 +743,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, html_dir=self.html_dir,
+            local_abunds_only=self.args.local, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict, output_dir=self.output_dir
         )
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
@@ -747,7 +757,8 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in
                                self.args.between_type_distances_cct_set.split(',')],
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=False, html_dir=self.html_dir, output_dir=self.output_dir,
+            local_abunds_only=False, html_dir=self.html_dir,
+            output_dir=self.output_dir,
             js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
@@ -760,7 +771,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in
                                self.args.between_type_distances.split(',')],
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
+            local_abunds_only=self.args.local, output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
@@ -773,7 +784,7 @@ class SymPortalWorkFlowManager:
             num_processors=self.args.num_proc,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
-            no_sqrt_transf=self.args.no_sqrt, local_abunds_only=self.args.local, output_dir=self.output_dir,
+            local_abunds_only=self.args.local, output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict
         )
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
@@ -790,6 +801,16 @@ class SymPortalWorkFlowManager:
 
     def _run_sample_distances_dependent_on_methods(self):
         """Start an instance of the correct distance class running."""
+        if self.args.distance_method == 'both':
+            if self._check_if_required_packages_found_in_path():
+                if self.args.between_sample_distances_sample_set:
+                    self._start_sample_braycurtis_data_set_samples()
+                    self._start_sample_unifrac_data_set_samples()
+                else:
+                    self._start_sample_braycurtis_data_sets()
+                    self._start_sample_unifrac_data_sets()
+            else:
+                self.args.distance_method = 'braycurtis'
         if self.args.distance_method == 'unifrac':
             if self.args.between_sample_distances_sample_set:
                 self._start_sample_unifrac_data_set_samples()
@@ -811,7 +832,7 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_sample_uid_list=dss_uid_list,
             num_processors=self.args.num_proc,
-            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir,
+            output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -821,7 +842,7 @@ class SymPortalWorkFlowManager:
             call_type='stand_alone',
             data_set_uid_list=ds_uid_list,
             num_processors=self.args.num_proc,
-            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir,
+            output_dir=self.output_dir,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str)
         self.distance_object.compute_unifrac_dists_and_pcoa_coords()
 
@@ -831,7 +852,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=dss_uid_list,
             call_type='stand_alone',
-            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
+            output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 
@@ -841,7 +862,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             data_set_uid_list=ds_uid_list,
             call_type='stand_alone',
-            no_sqrt_transf=self.args.no_sqrt, output_dir=self.output_dir, html_dir=self.html_dir,
+            output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         self.distance_object.compute_braycurtis_dists_and_pcoa_coords()
 

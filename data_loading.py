@@ -24,6 +24,7 @@ from numpy import NaN
 from collections import defaultdict
 import itertools
 import time
+from shutil import which
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -32,7 +33,7 @@ class DataLoading:
 
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, no_pre_med_seqs, debug=False, no_sqrt_transf=False):
+            distance_method, no_pre_med_seqs, debug=False):
         self.parent = parent_work_flow_obj
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
@@ -146,7 +147,6 @@ class DataLoading:
         # we will use this sequence stacked bar plotter when plotting the pre_MED seqs so that the plotting
         # can be put in the same order
         self.seq_stacked_bar_plotter = None
-        self.no_sqrt_transf = no_sqrt_transf
         # Timers
         # The timers for meausring how long it takes to create the DataSetSampleSequencePM
         self.pre_med_seq_start_time = None
@@ -253,10 +253,22 @@ class DataLoading:
 
     def _do_sample_dist_and_pcoa(self):
         print('\nCalculating between sample pairwise distances')
+        if self.distance_method == 'both':
+            if self._check_if_required_packages_found_in_path():
+                self._do_unifrac_dist_pcoa()
+                self._do_braycurtis_dist_pcoa()
+            else:
+                self.distance_method = 'braycurtis'
         if self.distance_method == 'unifrac':
             self._do_unifrac_dist_pcoa()
         elif self.distance_method == 'braycurtis':
             self._do_braycurtis_dist_pcoa()
+
+    def _check_if_required_packages_found_in_path(self):
+        """For creating unifrac-derived distances we need
+        both iqtree and mafft to be install in the users PATH.
+        Here we will check for them. If either of them are not found we will return False"""
+        return which('iqtree') and which('mafft')
 
     def _write_data_set_info_to_stdout(self):
         print(f'\n\nData loading complete. DataSet UID: {self.dataset_object.id}; Name: {self.dataset_object.name}')
@@ -269,7 +281,7 @@ class DataLoading:
         bray_curtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
             date_time_str=self.date_time_str,
             data_set_uid_list=[self.dataset_object.id], call_type='submission',
-            output_dir=self.output_directory, no_sqrt_transf=self.no_sqrt_transf, html_dir=self.html_dir,
+            output_dir=self.output_directory, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
         self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_path_list)
@@ -278,7 +290,6 @@ class DataLoading:
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
             call_type='submission', date_time_str=self.date_time_str, output_dir=self.output_directory,
             data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
-            no_sqrt_transf=self.no_sqrt_transf,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         self.output_path_list.extend(unifrac_dict_pcoa_creator.output_path_list)
@@ -1390,7 +1401,7 @@ class FastDataSetSampleSequencePMCreator:
     def make_data_set_sample_pm_objects(self):
         print('\nProcessing pre-MED seqs for each clade')
         for clade, seq_dict in self.consolidated_sequence_to_sample_and_abund_dict.items():
-            print(f'Processing clade {clade}')
+            print(f'\nProcessing clade {clade}')
             seq_matcher = self.SeqMatcher(
                 clade=clade, seq_dict=seq_dict, rs_dict=self.ref_seq_sequence_to_ref_seq_obj_dict[clade],
                 match_dict=self.ref_seq_match_obj_to_seq_sample_abundance_dict[clade],
@@ -1537,7 +1548,7 @@ class FastDataSetSampleSequencePMCreator:
             # len of the longest element
             finish_n = len(seq_list[-1])
             # Go from smallest n to largest n-1
-            print('Making consolidation path for non-ReferenceSequence matching sequences')
+            print('\nMaking consolidation path for non-ReferenceSequence matching sequences')
             for n in range(start_n, finish_n):
                 small_query_seqs = [seq for seq in seq_list if len(seq) == n]
                 super_seqs = [seq for seq in seq_list if len(seq) > n]
@@ -1614,7 +1625,9 @@ class FastDataSetSampleSequencePMCreator:
 
             # For each consolidated sequences, create a ReferenceSequence after checking to see that the sequence
             # does not already fit into one of the
+            print('\ncreating ReferenceSequence objects')
             new_ref_seq_count = 0
+            tot = len(self.non_match_dict.keys())
             for c_seq in self.non_match_dict.keys():
                 if testing:
                     if (c_seq in self.rs_dict) or ('A' + c_seq in self.rs_dict):
@@ -1631,7 +1644,8 @@ class FastDataSetSampleSequencePMCreator:
                 new_reference_sequence_obj.save()
                 self.match_dict[new_reference_sequence_obj] = self.non_match_dict[c_seq]
                 new_ref_seq_count += 1
-            print(f'{new_ref_seq_count} new ReferenceSequence objects were created for clade {self.clade}')
+                sys.stdout.write(f'\r{new_ref_seq_count} out of {tot} ReferenceSequence objects created')
+            print(f'\n{new_ref_seq_count} new ReferenceSequence objects were created for clade {self.clade}')
 
         def _create_data_set_sample_sequence_pm_objects(self):
             """Finally now that we have a reference sqeuence object representing
@@ -1644,7 +1658,7 @@ class FastDataSetSampleSequencePMCreator:
                                                     abundance=abundance,
                                                     data_set_sample_from=dss_obj)
                     data_set_sample_sequence_pre_med_list.append(dsspm)
-            print(f'Creating {len(data_set_sample_sequence_pre_med_list)} new DataSetSampleSequencePM objects for clade {self.clade}')
+            print(f'\nCreating {len(data_set_sample_sequence_pre_med_list)} new DataSetSampleSequencePM objects for clade {self.clade}')
             DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
 
 class DSSAttributeAssignmentHolder:

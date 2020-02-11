@@ -1,20 +1,21 @@
+import itertools
+import math
+import os
+import subprocess
+import sys
+
+import numpy as np
+import pandas as pd
+from scipy.spatial.distance import braycurtis
+from skbio.diversity import beta_diversity
+from skbio.stats.ordination import pcoa
+from skbio.tree import TreeNode
+
+import django_general
+import general
 from dbApp.models import (
     ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
     CladeCollection, CladeCollectionType)
-import os
-import math
-import sys
-from plumbum import local
-import pandas as pd
-import subprocess
-import numpy as np
-from skbio.stats.ordination import pcoa
-from skbio.tree import TreeNode
-from skbio.diversity import beta_diversity
-import general, django_general
-import itertools
-from scipy.spatial.distance import braycurtis
-from datetime import datetime
 from exceptions import InsufficientSequencesInAlignment
 
 
@@ -23,7 +24,8 @@ class BaseUnifracDistPCoACreator:
     These classes are used for generating UniFrac distances between either ITS2 type profiles
     or Samples."""
     def __init__(
-            self, num_proc, output_dir, data_set_uid_list, js_output_path_dict, html_dir, data_set_sample_uid_list, cct_set_uid_list,
+            self, num_proc, output_dir, data_set_uid_list, js_output_path_dict,
+            html_dir, data_set_sample_uid_list, cct_set_uid_list,
             call_type, date_time_str):
 
         self.num_proc = num_proc
@@ -58,9 +60,11 @@ class BaseUnifracDistPCoACreator:
 
             return data_set_sample_uid_list, clade_col_uids_of_output
         elif cct_set_uid_list:
-            clade_col_uids_of_output, clade_cols_of_output = self._get_distinct_cc_uids_of_output_from_cct_uids(cct_set_uid_list)
+            clade_col_uids_of_output, clade_cols_of_output = self._get_distinct_cc_uids_of_output_from_cct_uids(
+                cct_set_uid_list)
 
-            data_set_sample_uid_of_output = self._get_distinct_dss_objs_uids_of_output_from_cc_objs(clade_cols_of_output)
+            data_set_sample_uid_of_output = self._get_distinct_dss_objs_uids_of_output_from_cc_objs(
+                clade_cols_of_output)
 
             return data_set_sample_uid_of_output, clade_col_uids_of_output
         else:
@@ -83,20 +87,23 @@ class BaseUnifracDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output, clade_cols_of_output
 
-    def _chunk_query_distinct_dss_objs_from_cc_objs(self, clade_cols_of_output):
+    @staticmethod
+    def _chunk_query_distinct_dss_objs_from_cc_objs(clade_cols_of_output):
         data_set_samples_of_output_set = set()
         for uid_list in general.chunks(clade_cols_of_output):
             data_set_samples_of_output_set.update(
                 list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
         return list(data_set_samples_of_output_set)
 
-    def _chunk_query_distinct_cc_objs_from_cct_uids(self, cct_set_uid_list):
+    @staticmethod
+    def _chunk_query_distinct_cc_objs_from_cct_uids(cct_set_uid_list):
         clade_cols_of_output_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
             clade_cols_of_output_set.update(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
         return list(clade_cols_of_output_set)
 
-    def _chunk_query_distinct_rs_objs_from_rs_uids(self, rs_uid_list):
+    @staticmethod
+    def _chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list):
         rs_obj_of_output_set = set()
         for rs_list in general.chunks(rs_uid_list):
             rs_obj_of_output_set.update(list(ReferenceSequence.objects.filter(id__in=rs_list)))
@@ -108,19 +115,22 @@ class BaseUnifracDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output
 
-    def _chunk_query_cc_objs_from_dss_objs(self, data_set_samples_of_output):
+    @staticmethod
+    def _chunk_query_cc_objs_from_dss_objs(data_set_samples_of_output):
         clade_cols_of_output = []
         for uid_list in general.chunks(data_set_samples_of_output):
             clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return clade_cols_of_output
 
-    def _chunk_query_dss_objs_from_dss_uids(self, data_set_sample_uid_list):
+    @staticmethod
+    def _chunk_query_dss_objs_from_dss_uids(data_set_sample_uid_list):
         data_set_samples_of_output = []
         for uid_list in general.chunks(data_set_sample_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return data_set_samples_of_output
 
-    def _chunk_query_dss_objs_from_ds_uids(self, data_set_uid_list):
+    @staticmethod
+    def _chunk_query_dss_objs_from_ds_uids(data_set_uid_list):
         data_set_samples_of_output = []
         for uid_list in general.chunks(data_set_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
@@ -164,22 +174,23 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         else:
             self.clade_col_type_objects = None
             self.at_list_for_output = self._chunk_query_set_distinct_at_list_for_output_from_dss_uids()
-        self.at_id_to_at_name  = {at.id:at.name for at in self.at_list_for_output}
+        self.at_id_to_at_name = {at.id: at.name for at in self.at_list_for_output}
         self.clades_for_dist_calcs = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = os.path.join(output_dir, 'between_profile_distances')
         # whether to only use the abundances of DIVs in Types that are from the data set samples form this output only
         # i.e. rather than all instances of the type found in all samples (including samples outside of this output)
         self.local_abunds_only = local_abunds_only
 
-
     def _chunk_query_set_distinct_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
         for uid_list in general.chunks(self.data_set_sample_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(
-                data_analysis_from=self.data_analysis_obj, cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
+                data_analysis_from=self.data_analysis_obj,
+                cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
         return list(temp_at_set)
 
-    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
+    @staticmethod
+    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(cct_set_uid_list):
         temp_at_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
@@ -226,6 +237,8 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                       f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
+            wu_no_sqrt = None
+            wu_sqrt = None
             try:
                 wu_no_sqrt = self._perform_unifrac(clade_abund_df_no_sqrt, tree)
                 wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
@@ -270,7 +283,8 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getBtwnProfileDistCoordsUFNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistPCVariancesUFNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
-             {'function_name': 'getBtwnProfileDistPCAvailableUFNoSqrt', 'python_obj': self.pc_availabaility_dict_no_sqrt},
+             {'function_name': 'getBtwnProfileDistPCAvailableUFNoSqrt',
+              'python_obj': self.pc_availabaility_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistCoordsUFSqrt', 'python_obj': self.pc_coordinates_dict_sqrt},
              {'function_name': 'getBtwnProfileDistPCVariancesUFSqrt', 'python_obj': self.pc_variances_dict_sqrt},
              {'function_name': 'getBtwnProfileDistPCAvailableUFSqrt', 'python_obj': self.pc_availabaility_dict_sqrt}
@@ -334,7 +348,8 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
 
-    def _rescale_pcoa(self, pcoa_output):
+    @staticmethod
+    def _rescale_pcoa(pcoa_output):
         # work through the magnitudes of order and see what the bigest scaler we can work with is
         # whilst still remaining below 1
         query = 0.1
@@ -384,7 +399,8 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
         return clade_dist_file_path, ordered_at_names
 
-    def _perform_unifrac(self, clade_abund_df, tree):
+    @staticmethod
+    def _perform_unifrac(clade_abund_df, tree):
         # perform unifrac
         print('Performing unifrac calculations')
         wu = beta_diversity(
@@ -413,7 +429,6 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         clade_abund_df_sqrt = tadfg.abundance_df_sqrt
         set_of_ref_seq_uids = tadfg.reference_seq_uid_set
         return clade_abund_df_no_sqrt, clade_abund_df_sqrt, set_of_ref_seq_uids
-
 
     class TypeAbundanceDFGenerator:
         """This class will, for a given clade, produce a dataframe where the sequence uids are in the columns
@@ -451,25 +466,27 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
                 # A dictionary that will hold the abundance of the reference sequences in the given AnalysisType
                 # object. Key is RefSeq_obj uid and value is abundance normalised to 10000 reads.
-                if self.parent.local_abunds_only:  # Calculate the UniFrac using only the ccts from the specified samples
-                    normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
+                # Calculate the UniFrac using only the ccts from the specified samples
+                if self.parent.local_abunds_only:
+                    normalised_abund_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
                         at_obj, df_no_sqrt, ref_seq_uids_of_analysis_type)
                     normalised_abundance_of_divs_dict_sqrt = self._create_norm_abund_dict_from_local_clade_cols_unifrac(
                         at_obj, df_sqrt, ref_seq_uids_of_analysis_type)
 
-                elif self.parent.clade_col_type_objects:  # Caculate the abundance for only the specific cct that have been provided
-                    normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_cct_set_unifrac(
+                # Caculate the abundance for only the specific cct that have been provided
+                elif self.parent.clade_col_type_objects:
+                    normalised_abund_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_cct_set_unifrac(
                         at_obj, df_no_sqrt, ref_seq_uids_of_analysis_type)
                     normalised_abundance_of_divs_dict_sqrt = self._create_norm_abund_dict_from_cct_set_unifrac(
                         at_obj, df_sqrt, ref_seq_uids_of_analysis_type)
 
                 else:  # use all abund info to calculate av div rel abund
-                    normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_all_clade_cols_unifrac(
+                    normalised_abund_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_all_clade_cols_unifrac(
                         df_no_sqrt, ref_seq_uids_of_analysis_type)
                     normalised_abundance_of_divs_dict_sqrt = self._create_norm_abund_dict_from_all_clade_cols_unifrac(
                         df_sqrt, ref_seq_uids_of_analysis_type)
 
-                self.seq_abundance_dict_no_sqrt[at_obj.id] = normalised_abundance_of_divs_dict_no_sqrt
+                self.seq_abundance_dict_no_sqrt[at_obj.id] = normalised_abund_of_divs_dict_no_sqrt
                 self.seq_abundance_dict_sqrt[at_obj.id] = normalised_abundance_of_divs_dict_sqrt
 
             # Here we have the self.seq_abundance_dict populated and we can use this dict of dicts to build
@@ -574,22 +591,24 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def __init__(
             self, num_processors, html_dir, js_output_path_dict, call_type, output_dir, date_time_str,
-             data_set_uid_list=None, data_set_sample_uid_list=None):
+            data_set_uid_list=None, data_set_sample_uid_list=None):
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
             call_type=call_type,
-            date_time_str=date_time_str, cct_set_uid_list=None, html_dir=html_dir, js_output_path_dict=js_output_path_dict)
+            date_time_str=date_time_str, cct_set_uid_list=None, html_dir=html_dir,
+            js_output_path_dict=js_output_path_dict)
 
         self.clade_collections_from_data_set_samples = self._chunk_query_set_cc_obj_from_dss_uids()
-        self.cc_id_to_sample_name_dict = {cc_obj.id: cc_obj.data_set_sample_from.name for cc_obj in self.clade_collections_from_data_set_samples}
-        self.cc_id_to_sample_id = {cc_obj.id: cc_obj.data_set_sample_from.id for cc_obj in self.clade_collections_from_data_set_samples}
+        self.cc_id_to_sample_name_dict = {
+            cc_obj.id: cc_obj.data_set_sample_from.name for cc_obj in self.clade_collections_from_data_set_samples}
+        self.cc_id_to_sample_id = {
+            cc_obj.id: cc_obj.data_set_sample_from.id for cc_obj in self.clade_collections_from_data_set_samples}
 
         self.clades_for_dist_calcs = list(set([a.clade for a in self.clade_collections_from_data_set_samples]))
 
         self.output_dir = os.path.join(output_dir, 'between_sample_distances')
         os.makedirs(self.output_dir, exist_ok=True)
-
 
     def _chunk_query_set_cc_obj_from_dss_uids(self):
         temp_clade_col_objs = []
@@ -671,7 +690,8 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getBtwnSampleDistCoordsUFNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
              {'function_name': 'getBtwnSampleDistPCVariancesUFNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
-             {'function_name': 'getBtwnSampleDistPCAvailableUFNoSqrt', 'python_obj': self.pc_availabaility_dict_no_sqrt},
+             {'function_name': 'getBtwnSampleDistPCAvailableUFNoSqrt',
+              'python_obj': self.pc_availabaility_dict_no_sqrt},
              {'function_name': 'getBtwnSampleDistCoordsUFSqrt', 'python_obj': self.pc_coordinates_dict_sqrt},
              {'function_name': 'getBtwnSampleDistPCVariancesUFSqrt', 'python_obj': self.pc_variances_dict_sqrt},
              {'function_name': 'getBtwnSampleDistPCAvailableUFSqrt', 'python_obj': self.pc_availabaility_dict_sqrt}
@@ -727,7 +747,8 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
-    def _rescale_pcoa(self, pcoa_output):
+    @staticmethod
+    def _rescale_pcoa(pcoa_output):
         # work through the magnitudes of order and see what the bigest scaler we can work with is
         # whilst still remaining below 1
         query = 0.1
@@ -785,7 +806,8 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
         return clade_dist_file_path, ordered_sample_names
 
-    def _perform_unifrac(self, clade_abund_df, tree):
+    @staticmethod
+    def _perform_unifrac(clade_abund_df, tree):
         print('Performing unifrac calculations')
         wu = beta_diversity(
             metric='weighted_unifrac', counts=clade_abund_df.to_numpy(),
@@ -837,13 +859,9 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             for cc_obj in self.clade_collections_of_clade:
                 list_of_dsss_in_cc = list(DataSetSampleSequence.objects.filter(
                     clade_collection_found_in=cc_obj))
-
                 self.reference_seq_uid_set.update([dsss.reference_sequence_of.id for dsss in list_of_dsss_in_cc])
-
-
                 normalised_abund_dict_sqrt = self._make_norm_abund_dict_sqrt(list_of_dsss_in_cc)
                 normalised_abund_dict_no_sqrt = self._make_norm_abund_dict_no_sqrt(list_of_dsss_in_cc)
-
                 self.seq_abundance_dict_no_sqrt[cc_obj.id] = normalised_abund_dict_no_sqrt
                 self.seq_abundance_dict_sqrt[cc_obj.id] = normalised_abund_dict_sqrt
 
@@ -854,14 +872,17 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self.abundance_df_sqrt = pd.DataFrame.from_dict(self.seq_abundance_dict_sqrt, orient='index')
             self.abundance_df_sqrt[pd.isna(self.abundance_df_sqrt)] = 0
 
-        def _make_norm_abund_dict_no_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
+        @staticmethod
+        def _make_norm_abund_dict_no_sqrt(list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
             total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
             normalised_abund_dict = {
-                dsss.reference_sequence_of.id: int((dsss.abundance / total_seqs_of_cc) * normalisation_sequencing_depth) for
+                dsss.reference_sequence_of.id: int(
+                    (dsss.abundance / total_seqs_of_cc) * normalisation_sequencing_depth) for
                 dsss in list_of_dsss_in_cc}
             return normalised_abund_dict
 
-        def _make_norm_abund_dict_sqrt(self, list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
+        @staticmethod
+        def _make_norm_abund_dict_sqrt(list_of_dsss_in_cc, normalisation_sequencing_depth=10000):
             total_seqs_of_cc = sum([dss.abundance for dss in list_of_dsss_in_cc])
             rel_abund_dict = {dsss.id: (dsss.abundance / total_seqs_of_cc) for
                               dsss in list_of_dsss_in_cc}
@@ -871,10 +892,12 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             sqr_total = sum(dsss_uid_to_sqrt_rel_abund_dict.values())
 
             normalised_abund_dict = {
-                dsss.reference_sequence_of.id: int((dsss_uid_to_sqrt_rel_abund_dict[dsss.id] / sqr_total) * normalisation_sequencing_depth)
+                dsss.reference_sequence_of.id: int(
+                    (dsss_uid_to_sqrt_rel_abund_dict[dsss.id] / sqr_total) * normalisation_sequencing_depth)
                 for dsss in list_of_dsss_in_cc}
 
             return normalised_abund_dict
+
 
 class TreeCreatorForUniFrac:
     """Class responsible for generating a tree using iqtree to use in the calculation of weighted unifrac
@@ -884,7 +907,8 @@ class TreeCreatorForUniFrac:
         self.clade = clade
         self.ref_seq_objs = self.parent._chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list=set_of_ref_seq_uids)
         self.num_seqs = len(self.ref_seq_objs)
-        self.fasta_unaligned_path = os.path.join(self.parent.clade_output_dir, f'clade_{self.clade}_seqs.unaligned.fasta')
+        self.fasta_unaligned_path = os.path.join(
+            self.parent.clade_output_dir, f'clade_{self.clade}_seqs.unaligned.fasta')
         self.fasta_aligned_path = self.fasta_unaligned_path.replace('unaligned', 'aligned')
         # self.iqtree = local['iqtree']
         self.tree_out_path_unrooted = self.fasta_aligned_path + '.treefile'
@@ -918,10 +942,10 @@ class TreeCreatorForUniFrac:
         self.rooted_tree = TreeNode.read(self.tree_out_path_unrooted).root_at_midpoint()
         self.rooted_tree.write(self.tree_out_path_rooted)
 
-
     def _write_out_unaligned_seqs(self):
         django_general.write_ref_seq_objects_to_fasta(
             path=self.fasta_unaligned_path, list_of_ref_seq_objs=self.ref_seq_objs, identifier='id')
+
 
 # BrayCurtis classes
 class BaseBrayCurtisDistPCoACreator:
@@ -1021,9 +1045,11 @@ class BaseBrayCurtisDistPCoACreator:
 
             return data_set_sample_uid_list, clade_col_uids_of_output
         elif cct_set_uid_list:
-            clade_col_uids_of_output, clade_cols_of_output = self._get_distinct_cc_uids_of_output_from_cct_uids(cct_set_uid_list)
+            clade_col_uids_of_output, clade_cols_of_output = self._get_distinct_cc_uids_of_output_from_cct_uids(
+                cct_set_uid_list)
 
-            data_set_sample_uid_of_output = self._get_distinct_dss_objs_uids_of_output_from_cc_objs(clade_cols_of_output)
+            data_set_sample_uid_of_output = self._get_distinct_dss_objs_uids_of_output_from_cc_objs(
+                clade_cols_of_output)
 
             return data_set_sample_uid_of_output, clade_col_uids_of_output
         else:
@@ -1046,14 +1072,16 @@ class BaseBrayCurtisDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output, clade_cols_of_output
 
-    def _chunk_query_distinct_dss_objs_from_cc_objs(self, clade_cols_of_output):
+    @staticmethod
+    def _chunk_query_distinct_dss_objs_from_cc_objs(clade_cols_of_output):
         data_set_samples_of_output_set = set()
         for uid_list in general.chunks(clade_cols_of_output):
             data_set_samples_of_output_set.update(
                 list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
         return list(data_set_samples_of_output_set)
 
-    def _chunk_query_distinct_cc_objs_from_cct_uids(self, cct_set_uid_list):
+    @staticmethod
+    def _chunk_query_distinct_cc_objs_from_cct_uids(cct_set_uid_list):
         clade_cols_of_output_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
             clade_cols_of_output_set.update(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
@@ -1065,19 +1093,22 @@ class BaseBrayCurtisDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output
 
-    def _chunk_query_cc_objs_from_dss_objs(self, data_set_samples_of_output):
+    @staticmethod
+    def _chunk_query_cc_objs_from_dss_objs(data_set_samples_of_output):
         clade_cols_of_output = []
         for uid_list in general.chunks(data_set_samples_of_output):
             clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return clade_cols_of_output
 
-    def _chunk_query_dss_objs_from_dss_uids(self, data_set_sample_uid_list):
+    @staticmethod
+    def _chunk_query_dss_objs_from_dss_uids(data_set_sample_uid_list):
         data_set_samples_of_output = []
         for uid_list in general.chunks(data_set_sample_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return data_set_samples_of_output
 
-    def _chunk_query_dss_objs_from_ds_uids(self, data_set_uid_list):
+    @staticmethod
+    def _chunk_query_dss_objs_from_ds_uids(data_set_uid_list):
         data_set_samples_of_output = []
         for uid_list in general.chunks(data_set_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
@@ -1181,7 +1212,8 @@ class BaseBrayCurtisDistPCoACreator:
             self.clade_dist_file_as_list_no_sqrt = dist_with_obj_name
             general.write_list_to_destination(self.clade_dist_file_path_no_sqrt, self.clade_dist_file_as_list_no_sqrt)
 
-    def _append_obj_name_to_dist_line(self, dict_of_obj_id_to_obj_name, dist_with_obj_name, line):
+    @staticmethod
+    def _append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line):
         temp_list = []
         obj_id = int(line.split('\t')[0])
         obj_name = dict_of_obj_id_to_obj_name[obj_id]
@@ -1190,13 +1222,15 @@ class BaseBrayCurtisDistPCoACreator:
         new_line = '\t'.join(temp_list)
         dist_with_obj_name.append(new_line)
 
-    def _chunk_query_at_obj_from_at_uids(self, list_of_obj_uids):
+    @staticmethod
+    def _chunk_query_at_obj_from_at_uids(list_of_obj_uids):
         objs_of_outputs = []
         for uid_list in general.chunks(list_of_obj_uids):
             objs_of_outputs.extend(list(AnalysisType.objects.filter(id__in=uid_list)))
         return objs_of_outputs
 
-    def _chunk_query_cc_objs_from_cc_uids(self, list_of_cc_ids):
+    @staticmethod
+    def _chunk_query_cc_objs_from_cc_uids(list_of_cc_ids):
         cc_of_outputs = []
         for uid_list in general.chunks(list_of_cc_ids):
             cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
@@ -1240,7 +1274,8 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             profiles_or_samples='samples', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
 
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
-            data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list, cct_set_uid_list=cct_set_uid_list)
+            data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list,
+            cct_set_uid_list=cct_set_uid_list)
 
         self.cc_list_for_output = self._chunk_query_set_cc_list_from_dss_uids()
 
@@ -1257,7 +1292,8 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing sample pairwise distances and PCoA coordinates using the BrayCurtis method\n')
         for clade_in_question in self.clades_of_ccs:
-            dss_obj_to_cct_obj_dict = {cc_obj.data_set_sample_from : cc_obj for cc_obj in self.cc_list_for_output if cc_obj.clade == clade_in_question}
+            dss_obj_to_cct_obj_dict = {cc_obj.data_set_sample_from: cc_obj for cc_obj in
+                                       self.cc_list_for_output if cc_obj.clade == clade_in_question}
             self.objs_of_clade = list(dss_obj_to_cct_obj_dict.keys())
             if len(self.objs_of_clade) < 2:
                 continue
@@ -1278,7 +1314,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self.js_output_path_dict[
                 f"btwn_sample_braycurtis_{clade_in_question}_dist_sqrt"] = self.clade_dist_file_path_sqrt
             self.js_output_path_dict[
-                f"btwn_sample_braycurtis_{clade_in_question}_pcoa_sqrt"] =  self.clade_pcoa_coord_file_path_sqrt
+                f"btwn_sample_braycurtis_{clade_in_question}_pcoa_sqrt"] = self.clade_pcoa_coord_file_path_sqrt
             self.js_output_path_dict[
                 f"btwn_sample_braycurtis_{clade_in_question}_dist_no_sqrt"] = self.clade_dist_file_path_no_sqrt
             self.js_output_path_dict[
@@ -1321,10 +1357,9 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
                 sample_pc_coords_dict[pc] = f'{pcoa_coords_df.at[sample_uid, pc]:.3f}'
             genera_pc_coords_dict[int(sample_uid)] = sample_pc_coords_dict
         if sqrt:
-            self.self.pc_coordinates_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+            self.pc_coordinates_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
         else:
             self.pc_coordinates_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
-
 
     def _init_clade_dirs_and_paths(self, clade_in_question):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
@@ -1333,7 +1368,8 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self.clade_output_dir, f'{self.date_time_str}.bray_curtis_sample_distances_{clade_in_question}_sqrt.dist')
 
         self.clade_dist_file_path_no_sqrt = os.path.join(
-            self.clade_output_dir, f'{self.date_time_str}.bray_curtis_sample_distances_{clade_in_question}_no_sqrt.dist')
+            self.clade_output_dir,
+            f'{self.date_time_str}.bray_curtis_sample_distances_{clade_in_question}_no_sqrt.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self, dss_obj_to_cct_obj_dict, sqrt):
@@ -1353,14 +1389,14 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
                 sqr_total = sum(dsss_uid_to_sqrt_rel_abund_dict.values())
 
                 for dsss in list_of_dsss_in_cc:
-                    temp_dict[dsss.reference_sequence_of.id] = (dsss_uid_to_sqrt_rel_abund_dict[dsss.id] / sqr_total) * 10000
+                    temp_dict[dsss.reference_sequence_of.id] = (dsss_uid_to_sqrt_rel_abund_dict[dsss.id] /
+                                                                sqr_total) * 10000
                 self.clade_rs_uid_to_normalised_abund_clade_dict_sqrt[dss_obj.id] = temp_dict
             else:
                 total_seqs_ind_clade_col = sum([dsss.abundance for dsss in list_of_dsss_in_cc])
                 for dsss in list_of_dsss_in_cc:
                     temp_dict[dsss.reference_sequence_of.id] = (dsss.abundance / total_seqs_ind_clade_col)*10000
                 self.clade_rs_uid_to_normalised_abund_clade_dict_no_sqrt[dss_obj.id] = temp_dict
-
 
     @staticmethod
     def _infer_is_dataset_of_datasetsample(smpl_id_list_str, data_set_string):
@@ -1387,19 +1423,19 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     dss = DataSetSample
     dsss = DataSetSampleSequence
     cc = CladeCollection
-
-    TODO we want to change to outputing both a set of sqrt transformed and non transformed distance outputs
     """
 
     def __init__(
-            self, data_analysis_obj, js_output_path_dict, html_dir, output_dir, date_time_str, data_set_sample_uid_list=None,
+            self, data_analysis_obj, js_output_path_dict, html_dir, output_dir,
+            date_time_str, data_set_sample_uid_list=None,
             data_set_uid_list=None, cct_set_uid_list=None, call_type=None, local_abunds_only=False):
         super().__init__(
             call_type=call_type, date_time_str=date_time_str,
             profiles_or_samples='profiles', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
 
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
-            data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list, cct_set_uid_list=cct_set_uid_list)
+            data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list,
+            cct_set_uid_list=cct_set_uid_list)
         self.data_analysis_obj = data_analysis_obj
 
         self.cct_set_uid_list = cct_set_uid_list
@@ -1414,7 +1450,8 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.output_dir = os.path.join(output_dir, 'between_profile_distances')
         self.local = local_abunds_only
 
-    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
+    @staticmethod
+    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(cct_set_uid_list):
         temp_at_set = set()
         for uid_list in general.chunks(cct_set_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
@@ -1437,7 +1474,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def compute_braycurtis_dists_and_pcoa_coords(self):
         print('\n\nComputing ITS2 type profile pairwise distances and PCoA coordinates using the BrayCurtis method\n')
         for clade_in_question in self.clades_of_ats:
-            self.objs_of_clade = [at for at in self.at_list_for_output if at.clade==clade_in_question]
+            self.objs_of_clade = [at for at in self.at_list_for_output if at.clade == clade_in_question]
             if len(self.objs_of_clade) < 2:
                 continue
             self._init_clade_dirs_and_paths(clade_in_question)
@@ -1472,7 +1509,8 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getBtwnProfileDistCoordsBCNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistPCVariancesBCNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
-             {'function_name': 'getBtwnProfileDistPCAvailableBCNoSqrt', 'python_obj': self.pc_availabaility_dict_no_sqrt},
+             {'function_name': 'getBtwnProfileDistPCAvailableBCNoSqrt',
+              'python_obj': self.pc_availabaility_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistCoordsBCSqrt', 'python_obj': self.pc_coordinates_dict_sqrt},
              {'function_name': 'getBtwnProfileDistPCVariancesBCSqrt', 'python_obj': self.pc_variances_dict_sqrt},
              {'function_name': 'getBtwnProfileDistPCAvailableBCSqrt', 'python_obj': self.pc_availabaility_dict_sqrt}
@@ -1530,7 +1568,6 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             df_sqrt = pd.DataFrame(at.get_ratio_list())
 
             df_sqrt = general.sqrt_transform_abundance_df(df_sqrt)
-
 
             if self.local:
                 normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_local_clade_cols(
@@ -1592,9 +1629,9 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             i in range(len(ref_seq_uids_of_analysis_type))}
         return normalised_abundance_of_divs_dict
 
-    def _create_norm_abund_dict_from_all_clade_cols(self, df, ref_seq_uids_of_analysis_type):
+    @staticmethod
+    def _create_norm_abund_dict_from_all_clade_cols(df, ref_seq_uids_of_analysis_type):
         normalised_abundance_of_divs_dict = {
             ref_seq_uids_of_analysis_type[i]: math.ceil(df[i].mean() * 100000) for
             i in range(len(ref_seq_uids_of_analysis_type))}
         return normalised_abundance_of_divs_dict
-
