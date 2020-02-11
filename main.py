@@ -89,13 +89,13 @@ class SymPortalWorkFlowManager:
             epilog='For support email: benjamin.hume@kaust.edu.sa')
         group = parser.add_mutually_exclusive_group(required=True)
         self._define_mutually_exclusive_args(group)
-        self._define_additional_args(group, parser)
+        self._define_additional_args(parser)
         if custom_args_list is not None:
             return parser.parse_args(custom_args_list)
         else:
             return parser.parse_args()
 
-    def _define_additional_args(self, group, parser):
+    def _define_additional_args(self, parser):
         parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
         parser.add_argument('--name', help='A name for your input or analysis', default='noName')
         parser.add_argument('--description', help='An optional description', default='No description')
@@ -113,8 +113,13 @@ class SymPortalWorkFlowManager:
 
         parser.add_argument(
             '--distance_method',
-            help='Either \'unifrac\' or \'braycurtis\', default=braycurtis. The method to use when '
-                 'calculating distances between its2 type profiles or samples.', default='braycurtis')
+            help='Either \'unifrac\', \'braycurtis\', or \'all\' [all]. The method to use when '
+                 'calculating distances between its2 type profiles or samples. '
+                 '\n\'unifrac\' - ouput only unifrac-derived distance matrices'
+                 '\n\'braycurtis\' - output only braycurtis-derived distance matrices'
+                 '\n\'all\' - output both unifrac- and braycurtis-derived distance matrices '
+                 'mafft and iqtree will be checked for in your PATH. If not found, only braycurtis-derived distances '
+                 'will be output', default='all')
         # when run as remote
         parser.add_argument(
             '--submitting_user_name',
@@ -131,6 +136,13 @@ class SymPortalWorkFlowManager:
                                  " UniFrac-based distance calculations. This flag can be passed when calculating"
                                  " either between sample or between ITS2 type profile distances. "
                                  "[False]", action='store_true', default=False)
+        parser.add_argument('--dist_transformation', help="Either \'none\', \'sqrt\', or \'both\' [both]."
+                '\n\'none\' - no transformation will be applied to the sequence count data when producing distance'
+                ' matrices.'
+                '\n\'sqrt\' - a square root transformation will be applied to the sequence count data when '
+                'producing distance matrices.'
+                '\n\'both\' - two sets of distance matrices will be output. One with no transofmation applied to '
+                'the sequence count data, and one with the sqrt transformation applied.', default='both')
         parser.add_argument('--local',
                              help="When passed, only the DataSetSamples of the current output will be used"
                                              " in calculating ITS2 type profile similarities. If false, similarity"
