@@ -835,40 +835,54 @@ class TreeCreatorForUniFrac:
 class BaseBrayCurtisDistPCoACreator:
     def __init__(self, call_type, date_time_str, profiles_or_samples, js_output_path_dict, html_dir):
         self.call_type = call_type
-        
         self.date_time_str = date_time_str
-        
         self.output_path_list = []
         self.clade_output_dir = None
         # path to the .csv file that will hold the PCoA coordinates
-        self.clade_pcoa_coord_file_path = None
+        self.clade_pcoa_coord_file_path_no_sqrt = None
+        self.clade_pcoa_coord_file_path_sqrt = None
         # path to the .dist file that holds the unifrac or braycurtis derived sample clade-separated paired distances
-        self.clade_dist_file_path = None
-        self.clade_dist_file_as_list = None
+        self.clade_dist_file_path_no_sqrt = None
+        self.clade_dist_file_path_sqrt = None
+        # The actual contents of the distance file in list form
+        self.clade_dist_file_as_list_no_sqrt = None
+        self.clade_dist_file_as_list_sqrt = None
         # either 'profiles' or 'samples'
         self.profiles_or_samples = profiles_or_samples
 
         # clade specific attributes. Will be updated for every clade processe
         self.objs_of_clade = None
-        self.clade_rs_uid_to_normalised_abund_clade_dict = {}
-        self.clade_within_clade_distances_dict = {}
+        self.clade_rs_uid_to_normalised_abund_clade_dict_sqrt = {}
+        self.clade_rs_uid_to_normalised_abund_clade_dict_no_sqrt = {}
+        self.clade_within_clade_distances_dict_no_sqrt = {}
+        self.clade_within_clade_distances_dict_sqrt = {}
         self.js_output_path_dict = js_output_path_dict
         self.html_dir = html_dir
         self.genera_annotation_dict = {
             'A': 'Symbiodinium', 'B': 'Breviolum', 'C': 'Cladocopium', 'D': 'Durusdinium',
             'E': 'Effrenium', 'F': 'Clade F', 'G': 'Clade G', 'H': 'Clade H', 'I': 'Clade I'
         }
-        self.pc_coordinates_dict = {}
-        self.pc_variances_dict = {}
-        self.pc_availabaility_dict = {}
+        self.pc_coordinates_dict_no_sqrt = {}
+        self.pc_coordinates_dict_sqrt = {}
+        self.pc_variances_dict_no_sqrt = {}
+        self.pc_variances_dict_sqrt = {}
+        self.pc_availabaility_dict_no_sqrt = {}
+        self.pc_availabaility_dict_sqrt = {}
         self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
-    def _compute_pcoa_coords(self, clade):
+    def _compute_pcoa_coords(self, clade, sqrt):
         # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
         # a twoD list and then convert to a numpy array
-        self.clade_pcoa_coord_file_path = os.path.join(
-            self.clade_output_dir, f'{self.date_time_str}.bray_curtis_{self.profiles_or_samples}_PCoA_coords_{clade}.csv')
-        raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path)
+        if sqrt:
+            self.clade_pcoa_coord_file_path_sqrt = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_str}.bray_curtis_{self.profiles_or_samples}_PCoA_coords_{clade}_sqrt.csv')
+            raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path_sqrt)
+        else:
+            self.clade_pcoa_coord_file_path_no_sqrt = os.path.join(
+                self.clade_output_dir,
+                f'{self.date_time_str}.bray_curtis_{self.profiles_or_samples}_PCoA_coords_{clade}_no_sqrt.csv')
+            raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path_no_sqrt)
 
         temp_two_d_list = []
         object_names_from_dist_matrix = []
@@ -901,7 +915,10 @@ class BaseBrayCurtisDistPCoACreator:
             renamed_pcoa_dataframe.insert(loc=0, column='analysis_type_uid', value=object_ids_from_dist_matrix)
             renamed_pcoa_dataframe['analysis_type_uid'] = renamed_pcoa_dataframe['analysis_type_uid'].astype('int')
 
-        renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path, index=True, header=True, sep=',')
+        if sqrt:
+            renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path_no_sqrt, index=True, header=True, sep=',')
+        else:
+            renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path_no_sqrt, index=True, header=True, sep=',')
         return renamed_pcoa_dataframe
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list, cct_set_uid_list):
@@ -974,13 +991,19 @@ class BaseBrayCurtisDistPCoACreator:
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return data_set_samples_of_output
 
-    def _compute_braycurtis_btwn_obj_pairs(self):
+    def _compute_braycurtis_btwn_obj_pairs(self, sqrt):
         for obj_one, obj_two in itertools.combinations(list(self.objs_of_clade), 2):
             # let's work to a virtual subsample of 100 000
-            obj_one_seq_rel_abundance_dict = self.clade_rs_uid_to_normalised_abund_clade_dict[
-                obj_one.id]
-            obj_two_seq_rel_abundance_dict = self.clade_rs_uid_to_normalised_abund_clade_dict[
-                obj_two.id]
+            if sqrt:
+                obj_one_seq_rel_abundance_dict = self.clade_rs_uid_to_normalised_abund_clade_dict_sqrt[
+                    obj_one.id]
+                obj_two_seq_rel_abundance_dict = self.clade_rs_uid_to_normalised_abund_clade_dict_sqrt[
+                    obj_two.id]
+            else:
+                obj_one_seq_rel_abundance_dict = self.clade_rs_uid_to_normalised_abund_clade_dict_no_sqrt[
+                    obj_one.id]
+                obj_two_seq_rel_abundance_dict = self.clade_rs_uid_to_normalised_abund_clade_dict_no_sqrt[
+                    obj_two.id]
 
             # for each comparison. Get a set of all of the sequence and convert this to a list.
             set_of_rs_uids = set(list(obj_one_seq_rel_abundance_dict.keys()))
@@ -1008,10 +1031,16 @@ class BaseBrayCurtisDistPCoACreator:
             distance = braycurtis(rs_abundance_list_one, rs_abundance_list_two)
 
             # these distances can be stored in a dictionary by the 'id1/id2' and 'id2/id1'
-            self.clade_within_clade_distances_dict[frozenset({obj_one.id, obj_two.id})] = distance
+            if sqrt:
+                self.clade_within_clade_distances_dict_sqrt[frozenset({obj_one.id, obj_two.id})] = distance
+            else:
+                self.clade_within_clade_distances_dict_no_sqrt[frozenset({obj_one.id, obj_two.id})] = distance
 
-    def _generate_distance_file(self):
-        self.clade_dist_file_as_list = [len(self.objs_of_clade)]
+    def _generate_distance_file(self, sqrt):
+        if sqrt:
+            self.clade_dist_file_as_list_sqrt = [len(self.objs_of_clade)]
+        else:
+            self.clade_dist_file_as_list_no_sqrt = [len(self.objs_of_clade)]
         for obj_outer in self.objs_of_clade:
             temp_at_string = [obj_outer.id]
 
@@ -1019,16 +1048,29 @@ class BaseBrayCurtisDistPCoACreator:
                 if obj_outer == obj_inner:
                     temp_at_string.append(0)
                 else:
-                    temp_at_string.append(
-                        self.clade_within_clade_distances_dict[frozenset({obj_outer.id, obj_inner.id})])
-            self.clade_dist_file_as_list.append(
-                '\t'.join([str(distance_item) for distance_item in temp_at_string]))
+                    if sqrt:
+                        temp_at_string.append(
+                            self.clade_within_clade_distances_dict_no_sqrt[frozenset({obj_outer.id, obj_inner.id})])
+                    else:
+                        temp_at_string.append(
+                            self.clade_within_clade_distances_dict_no_sqrt[frozenset({obj_outer.id, obj_inner.id})])
+            if sqrt:
+                self.clade_dist_file_as_list_sqrt.append(
+                    '\t'.join([str(distance_item) for distance_item in temp_at_string]))
+            else:
+                self.clade_dist_file_as_list_no_sqrt.append(
+                    '\t'.join([str(distance_item) for distance_item in temp_at_string]))
 
-    def _add_obj_uids_to_dist_file_and_write(self):
+    def _add_obj_uids_to_dist_file_and_write(self, sqrt):
         # for the output version lets also append the sample name to each line so that we can see which sample it is
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
-        dist_with_obj_name = [self.clade_dist_file_as_list[0]]
-        list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list[1:]]
+        if sqrt:
+            dist_with_obj_name = [self.clade_dist_file_as_list_sqrt[0]]
+            list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list_sqrt[1:]]
+        else:
+            dist_with_obj_name = [self.clade_dist_file_as_list_no_sqrt[0]]
+            list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list_no_sqrt[1:]]
+
         if self.profiles_or_samples == 'samples':
             objs_of_outputs = self._chunk_query_dss_objs_from_dss_uids(list_of_obj_uids)
             dict_of_obj_id_to_obj_name = {obj.id: obj.name for obj in objs_of_outputs}
@@ -1036,16 +1078,25 @@ class BaseBrayCurtisDistPCoACreator:
             objs_of_outputs = self._chunk_query_at_obj_from_at_uids(list_of_obj_uids)
             dict_of_obj_id_to_obj_name = {obj.id: obj.name for obj in objs_of_outputs}
 
-        for line in self.clade_dist_file_as_list[1:]:
-            temp_list = []
-            obj_id = int(line.split('\t')[0])
-            obj_name = dict_of_obj_id_to_obj_name[obj_id]
-            temp_list.append(obj_name)
-            temp_list.extend(line.split('\t'))
-            new_line = '\t'.join(temp_list)
-            dist_with_obj_name.append(new_line)
-        self.clade_dist_file_as_list = dist_with_obj_name
-        general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
+        if sqrt:
+            for line in self.clade_dist_file_as_list_sqrt[1:]:
+                self._append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line)
+            self.clade_dist_file_as_list_sqrt = dist_with_obj_name
+            general.write_list_to_destination(self.clade_dist_file_path_sqrt, self.clade_dist_file_as_list_sqrt)
+        else:
+            for line in self.clade_dist_file_as_list_no_sqrt[1:]:
+                self._append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line)
+            self.clade_dist_file_as_list_no_sqrt = dist_with_obj_name
+            general.write_list_to_destination(self.clade_dist_file_path_no_sqrt, self.clade_dist_file_as_list_no_sqrt)
+
+    def _append_obj_name_to_dist_line(self, dict_of_obj_id_to_obj_name, dist_with_obj_name, line):
+        temp_list = []
+        obj_id = int(line.split('\t')[0])
+        obj_name = dict_of_obj_id_to_obj_name[obj_id]
+        temp_list.append(obj_name)
+        temp_list.extend(line.split('\t'))
+        new_line = '\t'.join(temp_list)
+        dist_with_obj_name.append(new_line)
 
     def _chunk_query_at_obj_from_at_uids(self, list_of_obj_uids):
         objs_of_outputs = []
@@ -1059,9 +1110,6 @@ class BaseBrayCurtisDistPCoACreator:
             cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
         return cc_of_outputs
 
-    def _write_out_dist_file(self):
-        general.write_list_to_destination(self.clade_dist_file_path, self.clade_dist_file_as_list)
-
     def _write_output_paths_to_stdout(self):
         print('\n\nBrayCurtis distances and PCoA computation complete. Output files:')
         if self.output_path_list:
@@ -1072,7 +1120,9 @@ class BaseBrayCurtisDistPCoACreator:
             print("There are no output files")
 
     def _append_output_files_to_output_list(self):
-        self.output_path_list.extend([self.clade_dist_file_path, self.clade_pcoa_coord_file_path])
+        self.output_path_list.extend(
+            [self.clade_dist_file_path_no_sqrt, self.clade_pcoa_coord_file_path_no_sqrt,
+             self.clade_dist_file_path_sqrt, self.clade_pcoa_coord_file_path_sqrt])
 
 
 class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
@@ -1126,7 +1176,6 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self._compute_braycurtis_btwn_obj_pairs()
             self._generate_distance_file()
             self._add_obj_uids_to_dist_file_and_write()
-            self._write_out_dist_file()
             pcoa_coords_df = self._compute_pcoa_coords(clade=clade_in_question)
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
             self._append_output_files_to_output_list()
@@ -1219,11 +1268,13 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     dss = DataSetSample
     dsss = DataSetSampleSequence
     cc = CladeCollection
+
+    TODO we want to change to outputing both a set of sqrt transformed and non transformed distance outputs
     """
 
     def __init__(
             self, data_analysis_obj, js_output_path_dict, html_dir, output_dir, date_time_str, data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, no_sqrt_transf=True, local_abunds_only=False):
+            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, local_abunds_only=False):
         super().__init__(
             call_type=call_type, date_time_str=date_time_str,
             profiles_or_samples='profiles', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
@@ -1242,9 +1293,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self.at_list_for_output = self._chunk_query_set_at_list_for_output_from_dss_uids()
         self.clades_of_ats = list(set([at.clade for at in self.at_list_for_output]))
         self.output_dir = os.path.join(output_dir, 'between_profile_distances')
-        self.no_sqrt_transf = no_sqrt_transf
         self.local = local_abunds_only
-
 
     def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
@@ -1274,40 +1323,58 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
                 continue
             self._init_clade_dirs_and_paths(clade_in_question)
             self._create_rs_uid_to_normalised_abund_dict_for_each_obj_profiles()
-            self._compute_braycurtis_btwn_obj_pairs()
-            self._generate_distance_file()
-            self._add_obj_uids_to_dist_file_and_write()
-            self._write_out_dist_file()
-            pcoa_coords_df = self._compute_pcoa_coords(clade=clade_in_question)
+            self._compute_braycurtis_btwn_obj_pairs(sqrt=True)
+            self._compute_braycurtis_btwn_obj_pairs(sqrt=False)
+            self._generate_distance_file(sqrt=True)
+            self._generate_distance_file(sqrt=False)
+            self._add_obj_uids_to_dist_file_and_write(sqrt=True)
+            self._add_obj_uids_to_dist_file_and_write(sqrt=False)
 
-            self._populate_js_output_objects(clade_in_question, pcoa_coords_df)
+            pcoa_coords_df_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=True)
+            pcoa_coords_df_no_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=False)
+
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df_sqrt, sqrt=True)
+            self._populate_js_output_objects(clade_in_question, pcoa_coords_df_no_sqrt, sqrt=False)
 
             self._append_output_files_to_output_list()
             self.js_output_path_dict[
-                f"btwn_profile_braycurtis_{clade_in_question}_dist"] = self.clade_dist_file_path
+                f"btwn_profile_braycurtis_{clade_in_question}_dist_no_sqrt"] = self.clade_dist_file_path_no_sqrt
             self.js_output_path_dict[
-                f"btwn_profile_braycurtis_{clade_in_question}_pcoa"] = self.clade_pcoa_coord_file_path
+                f"btwn_profile_braycurtis_{clade_in_question}_pcoa_no_sqrt"] = self.clade_pcoa_coord_file_path_no_sqrt
+            self.js_output_path_dict[
+                f"btwn_profile_braycurtis_{clade_in_question}_dist_sqrt"] = self.clade_dist_file_path_sqrt
+            self.js_output_path_dict[
+                f"btwn_profile_braycurtis_{clade_in_question}_pcoa_sqrt"] = self.clade_pcoa_coord_file_path_sqrt
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
 
     def _write_out_js_objects(self):
         general.write_out_js_file_to_return_python_objs_as_js_objs(
-            [{'function_name': 'getBtwnProfileDistCoordsBC', 'python_obj': self.pc_coordinates_dict},
-             {'function_name': 'getBtwnProfileDistPCVariancesBC', 'python_obj': self.pc_variances_dict},
-             {'function_name': 'getBtwnProfileDistPCAvailableBC', 'python_obj': self.pc_availabaility_dict}],
-            js_outpath=self.js_file_path)
+            [{'function_name': 'getBtwnProfileDistCoordsBCNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
+             {'function_name': 'getBtwnProfileDistPCVariancesBCNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
+             {'function_name': 'getBtwnProfileDistPCAvailableBCNoSqrt', 'python_obj': self.pc_availabaility_dict_no_sqrt},
+             {'function_name': 'getBtwnProfileDistCoordsBCSqrt', 'python_obj': self.pc_coordinates_dict_sqrt},
+             {'function_name': 'getBtwnProfileDistPCVariancesBCSqrt', 'python_obj': self.pc_variances_dict_sqrt},
+             {'function_name': 'getBtwnProfileDistPCAvailableBCSqrt', 'python_obj': self.pc_availabaility_dict_sqrt}
+             ], js_outpath=self.js_file_path)
 
-    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df):
+    def _populate_js_output_objects(self, clade_in_question, pcoa_coords_df, sqrt):
         # set the variance dict
         # and set the available pcs
         pcoa_coords_df.set_index('analysis_type_uid', drop=True, inplace=True)
         available_pcs = list(pcoa_coords_df)
         if len(available_pcs) > 6:
             available_pcs = available_pcs[:6]
-        self.pc_availabaility_dict[self.genera_annotation_dict[clade_in_question]] = available_pcs
-        variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
-        self.pc_variances_dict[self.genera_annotation_dict[clade_in_question]] = variances
+        if sqrt:
+            self.pc_availabaility_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
+            variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+            self.pc_variances_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
+        else:
+            self.pc_availabaility_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
+            variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
+            self.pc_variances_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
+
         # set the coordinates data holder dict here
         genera_pc_coords_dict = {}
         for profile_uid in pcoa_coords_df.index.values.tolist()[:-1]:
@@ -1315,13 +1382,22 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             for pc in available_pcs:
                 profile_pc_coords_dict[pc] = f'{pcoa_coords_df.at[profile_uid, pc]:.3f}'
             genera_pc_coords_dict[int(profile_uid)] = profile_pc_coords_dict
-        self.pc_coordinates_dict[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+
+        if sqrt:
+            self.pc_coordinates_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
+        else:
+            self.pc_coordinates_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = genera_pc_coords_dict
 
     def _init_clade_dirs_and_paths(self, clade_in_question):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
-        self.clade_dist_file_path = os.path.join(
+        # path for the sqrt transformed distance file
+        self.clade_dist_file_path_sqrt = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_str}.bray_curtis_within_clade_profile_distances_{clade_in_question}.dist')
+            f'{self.date_time_str}.bray_curtis_within_clade_profile_distances_{clade_in_question}_sqrt.dist')
+        # path for the non transformed distance file
+        self.clade_dist_file_path_no_sqrt = os.path.join(
+            self.clade_output_dir,
+            f'{self.date_time_str}.bray_curtis_within_clade_profile_distances_{clade_in_question}_no_sqrt.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_profiles(self):
@@ -1331,22 +1407,31 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         for at in self.objs_of_clade:
             ref_seq_uids_of_analysis_type = [int(b) for b in at.ordered_footprint_list.split(',')]
 
-            df = pd.DataFrame(at.get_ratio_list())
+            df_no_sqrt = pd.DataFrame(at.get_ratio_list())
+            df_sqrt = pd.DataFrame(at.get_ratio_list())
 
-            if not self.no_sqrt_transf:
-                df = general.sqrt_transform_abundance_df(df)
+            df_sqrt = general.sqrt_transform_abundance_df(df_sqrt)
+
 
             if self.local:
-                normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_local_clade_cols(
-                    at, df, ref_seq_uids_of_analysis_type)
-            elif self.cct_set_uid_list:
-                normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_cct_set(
-                    at, df, ref_seq_uids_of_analysis_type)
-            else:
-                normalised_abundance_of_divs_dict = self._create_norm_abund_dict_from_all_clade_cols(
-                    df, ref_seq_uids_of_analysis_type)
+                normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_local_clade_cols(
+                    at, df_no_sqrt, ref_seq_uids_of_analysis_type)
+                normalised_abundance_of_divs_dict_sqrt = self._create_norm_abund_dict_from_local_clade_cols(
+                    at, df_sqrt, ref_seq_uids_of_analysis_type)
 
-            self.clade_rs_uid_to_normalised_abund_clade_dict[at.id] = normalised_abundance_of_divs_dict
+            elif self.cct_set_uid_list:
+                normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_cct_set(
+                    at, df_no_sqrt, ref_seq_uids_of_analysis_type)
+                normalised_abundance_of_divs_dict_sqrt = self._create_norm_abund_dict_from_cct_set(
+                    at, df_sqrt, ref_seq_uids_of_analysis_type)
+            else:
+                normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_all_clade_cols(
+                    df_no_sqrt, ref_seq_uids_of_analysis_type)
+                normalised_abundance_of_divs_dict_sqrt = self._create_norm_abund_dict_from_all_clade_cols(
+                    df_sqrt, ref_seq_uids_of_analysis_type)
+
+            self.clade_rs_uid_to_normalised_abund_clade_dict_no_sqrt[at.id] = normalised_abundance_of_divs_dict_no_sqrt
+            self.clade_rs_uid_to_normalised_abund_clade_dict_sqrt[at.id] = normalised_abundance_of_divs_dict_sqrt
 
     def _create_norm_abund_dict_from_local_clade_cols(self, at, df, ref_seq_uids_of_analysis_type):
         # we want to limit the inference of the average relative abundance of the DIVs to only those
