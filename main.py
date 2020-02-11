@@ -693,6 +693,8 @@ class SymPortalWorkFlowManager:
                     self._start_type_braycurtis_data_sets()
                     self._start_type_unifrac_data_sets()
             else:
+                print('Changing distance method to braycurtis as one or more of the required '
+                      'packages could not be found in your PATH')
                 self.args.distance_method = 'braycurtis'
 
         if self.args.distance_method == 'unifrac':
@@ -810,6 +812,8 @@ class SymPortalWorkFlowManager:
                     self._start_sample_braycurtis_data_sets()
                     self._start_sample_unifrac_data_sets()
             else:
+                print('Changing distance method to braycurtis as one or more of the required '
+                      'packages could not be found in your PATH')
                 self.args.distance_method = 'braycurtis'
         if self.args.distance_method == 'unifrac':
             if self.args.between_sample_distances_sample_set:

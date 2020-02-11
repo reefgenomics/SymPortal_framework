@@ -26,13 +26,14 @@ class SymPortalTester:
         self.cleanup_after_previous_tests()
 
     def _test_data_loading_work_flow(self):
-        custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc), '--data_sheet',
-             self.data_sheet_file_path, '--debug']
+        custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc',
+                            str(self.num_proc), '--data_sheet', self.data_sheet_file_path, '--debug']
         self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
         self.work_flow_manager.start_work_flow()
 
     def _test_data_loading_work_flow_no_datasheet(self):
-        custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc', str(self.num_proc), '--debug']
+        custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc',
+                            str(self.num_proc), '--debug']
         self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
         self.work_flow_manager.start_work_flow()
 

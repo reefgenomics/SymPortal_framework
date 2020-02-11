@@ -258,6 +258,8 @@ class DataLoading:
                 self._do_unifrac_dist_pcoa()
                 self._do_braycurtis_dist_pcoa()
             else:
+                print('Changing distance method to braycurtis as one or more of the required '
+                      'packages could not be found in your PATH')
                 self.distance_method = 'braycurtis'
         if self.distance_method == 'unifrac':
             self._do_unifrac_dist_pcoa()
@@ -382,7 +384,8 @@ class DataLoading:
             pre_med_sequence_output_directory_path=self.pre_med_sequence_output_directory_path)
         data_set_sample_pre_med_obj_creator.make_data_set_sample_pm_objects()
         self.pre_med_seq_stop_time = time.time()
-        print(f'\n\nCreation of DataSetSampleSequencePM objects took {self.pre_med_seq_stop_time-self.pre_med_seq_start_time}s')
+        print(f'\n\nCreation of DataSetSampleSequencePM objects took '
+              f'{self.pre_med_seq_stop_time-self.pre_med_seq_start_time}s')
 
     def _do_med_decomposition(self):
         self.perform_med_handler_instance = PerformMEDHandler(
@@ -598,7 +601,8 @@ class DataLoading:
     def _create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
         back_up_dir = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade_backup'))
         os.makedirs(back_up_dir, exist_ok=True)
-        symclade_current_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade.fa'))
+        symclade_current_path = os.path.abspath(
+            os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade.fa'))
 
         symclade_backup_path = os.path.join(back_up_dir, f'symClade_{self.date_time_str}.fa')
         symclade_backup_readme_path = os.path.join(back_up_dir, f'symClade_{self.date_time_str}.readme')
@@ -694,8 +698,7 @@ class DataLoading:
         sample_fastq_pairs = []
         for sample_name in self.list_of_samples_names:
             print(f'Sample {sample_name}')
-            temp_list = []
-            temp_list.append(sample_name.replace('-', '[dS]'))
+            temp_list = [sample_name.replace('-', '[dS]')]
             fwd_file_path = None
             rev_file_path = None
             for file_path in return_list_of_file_paths_in_directory(self.user_input_path):
@@ -717,10 +720,10 @@ class DataLoading:
                             self._print_sample_direction_path(direction='rev', file_path=file_path)
                     else:
                         seq_direction_result = self._check_seq_file_path_for_seq_direction(file_path=file_path)
-                        if seq_direction_result =='rev':
+                        if seq_direction_result == 'rev':
                             rev_file_path = file_path
                             self._print_sample_direction_path(direction='rev', file_path=file_path)
-                        elif seq_direction_result =='fwd':
+                        elif seq_direction_result == 'fwd':
                             fwd_file_path = file_path
                             self._print_sample_direction_path(direction='fwd', file_path=file_path)
                         else:
@@ -752,8 +755,8 @@ class DataLoading:
         write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
 
-
-    def _check_seq_file_path_for_seq_direction(self, file_path):
+    @staticmethod
+    def _check_seq_file_path_for_seq_direction(file_path):
         """ This will try to deduce whether a given sequencing file is of a given direction"""
         file_name_list = list(ntpath.basename(file_path))
 
@@ -778,7 +781,8 @@ class DataLoading:
                     return 'rev'
         return False
 
-    def _print_sample_direction_path(self, direction, file_path):
+    @staticmethod
+    def _print_sample_direction_path(direction, file_path):
         if direction == 'fwd':
             print(f'R1 = {file_path}')
         else:
@@ -842,10 +846,7 @@ class DataLoading:
 
     def _generate_stability_file_and_data_set_sample_objects_with_datasheet(self):
         # if we are given a data_sheet then use the sample names given as the DataSetSample object names
-
         self.make_dot_stability_file_datasheet()
-
-
         self._create_data_set_sample_objects_in_bulk_with_datasheet()
 
     def make_dot_stability_file_datasheet(self):
@@ -856,8 +857,7 @@ class DataLoading:
         joined with the temp_working_directory."""
         sample_fastq_pairs = []
         for sample_name in self.sample_meta_info_df.index.values.tolist():
-            temp_list = []
-            temp_list.append(sample_name.replace('-', '[dS]'))
+            temp_list = [sample_name.replace('-', '[dS]')]
             temp_list.append(
                 os.path.join(
                     self.temp_working_directory,
@@ -902,13 +902,13 @@ class DataLoading:
                 collection_date = str(self.sample_meta_info_df.loc[sampleName, 'collection_date'])
             except:
                 sample_type = 'NoData'
-                host_phylum ='NoData'
-                host_class ='NoData'
-                host_order ='NoData'
-                host_family ='NoData'
-                host_genus ='NoData'
-                host_species ='NoData'
-                collection_depth ='NoData'
+                host_phylum = 'NoData'
+                host_class = 'NoData'
+                host_order = 'NoData'
+                host_family = 'NoData'
+                host_genus = 'NoData'
+                host_species = 'NoData'
+                collection_depth = 'NoData'
                 collection_date = 'NoData'
             try:
                 collection_latitude = float(self.sample_meta_info_df.loc[sampleName, 'collection_latitude'])
@@ -993,7 +993,8 @@ class DataLoading:
         self._check_datasheet_df_vals_unique()
 
         self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].astype(str)
-        self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].str.rstrip().str.lstrip().str.replace(' ', '_').str.replace('/', '_')
+        self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].str.rstrip()\
+            .str.lstrip().str.replace(' ', '_').str.replace('/', '_')
 
         self.sample_meta_info_df.set_index('sample_name', inplace=True, drop=True)
 
@@ -1025,13 +1026,12 @@ class DataLoading:
                     print(f'changing {current_species_val} to {new_species_val} for {row_name}')
                     self.sample_meta_info_df.at[row_name, 'host_species'] = new_species_val
 
-
     def _check_vars_can_be_string(self):
         """First convert each of the columns to type string.
         Then make sure that all of the vals are genuine vals of NoData
         """
         for col in ['sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus',
-                        'host_species', 'collection_depth', 'collection_date']:
+                    'host_species', 'collection_depth', 'collection_date']:
             self.sample_meta_info_df[col] = self.sample_meta_info_df[col].astype(str)
         for i, sample_name in enumerate(self.sample_meta_info_df.index.values.tolist()):
             for col in ['sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus',
@@ -1102,7 +1102,8 @@ class DataLoading:
                             lon_float = self.dms2dec(lon)
                         # if all this fails, convert to 999
                         except Exception:
-                            print(f'Unable to convert the Lat Lon values of {sample_name} to float. Values will be set to 999')
+                            print(f'Unable to convert the Lat Lon values of {sample_name} to float. '
+                                  f'Values will be set to 999')
                             self._set_lat_lon_to_999(sample_name)
                             continue
                 # final check to make sure that the values are in a sensible range
@@ -1113,7 +1114,8 @@ class DataLoading:
                     self._set_lat_lon_to_999(sample_name)
         # finally make sure that the lat and long cols are typed as float
         self.sample_meta_info_df['collection_latitude'] = self.sample_meta_info_df['collection_latitude'].astype(float)
-        self.sample_meta_info_df['collection_longitude'] = self.sample_meta_info_df['collection_longitude'].astype(float)
+        self.sample_meta_info_df['collection_longitude'] = self.sample_meta_info_df['collection_longitude'].astype(
+            float)
 
     def _set_lat_lon_to_999(self, sample_name):
         self.sample_meta_info_df.at[sample_name, 'collection_latitude'] = float(999)
@@ -1265,7 +1267,8 @@ class DataLoading:
             # If working form datasheet this is as easy as copying over the specified file paths
             for sample_name in self.sample_meta_info_df.index.values.tolist():
                 # copy over the fwd read
-                shutil.copy(self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name'], self.temp_working_directory)
+                shutil.copy(self.sample_meta_info_df.loc[sample_name, 'fastq_fwd_file_name'],
+                            self.temp_working_directory)
                 # copy over the rev read
                 shutil.copy(self.sample_meta_info_df.loc[sample_name, 'fastq_rev_file_name'],
                             self.temp_working_directory)
@@ -1298,7 +1301,7 @@ class DataLoading:
 
     def _setup_sequence_dump_file_path(self):
         seq_dump_file_path = os.path.join(
-            self.symportal_root_directory,'dbBackUp', 'seq_dumps', f'seq_dump_{self.date_time_str}')
+            self.symportal_root_directory, 'dbBackUp', 'seq_dumps', f'seq_dump_{self.date_time_str}')
         os.makedirs(os.path.dirname(seq_dump_file_path), exist_ok=True)
         return seq_dump_file_path
 
@@ -1317,7 +1320,8 @@ class DataLoading:
             )
         else:
             # then we assume that we are pointing to a directory and we can directly use that to make the wkd
-            self.temp_working_directory = os.path.abspath(os.path.join(self.user_input_path, 'tempData', str(self.dataset_object.id)))
+            self.temp_working_directory = os.path.abspath(os.path.join(self.user_input_path, 'tempData',
+                                                                       str(self.dataset_object.id)))
         self._create_temp_wkd()
         return self.temp_working_directory
 
@@ -1326,6 +1330,7 @@ class DataLoading:
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)
         os.makedirs(self.temp_working_directory)
+
 
 class FastDataSetSampleSequencePMCreator:
     def __init__(self, pre_med_sequence_output_directory_path, dataset_object):
@@ -1336,8 +1341,7 @@ class FastDataSetSampleSequencePMCreator:
         self.ref_seq_sequence_to_ref_seq_obj_dict = {}
         for clade in clades:
             self.ref_seq_sequence_to_ref_seq_obj_dict[clade] = {
-            ref_seq.sequence: ref_seq for ref_seq in ReferenceSequence.objects.filter(clade=clade)
-            }
+                ref_seq.sequence: ref_seq for ref_seq in ReferenceSequence.objects.filter(clade=clade)}
         self.list_of_pre_med_sample_dirs = self._populate_list_of_pre_med_sample_dirs()
         # This is a dict that will have three levels.
         # The first set of keys will be the clades.
@@ -1620,7 +1624,8 @@ class FastDataSetSampleSequencePMCreator:
                 # first sanity check to see that non of the consolidated sequences fit into any of the other
                 # consolidated sequences
                 for seq_one, seq_two in itertools.combinations(self.non_match_dict.keys(), 2):
-                    if (seq_one in seq_two) or (seq_two in seq_one) or ('A' + seq_one in seq_two) or ('A' + seq_two in seq_one):
+                    if (seq_one in seq_two) or (seq_two in seq_one) or \
+                            ('A' + seq_one in seq_two) or ('A' + seq_two in seq_one):
                         raise RuntimeError('Consolidated sequences can be further consolidated')
 
             # For each consolidated sequences, create a ReferenceSequence after checking to see that the sequence
@@ -1658,8 +1663,10 @@ class FastDataSetSampleSequencePMCreator:
                                                     abundance=abundance,
                                                     data_set_sample_from=dss_obj)
                     data_set_sample_sequence_pre_med_list.append(dsspm)
-            print(f'\nCreating {len(data_set_sample_sequence_pre_med_list)} new DataSetSampleSequencePM objects for clade {self.clade}')
+            print(f'\nCreating {len(data_set_sample_sequence_pre_med_list)} '
+                  f'new DataSetSampleSequencePM objects for clade {self.clade}')
             DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
+
 
 class DSSAttributeAssignmentHolder:
     """
@@ -1684,6 +1691,7 @@ class DSSAttributeAssignmentHolder:
         self.error_reason = 'noError'
         self.cladal_seq_totals = None
         self.initial_processing_complete = False
+
 
 class InitialMothurHandler:
     def __init__(self, data_loading_parent):
@@ -1760,7 +1768,7 @@ class InitialMothurHandler:
 
         for contigpair in iter(self.input_queue_containing_pairs_of_fastq_file_paths.get, 'STOP'):
 
-            initial_morthur_worker = InitialMothurWorker(init_mothur_handler_parent_obj = self, contig_pair=contigpair)
+            initial_morthur_worker = InitialMothurWorker(init_mothur_handler_parent_obj=self, contig_pair=contigpair)
 
             try:
                 initial_morthur_worker.start_initial_mothur_worker()
@@ -1772,7 +1780,7 @@ class InitialMothurHandler:
 
 class InitialMothurWorker:
     def __init__(self, init_mothur_handler_parent_obj, contig_pair):
-        self.parent=init_mothur_handler_parent_obj
+        self.parent = init_mothur_handler_parent_obj
         self.sample_name = contig_pair.split('\t')[0].replace('[dS]', '-')
         self.data_set_sample = DataSetSample.objects.get(
                 name=self.sample_name, data_submission_from=self.parent.parent.dataset_object
@@ -1781,8 +1789,10 @@ class InitialMothurWorker:
         self.cwd = os.path.join(self.parent.parent.temp_working_directory, self.sample_name)
         os.makedirs(self.cwd, exist_ok=True)
         self.mothur_analysis_object = MothurAnalysis.init_from_pair_of_fastq_gz_files(
-            pcr_analysis_name='symvar', output_dir=self.cwd, input_dir=self.cwd, fastq_gz_fwd_path=contig_pair.split('\t')[1],
-            fastq_gz_rev_path=contig_pair.split('\t')[2], stdout_and_sterr_to_pipe=(not self.parent.parent.debug), name=self.sample_name)
+            pcr_analysis_name='symvar', output_dir=self.cwd, input_dir=self.cwd,
+            fastq_gz_fwd_path=contig_pair.split('\t')[1],
+            fastq_gz_rev_path=contig_pair.split('\t')[2], stdout_and_sterr_to_pipe=(not self.parent.parent.debug),
+            name=self.sample_name)
 
     def start_initial_mothur_worker(self):
         sys.stdout.write(f'{self.sample_name}: QC started\n')
@@ -1852,7 +1862,7 @@ class InitialMothurWorker:
 
     def _do_make_contigs(self):
         try:
-            stdout_as_list = self.mothur_analysis_object.execute_make_contigs()
+            self.mothur_analysis_object.execute_make_contigs()
         except RuntimeError as e:
             if str(e) == 'bad fastq, mothur stuck in loop':
                 self.log_qc_error_and_continue(errorreason='Bad fastq, mothur stuck in loop')
@@ -1895,7 +1905,7 @@ class InitialMothurWorker:
     def check_for_no_seqs_after_pcr_and_raise_runtime_error(self):
         if len(self.mothur_analysis_object.sequence_collection) == 0:
             self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
-            raise RuntimeError({'sample_name':self.sample_name})
+            raise RuntimeError({'sample_name': self.sample_name})
 
     def check_for_error_and_raise_runtime_error(self):
         for stdout_line in decode_utf8_binary_to_list(
@@ -1903,16 +1913,15 @@ class InitialMothurWorker:
         ):
             if '[WARNING]: Blank fasta name, ignoring read.' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='Blank fasta name')
-                raise RuntimeError({'sample_name':self.sample_name})
+                raise RuntimeError({'sample_name': self.sample_name})
             if 'do not match' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='error in fastq file')
                 raise RuntimeError({'sample_name': self.sample_name})
             if 'ERROR' in stdout_line:
                 self.log_qc_error_and_continue(errorreason='error in inital QC')
-                raise RuntimeError({'sample_name':self.sample_name})
+                raise RuntimeError({'sample_name': self.sample_name})
         self.log_qc_error_and_continue(errorreason='error in inital QC')
         raise RuntimeError({'sample_name': self.sample_name})
-
 
     def log_qc_error_and_continue(self, errorreason):
         print('{}: Error in processing sample'.format(self.sample_name))
@@ -1922,7 +1931,6 @@ class InitialMothurWorker:
         self.dss_att_holder.error_in_processing = True
         self.dss_att_holder.error_reason = errorreason
         self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
-
 
 
 class PotentialSymTaxScreeningHandler:
@@ -2228,7 +2236,8 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
                 data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
-                data_loading_debug=data_loading_debug, sample_attributes_mp_output_queue=self.sample_attributes_mp_output_queue
+                data_loading_debug=data_loading_debug,
+                sample_attributes_mp_output_queue=self.sample_attributes_mp_output_queue
             )
 
             try:
@@ -2236,6 +2245,7 @@ class SymNonSymTaxScreeningHandler:
             except RuntimeError as e:
                 self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
         self.sample_attributes_mp_output_queue.put('DONE')
+
 
 class SymNonSymTaxScreeningWorker:
     def __init__(
@@ -2315,7 +2325,8 @@ class SymNonSymTaxScreeningWorker:
         self.datasetsample_object = DataSetSample.objects.get(
             name=sample_name, data_submission_from=data_loading_dataset_object
         )
-        self.sample_att_holder = DSSAttributeAssignmentHolder(name=self.datasetsample_object.name, uid=self.datasetsample_object.id)
+        self.sample_att_holder = DSSAttributeAssignmentHolder(name=self.datasetsample_object.name,
+                                                              uid=self.datasetsample_object.id)
         self.debug = data_loading_debug
         self.sample_attributes_mp_output_queue = sample_attributes_mp_output_queue
 
@@ -2414,8 +2425,9 @@ class SymNonSymTaxScreeningWorker:
 
             with open(pre_med_names_path_clade_specific, 'w') as f:
                 for sequence_name in [
-                    seq_name for seq_name, clade_val in self.sequence_name_to_clade_dict.items() if
-                    clade_val == clade_value and seq_name in self.sym_no_size_violation_sequence_name_set_for_sample]:
+                        seq_name for seq_name, clade_val in self.sequence_name_to_clade_dict.items() if
+                        clade_val == clade_value and seq_name in
+                        self.sym_no_size_violation_sequence_name_set_for_sample]:
                     f.write(f'{self.name_dict[sequence_name]}\n')
                     self.absolute_number_of_sym_no_size_violation_sequences += len(
                         self.name_dict[sequence_name].split('\t')[1].split(','))
@@ -2429,7 +2441,8 @@ class SymNonSymTaxScreeningWorker:
             with open(pre_med_fasta_path_clade_specific, 'w') as f:
                 for sequence_name in [
                     seq_name for seq_name, clade_val in self.sequence_name_to_clade_dict.items() if
-                    clade_val == clade_value and seq_name in self.sym_no_size_violation_sequence_name_set_for_sample]:
+                        clade_val == clade_value and seq_name in
+                        self.sym_no_size_violation_sequence_name_set_for_sample]:
 
                     f.write(f'>{sequence_name}\n')
                     f.write(f'{self.fasta_dict[sequence_name]}\n')
@@ -2510,7 +2523,7 @@ class SymNonSymTaxScreeningWorker:
         self.sample_att_holder.error_in_processing = True
         self.sample_att_holder.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
         self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
-        raise RuntimeError({'sample_name':self.sample_name})
+        raise RuntimeError({'sample_name': self.sample_name})
 
     def _identify_and_write_non_sym_seqs_in_sample(self):
         self._add_seqs_with_no_blast_match_to_non_sym_list()
@@ -2620,7 +2633,8 @@ class PerformMEDHandler:
         for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
 
             perform_med_worker_instance = PerformMEDWorker(
-                redundant_fasta_path=redundant_fata_path, data_loading_debug=data_loading_debug, data_loading_path_to_med_padding_executable=data_loading_path_to_med_padding_executable,
+                redundant_fasta_path=redundant_fata_path, data_loading_debug=data_loading_debug,
+                data_loading_path_to_med_padding_executable=data_loading_path_to_med_padding_executable,
                 data_loading_path_to_med_decompose_executable=data_loading_path_to_med_decompose_executable)
 
             perform_med_worker_instance.do_decomposition()
@@ -2706,7 +2720,7 @@ class DataSetSampleSequenceCreatorWorker:
         try:
             node_file_as_list = read_defined_file_to_list(node_file_path)
         except FileNotFoundError:
-            raise RuntimeError({'med_output_directory':self.output_directory})
+            raise RuntimeError({'med_output_directory': self.output_directory})
 
         for i in range(0, len(node_file_as_list), 2):
             node_seq_name = node_file_as_list[i].split('|')[0][1:]
@@ -2816,7 +2830,8 @@ class DataSetSampleSequenceCreatorWorker:
 
             self._del_all_but_first_of_non_unique_nodes_from_df_and_node_to_ref_seq_dict(node_names_to_be_consolidated)
 
-            self._update_node_name_abund_in_df_and_nuc_seq_list(node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq)
+            self._update_node_name_abund_in_df_and_nuc_seq_list(node_names_to_be_consolidated,
+                                                                summed_abund_of_nodes_of_ref_seq)
 
     def _get_list_of_node_names_that_need_consolidating(self, non_unique_ref_seq_uid):
         node_names_to_be_consolidated = [
@@ -2824,7 +2839,8 @@ class DataSetSampleSequenceCreatorWorker:
             self.node_sequence_name_to_ref_seq_id[node_name] == non_unique_ref_seq_uid]
         return node_names_to_be_consolidated
 
-    def _update_node_name_abund_in_df_and_nuc_seq_list(self, node_names_to_be_consolidated, summed_abund_of_nodes_of_ref_seq):
+    def _update_node_name_abund_in_df_and_nuc_seq_list(self, node_names_to_be_consolidated,
+                                                       summed_abund_of_nodes_of_ref_seq):
         df_index_name = self.node_abundance_df.index.values.tolist()[0]
         self.node_abundance_df.at[df_index_name, node_names_to_be_consolidated[0]] = summed_abund_of_nodes_of_ref_seq
 
@@ -2953,7 +2969,9 @@ class DataSetSampleCreatorHandler:
                 if data_set_sample_sequence_creator_worker.num_med_nodes < 10:
                     print(
                         f'{med_output_directory}: '
-                        f'WARNING node file contains only {data_set_sample_sequence_creator_worker.num_med_nodes} sequences.')
+                        f'WARNING node file contains only '
+                        f'{data_set_sample_sequence_creator_worker.num_med_nodes} sequences.')
             sys.stdout.write(
-                f'\n\nPopulating {data_set_sample_sequence_creator_worker.sample_name} with clade {data_set_sample_sequence_creator_worker.clade} sequences\n')
+                f'\n\nPopulating {data_set_sample_sequence_creator_worker.sample_name} with '
+                f'clade {data_set_sample_sequence_creator_worker.clade} sequences\n')
             data_set_sample_sequence_creator_worker.make_data_set_sample_sequences()
