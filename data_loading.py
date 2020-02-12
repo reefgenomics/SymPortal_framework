@@ -280,13 +280,13 @@ class DataLoading:
         return 'PCoA_coords' in output_path
 
     def _do_braycurtis_dist_pcoa(self):
-        bray_curtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
+        braycurtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
             date_time_str=self.date_time_str,
             data_set_uid_list=[self.dataset_object.id], call_type='submission',
             output_dir=self.output_directory, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
-        bray_curtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
-        self.output_path_list.extend(bray_curtis_dist_pcoa_creator.output_path_list)
+        braycurtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
+        self.output_path_list.extend(braycurtis_dist_pcoa_creator.output_path_list)
 
     def _do_unifrac_dist_pcoa(self):
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
