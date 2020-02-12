@@ -56,7 +56,7 @@ class SymPortalWorkFlowManager:
         self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.submitting_user = sp_config.user_name
         self.submitting_user_email = sp_config.user_email
-
+        self.number_of_samples = None
         # for data_loading
         self.data_loading_object = None
         self.data_set_object = None
@@ -96,7 +96,8 @@ class SymPortalWorkFlowManager:
         else:
             return parser.parse_args()
 
-    def _define_additional_args(self, parser):
+    @staticmethod
+    def _define_additional_args(parser):
         parser.add_argument('--num_proc', type=int, help='Number of processors to use', default=1)
         parser.add_argument('--name', help='A name for your input or analysis', default='noName')
         parser.add_argument('--description', help='An optional description', default='No description')
@@ -129,28 +130,31 @@ class SymPortalWorkFlowManager:
 
         parser.add_argument(
             '--submitting_user_email',
-            help='Only for use when running as remote\nallows the association of a different user_email to the data_set '
+            help='Only for use when running as remote\nallows the association of a '
+                 'different user_email to the data_set '
                  'than the one listed in sp_config', default='not supplied')
         parser.add_argument('--local',
-                             help="When passed, only the DataSetSamples of the current output will be used"
-                                             " in calculating ITS2 type profile similarities. If false, similarity"
-                                             " matrices will be calculated using the DIV abundance info from all"
-                                             " DataSetSamples the ITS2 type profiles were found in. "
-                                  " This flag will only have an effect when applied to between ITS2 type profile "
-                                  "distances. It will have no effect when calculating between sample distances. "
-                                  "[False]",
-                             action='store_true', default=False)
+                            help="When passed, only the DataSetSamples of the current output will be used"
+                                 " matrices will be calculated using the DIV abundance info from all"
+                                 " DataSetSamples the ITS2 type profiles were found in."
+                                 " This flag will only have an effect when applied to between ITS2 type profile "
+                                 "distances. It will have no effect when calculating between sample distances. "
+                                 "[False]",
+                            action='store_true', default=False)
         parser.add_argument('--no_pre_med_seqs',
                             help="When passed, DataSetSampleSequencePM objects will not be created"
                                  "[False]", action='store_true', default=False)
 
-    def _define_mutually_exclusive_args(self, group):
+    @staticmethod
+    def _define_mutually_exclusive_args(group):
         group.add_argument(
             '--load', metavar='path_to_dir',
             help='Run this to load data to the framework\'s database. The first argument to this command must be an '
-                 'absolute path to a directory containing  the paired sequencing reads in .fastq.gz format. Alternatively, '
+                 'absolute path to a directory containing  the paired sequencing '
+                 'reads in .fastq.gz format. Alternatively, '
                  'this path can point directly to a single compressed file containing the same paired fastq.gz files. '
-                 '\nA name must be associated with the data_set using the --name flag. \nThe number of processes to use '
+                 '\nA name must be associated with the data_set using the --name flag. \n'
+                 'The number of processes to use '
                  'can also be specified using the --num_proc flag. \nA datasheet can also be uploaded using the '
                  '--data_sheet flag and the full path to the .xlsx data_sheet file (RECOMMENDED). \n'
                  'To skip the generation of figures pass the --no_figures flag.\n To skip the generation of '
@@ -161,7 +165,8 @@ class SymPortalWorkFlowManager:
                  'which to analyse. e.g.: 43,44,45. If you wish to use all available dataSubmissions, you may pass '
                  '\'all\' as an argument. To display all data_sets currently submitted to the framework\'s database, '
                  'including their ids, use the \'show_data_sets\' command\nTo skip the generation of figures pass the '
-                 '--no_figures flag.\nTo skip the generation of ordination files (pairwise distances and PCoA coordinates) '
+                 '--no_figures flag.\nTo skip the generation of ordination files '
+                 '(pairwise distances and PCoA coordinates) '
                  'pass the --no_ordinations flag')
         group.add_argument(
             '--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
@@ -174,14 +179,17 @@ class SymPortalWorkFlowManager:
         group.add_argument(
             '--print_output_seqs_sample_set', metavar='DataSetSample UIDs',
             help='Use this function to output ITS2 sequence count tables for a collection of DataSetSample instances. '
-                 'The input to this function should be a comma separated string of the UIDs of the DataSetSample instances '
+                 'The input to this function should be a comma separated string of '
+                 'the UIDs of the DataSetSample instances '
                  'in question. e.g. 345,346,347,348')
         group.add_argument(
             '--print_output_types', metavar='DataSet UIDs, DataAnalysis UID',
             help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
-                 'data_sets that have been run in a given analysis. Give the data_set uids that you wish to make outputs '
+                 'data_sets that have been run in a given analysis. '
+                 'Give the data_set uids that you wish to make outputs '
                  'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
-                 'comma separate the uids of the data_set objects, e.g. 44,45,46. Give the ID of the analysis you wish to '
+                 'comma separate the uids of the data_set objects, '
+                 'e.g. 44,45,46. Give the ID of the analysis you wish to '
                  'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
                  '--no_figures flag.')
         group.add_argument(
@@ -224,7 +232,6 @@ class SymPortalWorkFlowManager:
                                 'the DataSetSample names exactly. Unpopulated columns in the datasheet will be ignored.'
                                 ' I.e. existing meta-information will not be removed from the DataSetSampes if '
                                 'information is missing in the datasheet.')
-
 
     def start_work_flow(self):
         if self.args.load:
@@ -346,18 +353,23 @@ class SymPortalWorkFlowManager:
 
             # here output the js_output_path item for the DataExplorer
             self._output_js_output_path_dict()
-            print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: {self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
-            self.data_analysis_object.loading_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
+            print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
+                  f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
+            self.data_analysis_object.loading_complete_time_stamp = str(
+                datetime.now()).replace(' ', '_').replace(':', '-')
             self.data_analysis_object.save()
-            print(f'DataSet analysis_complete_time_stamp: {self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
+            print(f'DataSet analysis_complete_time_stamp: '
+                  f'{self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
 
         else:
             print('\nOutputs skipped at user\'s request\n')
-            print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: {self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
+            print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
+                  f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
             self.data_analysis_object.loading_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':',
                                                                                                                   '-')
             self.data_analysis_object.save()
-            print(f'DataSet analysis_complete_time_stamp: {self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
+            print(f'DataSet analysis_complete_time_stamp: '
+                  f'{self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
 
     def _verify_name_arg_given_analysis(self):
         if self.args.name == 'noName':
@@ -677,13 +689,15 @@ class SymPortalWorkFlowManager:
                 print(f'DataSetSample UID: {dss_uid} was not part of DataAnalysis: {self.data_analysis_object.name}')
                 raise RuntimeError
 
-    def _chunk_query_dss_objs_from_ds_uids(self, ds_of_analysis):
+    @staticmethod
+    def _chunk_query_dss_objs_from_ds_uids(ds_of_analysis):
         dss_of_analysis = []
         for uid_list in general.chunks(ds_of_analysis):
             dss_of_analysis.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return dss_of_analysis
 
-    def _chunk_query_ds_objs_from_ds_uids(self, ds_uid_list_for_query):
+    @staticmethod
+    def _chunk_query_ds_objs_from_ds_uids(ds_uid_list_for_query):
         ds_of_analysis = []
         for uid_list in general.chunks(ds_uid_list_for_query):
             ds_of_analysis.extend(list(DataSet.objects.filter(id__in=uid_list)))
@@ -697,7 +711,13 @@ class SymPortalWorkFlowManager:
         self._verify_data_analysis_uid_provided()
         self._set_data_analysis_obj_from_arg_analysis_uid()
         self.run_type_distances_dependent_on_methods()
-        self._plot_type_distances_from_distance_object()
+        if self.args.distance_method == 'both':
+            self._plot_type_distances_from_distance_object(self.braycurtis_distance_object)
+            self._plot_type_distances_from_distance_object(self.unifrac_distance_object)
+        elif self.args.distance_method == 'unifrac':
+            self._plot_type_distances_from_distance_object(self.unifrac_distance_object)
+        elif self.args.distance_method == 'braycurtis':
+            self._plot_type_distances_from_distance_object(self.braycurtis_distance_object)
         self._print_all_outputs_complete()
         self._output_js_output_path_dict()
 
@@ -739,7 +759,8 @@ class SymPortalWorkFlowManager:
             else:
                 self._start_type_braycurtis_data_sets()
 
-    def _check_if_required_packages_found_in_path(self):
+    @staticmethod
+    def _check_if_required_packages_found_in_path():
         """For creating unifrac-derived distances we need
         both iqtree and mafft to be install in the users PATH.
         Here we will check for them. If either of them are not found we will return False"""
@@ -785,7 +806,7 @@ class SymPortalWorkFlowManager:
             date_time_str=self.date_time_str,
             num_processors=self.args.num_proc,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in
-                               self.args.between_type_distances_cct_set.split(',')],
+                              self.args.between_type_distances_cct_set.split(',')],
             local_abunds_only=False, html_dir=self.html_dir,
             output_dir=self.output_dir,
             js_output_path_dict=self.js_output_path_dict
@@ -824,7 +845,13 @@ class SymPortalWorkFlowManager:
             self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
         self._set_html_dir_and_js_out_path_from_output_dir()
         self._run_sample_distances_dependent_on_methods()
-        self._plot_sample_distances_from_distance_object()
+        if self.args.distance_method == 'both':
+            self._plot_sample_distances_from_distance_object(self.braycurtis_distance_object)
+            self._plot_sample_distances_from_distance_object(self.unifrac_distance_object)
+        elif self.args.distance_method == 'unifrac':
+            self._plot_sample_distances_from_distance_object(self.unifrac_distance_object)
+        elif self.args.distance_method == 'braycurtis':
+            self._plot_sample_distances_from_distance_object(self.braycurtis_distance_object)
         self._print_all_outputs_complete()
         self._output_js_output_path_dict()
 
@@ -853,8 +880,8 @@ class SymPortalWorkFlowManager:
             else:
                 self._start_sample_braycurtis_data_sets()
 
-
-    def _print_all_outputs_complete(self):
+    @staticmethod
+    def _print_all_outputs_complete():
         print('\n\nALL OUTPUTS COMPLETE\n\n')
 
     def _start_sample_unifrac_data_set_samples(self):
@@ -900,13 +927,14 @@ class SymPortalWorkFlowManager:
     # APPLY DATASHEET TO DATASETSAMPLES
     def apply_datasheet_to_dataset_samples(self):
         try:
-            adtdss = django_general.ApplyDatasheetToDataSetSamples(data_set_uid=self.args.apply_data_sheet, data_sheet_path=self.args.data_sheet)
+            adtdss = django_general.ApplyDatasheetToDataSetSamples(data_set_uid=self.args.apply_data_sheet,
+                                                                   data_sheet_path=self.args.data_sheet)
         except RuntimeError as e:
             print(e)
             return
         adtdss.apply_datasheet()
 
-    #VACUUM DB
+    # VACUUM DB
     def perform_vacuum_database(self):
         print('Vacuuming database')
         self.vacuum_db()

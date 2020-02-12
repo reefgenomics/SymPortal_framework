@@ -1444,11 +1444,12 @@ class FastDataSetSampleSequencePMCreator:
             as the value. If we are unable to find a match then we add the information to the non_match dictionary
             that we will consolidate the subset and superset matches in the next step of processing.
 
-            TODO we should be able to multiprocess this if we are careful. We can split up the list of nuc_seqs
+            We should be able to multiprocess this if we are careful. (We can split up the list of nuc_seqs
             and give copies of the ReferenceSequences to each process. We can then carefully merge the resulting
             match dictionaries taking into account the need to check when merging the same ReferenceSequence
             representatives that they may contain the same DataSetSample objects and the abundances will need to
-            be summed for these.
+            be summed for these.)
+            However, I don't think we need to implement this as it is already quite fast.
             """
             print('Attempting to match sequences to ReferenceSequence objects')
             count = 0
@@ -1534,9 +1535,10 @@ class FastDataSetSampleSequencePMCreator:
             When we have created all of these matches we will then be able to follow this path of tuples
             to do the consolidation.
 
-            TODO this should be multiprocessable. We can give copies of the dictionaries and assign different n
+            This should be multiprocessable. (We can give copies of the dictionaries and assign different n
             values to each of the threads. We can then put together the list of tuples for each n in order of asscending
-            n values to create the consolidation path."""
+            n values to create the consolidation path.)
+            However, I don't think it is necessary to implement this. It already seems to be quite fast."""
 
             self._make_consolidation_path()
 
@@ -1618,11 +1620,6 @@ class FastDataSetSampleSequencePMCreator:
             match or fit into any of the existing reference sequences. We will also check that none of the sequences
             match of fit into any of the other sequences. This will be very slow but worth the price considering
             that we don't want to pollute the referenceSequence pool of the database.
-
-            #TODO speed up the creation of the referenceseq objects
-            To do this create the objects in bulk and then do a query to collect them again
-            then go back through the no match dict and use a dict of sequence to refseq object
-            to populate the match dict in preparation of making the DAtaSetSampleSEequencePM objects
             """
 
             if testing:
