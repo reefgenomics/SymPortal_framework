@@ -1618,6 +1618,11 @@ class FastDataSetSampleSequencePMCreator:
             match or fit into any of the existing reference sequences. We will also check that none of the sequences
             match of fit into any of the other sequences. This will be very slow but worth the price considering
             that we don't want to pollute the referenceSequence pool of the database.
+
+            #TODO speed up the creation of the referenceseq objects
+            To do this create the objects in bulk and then do a query to collect them again
+            then go back through the no match dict and use a dict of sequence to refseq object
+            to populate the match dict in preparation of making the DAtaSetSampleSEequencePM objects
             """
 
             if testing:
@@ -1631,8 +1636,7 @@ class FastDataSetSampleSequencePMCreator:
             # For each consolidated sequences, create a ReferenceSequence after checking to see that the sequence
             # does not already fit into one of the
             print('\ncreating ReferenceSequence objects')
-            new_ref_seq_count = 0
-            tot = len(self.non_match_dict.keys())
+            new_rs_list = []
             for c_seq in self.non_match_dict.keys():
                 if testing:
                     if (c_seq in self.rs_dict) or ('A' + c_seq in self.rs_dict):
@@ -1645,12 +1649,18 @@ class FastDataSetSampleSequencePMCreator:
                 # Create the new reference sequence. Unfortunately creating the reference squences one by one
                 # will likely slow us down quite a lot but I see know way around it given that we need to associate
                 # add the reference sequence object as the representative to the match dict
-                new_reference_sequence_obj = ReferenceSequence(clade=self.clade, sequence=c_seq)
-                new_reference_sequence_obj.save()
-                self.match_dict[new_reference_sequence_obj] = self.non_match_dict[c_seq]
-                new_ref_seq_count += 1
-                sys.stdout.write(f'\r{new_ref_seq_count} out of {tot} ReferenceSequence objects created')
-            print(f'\n{new_ref_seq_count} new ReferenceSequence objects were created for clade {self.clade}')
+                new_rs_list.append(ReferenceSequence(clade=self.clade, sequence=c_seq))
+
+            print(f'\ncreating {len(new_rs_list)} new ReferenceSequence objects in bulk for clade {self.clade}')
+            ReferenceSequence.objects.bulk_create(new_rs_list)
+
+            # Now get the newly create ref seq objects back and create a dict form them
+            # with rs sequence as key and the rs object itself as the value
+            new_rs_seq_to_obj_dict = {rs.sequence: rs for rs in ReferenceSequence.objects.filter(sequence__in=list(self.non_match_dict.keys()))}
+            # Now go back through the no match dict and use this dictionary to poulate the match dictionary
+            for c_seq in self.non_match_dict.keys():
+                self.match_dict[new_rs_seq_to_obj_dict[c_seq]] = self.non_match_dict[c_seq]
+            # Done. Now check the speed up.
 
         def _create_data_set_sample_sequence_pm_objects(self):
             """Finally now that we have a reference sqeuence object representing
@@ -1663,8 +1673,8 @@ class FastDataSetSampleSequencePMCreator:
                                                     abundance=abundance,
                                                     data_set_sample_from=dss_obj)
                     data_set_sample_sequence_pre_med_list.append(dsspm)
-            print(f'\nCreating {len(data_set_sample_sequence_pre_med_list)} '
-                  f'new DataSetSampleSequencePM objects for clade {self.clade}')
+            print(f'\ncreating {len(data_set_sample_sequence_pre_med_list)} '
+                  f'new DataSetSampleSequencePM objects in bulk for clade {self.clade}')
             DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
 
 
