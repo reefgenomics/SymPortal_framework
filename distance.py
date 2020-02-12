@@ -1173,7 +1173,7 @@ class BaseBrayCurtisDistPCoACreator:
                 else:
                     if sqrt:
                         temp_at_string.append(
-                            self.clade_within_clade_distances_dict_no_sqrt[frozenset({obj_outer.id, obj_inner.id})])
+                            self.clade_within_clade_distances_dict_sqrt[frozenset({obj_outer.id, obj_inner.id})])
                     else:
                         temp_at_string.append(
                             self.clade_within_clade_distances_dict_no_sqrt[frozenset({obj_outer.id, obj_inner.id})])
