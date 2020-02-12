@@ -1032,7 +1032,7 @@ class BaseBrayCurtisDistPCoACreator:
             renamed_pcoa_dataframe['analysis_type_uid'] = renamed_pcoa_dataframe['analysis_type_uid'].astype('int')
 
         if sqrt:
-            renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path_no_sqrt, index=True, header=True, sep=',')
+            renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path_sqrt, index=True, header=True, sep=',')
         else:
             renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path_no_sqrt, index=True, header=True, sep=',')
         return renamed_pcoa_dataframe

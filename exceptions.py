@@ -12,3 +12,8 @@ class NoDataSetSampleSequencePMObjects(Error):
     trying to generate a pre med sequence output table but there DataSetSampleSequencePM
     objects were not generated during data loading"""
     pass
+
+class DistanceTypeNotIdentifiedError(Error):
+    """Raised when looking for the distance type i.e. unifrac or braycurtis in the path of the PCoA csv.
+    Will also be raised if the transofrmation type cannot be inferred i.e. sqrt or no_sqrt"""
+    pass

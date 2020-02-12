@@ -10,19 +10,14 @@ from matplotlib.colors import ListedColormap
 from matplotlib.lines import Line2D
 from collections import defaultdict
 import pandas as pd
-
+from exceptions import DistanceTypeNotIdentifiedError
 import os
 import numpy as np
 import sys
 from datetime import datetime
 import general
 import json
-from dbApp.models import ReferenceSequence
-
 plt.ioff()
-
-
-
 
 class DistScatterPlotter:
     def __init__(self, csv_path, date_time_str):
@@ -42,6 +37,18 @@ class DistScatterPlotter:
         self.fig_output_base = None
         self.date_time_str = date_time_str
         self.output_path_list = []
+        if 'braycurtis' in csv_path:
+            self.dist_type = 'braycurtis'
+        elif 'unifrac' in csv_path:
+            self.dist_type = 'unifrac'
+        else:
+            raise DistanceTypeNotIdentifiedError()
+        if '_no_sqrt' in csv_path:
+            self.sqrt = False
+        elif 'sqrt' in csv_path:
+            self.sqrt = True
+        else:
+            raise DistanceTypeNotIdentifiedError
 
     def create_base_scatter_plot(self):
         self.ax.scatter(self.x_values, self.y_values, c='black', marker='o')
@@ -51,7 +58,10 @@ class DistScatterPlotter:
         self.ax.set_ylabel('PC2; explained = {}'.format('%.3f' % self.plotting_df['PC2'][-1]))
 
     def _add_title(self, title_prefix):
-        self.ax.set_title(f'{title_prefix} {self.clade}')
+        if self.sqrt:
+            self.ax.set_title(f'{title_prefix} {self.clade} {self.dist_type} sqrt')
+        else:
+            self.ax.set_title(f'{title_prefix} {self.clade} {self.dist_type} no_sqrt')
 
     def _output_dist_scatter(self):
         plt.tight_layout()
@@ -77,9 +87,14 @@ class DistScatterPlotterSamples(DistScatterPlotter):
         self._annotate_plot_with_sample_names()
         self._add_title(title_prefix='between sample distances clade')
 
-        self.fig_output_base = os.path.join(
-            self.output_directory,
-            f'{self.date_time_str}_between_sample_distances_clade_{self.clade}')
+        if self.sqrt:
+            self.fig_output_base = os.path.join(
+                self.output_directory,
+                f'{self.date_time_str}_between_sample_distances_clade_{self.clade}_{self.dist_type}_sqrt')
+        else:
+            self.fig_output_base = os.path.join(
+                self.output_directory,
+                f'{self.date_time_str}_between_sample_distances_clade_{self.clade}_{self.dist_type}_no_sqrt')
         self._output_dist_scatter()
 
     def _annotate_plot_with_sample_names(self):
@@ -100,9 +115,14 @@ class DistScatterPlotterTypes(DistScatterPlotter):
         self.create_base_scatter_plot()
         self._annotate_plot_with_type_uids()
         self._add_title(title_prefix='between its2 type profile distances clade')
-        self.fig_output_base = os.path.join(
-            self.output_directory,
-            f'{self.date_time_str}_between_its2_type_prof_dist_clade_{self.clade}')
+        if self.sqrt:
+            self.fig_output_base = os.path.join(
+                self.output_directory,
+                f'{self.date_time_str}_between_its2_type_prof_dist_clade_{self.clade}_{self.dist_type}_sqrt')
+        else:
+            self.fig_output_base = os.path.join(
+                self.output_directory,
+                f'{self.date_time_str}_between_its2_type_prof_dist_clade_{self.clade}_{self.dist_type}_no_sqrt')
         self._output_dist_scatter()
 
     def _annotate_plot_with_type_uids(self):
