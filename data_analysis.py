@@ -100,8 +100,8 @@ class SPDataAnalysis:
                     CladeCollectionType(
                         analysis_type_of=AnalysisType.objects.get(id=vat.id),
                         clade_collection_found_in=CladeCollection.objects.get(id=vcc.id)))
-
-        CladeCollectionType.objects.bulk_create(clade_collection_type_list_for_bulk_create)
+        for cct_chunk in general.chunks(clade_collection_type_list_for_bulk_create):
+            CladeCollectionType.objects.bulk_create(cct_chunk)
 
     def _update_keys_of_vat_dict(self):
         # now update remake the vat dict so that the correct ids are used
