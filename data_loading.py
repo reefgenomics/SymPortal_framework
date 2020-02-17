@@ -804,7 +804,8 @@ class DataLoading:
                                 cladal_seq_totals=empty_cladal_seq_totals)
             list_of_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-        DataSetSample.objects.bulk_create(list_of_sample_objects)
+        for dss_chunk in general.chunks(list_of_sample_objects):
+            DataSetSample.objects.bulk_create(dss_chunk)
 
     def _get_num_chars_in_common_with_fastq_names(self):
         i = 1
@@ -939,7 +940,8 @@ class DataLoading:
                                 )
             list_of_data_set_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-        DataSetSample.objects.bulk_create(list_of_data_set_sample_objects)
+        for dss_chunk in general.chunks(list_of_data_set_sample_objects):
+            DataSetSample.objects.bulk_create(dss_chunk)
 
     def _if_fastq_files_missing_sys_exit(self, list_of_meta_gz_files):
         for fastq in list_of_meta_gz_files:
@@ -1649,7 +1651,8 @@ class FastDataSetSampleSequencePMCreator:
                 new_rs_list.append(ReferenceSequence(clade=self.clade, sequence=c_seq))
 
             print(f'\ncreating {len(new_rs_list)} new ReferenceSequence objects in bulk for clade {self.clade}')
-            ReferenceSequence.objects.bulk_create(new_rs_list)
+            for rs_chunk in general.chunks(new_rs_list):
+                ReferenceSequence.objects.bulk_create(rs_chunk)
 
             # Now get the newly create ref seq objects back and create a dict form them
             # with rs sequence as key and the rs object itself as the value
@@ -1672,7 +1675,8 @@ class FastDataSetSampleSequencePMCreator:
                     data_set_sample_sequence_pre_med_list.append(dsspm)
             print(f'\ncreating {len(data_set_sample_sequence_pre_med_list)} '
                   f'new DataSetSampleSequencePM objects in bulk for clade {self.clade}')
-            DataSetSampleSequencePM.objects.bulk_create(data_set_sample_sequence_pre_med_list)
+            for dssspm_chunk in general.chunks(data_set_sample_sequence_pre_med_list):
+                DataSetSampleSequencePM.objects.bulk_create(dssspm_chunk)
 
 
 class DSSAttributeAssignmentHolder:
@@ -2770,7 +2774,8 @@ class DataSetSampleSequenceCreatorWorker:
                                             df_index_label, node_nucleotide_sequence_object.name],
                                         data_set_sample_from=self.dataset_sample_object)
             data_set_sample_sequence_list.append(dss)
-        DataSetSampleSequence.objects.bulk_create(data_set_sample_sequence_list)
+        for dsss_chunk in general.chunks(data_set_sample_sequence_list):
+            DataSetSampleSequence.objects.bulk_create(dsss_chunk)
 
     def _create_data_set_sample_sequences_with_clade_collection(self):
         data_set_sample_sequence_list = []
@@ -2787,7 +2792,8 @@ class DataSetSampleSequenceCreatorWorker:
                 data_set_sample_from=self.dataset_sample_object)
             data_set_sample_sequence_list.append(dss)
         # Save all of the newly created dss
-        DataSetSampleSequence.objects.bulk_create(data_set_sample_sequence_list)
+        for dsss_chunk in general.chunks(data_set_sample_sequence_list):
+            DataSetSampleSequence.objects.bulk_create(dsss_chunk)
         self.clade_collection_object.footprint = ','.join(associated_ref_seq_uid_as_str_list)
         self.clade_collection_object.save()
 
