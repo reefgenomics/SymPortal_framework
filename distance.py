@@ -677,11 +677,11 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             self.js_output_path_dict[
                 f"btwn_sample_unifrac_{clade_in_question}_dist_no_sqrt"] = clade_dist_file_path_no_sqrt
             self.js_output_path_dict[
-                f"btwn_sample_unifrac_{clade_in_question}_pcoa_no_sqrt"] = clade_dist_file_path_no_sqrt
+                f"btwn_sample_unifrac_{clade_in_question}_pcoa_no_sqrt"] = clade_pcoa_file_path_no_sqrt
             self.js_output_path_dict[
                 f"btwn_sample_unifrac_{clade_in_question}_dist_sqrt"] = clade_dist_file_path_sqrt
             self.js_output_path_dict[
-                f"btwn_sample_unifrac_{clade_in_question}_pcoa_sqrt"] = clade_dist_file_path_sqrt
+                f"btwn_sample_unifrac_{clade_in_question}_pcoa_sqrt"] = clade_pcoa_file_path_sqrt
 
         self._write_out_js_objects()
         self._write_output_paths_to_stdout()
