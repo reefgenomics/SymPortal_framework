@@ -298,9 +298,9 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         if len(available_pcs) > 6:
             available_pcs = available_pcs[:6]
         if sqrt:
-            self.pc_availabaility_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
+            self.pc_availabaility_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
             variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
-            self.pc_variances_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
+            self.pc_variances_dict_sqrt[self.genera_annotation_dict[clade_in_question]] = variances
         else:
             self.pc_availabaility_dict_no_sqrt[self.genera_annotation_dict[clade_in_question]] = available_pcs
             variances = [pcoa_coords_df.iloc[-1][pc] for pc in available_pcs]
