@@ -355,21 +355,21 @@ class SymPortalWorkFlowManager:
             self._output_js_output_path_dict()
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
                   f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
-            self.data_analysis_object.loading_complete_time_stamp = str(
+            self.data_analysis_object.analysis_complete_time_stamp = str(
                 datetime.now()).replace(' ', '_').replace(':', '-')
             self.data_analysis_object.save()
             print(f'DataSet analysis_complete_time_stamp: '
-                  f'{self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
+                  f'{self.data_analysis_object.analysis_complete_time_stamp}\n\n\n')
 
         else:
             print('\nOutputs skipped at user\'s request\n')
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
                   f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
-            self.data_analysis_object.loading_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':',
+            self.data_analysis_object.analysis_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':',
                                                                                                                   '-')
             self.data_analysis_object.save()
             print(f'DataSet analysis_complete_time_stamp: '
-                  f'{self.data_analysis_object.loading_complete_time_stamp}\n\n\n')
+                  f'{self.data_analysis_object.analysis_complete_time_stamp}\n\n\n')
 
     def _verify_name_arg_given_analysis(self):
         if self.args.name == 'noName':
