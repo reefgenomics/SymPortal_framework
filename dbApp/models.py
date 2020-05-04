@@ -91,11 +91,12 @@ class Study(models.Model):
     data_url = models.CharField(max_length=250, null=True)
     data_explorer = models.BooleanField(default=False)
     analysis = models.BooleanField(default=True)
+    author_list_string = models.CharField(max_length=500, null=True)
+    additional_markers = models.CharField(max_length=200, null=True)
     creation_time_stamp = models.CharField(
         max_length=100,
         default=str(datetime.now()).replace(' ', '_').replace(':', '-')
     )
-
 
 class User(models.Model):
     objects = models.Manager()
