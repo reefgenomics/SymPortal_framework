@@ -96,12 +96,6 @@ class Study(models.Model):
         default=str(datetime.now()).replace(' ', '_').replace(':', '-')
     )
 
-    #TODO Methods to implement
-    def update_from_dataset(self, data_set_id, data_set_object):
-        """This method can be called to change the data_set_samples that a Study is associated with.
-        For example, if a study is re-loaded into the SymPortal database,
-        we can 'update' the datasetsamples to the new datasetsamples of this new loading."""
-        raise NotImplementedError
 
 class User(models.Model):
     objects = models.Manager()
