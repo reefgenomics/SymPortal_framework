@@ -1,0 +1,20 @@
+name: symportal_python
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - python3==3.6
+  - numpy
+  - biopython
+  - Django
+  - matplotlib
+  - pandas
+  - plumbum
+  - scipy
+  - scikit-bio
+  - sklearn
+  - xlrd
+  - blast
+  - iqtree
+  - mafft
+  - mothur==1.43.0

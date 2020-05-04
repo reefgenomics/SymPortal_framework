@@ -209,9 +209,9 @@ class DataLoading:
             ['mothur', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
         for line in decode_utf8_binary_to_list(mothur_version_cmd.stdout):
-            if "1.39.5" in line:
+            if "1.43" in line:
                 return
-        raise RuntimeError('Are you sure you are running version 1.39.5 of mothur?')
+        raise RuntimeError('SymPortal currently uses version 1.43 of mothur.\nCheck your version.')
 
     def _make_new_dataset_object(self):
         self.dataset_object = DataSet(
@@ -675,6 +675,9 @@ class DataLoading:
         for file in os.listdir(self.user_input_path):
             if file.endswith('fastq') or file.endswith('fq') or file.endswith('fastq.gz') or file.endswith('fq.gz'):
                 self.list_of_fastq_files_in_wkd.append(file)
+
+        if len(self.list_of_fastq_files_in_wkd) < 3:
+            raise RuntimeError(f'Cannot auto infer names from {len(self.list_of_fastq_files_in_wkd)} fastq files. Please use a datasheet.')
 
         end_index = self._identify_sample_names_without_datasheet()
 
@@ -1771,7 +1774,7 @@ class InitialMothurHandler:
     def _worker_initial_mothur(self):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
-        This QC includes making contigs, screening for ambigous calls (0 allowed) and homopolymer (maxhomop=5)
+        This QC includes making contigs, screening for ambigous calls (0 allowed),
         Discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
         This is all done through the use of an InitialMothurWorker class which in turn makes use of the MothurAnalysis
         class that does the heavy lifting of running the mothur commands in sequence.
@@ -1799,18 +1802,17 @@ class InitialMothurWorker:
         self.dss_att_holder = DSSAttributeAssignmentHolder(name=self.data_set_sample.name, uid=self.data_set_sample.id)
         self.cwd = os.path.join(self.parent.parent.temp_working_directory, self.sample_name)
         os.makedirs(self.cwd, exist_ok=True)
-        self.mothur_analysis_object = MothurAnalysis.init_from_pair_of_fastq_gz_files(
-            pcr_analysis_name='symvar', output_dir=self.cwd, input_dir=self.cwd,
-            fastq_gz_fwd_path=contig_pair.split('\t')[1],
-            fastq_gz_rev_path=contig_pair.split('\t')[2], stdout_and_sterr_to_pipe=(not self.parent.parent.debug),
-            name=self.sample_name)
+        self.mothur_analysis_object = MothurAnalysis(
+            name=self.sample_name,
+            output_dir=self.cwd, input_dir=self.cwd,
+            fastq_gz_fwd_path=contig_pair.split('\t')[1], fastq_gz_rev_path=contig_pair.split('\t')[2],
+            stdout_and_sterr_to_pipe=(not self.parent.parent.debug)
+            )
 
     def start_initial_mothur_worker(self):
         sys.stdout.write(f'{self.sample_name}: QC started\n')
 
         self._do_make_contigs()
-
-        self._set_absolute_num_seqs_after_make_contigs()
 
         self._do_unique_seqs()
 
@@ -1820,21 +1822,36 @@ class InitialMothurWorker:
 
         self._do_screen_seqs()
 
-        self._do_unique_seqs()
-
         self._do_split_abund()
 
-        self._do_unique_seqs()
-
-        self._set_unique_num_seqs_after_initial_qc()
-
-        self._set_absolute_num_seqs_after_inital_qc()
+        self._set_unique_and_abs_num_seqs_after_initial_qc()
 
         self._write_out_final_name_and_fasta_for_tax_screening()
 
         self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
 
         sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
+
+    def _do_make_contigs(self):
+        try:
+            self.dss_att_holder.num_contigs = self.mothur_analysis_object.execute_make_contigs()
+            sys.stdout.write(
+                f'{self.sample_name}: data_set_sample_instance_in_q.num_contigs = {self.dss_att_holder.num_contigs}\n')
+
+        except RuntimeError as e:
+            if str(e) == 'bad fastq, mothur stuck in loop':
+                self.log_qc_error_and_continue(errorreason='Bad fastq, mothur stuck in loop')
+                raise RuntimeError({'sample_name': self.sample_name})
+            if str(e) == 'error in make.contigs':
+                self.log_qc_error_and_continue(errorreason='Error in make.contigs')
+                raise RuntimeError({'sample_name': self.sample_name})
+            if str(e) == 'Unable to extract fasta path from make.contigs output':
+                self.log_qc_error_and_continue(errorreason='Unable to extract fasta path from make.contigs output')
+                raise RuntimeError({'sample_name': self.sample_name})
+            if str(e) == 'empty fasta':
+                self.log_qc_error_and_continue(errorreason='Error in make.contigs')
+                raise RuntimeError({'sample_name': self.sample_name})
+
 
     def _write_out_final_name_and_fasta_for_tax_screening(self):
         name_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
@@ -1851,87 +1868,63 @@ class InitialMothurWorker:
             if str(e) == 'PCR fasta file is blank':
                 self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
                 raise RuntimeError({'sample_name': self.sample_name})
-            self.check_for_error_and_raise_runtime_error()
+            self.check_for_error_and_raise_runtime_error(stage_of_qc='PCR')
 
     def _do_split_abund(self):
         try:
-            self.mothur_analysis_object.execute_split_abund(abund_cutoff=2)
+            self.mothur_analysis_object.execute_split_abund()
         except:
-            self.check_for_error_and_raise_runtime_error()
+            self.check_for_error_and_raise_runtime_error(stage_of_qc='split by abundance')
 
     def _do_unique_seqs(self):
         try:
             self.mothur_analysis_object.execute_unique_seqs()
         except:
-            self.check_for_error_and_raise_runtime_error()
+            self.check_for_error_and_raise_runtime_error(stage_of_qc='unique seqs')
 
     def _do_screen_seqs(self):
         try:
-            self.mothur_analysis_object.execute_screen_seqs(argument_dictionary={'maxambig': 0, 'maxhomop': 5})
+            self.mothur_analysis_object.execute_screen_seqs()
         except RuntimeError:
-            self.check_for_error_and_raise_runtime_error()
+            self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs')
 
-    def _do_make_contigs(self):
-        try:
-            self.mothur_analysis_object.execute_make_contigs()
-        except RuntimeError as e:
-            if str(e) == 'bad fastq, mothur stuck in loop':
-                self.log_qc_error_and_continue(errorreason='Bad fastq, mothur stuck in loop')
-                raise RuntimeError({'sample_name': self.sample_name})
-            if str(e) == 'bad fastq':
-                self.log_qc_error_and_continue(errorreason='Bad fastq')
-                raise RuntimeError({'sample_name': self.sample_name})
-            if str(e) == 'error in make.contigs':
-                self.log_qc_error_and_continue(errorreason='Error in make.contigs')
-                raise RuntimeError({'sample_name': self.sample_name})
-            if str(e) == 'empty fasta':
-                self.log_qc_error_and_continue(errorreason='Error in make.contigs')
-                raise RuntimeError({'sample_name': self.sample_name})
+    def _set_unique_and_abs_num_seqs_after_initial_qc(self):
+        name_file = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
 
-    def _set_absolute_num_seqs_after_make_contigs(self):
-        number_of_contig_seqs_absolute = len(
-            read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)
-        ) - 1
-        self.dss_att_holder.num_contigs = number_of_contig_seqs_absolute
-        sys.stdout.write(
-            f'{self.sample_name}: data_set_sample_instance_in_q.num_contigs = {number_of_contig_seqs_absolute}\n')
-
-    def _set_unique_num_seqs_after_initial_qc(self):
-        number_of_contig_seqs_unique = len(
-            read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)) - 1
+        number_of_contig_seqs_unique = len(name_file)
         self.dss_att_holder.post_qc_unique_num_seqs = number_of_contig_seqs_unique
         sys.stdout.write(
             f'{self.sample_name}: '
             f'data_set_sample_instance_in_q.post_qc_unique_num_seqs = {number_of_contig_seqs_unique}\n')
 
-    def _set_absolute_num_seqs_after_inital_qc(self):
-        last_summary = read_defined_file_to_list(self.mothur_analysis_object.latest_summary_path)
-        absolute_count = 0
-        for line in last_summary[1:]:
-            absolute_count += int(line.split('\t')[6])
-            self.dss_att_holder.post_qc_absolute_num_seqs = absolute_count
+        abs_count = 0
+        for line in name_file:
+            abs_count += len(line.split('\t')[1].split(','))
+
+        self.dss_att_holder.post_qc_absolute_num_seqs = abs_count
+
         sys.stdout.write(
-            f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {absolute_count}\n')
+            f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {abs_count}\n')
 
     def check_for_no_seqs_after_pcr_and_raise_runtime_error(self):
         if len(self.mothur_analysis_object.sequence_collection) == 0:
             self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
             raise RuntimeError({'sample_name': self.sample_name})
 
-    def check_for_error_and_raise_runtime_error(self):
+    def check_for_error_and_raise_runtime_error(self, stage_of_qc):
         for stdout_line in decode_utf8_binary_to_list(
                 self.mothur_analysis_object.latest_completed_process_command.stdout
         ):
             if '[WARNING]: Blank fasta name, ignoring read.' in stdout_line:
-                self.log_qc_error_and_continue(errorreason='Blank fasta name')
+                self.log_qc_error_and_continue(errorreason=f'Blank fasta name during {stage_of_qc}')
                 raise RuntimeError({'sample_name': self.sample_name})
             if 'do not match' in stdout_line:
-                self.log_qc_error_and_continue(errorreason='error in fastq file')
+                self.log_qc_error_and_continue(errorreason=f'error in fastq file during {stage_of_qc}')
                 raise RuntimeError({'sample_name': self.sample_name})
             if 'ERROR' in stdout_line:
-                self.log_qc_error_and_continue(errorreason='error in inital QC')
+                self.log_qc_error_and_continue(errorreason=f'error in inital QC during {stage_of_qc}')
                 raise RuntimeError({'sample_name': self.sample_name})
-        self.log_qc_error_and_continue(errorreason='error in inital QC')
+        self.log_qc_error_and_continue(errorreason=f'error in inital QC during {stage_of_qc}')
         raise RuntimeError({'sample_name': self.sample_name})
 
     def log_qc_error_and_continue(self, errorreason):
@@ -2486,14 +2479,14 @@ class SymNonSymTaxScreeningWorker:
                     self.sym_size_violation_sequence_name_set_for_sample.add(query_sequence_name)
 
     def _associate_qc_meta_info_to_dss_objs(self):
-        self._associate_non_sym_seq_attributes_to_dataset()
-        self._associate_sym_seq_no_size_violation_attributes_to_dataset()
-        self._associate_sym_seq_size_violation_attributes_to_dataset()
+        self._associate_non_sym_seq_attributes_to_datasetsample()
+        self._associate_sym_seq_no_size_violation_attributes_to_datasetsample()
+        self._associate_sym_seq_size_violation_attributes_to_datasetsample()
         self.sample_att_holder.initial_processing_complete = True
         self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
         print(f'{self.sample_name}: pre-med QC complete')
 
-    def _associate_sym_seq_size_violation_attributes_to_dataset(self):
+    def _associate_sym_seq_size_violation_attributes_to_datasetsample(self):
         # it is important that we set these values from the objects of this class rather
         # from the data_set_sample object attributes as some of these have not been set yet
         self.sample_att_holder.size_violation_absolute = (
@@ -2501,24 +2494,24 @@ class SymNonSymTaxScreeningWorker:
                 self.sample_att_holder.absolute_num_sym_seqs -
                 self.sample_att_holder.non_sym_absolute_num_seqs
         )
-        print(f'{self.sample_name}: size_violation_absolute = {self.datasetsample_object.size_violation_absolute}')
+        print(f'{self.sample_name}: size_violation_absolute = {self.sample_att_holder.size_violation_absolute}')
         self.sample_att_holder.size_violation_unique = (
                 self.datasetsample_object.post_qc_unique_num_seqs -
                 self.sample_att_holder.unique_num_sym_seqs -
                 self.sample_att_holder.non_sym_unique_num_seqs
         )
-        print(f'{self.sample_name}: size_violation_unique = {self.datasetsample_object.size_violation_unique}')
+        print(f'{self.sample_name}: size_violation_unique = {self.sample_att_holder.size_violation_unique}')
 
-    def _associate_sym_seq_no_size_violation_attributes_to_dataset(self):
+    def _associate_sym_seq_no_size_violation_attributes_to_datasetsample(self):
         self.sample_att_holder.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
         self.sample_att_holder.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
-        print(f'{self.sample_name}: unique_num_sym_seqs = {self.datasetsample_object.unique_num_sym_seqs}')
+        print(f'{self.sample_name}: unique_num_sym_seqs = {len(self.sym_no_size_violation_sequence_name_set_for_sample)}')
         print(f'{self.sample_name}: absolute_num_sym_seqs = {self.absolute_number_of_sym_no_size_violation_sequences}')
 
-    def _associate_non_sym_seq_attributes_to_dataset(self):
+    def _associate_non_sym_seq_attributes_to_datasetsample(self):
         self.sample_att_holder.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
         self.sample_att_holder.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        print(f'{self.sample_name}: non_sym_unique_num_seqs = {self.datasetsample_object.non_sym_unique_num_seqs}')
+        print(f'{self.sample_name}: non_sym_unique_num_seqs = {len(self.non_symbiodinium_sequence_name_set_for_sample)}')
         print(f'{self.sample_name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
 
     def _log_dataset_attr_and_raise_runtime_error(self):

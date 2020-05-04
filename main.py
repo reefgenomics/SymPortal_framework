@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 """ SymPortal: a novel analytical framework and platform for coral algal
     symbiont next-generation sequencing ITS2 profiling
     Copyright (C) 2018  Benjamin C C Hume
