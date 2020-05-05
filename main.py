@@ -577,8 +577,8 @@ class SymPortalWorkFlowManager:
             self._stand_alone_sequence_output_data_set()
         self.number_of_samples = len(self.output_seq_count_table_obj.sorted_sample_uid_list)
         self._plot_if_not_too_many_samples(self._plot_sequence_stacked_bar_from_seq_output_table)
-        self._print_all_outputs_complete()
         self._output_js_output_path_dict()
+        self._print_all_outputs_complete()
 
     def _set_html_dir_and_js_out_path_from_output_dir(self):
         self.html_dir = os.path.join(self.output_dir, 'html')
@@ -624,8 +624,8 @@ class SymPortalWorkFlowManager:
             print('\nFigure plotting skipped at user\'s request')
         if not self.args.no_ordinations:
             self._do_data_analysis_ordinations()
-        self._print_all_outputs_complete()
         self._output_js_output_path_dict()
+        self._print_all_outputs_complete()
 
     def _stand_alone_seq_output_from_type_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
@@ -718,8 +718,8 @@ class SymPortalWorkFlowManager:
             self._plot_type_distances_from_distance_object(self.unifrac_distance_object)
         elif self.args.distance_method == 'braycurtis':
             self._plot_type_distances_from_distance_object(self.braycurtis_distance_object)
-        self._print_all_outputs_complete()
         self._output_js_output_path_dict()
+        self._print_all_outputs_complete()
 
     def run_type_distances_dependent_on_methods(self):
         """Start an instance of the correct distance class running."""
@@ -852,8 +852,8 @@ class SymPortalWorkFlowManager:
             self._plot_sample_distances_from_distance_object(self.unifrac_distance_object)
         elif self.args.distance_method == 'braycurtis':
             self._plot_sample_distances_from_distance_object(self.braycurtis_distance_object)
-        self._print_all_outputs_complete()
         self._output_js_output_path_dict()
+        self._print_all_outputs_complete()
 
     def _run_sample_distances_dependent_on_methods(self):
         """Start an instance of the correct distance class running."""

@@ -1718,8 +1718,14 @@ class InitialMothurHandler:
 
     def _populate_input_queue(self):
         for fastq_path_pair in self.parent.sample_fastq_pairs:
-            self.input_queue_containing_pairs_of_fastq_file_paths.put(fastq_path_pair)
-
+            
+            sample_name = fastq_path_pair.split('\t')[0].replace('[dS]', '-')
+            data_set_sample = DataSetSample.objects.get(
+                    name=sample_name, data_submission_from=self.parent.dataset_object
+                )
+            dss_att_holder = DSSAttributeAssignmentHolder(name=data_set_sample.name, uid=data_set_sample.id)
+            self.input_queue_containing_pairs_of_fastq_file_paths.put((fastq_path_pair,dss_att_holder))
+            
         for n in range(self.parent.num_proc):
             self.input_queue_containing_pairs_of_fastq_file_paths.put('STOP')
 
@@ -1731,7 +1737,11 @@ class InitialMothurHandler:
         sys.stdout.write('\nPerforming initial mothur QC\n')
         for n in range(self.parent.num_proc):
             p = Process(target=self._worker_initial_mothur,
-                        args=()
+                        args=(self.input_queue_containing_pairs_of_fastq_file_paths, 
+                        self.samples_that_caused_errors_in_qc_mp_list, 
+                        self.output_queue_for_attribute_data, 
+                        self.parent.temp_working_directory, 
+                        self.parent.debug)
                         )
 
             all_processes.append(p)
@@ -1771,7 +1781,9 @@ class InitialMothurHandler:
                     dss_obj.num_contigs = dss_proxy.num_contigs
                     dss_obj.save()
 
-    def _worker_initial_mothur(self):
+    # We will attempt to fix the weakref pickling issue we are having by maing this a static method.
+    @staticmethod
+    def _worker_initial_mothur(in_q_paths, out_q_error_samples, out_q_attr_data, temp_working_directory, debug):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
         This QC includes making contigs, screening for ambigous calls (0 allowed),
@@ -1780,34 +1792,38 @@ class InitialMothurHandler:
         class that does the heavy lifting of running the mothur commands in sequence.
         """
 
-        for contigpair in iter(self.input_queue_containing_pairs_of_fastq_file_paths.get, 'STOP'):
+        for contigpair, dss_att_holder in iter(in_q_paths.get, 'STOP'):
 
-            initial_morthur_worker = InitialMothurWorker(init_mothur_handler_parent_obj=self, contig_pair=contigpair)
+            initial_morthur_worker = InitialMothurWorker(
+                dss_att_holder=dss_att_holder, 
+                contig_pair=contigpair, 
+                temp_working_directory=temp_working_directory,
+                debug=debug, out_q_attr_data=out_q_attr_data
+                )
 
             try:
                 initial_morthur_worker.start_initial_mothur_worker()
+                out_q_attr_data.put(initial_morthur_worker.dss_att_holder)
             except RuntimeError as e:
-                self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
-        self.output_queue_for_attribute_data.put('DONE')
+                out_q_error_samples.append(e.args[0]['sample_name'])
+        out_q_attr_data.put('DONE')
         return
 
 
 class InitialMothurWorker:
-    def __init__(self, init_mothur_handler_parent_obj, contig_pair):
-        self.parent = init_mothur_handler_parent_obj
-        self.sample_name = contig_pair.split('\t')[0].replace('[dS]', '-')
-        self.data_set_sample = DataSetSample.objects.get(
-                name=self.sample_name, data_submission_from=self.parent.parent.dataset_object
-            )
-        self.dss_att_holder = DSSAttributeAssignmentHolder(name=self.data_set_sample.name, uid=self.data_set_sample.id)
-        self.cwd = os.path.join(self.parent.parent.temp_working_directory, self.sample_name)
+    def __init__(self, dss_att_holder, contig_pair, temp_working_directory, debug, out_q_attr_data):
+        self.sample_name = dss_att_holder.name
+        self.dss_att_holder = dss_att_holder
+        self.cwd = os.path.join(temp_working_directory, self.sample_name)
+        self.debug = debug
         os.makedirs(self.cwd, exist_ok=True)
         self.mothur_analysis_object = MothurAnalysis(
             name=self.sample_name,
             output_dir=self.cwd, input_dir=self.cwd,
             fastq_gz_fwd_path=contig_pair.split('\t')[1], fastq_gz_rev_path=contig_pair.split('\t')[2],
-            stdout_and_sterr_to_pipe=(not self.parent.parent.debug)
+            stdout_and_sterr_to_pipe=(not self.debug)
             )
+        self.output_queue_for_attribute_data = out_q_attr_data
 
     def start_initial_mothur_worker(self):
         sys.stdout.write(f'{self.sample_name}: QC started\n')
@@ -1828,7 +1844,7 @@ class InitialMothurWorker:
 
         self._write_out_final_name_and_fasta_for_tax_screening()
 
-        self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
+        self.output_queue_for_attribute_data.put(self.dss_att_holder)
 
         sys.stdout.write(f'{self.sample_name}: Initial mothur complete\n')
 
@@ -1934,7 +1950,7 @@ class InitialMothurWorker:
         self.dss_att_holder.initial_processing_complete = True
         self.dss_att_holder.error_in_processing = True
         self.dss_att_holder.error_reason = errorreason
-        self.parent.output_queue_for_attribute_data.put(self.dss_att_holder)
+        self.output_queue_for_attribute_data.put(self.dss_att_holder)
 
 
 class PotentialSymTaxScreeningHandler:
