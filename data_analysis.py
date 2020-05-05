@@ -685,7 +685,6 @@ class SPDataAnalysis:
                 cc=vcc, maj_dss_seq_list=vcc.ordered_dsss_objs[0])
 
 
-
 class ArtefactAssessor:
     def __init__(self, parent_sp_data_analysis):
         self.sp_data_analysis = parent_sp_data_analysis
@@ -823,134 +822,11 @@ class ArtefactAssessor:
             at_id for at_id in self.virtual_analysis_type_dict.keys() if
             self.virtual_analysis_type_dict[at_id].clade == self.current_clade]
 
-    def _type_non_artefacts_are_subsets_of_each_other(self, analysis_type_a, analysis_type_b):
-        if set(self.virtual_analysis_type_dict[
-                            analysis_type_a.id].ref_seq_uids_set).issubset(
-            self.virtual_analysis_type_dict[analysis_type_b.id].ref_seq_uids_set):
-            if set(self.virtual_analysis_type_dict[
-                            analysis_type_b.id].ref_seq_uids_set).issubset(
-                    self.virtual_analysis_type_dict[analysis_type_a.id].ref_seq_uids_set):
-                return True
-        return False
-
-    def _create_clade_collection_to_starting_analysis_type_dictionary(self):
-        """Create a dictionary that links CladeCollection to the AnalysisTypes that they associated with.
-        NB it used to be that only one AnalysisType could be associated to one CladeCollection, but since
-        the introduction of the basal type theory a single CladeCollection can now associate with more than one
-        AnalysisType. As such, we use a defaultdict(list) as the default rather than a direct key to value association
-        between CladeCollection and AnlaysisType."""
-        cc_to_initial_type_dict = defaultdict(list)
-
-        clade_collection_to_type_tuple_list = []
-        for at in self.virtual_analysis_type_dict.values():
-            type_uid = at.id
-            initial_clade_collections = [int(x) for x in at.list_of_clade_collections_found_in_initially.split(',')]
-            for CCID in initial_clade_collections:
-                clade_collection_to_type_tuple_list.append((CCID, type_uid))
-
-        for ccid, atid in clade_collection_to_type_tuple_list:
-            cc_to_initial_type_dict[ccid].append(atid)
-
-        return dict(cc_to_initial_type_dict)
-
-    def _generate_basal_seqs_set(self, footprint):
-        basal_set = set()
-        found_c15_a = False
-        for rs in footprint:
-            if rs.name == 'C3':
-                basal_set.add('C3')
-            elif rs.name == 'C1':
-                basal_set.add('C1')
-            elif 'C15' in rs.name and not found_c15_a:
-                basal_set.add('C15')
-                found_c15_a = True
-
-        if basal_set:
-            return basal_set
-        else:
-            return None
-
     def _set_set_of_clades_from_analysis(self):
         self.set_of_clades_from_analysis = set()
         for at in self.virtual_analysis_type_dict.values():
             self.set_of_clades_from_analysis.add(at.clade)
         return self.set_of_clades_from_analysis
-
-    def _create_ref_seq_rel_abunds_for_all_ccs_dict(self):
-        cc_input_mp_queue = Queue()
-        mp_manager = Manager()
-        cc_to_ref_seq_abunds_mp_dict = mp_manager.dict()
-
-        for cc in self.sp_data_analysis.ccs_of_analysis:
-            cc_input_mp_queue.put(cc)
-
-        for n in range(self.sp_data_analysis.workflow_manager.args.num_proc):
-            cc_input_mp_queue.put('STOP')
-
-        all_processes = []
-        for n in range(self.sp_data_analysis.workflow_manager.args.num_proc):
-            p = Process(target=self._cc_to_ref_seq_list_and_abund_worker, args=(cc_input_mp_queue, cc_to_ref_seq_abunds_mp_dict))
-            all_processes.append(p)
-            p.start()
-
-        for p in all_processes:
-            p.join()
-
-        return dict(cc_to_ref_seq_abunds_mp_dict)
-
-    def _cc_to_ref_seq_list_and_abund_worker(self, cc_input_mp_queue, cc_to_ref_seq_abunds_mp_dict):
-        for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
-
-            sys.stdout.write(f'\r{clade_collection_object} {current_process().name}')
-
-            list_of_dataset_sample_sequences_in_clade_collection = [
-                dsss for dsss in DataSetSampleSequence.objects.filter(
-                    clade_collection_found_in=clade_collection_object)]
-
-            list_of_ref_seqs_in_cladecollection = [
-                dsss.reference_sequence_of for dsss in list_of_dataset_sample_sequences_in_clade_collection]
-
-            list_of_abundances = [dsss.abundance / self.cc_to_total_seqs_dict[clade_collection_object.id] for dsss in
-                                  list_of_dataset_sample_sequences_in_clade_collection]
-            inner_dict = {}
-            for i in range(len(list_of_dataset_sample_sequences_in_clade_collection)):
-                inner_dict[list_of_ref_seqs_in_cladecollection[i]] = list_of_abundances[i]
-            cc_to_ref_seq_abunds_mp_dict[clade_collection_object.id] = inner_dict
-
-    def _create_total_seqs_dict_for_all_ccs(self):
-        """Generate a dict that simply holds the total number of seqs per clade_collection_object.
-        This will be used when working out relative proportions of seqs in the clade_collection_object
-        """
-        print('Generating CladeCollection to total sequence dictionary')
-        cc_input_mp_queue = Queue()
-        mp_manager = Manager()
-        cc_to_total_seqs_mp_dict = mp_manager.dict()
-
-        for cc in self.sp_data_analysis.ccs_of_analysis:
-            cc_input_mp_queue.put(cc)
-
-        for n in range(self.sp_data_analysis.workflow_manager.args.num_proc):
-            cc_input_mp_queue.put('STOP')
-
-        all_processes = []
-        for n in range(self.sp_data_analysis.workflow_manager.args.num_proc):
-            p = Process(target=self._cc_to_total_seqs_dict_worker, args=(cc_input_mp_queue, cc_to_total_seqs_mp_dict))
-            all_processes.append(p)
-            p.start()
-
-        for p in all_processes:
-            p.join()
-
-        return dict(cc_to_total_seqs_mp_dict)
-
-    def _cc_to_total_seqs_dict_worker(self, cc_input_mp_queue, cc_to_total_seqs_mp_dict):
-        for clade_collection_object in iter(cc_input_mp_queue.get, 'STOP'):
-            sys.stdout.write(f'\r{clade_collection_object} {current_process().name}')
-            total_sequences_in_cladecollection = sum(
-                [dsss.abundance for dsss in
-                 DataSetSampleSequence.objects.filter(clade_collection_found_in=clade_collection_object)])
-            cc_to_total_seqs_mp_dict[clade_collection_object.id] = total_sequences_in_cladecollection
-
 
 class PotentialNewType:
     def __init__(
@@ -2202,7 +2078,7 @@ class SyntheticFootprintPermutator:
         all_processes = []
 
         for N in range(self.supported_footprint_identifier.sp_data_analysis.workflow_manager.args.num_proc):
-            p = Process(target=self.permute_synthetic_footprints_worker, args=())
+            p = Process(target=self.permute_synthetic_footprints_worker, args=(self.len_n_profile_input_mp_list.get, self.supported_footprint_identifier.current_n - 1, self.collapse_n_mer_mp_dict))
             all_processes.append(p)
             p.start()
 
@@ -2211,11 +2087,12 @@ class SyntheticFootprintPermutator:
 
         sys.stdout.write(f'\rGenerated {len(self.collapse_n_mer_mp_dict.items())} synthetic footprints')
 
-    def permute_synthetic_footprints_worker(self):
-        for footprint_set in iter(self.len_n_profile_input_mp_list.get, 'STOP'):
+    @staticmethod
+    def permute_synthetic_footprints_worker(in_q, current_n, collapse_n_mer_mp_dict):
+        for footprint_set in iter(in_q, 'STOP'):
             temp_dict = {
-                frozenset(tup): [] for tup in itertools.combinations(footprint_set, self.supported_footprint_identifier.current_n - 1)}
-            self.collapse_n_mer_mp_dict.update(temp_dict)
+                frozenset(tup): [] for tup in itertools.combinations(footprint_set, current_n)}
+            collapse_n_mer_mp_dict.update(temp_dict)
             sys.stdout.write(f'\rGenerated iterCombos using {current_process().name}')
 
 
