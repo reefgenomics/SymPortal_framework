@@ -3,7 +3,7 @@ channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python3==3.6
+  - python==3.6
   - numpy
   - biopython
   - Django
@@ -12,7 +12,6 @@ dependencies:
   - plumbum
   - scipy
   - scikit-bio
-  - sklearn
   - xlrd
   - blast
   - iqtree
