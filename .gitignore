@@ -7,11 +7,10 @@ tests/.DS_Store
 *.pyc
 tests/__pycache__/
 settings.py
-tests/.DS_Store
 db.sqlite3
 /__pycache__
 /.idea
 /dbApp/__pycache__
 /dbBackup
-/.DS_Storesp_config.py
-.DS_Store
+/.DS_Store
+sp_config.py
