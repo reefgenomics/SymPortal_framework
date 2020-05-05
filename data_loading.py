@@ -2215,8 +2215,13 @@ class SymNonSymTaxScreeningHandler:
 
         for n in range(self.num_proc):
             p = Process(target=self._sym_non_sym_tax_screening_worker, args=(
-                data_loading_temp_working_directory, data_loading_dataset_object,
-                non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path,
+                self.sample_name_mp_input_queue, 
+                self.samples_that_caused_errors_in_qc_mp_list, 
+                self.sample_attributes_mp_output_queue,
+                data_loading_temp_working_directory, 
+                data_loading_dataset_object,
+                non_symb_and_size_violation_base_dir_path, 
+                data_loading_pre_med_sequence_output_directory_path,
                 data_loading_debug))
             all_processes.append(p)
             p.start()
@@ -2225,6 +2230,37 @@ class SymNonSymTaxScreeningHandler:
 
         for p in all_processes:
             p.join()
+
+    @staticmethod
+    def _sym_non_sym_tax_screening_worker(
+        in_q, 
+        samples_that_caused_errors_in_qc_mp_list, 
+        sample_attributes_mp_output_queue, 
+        data_loading_temp_working_directory, 
+        data_loading_dataset_object,
+        data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
+        data_loading_pre_med_sequence_output_directory_path,
+        data_loading_debug):
+
+        for sample_name in iter(in_q.get, 'STOP'):
+            if sample_name in samples_that_caused_errors_in_qc_mp_list:
+                continue
+
+            sym_non_sym_tax_screening_worker_object = SymNonSymTaxScreeningWorker(
+                data_loading_temp_working_directory=data_loading_temp_working_directory,
+                data_loading_dataset_object=data_loading_dataset_object, sample_name=sample_name,
+                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
+                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
+                data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
+                data_loading_debug=data_loading_debug,
+                sample_attributes_mp_output_queue=sample_attributes_mp_output_queue
+            )
+
+            try:
+                sym_non_sym_tax_screening_worker_object.identify_sym_non_sym_seqs()
+            except RuntimeError as e:
+                samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
+        sample_attributes_mp_output_queue.put('DONE')
 
     def _associate_info_to_dss_objects(self, data_loading_dataset_object):
         # now save the collected data contained in the sample_attributes_holder_mp_dict to the relevant
@@ -2259,29 +2295,7 @@ class SymNonSymTaxScreeningHandler:
                     dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
                     dss_obj.save()
 
-    def _sym_non_sym_tax_screening_worker(self, data_loading_temp_working_directory, data_loading_dataset_object,
-                                          data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
-                                          data_loading_pre_med_sequence_output_directory_path, data_loading_debug):
-
-        for sample_name in iter(self.sample_name_mp_input_queue.get, 'STOP'):
-            if sample_name in self.samples_that_caused_errors_in_qc_mp_list:
-                continue
-
-            sym_non_sym_tax_screening_worker_object = SymNonSymTaxScreeningWorker(
-                data_loading_temp_working_directory=data_loading_temp_working_directory,
-                data_loading_dataset_object=data_loading_dataset_object, sample_name=sample_name,
-                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
-                data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
-                data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
-                data_loading_debug=data_loading_debug,
-                sample_attributes_mp_output_queue=self.sample_attributes_mp_output_queue
-            )
-
-            try:
-                sym_non_sym_tax_screening_worker_object.identify_sym_non_sym_seqs()
-            except RuntimeError as e:
-                self.samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
-        self.sample_attributes_mp_output_queue.put('DONE')
+    
 
 
 class SymNonSymTaxScreeningWorker:
