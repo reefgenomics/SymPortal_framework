@@ -2658,7 +2658,7 @@ class PerformMEDHandler:
 
         for n in range(self.num_proc):
             p = Process(target=self._perform_med_worker, args=(
-                data_loading_debug, data_loading_path_to_med_padding_executable,
+                self.input_queue_of_redundant_fasta_paths, data_loading_debug, data_loading_path_to_med_padding_executable,
                 data_loading_path_to_med_decompoase_executable))
             all_processes.append(p)
             p.start()
@@ -2678,11 +2678,11 @@ class PerformMEDHandler:
         for n in range(self.num_proc):
             self.input_queue_of_redundant_fasta_paths.put('STOP')
 
+    @staticmethod
     def _perform_med_worker(
-            self, data_loading_debug, data_loading_path_to_med_padding_executable,
+            in_q, data_loading_debug, data_loading_path_to_med_padding_executable,
             data_loading_path_to_med_decompose_executable):
-        for redundant_fata_path in iter(self.input_queue_of_redundant_fasta_paths.get, 'STOP'):
-
+        for redundant_fata_path in iter(in_q.get, 'STOP'):
             perform_med_worker_instance = PerformMEDWorker(
                 redundant_fasta_path=redundant_fata_path, data_loading_debug=data_loading_debug,
                 data_loading_path_to_med_padding_executable=data_loading_path_to_med_padding_executable,
