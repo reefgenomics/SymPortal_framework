@@ -1,9 +1,9 @@
-name: symportal_python
+name: symportal_env
 channels:
   - conda-forge
   - bioconda
 dependencies:
-  - python==3.6
+  - python=3
   - numpy
   - biopython
   - Django

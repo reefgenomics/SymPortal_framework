@@ -2089,7 +2089,7 @@ class SyntheticFootprintPermutator:
 
     @staticmethod
     def permute_synthetic_footprints_worker(in_q, current_n, collapse_n_mer_mp_dict):
-        for footprint_set in iter(in_q, 'STOP'):
+        for footprint_set in iter(in_q.get, 'STOP'):
             temp_dict = {
                 frozenset(tup): [] for tup in itertools.combinations(footprint_set, current_n)}
             collapse_n_mer_mp_dict.update(temp_dict)
