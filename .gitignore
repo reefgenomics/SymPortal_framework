@@ -13,4 +13,5 @@ db.sqlite3
 /.idea
 /dbApp/__pycache__
 /dbBackup
-/.DS_Store
+/.DS_Storesp_config.py
+.DS_Store
