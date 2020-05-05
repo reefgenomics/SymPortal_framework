@@ -1986,15 +1986,32 @@ class PotentialSymTaxScreeningHandler:
         for n in range(self.num_proc):
             new_process = Process(
                 target=self._potential_sym_tax_screening_worker,
-                args=(data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug))
+                args=(
+                    self.input_queue, 
+                    self.error_samples_mp_list,
+                    self.checked_samples_mp_list,
+                    self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict, 
+                    self.sub_evalue_nucleotide_sequence_to_clade_mp_dict,
+                    data_loading_temp_working_directory,
+                    data_loading_path_to_symclade_db,
+                    data_loading_debug
+                    ))
 
             all_processes.append(new_process)
             new_process.start()
         for process in all_processes:
             process.join()
 
+    @staticmethod
     def _potential_sym_tax_screening_worker(
-            self, data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug):
+            in_q, 
+            error_samples_mp_list, 
+            checked_samples_mp_list, 
+            sub_evalue_sequence_to_num_sampes_found_in_mp_dict, 
+            sub_evalue_nucleotide_sequence_to_clade_mp_dict, 
+            data_loading_temp_working_directory, 
+            data_loading_path_to_symclade_db, 
+            data_loading_debug):
         """
         input_q: The multiprocessing queue that holds a list of the sample names
         e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
@@ -2010,23 +2027,23 @@ class PotentialSymTaxScreeningHandler:
         Whilst this doesn't return anything a number of objects are picked out in each of the local
         working directories for use in the workers that follow this one.
         """
-        for sample_name in iter(self.input_queue.get, 'STOP'):
+        for sample_name in iter(in_q.get, 'STOP'):
 
             # If the sample gave an error during the inital mothur then we don't consider it here.
-            if sample_name in self.error_samples_mp_list:
+            if sample_name in error_samples_mp_list:
                 continue
 
             # A sample will be in this list if we have already performed this worker on it and none of its sequences
             # gave matches to the symClade database at below the evalue threshold
-            if sample_name in self.checked_samples_mp_list:
+            if sample_name in checked_samples_mp_list:
                 continue
 
             taxonomic_screening_worker = PotentialSymTaxScreeningWorker(
                 sample_name=sample_name, wkd=data_loading_temp_working_directory,
                 path_to_symclade_db=data_loading_path_to_symclade_db, debug=data_loading_debug,
-                checked_samples_mp_list=self.checked_samples_mp_list,
-                e_val_collection_mp_dict=self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict,
-                sub_evalue_nucleotide_sequence_to_clade_mp_dict=self.sub_evalue_nucleotide_sequence_to_clade_mp_dict)
+                checked_samples_mp_list=checked_samples_mp_list,
+                e_val_collection_mp_dict=sub_evalue_sequence_to_num_sampes_found_in_mp_dict,
+                sub_evalue_nucleotide_sequence_to_clade_mp_dict=sub_evalue_nucleotide_sequence_to_clade_mp_dict)
 
             taxonomic_screening_worker.execute_tax_screening()
 
