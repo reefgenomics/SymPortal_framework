@@ -395,7 +395,7 @@ class DataLoading:
 
         self.perform_med_handler_instance.execute_perform_med_worker(
             data_loading_debug=self.debug,
-            data_loading_path_to_med_decompoase_executable=self.path_to_med_decompose_executable,
+            data_loading_path_to_med_decompose_executable=self.path_to_med_decompose_executable,
             data_loading_path_to_med_padding_executable=self.path_to_med_padding_executable)
 
         self.list_of_med_output_directories = self.perform_med_handler_instance.list_of_med_result_dirs
@@ -2653,13 +2653,13 @@ class PerformMEDHandler:
 
     def execute_perform_med_worker(
             self, data_loading_debug, data_loading_path_to_med_padding_executable,
-            data_loading_path_to_med_decompoase_executable):
+            data_loading_path_to_med_decompose_executable):
         all_processes = []
 
         for n in range(self.num_proc):
             p = Process(target=self._perform_med_worker, args=(
                 self.input_queue_of_redundant_fasta_paths, data_loading_debug, data_loading_path_to_med_padding_executable,
-                data_loading_path_to_med_decompoase_executable))
+                data_loading_path_to_med_decompose_executable))
             all_processes.append(p)
             p.start()
 
