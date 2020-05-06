@@ -17,3 +17,4 @@ dependencies:
   - iqtree
   - mafft
   - mothur==1.43.0
+  - psycopg2
