@@ -13,7 +13,6 @@ import os
 import sys
 import numpy as np
 import matplotlib as mpl
-mpl.use('TkAgg')
 import matplotlib.pyplot as plt
 # import matplotlib.pyplot as plt
 
