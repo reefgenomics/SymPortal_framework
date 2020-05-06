@@ -14,3 +14,11 @@ db.sqlite3
 /dbBackup
 **/.DS_Store
 sp_config.py
+.env
+.vscode/
+outputs/
+*.nhr
+*.nin
+*.nsq
+/**/tempData
+*.logfile
