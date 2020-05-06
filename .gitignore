@@ -4,7 +4,7 @@
 /__pycache__
 tests/.DS_Store
 /lib/med_decompose/Oligotyping/__pycache__/*
-*.pyc
+/**/*.pyc
 tests/__pycache__/
 settings.py
 db.sqlite3
@@ -12,5 +12,5 @@ db.sqlite3
 /.idea
 /dbApp/__pycache__
 /dbBackup
-/.DS_Store
+**/.DS_Store
 sp_config.py

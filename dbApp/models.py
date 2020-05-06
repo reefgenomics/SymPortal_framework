@@ -1,5 +1,4 @@
 from django.db import models
-from django.db.models import Max
 import json
 import general
 from datetime import datetime

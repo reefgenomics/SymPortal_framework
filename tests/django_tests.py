@@ -1,4 +1,4 @@
-#!/usr/bin/env python3.6
+#!/usr/bin/env python3
 from django.test import TransactionTestCase
 import os
 import main
