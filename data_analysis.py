@@ -2078,7 +2078,7 @@ class SyntheticFootprintPermutator:
         all_processes = []
 
         for N in range(self.supported_footprint_identifier.sp_data_analysis.workflow_manager.args.num_proc):
-            p = Process(target=self.permute_synthetic_footprints_worker, args=(self.len_n_profile_input_mp_list.get, self.supported_footprint_identifier.current_n - 1, self.collapse_n_mer_mp_dict))
+            p = Process(target=self.permute_synthetic_footprints_worker, args=(self.len_n_profile_input_mp_list, self.supported_footprint_identifier.current_n - 1, self.collapse_n_mer_mp_dict))
             all_processes.append(p)
             p.start()
 
