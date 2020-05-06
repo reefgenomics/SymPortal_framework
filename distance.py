@@ -934,7 +934,7 @@ class TreeCreatorForUniFrac:
         print('Testing models and making phylogenetic tree')
         print('This could take some time...')
         subprocess.run(
-            ['iqtree', '-nt', 'AUTO', '-s', f'{self.fasta_aligned_path}'])
+            ['iqtree', '-T', 'AUTO', '--threads-max', '2', '-s', f'{self.fasta_aligned_path}'])
 
         # root the tree
         print('Tree creation complete')
