@@ -643,13 +643,10 @@ class SPDataAnalysis:
         for clade_fp_dict in self.clade_footp_dicts_list:
             self.current_clade = self.clade_list[self.clade_footp_dicts_list.index(clade_fp_dict)]
             if self._there_are_footprints_of_this_clade(clade_fp_dict):
-
                 sfi = SupportedFootPrintIdentifier(clade_footprint_dict=clade_fp_dict, parent_sp_data_analysis=self)
                 self.list_of_initial_types_after_collapse = sfi.identify_supported_footprints()
-
                 analysis_type_creator = AnalysisTypeCreator(parent_sp_data_analysis=self)
                 analysis_type_creator.create_analysis_types()
-
         self._verify_all_ccs_associated_to_analysis_type()
 
 
@@ -1564,8 +1561,6 @@ class SupportedFootPrintIdentifier:
                     if self.list_of_initial_types_of_len_n:
                         self._generate_synth_footprints()
                         self._associate_un_sup_init_types_to_synth_footprints()
-
-
                         # Here we have a populated dict.
                         # We are only interseted in n-1 len footprints that were found in the unsupported types
                         # Because each of the synth footprints will be found in the
@@ -1615,11 +1610,12 @@ class SupportedFootPrintIdentifier:
         return False
 
     def _generate_synth_footprints(self):
-        sfp = SyntheticFootprintPermutator(parent_supported_footprint_identifier=self)
-        sfp.permute_synthetic_footprints()
-        # NB its necessary to convert the mp dict to standard dict for lists that are the values
-        # to behave as expected with the .append() function.
-        self.synthetic_fp_dict = dict(sfp.collapse_n_mer_mp_dict)
+        temp_dict = {}
+        for footprint_set in [_.profile for _ in self.list_of_initial_types_of_len_n]:
+            temp_dict.update({
+                frozenset(tup): [] for tup in itertools.combinations(footprint_set, self.current_n-1)})
+        sys.stdout.write(f'\rGenerated {len(temp_dict.items())} synthetic footprints')
+        self.synthetic_fp_dict = temp_dict
 
     def _associate_un_sup_init_types_to_synth_footprints(self):
         # Now go through each of the (n-1) footprints and see if they
@@ -2058,43 +2054,6 @@ class SyntheticFootprintCollapser:
             if self.current_synth_fp.issubset(self.current_fp_to_collapse.profile):
                 return True
         return False
-
-
-class SyntheticFootprintPermutator:
-    def __init__(self, parent_supported_footprint_identifier):
-        self.supported_footprint_identifier = parent_supported_footprint_identifier
-        self.len_n_profile_input_mp_list = Queue()
-        self.mp_manager = Manager()
-        self.collapse_n_mer_mp_dict = self.mp_manager.dict()
-        self._populate_mp_input_queue()
-
-    def _populate_mp_input_queue(self):
-        for len_n_initial_type in self.supported_footprint_identifier.list_of_initial_types_of_len_n:
-            self.len_n_profile_input_mp_list.put(len_n_initial_type.profile)
-        for n in range(self.supported_footprint_identifier.sp_data_analysis.workflow_manager.args.num_proc):
-            self.len_n_profile_input_mp_list.put('STOP')
-
-    def permute_synthetic_footprints(self):
-        all_processes = []
-
-        for N in range(self.supported_footprint_identifier.sp_data_analysis.workflow_manager.args.num_proc):
-            p = Process(target=self.permute_synthetic_footprints_worker, args=(self.len_n_profile_input_mp_list, self.supported_footprint_identifier.current_n - 1, self.collapse_n_mer_mp_dict))
-            all_processes.append(p)
-            p.start()
-
-        for p in all_processes:
-            p.join()
-
-        sys.stdout.write(f'\rGenerated {len(self.collapse_n_mer_mp_dict.items())} synthetic footprints')
-
-    @staticmethod
-    def permute_synthetic_footprints_worker(in_q, current_n, collapse_n_mer_mp_dict):
-        for footprint_set in iter(in_q.get, 'STOP'):
-            temp_dict = {
-                frozenset(tup): [] for tup in itertools.combinations(footprint_set, current_n)}
-            collapse_n_mer_mp_dict.update(temp_dict)
-            sys.stdout.write(f'\rGenerated iterCombos using {current_process().name}')
-
 
 class FootprintCollapser:
     """Responsible for collapsing the long initial type into a short initial type."""
