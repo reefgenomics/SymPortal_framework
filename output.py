@@ -1,6 +1,6 @@
 from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
                           DataAnalysis, DataSetSampleSequencePM, CladeCollectionType)
-from multiprocessing import Queue, Process, Manager
+from multiprocessing import Queue, Process, Manager, Lock
 import sys
 from django import db
 from datetime import datetime
@@ -1009,6 +1009,7 @@ class SequenceCountTableCreator:
             self._set_non_analysis_seq_table_output_paths()
         self.pre_med_absolute_df_path = None
         self.pre_med_relative_df_path = None
+        self.pre_med_fasta_out_path = None
 
     def _set_non_analysis_seq_table_output_paths(self):
         self._set_non_analysis_abs_count_tab_output_paths()
@@ -1100,6 +1101,7 @@ class SequenceCountTableCreator:
         pre_med_output = self.PreMedSeqOutput(parent=self)
         pre_med_output.make_pre_med_count_tables()
         self.output_df_relative_pre_med = pre_med_output.rel_count_df
+        
 
     def make_seq_output_tables(self):
         self._make_output_tables_post_med()
@@ -1754,10 +1756,10 @@ class SequenceCountTableCreator:
             # The directories for the output tables
             self.parent.pre_med_absolute_df_path = os.path.join(self.pre_med_dir, 'pre_med_absolute_abundance_df.csv')
             self.parent.pre_med_relative_df_path = os.path.join(self.pre_med_dir, 'pre_med_relative_abundance_df.csv')
-            self.fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
+            self.parent.pre_med_fasta_out_path = os.path.join(self.pre_med_dir, 'pre_med_master_seqs.fasta')
             self.parent.js_output_path_dict["pre_med_absolute_count"] = self.parent.pre_med_absolute_df_path
             self.parent.js_output_path_dict["pre_med_relative_count"] = self.parent.pre_med_relative_df_path
-            self.parent.js_output_path_dict["pre_med_fasta"] = self.fasta_out_path
+            self.parent.js_output_path_dict["pre_med_fasta"] = self.parent.pre_med_fasta_out_path
             # The dictionary that will be used to create the master fasta file for all pre_med_seqs
             self.master_fasta_dict = {}
 
@@ -1869,7 +1871,7 @@ class SequenceCountTableCreator:
                 fasta_out.append(f'>{seq_name}')
                 fasta_out.append(f'{seq}')
 
-            general.write_list_to_destination(self.fasta_out_path, fasta_out)
+            general.write_list_to_destination(self.parent.pre_med_fasta_out_path, fasta_out)
 
         def _write_out_dfs_as_csv(self):
             print('\nWriting out pre-med sequence count tables: \n')
@@ -1997,14 +1999,14 @@ class SequenceCountTableCollectAbundanceHandler:
         # close all connections to the db so that they are automatically recreated for each process
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
-
+        lock = Lock()
         for n in range(self.seq_count_table_creator.num_proc):
             p = Process(target=self._sequence_count_table_ordered_seqs_worker, args=(
                 self.input_dss_mp_queue, 
                 self.dss_id_to_list_of_dsss_objects_mp_dict, 
                 self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
                 self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
-                self.annotated_dss_name_to_cummulative_rel_abund_mp_dict, self.ref_seq_names_clade_annotated))
+                self.annotated_dss_name_to_cummulative_rel_abund_mp_dict, self.ref_seq_names_clade_annotated, lock))
             all_processes.append(p)
             p.start()
 
@@ -2019,7 +2021,7 @@ class SequenceCountTableCollectAbundanceHandler:
         dss_id_to_list_of_dsss_objects_mp_dict, 
         dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
         dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict, 
-        annotated_dss_name_to_cummulative_rel_abund_mp_dict, ref_seq_names_clade_annotated):
+        annotated_dss_name_to_cummulative_rel_abund_mp_dict, ref_seq_names_clade_annotated, lock):
         for dss in iter(in_q.get, 'STOP'):
             sys.stdout.write(f'\r{dss.name}: collecting seq abundances')
             sequence_count_table_ordered_seqs_worker_instance = SequenceCountTableCollectAbundanceWorker(
@@ -2028,7 +2030,7 @@ class SequenceCountTableCollectAbundanceHandler:
                 dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict=dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
                 annotated_dss_name_to_cummulative_rel_abund_mp_dict=annotated_dss_name_to_cummulative_rel_abund_mp_dict, 
                 ref_seq_names_clade_annotated=ref_seq_names_clade_annotated,
-                dss=dss)
+                dss=dss, lock=lock)
             sequence_count_table_ordered_seqs_worker_instance.start_seq_abund_collection()
     
     def _generate_clade_abundance_ordered_ref_seq_list_from_seq_name_abund_dict(self):
@@ -2067,7 +2069,7 @@ class SequenceCountTableCollectAbundanceWorker:
         dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
         dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict, 
         annotated_dss_name_to_cummulative_rel_abund_mp_dict, ref_seq_names_clade_annotated,
-        dss):
+        dss, lock):
         self.dss_id_to_list_of_dsss_objects_mp_dict = dss_id_to_list_of_dsss_objects_mp_dict
         self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict
         self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict
@@ -2075,6 +2077,7 @@ class SequenceCountTableCollectAbundanceWorker:
         self.ref_seq_names_clade_annotated = ref_seq_names_clade_annotated
         self.dss = dss
         self.total_abundance_of_sequences_in_sample = sum([int(a) for a in json.loads(self.dss.cladal_seq_totals)])
+        self.lock = lock
 
     def start_seq_abund_collection(self):
         clade_summary_absolute_dict, clade_summary_relative_dict = \
@@ -2108,7 +2111,8 @@ class SequenceCountTableCollectAbundanceWorker:
     def _populate_abs_and_rel_abundances_for_dsss(self, dsss, name_unit, smple_seq_count_aboslute_dict,
                                                   smple_seq_count_relative_dict):
         rel_abund_of_dsss = dsss.abundance / self.total_abundance_of_sequences_in_sample
-        self.annotated_dss_name_to_cummulative_rel_abund_mp_dict[name_unit] += rel_abund_of_dsss
+        with self.lock:
+            self.annotated_dss_name_to_cummulative_rel_abund_mp_dict[name_unit] += rel_abund_of_dsss
         smple_seq_count_aboslute_dict[name_unit] += dsss.abundance
         smple_seq_count_relative_dict[name_unit] += rel_abund_of_dsss
 
