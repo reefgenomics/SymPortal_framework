@@ -4,7 +4,7 @@
 import os
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.conf import settings
-import general
+from general import ThreadSafeGeneral
 # ####### Setup Django DB and Models ########
 # Ensure settings are read
 from django.core.wsgi import get_wsgi_application
@@ -15,8 +15,9 @@ from dbApp.models import ReferenceSequence
 # ###########################################
 
 def populate_db_with_ref_seqs():
+    thread_safe_general = ThreadSafeGeneral()
     fasta_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa'))
-    fasta_dict = general.create_dict_from_fasta(fasta_path=fasta_path)
+    fasta_dict = thread_safe_general.create_dict_from_fasta(fasta_path=fasta_path)
     current_ref_seq_names = [rs.name for rs in ReferenceSequence.objects.all()]
     bulk_new_rs_list = []
     created_name_list = []

@@ -1,19 +1,14 @@
 import os
 import shutil
-from multiprocessing import Queue, Manager, Process, current_process
 import sys
-from dbApp.models import AnalysisType, DataSetSampleSequence, ReferenceSequence, CladeCollectionType, CladeCollection
+from dbApp.models import AnalysisType, ReferenceSequence, CladeCollectionType, CladeCollection
 import itertools
 from collections import defaultdict
-import operator
-from django import db
-import pickle
 import virtual_objects
-import time
 import numpy as np
 from scipy.stats import gaussian_kde
 import symportal_utils
-import general
+from general import ThreadSafeGeneral
 import string
 import re
 import sp_config
@@ -43,6 +38,7 @@ class SPDataAnalysis:
             within_clade_cutoff=self.workflow_manager.within_clade_cutoff,
             num_proc=self.workflow_manager.args.num_proc,
             list_of_data_set_uids=self.list_of_data_set_uids)
+        self.thread_safe_general = ThreadSafeGeneral()
 
     def analyse_data(self):
         print('\n\nBeginning profile discovery')
@@ -100,7 +96,7 @@ class SPDataAnalysis:
                     CladeCollectionType(
                         analysis_type_of=AnalysisType.objects.get(id=vat.id),
                         clade_collection_found_in=CladeCollection.objects.get(id=vcc.id)))
-        for cct_chunk in general.chunks(clade_collection_type_list_for_bulk_create):
+        for cct_chunk in self.thread_safe_general.chunks(clade_collection_type_list_for_bulk_create):
             CladeCollectionType.objects.bulk_create(cct_chunk)
 
     def _update_keys_of_vat_dict(self):
@@ -254,6 +250,7 @@ class SPDataAnalysis:
 
     class DIVNamer:
         def __init__(self, parent_sp_data_analysis):
+            self.thread_safe_general = ThreadSafeGeneral()
             self.sp_data_analysis = parent_sp_data_analysis
             self.query_fasta_as_list = []
             self.query_fasta_path = os.path.join(
@@ -341,14 +338,14 @@ class SPDataAnalysis:
             # create the fasta that will be the database to blast against
             for rs in ReferenceSequence.objects.filter(has_name=True):
                 self.db_fasta_as_list.extend(['>{}'.format(rs.name), rs.sequence])
-            general.write_list_to_destination(destination=self.db_fasta_path,
+            self.thread_safe_general.write_list_to_destination(destination=self.db_fasta_path,
                                               list_to_write=self.db_fasta_as_list)
 
         def _create_and_write_query_fasta(self):
             # create the fasta as a file that will be queried in the blast
             for rs in self.unamed_div_uid_to_div_obj.values():
                 self.query_fasta_as_list.extend([f'>{rs.id}', rs.sequence])
-            general.write_list_to_destination(
+            self.thread_safe_general.write_list_to_destination(
                 destination=self.query_fasta_path, list_to_write=self.query_fasta_as_list)
 
     class ProfileAssigner:

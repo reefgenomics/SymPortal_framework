@@ -44,7 +44,7 @@ import argparse
 import data_loading
 import sp_config
 import data_analysis
-import general
+from general import ThreadSafeGeneral
 import django_general
 from shutil import which
 
@@ -52,6 +52,7 @@ class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
         self.args = self._define_args(custom_args_list)
         # general attributes
+        self.thread_safe_general = ThreadSafeGeneral()
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.submitting_user = sp_config.user_name
@@ -384,7 +385,7 @@ class SymPortalWorkFlowManager:
         for k, v in self.js_output_path_dict.items():
             new_dict[k] = os.path.relpath(v, self.output_dir)
 
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getDataFilePaths', 'python_obj': new_dict}],
             js_outpath=self.js_file_path)
 
@@ -690,17 +691,15 @@ class SymPortalWorkFlowManager:
                 print(f'DataSetSample UID: {dss_uid} was not part of DataAnalysis: {self.data_analysis_object.name}')
                 raise RuntimeError
 
-    @staticmethod
-    def _chunk_query_dss_objs_from_ds_uids(ds_of_analysis):
+    def _chunk_query_dss_objs_from_ds_uids(self, ds_of_analysis):
         dss_of_analysis = []
-        for uid_list in general.chunks(ds_of_analysis):
+        for uid_list in self.thread_safe_general.chunks(ds_of_analysis):
             dss_of_analysis.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return dss_of_analysis
 
-    @staticmethod
-    def _chunk_query_ds_objs_from_ds_uids(ds_uid_list_for_query):
+    def _chunk_query_ds_objs_from_ds_uids(self, ds_uid_list_for_query):
         ds_of_analysis = []
-        for uid_list in general.chunks(ds_uid_list_for_query):
+        for uid_list in self.thread_safe_general.chunks(ds_uid_list_for_query):
             ds_of_analysis.extend(list(DataSet.objects.filter(id__in=uid_list)))
         return ds_of_analysis
 

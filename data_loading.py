@@ -6,14 +6,13 @@ import shutil
 import subprocess
 import glob
 import pandas as pd
-import general
 import json
 from collections import Counter
 from django import db
 from multiprocessing import Queue as mp_Queue, Manager, Process, Lock as mp_Lock
 from threading import Lock as mt_Lock, Thread
 from queue import Queue as mt_Queue
-from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
+from general import ThreadSafeGeneral
 from datetime import datetime
 import distance
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
@@ -37,6 +36,7 @@ class DataLoading:
             self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
             distance_method, no_pre_med_seqs, threads, debug=False):
         self.parent = parent_work_flow_obj
+        self.thread_safe_general = ThreadSafeGeneral()
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
         self.user_input_path = user_input_path
@@ -196,7 +196,7 @@ class DataLoading:
             for k, v in self.js_output_path_dict.items():
                 new_dict[k] = os.path.relpath(v, self.output_directory)
 
-            general.write_out_js_file_to_return_python_objs_as_js_objs(
+            self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
                 [{'function_name': 'getDataFilePaths', 'python_obj': new_dict}],
                 js_outpath=self.js_file_path)
 
@@ -211,7 +211,7 @@ class DataLoading:
         mothur_version_cmd = subprocess.run(
             ['mothur', '-v'], stdout=subprocess.PIPE, stderr=subprocess.PIPE
         )
-        for line in decode_utf8_binary_to_list(mothur_version_cmd.stdout):
+        for line in self.thread_safe_general.decode_utf8_binary_to_list(mothur_version_cmd.stdout):
             if "1.43" in line:
                 return
         raise RuntimeError('SymPortal currently uses version 1.43 of mothur.\nCheck your version.')
@@ -344,7 +344,7 @@ class DataLoading:
     def _perform_sequence_drop(self):
         sequence_drop_file = self._generate_sequence_drop_file()
         sys.stdout.write(f'\n\nBackup of named reference_sequences output to {self.seq_dump_file_path}\n')
-        write_list_to_destination(self.seq_dump_file_path, sequence_drop_file)
+        self.thread_safe_general.write_list_to_destination(self.seq_dump_file_path, sequence_drop_file)
 
     @staticmethod
     def _generate_sequence_drop_file():
@@ -534,17 +534,17 @@ class DataLoading:
         self._taxa_screening_make_new_symclade_db(combined_fasta)
 
     def _taxa_screening_make_new_symclade_db(self, combined_fasta):
-        write_list_to_destination(self.symclade_db_full_path, combined_fasta)
-        make_new_blast_db(input_fasta_to_make_db_from=self.symclade_db_full_path, db_title='symClade')
+        self.thread_safe_general.write_list_to_destination(self.symclade_db_full_path, combined_fasta)
+        self.thread_safe_general.make_new_blast_db(input_fasta_to_make_db_from=self.symclade_db_full_path, db_title='symClade')
 
     def _taxa_screening_combine_new_symclade_seqs_with_current(self, new_symclade_fasta_as_list):
-        old_symclade_fasta_as_list = read_defined_file_to_list(self.symclade_db_full_path)
+        old_symclade_fasta_as_list = self.thread_safe_general.read_defined_file_to_list(self.symclade_db_full_path)
         combined_fasta = new_symclade_fasta_as_list + old_symclade_fasta_as_list
         return combined_fasta
 
     def _taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
             self, query_sequences_verified_as_symbiodinium_list):
-        screened_seqs_fasta_dict = create_dict_from_fasta(
+        screened_seqs_fasta_dict = self.thread_safe_general.create_dict_from_fasta(
             fasta_path=self.sequences_to_screen_fasta_path
         )
         new_symclade_fasta_as_list = []
@@ -597,7 +597,7 @@ class DataLoading:
                 )
                 sequence_number_counter += 1
         if self.sequences_to_screen_fasta_as_list:
-            write_list_to_destination(self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
+            self.thread_safe_general.write_list_to_destination(self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
 
     def _create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
         back_up_dir = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade_backup'))
@@ -612,7 +612,7 @@ class DataLoading:
         # Then write out a very breif readme
         read_me = [
             f'This is a symClade.fa backup created during datasubmission of data_set ID: {self.dataset_object.id}']
-        write_list_to_destination(symclade_backup_readme_path, read_me)
+        self.thread_safe_general.write_list_to_destination(symclade_backup_readme_path, read_me)
 
     def _make_fasta_of_sequences_that_need_taxa_screening(self):
         self._init_potential_sym_tax_screen_handler()
@@ -637,7 +637,7 @@ class DataLoading:
         self.taxonomic_screening_handler = PotentialSymTaxScreeningHandler(
             samples_that_caused_errors_in_qc_list=self.samples_that_caused_errors_in_qc_list,
             checked_samples_list=self.checked_samples_with_no_additional_symbiodinium_sequences,
-            list_of_samples_names=self.list_of_samples_names, num_proc=self.num_proc
+            list_of_samples_names=self.list_of_samples_names, num_proc=self.num_proc, threads=self.threads
         )
 
     def _if_symclade_binaries_not_present_remake_db(self):
@@ -655,11 +655,11 @@ class DataLoading:
         if binary_count != 3:
             # then some of the binaries are not present and we need to remake the blast dictionary
             if not self.debug:
-                general.make_new_blast_db(
+                self.thread_safe_general.make_new_blast_db(
                     input_fasta_to_make_db_from=self.symclade_db_full_path,
                     db_title='symClade', pipe_stdout_sterr=True)
             elif self.debug:
-                general.make_new_blast_db(
+                self.thread_safe_general.make_new_blast_db(
                     input_fasta_to_make_db_from=self.symclade_db_full_path,
                     db_title='symClade', pipe_stdout_sterr=False)
 
@@ -705,7 +705,7 @@ class DataLoading:
             temp_list = [sample_name.replace('-', '[dS]')]
             fwd_file_path = None
             rev_file_path = None
-            for file_path in return_list_of_file_paths_in_directory(self.user_input_path):
+            for file_path in self.thread_safe_general.return_list_of_file_paths_in_directory(self.user_input_path):
                 if sample_name == ntpath.basename(file_path)[:-end_index]:
                     # When here we know which sample the file_path belongs to
                     # but we still need to deduce whether this is the fwd or rev read
@@ -756,7 +756,7 @@ class DataLoading:
         # Reinit the list_of_samples_names so from the sample_name_to_seq_files_dict so that
         # the samples that had files that were below the 300 byte size threshold are removed form the list
         self.list_of_samples_names = list(self.sample_name_to_seq_files_dict.keys())
-        write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
+        self.thread_safe_general.write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
 
     @staticmethod
@@ -808,7 +808,7 @@ class DataLoading:
                                 cladal_seq_totals=empty_cladal_seq_totals)
             list_of_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-        for dss_chunk in general.chunks(list_of_sample_objects):
+        for dss_chunk in self.thread_safe_general.chunks(list_of_sample_objects):
             DataSetSample.objects.bulk_create(dss_chunk)
 
     def _get_num_chars_in_common_with_fastq_names(self):
@@ -876,7 +876,7 @@ class DataLoading:
                 )
             )
             sample_fastq_pairs.append('\t'.join(temp_list))
-        write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
+        self.thread_safe_general.write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
 
     def _create_data_set_sample_objects_in_bulk_with_datasheet(self):
@@ -944,7 +944,7 @@ class DataLoading:
                                 )
             list_of_data_set_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
-        for dss_chunk in general.chunks(list_of_data_set_sample_objects):
+        for dss_chunk in self.thread_safe_general.chunks(list_of_data_set_sample_objects):
             DataSetSample.objects.bulk_create(dss_chunk)
 
     def _if_fastq_files_missing_sys_exit(self, list_of_meta_gz_files):
@@ -1342,6 +1342,7 @@ class FastDataSetSampleSequencePMCreator:
     def __init__(self, pre_med_sequence_output_directory_path, dataset_object):
         # dictionaries to save us having to do lots of database look ups
         self.pre_med_sequence_output_directory_path = pre_med_sequence_output_directory_path
+        self.thread_safe_general = ThreadSafeGeneral()
         self.dataset_object = dataset_object
         clades = list('ABCDEFGHI')
         self.ref_seq_sequence_to_ref_seq_obj_dict = {}
@@ -1368,7 +1369,7 @@ class FastDataSetSampleSequencePMCreator:
         self.no_match_consolidated_seq_to_sample_and_abund_dict = defaultdict(dict)
 
     def _populate_list_of_pre_med_sample_dirs(self):
-        return general.return_list_of_directory_paths_in_directory(
+        return self.thread_safe_general.return_list_of_directory_paths_in_directory(
             self.pre_med_sequence_output_directory_path)
 
     def _populated_consolidated_seq_to_sample_and_abund_dict(self):
@@ -1387,11 +1388,11 @@ class FastDataSetSampleSequencePMCreator:
             # get list of the fasta files (one per clade) that we will need to process
             # we can deduce the .names file from the fasta file simply by changing the extension
             sample_list_of_fasta_file_paths = [
-                f_path for f_path in general.return_list_of_file_paths_in_directory(sample_pm_dir) if
+                f_path for f_path in self.thread_safe_general.return_list_of_file_paths_in_directory(sample_pm_dir) if
                 '.fasta' in f_path]
             for f_path in sample_list_of_fasta_file_paths:
-                fasta_dict = general.create_dict_from_fasta(fasta_path=f_path)
-                names_dict = general.create_seq_name_to_abundance_dict_from_name_file(
+                fasta_dict = self.thread_safe_general.create_dict_from_fasta(fasta_path=f_path)
+                names_dict = self.thread_safe_general.create_seq_name_to_abundance_dict_from_name_file(
                     name_file_path=f_path.replace('.fasta', '.names'))
                 clade = f_path.split('/')[-1].split('_')[3]
                 # we only need to get the datasetsample object if we haven't already
@@ -1434,6 +1435,7 @@ class FastDataSetSampleSequencePMCreator:
             self.non_match_dict = non_match_dict
             # The consolidation path that we will follow to consolidate the non refseq match sequences
             self.consolidation_path_list = []
+            self.thread_safe_general = ThreadSafeGeneral()
 
         def match_and_make_ref_seqs(self):
             self._assign_sequence_to_match_or_non_match_dicts()
@@ -1655,7 +1657,7 @@ class FastDataSetSampleSequencePMCreator:
                 new_rs_list.append(ReferenceSequence(clade=self.clade, sequence=c_seq))
 
             print(f'\ncreating {len(new_rs_list)} new ReferenceSequence objects in bulk for clade {self.clade}')
-            for rs_chunk in general.chunks(new_rs_list):
+            for rs_chunk in self.thread_safe_general.chunks(new_rs_list):
                 ReferenceSequence.objects.bulk_create(rs_chunk)
 
             # Now get the newly create ref seq objects back and create a dict form them
@@ -1679,7 +1681,7 @@ class FastDataSetSampleSequencePMCreator:
                     data_set_sample_sequence_pre_med_list.append(dsspm)
             print(f'\ncreating {len(data_set_sample_sequence_pre_med_list)} '
                   f'new DataSetSampleSequencePM objects in bulk for clade {self.clade}')
-            for dssspm_chunk in general.chunks(data_set_sample_sequence_pre_med_list):
+            for dssspm_chunk in self.thread_safe_general.chunks(data_set_sample_sequence_pre_med_list):
                 DataSetSampleSequencePM.objects.bulk_create(dssspm_chunk)
 
 
@@ -1716,12 +1718,14 @@ class InitialMothurHandler:
             self.samples_that_caused_errors_in_qc_mp_list = []
             self.output_queue_for_attribute_data = mt_Queue()
             self._populate_input_queue()
+            self.lock = mt_Lock()
         else:
             self.input_queue_containing_pairs_of_fastq_file_paths = mp_Queue()
             self.worker_manager = Manager()
             self.samples_that_caused_errors_in_qc_mp_list = self.worker_manager.list()
             self.output_queue_for_attribute_data = mp_Queue()
             self._populate_input_queue()
+            self.lock = mp_Lock()
 
     def _populate_input_queue(self):
         for fastq_path_pair in self.parent.sample_fastq_pairs:
@@ -1748,7 +1752,7 @@ class InitialMothurHandler:
                         self.samples_that_caused_errors_in_qc_mp_list, 
                         self.output_queue_for_attribute_data, 
                         self.parent.temp_working_directory, 
-                        self.parent.debug)
+                        self.parent.debug, self.lock)
                         )
             else:
                 p = Process(target=self._worker_initial_mothur,
@@ -1756,7 +1760,7 @@ class InitialMothurHandler:
                             self.samples_that_caused_errors_in_qc_mp_list, 
                             self.output_queue_for_attribute_data, 
                             self.parent.temp_working_directory, 
-                            self.parent.debug)
+                            self.parent.debug, self.lock)
                             )
 
             all_processes.append(p)
@@ -1798,7 +1802,7 @@ class InitialMothurHandler:
 
     # We will attempt to fix the weakref pickling issue we are having by maing this a static method.
     @staticmethod
-    def _worker_initial_mothur(in_q_paths, out_list_error_samples, out_q_attr_data, temp_working_directory, debug):
+    def _worker_initial_mothur(in_q_paths, out_list_error_samples, out_q_attr_data, temp_working_directory, debug, lock):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
         This QC includes making contigs, screening for ambigous calls (0 allowed),
@@ -1806,14 +1810,13 @@ class InitialMothurHandler:
         This is all done through the use of an InitialMothurWorker class which in turn makes use of the MothurAnalysis
         class that does the heavy lifting of running the mothur commands in sequence.
         """
-
         for contigpair, dss_att_holder in iter(in_q_paths.get, 'STOP'):
 
             initial_morthur_worker = InitialMothurWorker(
                 dss_att_holder=dss_att_holder, 
                 contig_pair=contigpair, 
                 temp_working_directory=temp_working_directory,
-                debug=debug, out_q_attr_data=out_q_attr_data
+                debug=debug, out_q_attr_data=out_q_attr_data, lock=lock
                 )
 
             try:
@@ -1826,7 +1829,7 @@ class InitialMothurHandler:
 
 
 class InitialMothurWorker:
-    def __init__(self, dss_att_holder, contig_pair, temp_working_directory, debug, out_q_attr_data):
+    def __init__(self, dss_att_holder, contig_pair, temp_working_directory, debug, out_q_attr_data, lock):
         self.sample_name = dss_att_holder.name
         self.dss_att_holder = dss_att_holder
         self.cwd = os.path.join(temp_working_directory, self.sample_name)
@@ -1839,6 +1842,8 @@ class InitialMothurWorker:
             stdout_and_sterr_to_pipe=(not self.debug)
             )
         self.output_queue_for_attribute_data = out_q_attr_data
+        self.thread_safe_general = ThreadSafeGeneral()
+        self.lock = lock
 
     def start_initial_mothur_worker(self):
         sys.stdout.write(f'{self.sample_name}: QC started\n')
@@ -1883,14 +1888,13 @@ class InitialMothurWorker:
                 self.log_qc_error_and_continue(errorreason='Error in make.contigs')
                 raise RuntimeError({'sample_name': self.sample_name})
 
-
     def _write_out_final_name_and_fasta_for_tax_screening(self):
-        name_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
+        name_file_as_list = self.thread_safe_general.read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
         taxonomic_screening_name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
-        write_list_to_destination(taxonomic_screening_name_file_path, name_file_as_list)
-        fasta_file_as_list = read_defined_file_to_list(self.mothur_analysis_object.fasta_path)
+        self.thread_safe_general.write_list_to_destination(taxonomic_screening_name_file_path, name_file_as_list)
+        fasta_file_as_list = self.thread_safe_general.read_defined_file_to_list(self.mothur_analysis_object.fasta_path)
         taxonomic_screening_fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
-        write_list_to_destination(taxonomic_screening_fasta_file_path, fasta_file_as_list)
+        self.thread_safe_general.write_list_to_destination(taxonomic_screening_fasta_file_path, fasta_file_as_list)
 
     def _do_fwd_and_rev_pcr(self):
         try:
@@ -1920,7 +1924,7 @@ class InitialMothurWorker:
             self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs')
 
     def _set_unique_and_abs_num_seqs_after_initial_qc(self):
-        name_file = read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
+        name_file = self.thread_safe_general.read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
 
         number_of_contig_seqs_unique = len(name_file)
         self.dss_att_holder.post_qc_unique_num_seqs = number_of_contig_seqs_unique
@@ -1943,7 +1947,7 @@ class InitialMothurWorker:
             raise RuntimeError({'sample_name': self.sample_name})
 
     def check_for_error_and_raise_runtime_error(self, stage_of_qc):
-        for stdout_line in decode_utf8_binary_to_list(
+        for stdout_line in self.thread_safe_general.decode_utf8_binary_to_list(
                 self.mothur_analysis_object.latest_completed_process_command.stdout
         ):
             if '[WARNING]: Blank fasta name, ignoring read.' in stdout_line:
@@ -1973,16 +1977,29 @@ class PotentialSymTaxScreeningHandler:
     screening against the NCBI database. We also rely on this method to do the blast of our each samples sequences
     against our symclade.fa reference sequences database. We read in the blast.out file in the later functions.
     """
-    def __init__(self, samples_that_caused_errors_in_qc_list, checked_samples_list, list_of_samples_names, num_proc):
-        self.input_queue = mp_Queue()
-        self.manager = Manager()
-        self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict = self.manager.dict()
-        self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = self.manager.dict()
-        self.error_samples_mp_list = self.manager.list(samples_that_caused_errors_in_qc_list)
-        self.checked_samples_mp_list = self.manager.list(checked_samples_list)
-        self.list_of_sample_names = list_of_samples_names
-        self.num_proc = num_proc
-        self._load_input_queue()
+    def __init__(self, samples_that_caused_errors_in_qc_list, checked_samples_list, list_of_samples_names, num_proc, threads):
+        self.threads = threads
+        if self.threads:
+            self.input_queue = mt_Queue()
+            self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict = {}
+            self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = {}
+            self.error_samples_mp_list = samples_that_caused_errors_in_qc_list
+            self.checked_samples_mp_list = checked_samples_list
+            self.list_of_sample_names = list_of_samples_names
+            self.num_proc = num_proc
+            self._load_input_queue()
+            self.lock = mt_Lock()
+        else:
+            self.input_queue = mp_Queue()
+            self.manager = Manager()
+            self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict = self.manager.dict()
+            self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = self.manager.dict()
+            self.error_samples_mp_list = self.manager.list(samples_that_caused_errors_in_qc_list)
+            self.checked_samples_mp_list = self.manager.list(checked_samples_list)
+            self.list_of_sample_names = list_of_samples_names
+            self.num_proc = num_proc
+            self._load_input_queue()
+            self.lock = mp_Lock()
 
     def _load_input_queue(self):
         # load up the input q
@@ -1995,12 +2012,12 @@ class PotentialSymTaxScreeningHandler:
     def execute_potential_sym_tax_screening(
             self, data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug):
         all_processes = []
-        lock = mp_Lock()
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         sys.stdout.write('\nPerforming potential sym tax screening QC\n')
         for n in range(self.num_proc):
-            new_process = Process(
+            if self.threads:
+                p = Thread(
                 target=self._potential_sym_tax_screening_worker,
                 args=(
                     self.input_queue, 
@@ -2010,13 +2027,26 @@ class PotentialSymTaxScreeningHandler:
                     self.sub_evalue_nucleotide_sequence_to_clade_mp_dict,
                     data_loading_temp_working_directory,
                     data_loading_path_to_symclade_db,
-                    data_loading_debug, lock
+                    data_loading_debug, self.lock
                     ))
+            else:
+                p = Process(
+                    target=self._potential_sym_tax_screening_worker,
+                    args=(
+                        self.input_queue, 
+                        self.error_samples_mp_list,
+                        self.checked_samples_mp_list,
+                        self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict, 
+                        self.sub_evalue_nucleotide_sequence_to_clade_mp_dict,
+                        data_loading_temp_working_directory,
+                        data_loading_path_to_symclade_db,
+                        data_loading_debug, self.lock
+                        ))
 
-            all_processes.append(new_process)
-            new_process.start()
-        for process in all_processes:
-            process.join()
+            all_processes.append(p)
+            p.start()
+        for p in all_processes:
+            p.join()
 
     @staticmethod
     def _potential_sym_tax_screening_worker(
@@ -2068,12 +2098,13 @@ class PotentialSymTaxScreeningWorker:
     def __init__(
             self, sample_name, wkd, path_to_symclade_db, debug, e_val_collection_mp_dict,
             checked_samples_mp_list, sub_evalue_nucleotide_sequence_to_clade_mp_dict, lock):
+        self.thread_safe_general = ThreadSafeGeneral()
         self.sample_name = sample_name
         self.cwd = os.path.join(wkd, self.sample_name)
         self.fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
-        self.fasta_dict = create_dict_from_fasta(fasta_path=self.fasta_file_path)
+        self.fasta_dict = self.thread_safe_general.create_dict_from_fasta(fasta_path=self.fasta_file_path)
         self.name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
-        self.name_dict = {a.split('\t')[0]: a for a in read_defined_file_to_list(self.name_file_path)}
+        self.name_dict = {a.split('\t')[0]: a for a in self.thread_safe_general.read_defined_file_to_list(self.name_file_path)}
         self.path_to_symclade_db = path_to_symclade_db
         self.debug = debug
         # This is a managed dictionary where key is a nucleotide sequence that has:
@@ -2378,12 +2409,12 @@ class SymNonSymTaxScreeningWorker:
 
     def _init_fasta_name_blast_and_clade_dict_attributes(self):
         fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
-        self.fasta_dict = create_dict_from_fasta(fasta_path=fasta_file_path)
+        self.fasta_dict = self.thread_safe_general.create_dict_from_fasta(fasta_path=fasta_file_path)
         name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
-        self.name_dict = {a.split('\t')[0]: a for a in read_defined_file_to_list(name_file_path)}
+        self.name_dict = {a.split('\t')[0]: a for a in self.thread_safe_general.read_defined_file_to_list(name_file_path)}
         blast_output_path = os.path.join(self.cwd, 'blast.out')
         self.blast_dict = {blast_line.split('\t')[0]: blast_line for blast_line in
-                           read_defined_file_to_list(blast_output_path)}
+                           self.thread_safe_general.read_defined_file_to_list(blast_output_path)}
         self.sequence_name_to_clade_dict = {
             blast_out_line.split('\t')[0]: blast_out_line.split('\t')[1][-1] for
             blast_out_line in self.blast_dict.values()
@@ -2401,6 +2432,7 @@ class SymNonSymTaxScreeningWorker:
                                                               uid=self.datasetsample_object.id)
         self.debug = data_loading_debug
         self.sample_attributes_mp_output_queue = sample_attributes_mp_output_queue
+        self.thread_safe_general = ThreadSafeGeneral()
 
     def identify_sym_non_sym_seqs(self):
         """This method completes the pre-med quality control.
@@ -2462,7 +2494,7 @@ class SymNonSymTaxScreeningWorker:
 
     def _if_debug_check_length_of_deuniqued_fasta(self, sample_clade_fasta_path):
         if self.debug:
-            deuniqued_fasta = read_defined_file_to_list(sample_clade_fasta_path)
+            deuniqued_fasta = self.thread_safe_general.read_defined_file_to_list(sample_clade_fasta_path)
             if deuniqued_fasta:
                 if len(deuniqued_fasta) < 100:
                     print(f'{self.sample_name}: WARNING the dequniqed fasta is < {len(deuniqued_fasta)} lines')
@@ -2716,6 +2748,7 @@ class PerformMEDWorker:
     def __init__(
             self, redundant_fasta_path, data_loading_path_to_med_padding_executable, data_loading_debug,
             data_loading_path_to_med_decompose_executable):
+        self.thread_safe_general = ThreadSafeGeneral()
         self.redundant_fasta_path_unpadded = redundant_fasta_path
         self.redundant_fasta_path_padded = self.redundant_fasta_path_unpadded.replace('.fasta', '.padded.fasta')
         self.cwd = os.path.dirname(self.redundant_fasta_path_unpadded)
@@ -2762,7 +2795,7 @@ class PerformMEDWorker:
         # calculated when working with a modelling project where I was subsampling to 1000 sequences. In this
         # scenario the M was set to 4.
         # We should also take care that M doesn't go below 4, so we should use a max choice for the M
-        num_of_seqs_to_decompose = len(read_defined_file_to_list(self.redundant_fasta_path_unpadded)) / 2
+        num_of_seqs_to_decompose = len(self.thread_safe_general.read_defined_file_to_list(self.redundant_fasta_path_unpadded)) / 2
         return max(4, int(0.004 * num_of_seqs_to_decompose))
 
 
@@ -2772,6 +2805,7 @@ class DataSetSampleSequenceCreatorWorker:
     def __init__(self, med_output_directory,
                  data_set_sample_creator_handler_ref_seq_sequence_to_ref_seq_id_dict,
                  data_set_sample_creator_handler_ref_seq_uid_to_ref_seq_name_dict, data_loading_dataset_obj):
+        self.thread_safe_general = ThreadSafeGeneral()
         self.output_directory = med_output_directory
         self.sample_name = self.output_directory.split('/')[-3]
         self.clade = self.output_directory.split('/')[-2]
@@ -2791,7 +2825,7 @@ class DataSetSampleSequenceCreatorWorker:
     def _populate_nodes_list_of_nucleotide_sequences(self):
         node_file_path = os.path.join(self.output_directory, 'NODE-REPRESENTATIVES.fasta')
         try:
-            node_file_as_list = read_defined_file_to_list(node_file_path)
+            node_file_as_list = self.thread_safe_general.read_defined_file_to_list(node_file_path)
         except FileNotFoundError:
             raise RuntimeError({'med_output_directory': self.output_directory})
 
@@ -2836,7 +2870,7 @@ class DataSetSampleSequenceCreatorWorker:
                                             df_index_label, node_nucleotide_sequence_object.name],
                                         data_set_sample_from=self.dataset_sample_object)
             data_set_sample_sequence_list.append(dss)
-        for dsss_chunk in general.chunks(data_set_sample_sequence_list):
+        for dsss_chunk in self.thread_safe_general.chunks(data_set_sample_sequence_list):
             DataSetSampleSequence.objects.bulk_create(dsss_chunk)
 
     def _create_data_set_sample_sequences_with_clade_collection(self):
@@ -2854,7 +2888,7 @@ class DataSetSampleSequenceCreatorWorker:
                 data_set_sample_from=self.dataset_sample_object)
             data_set_sample_sequence_list.append(dss)
         # Save all of the newly created dss
-        for dsss_chunk in general.chunks(data_set_sample_sequence_list):
+        for dsss_chunk in self.thread_safe_general.chunks(data_set_sample_sequence_list):
             DataSetSampleSequence.objects.bulk_create(dsss_chunk)
         self.clade_collection_object.footprint = ','.join(associated_ref_seq_uid_as_str_list)
         self.clade_collection_object.save()

@@ -3,7 +3,6 @@ from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence, Ana
 from multiprocessing import Queue, Process, Manager, Lock
 import sys
 from django import db
-from datetime import datetime
 import os
 import json
 from collections import defaultdict
@@ -11,8 +10,7 @@ import pandas as pd
 import numpy as np
 import sp_config
 import virtual_objects
-import general
-import plotting
+from general import ThreadSafeGeneral
 from exceptions import NoDataSetSampleSequencePMObjects
 
 
@@ -48,7 +46,7 @@ class OutputTypeCountTable:
 
         self.vcc_uids_to_output = self._set_vcc_uids_to_output()
         self.date_time_str = date_time_str
-
+        self.thread_safe_general = ThreadSafeGeneral()
         self.clades_of_output = set()
         # A sorting of the vats of the output only by the len of the vccs of the output that they associate with
         # i.e. before they are then sorted by clade. This will be used when calculating the order of the samples
@@ -192,7 +190,7 @@ class OutputTypeCountTable:
         self._write_out_additional_info_profiles()
 
     def _write_out_additional_info_profiles(self):
-        general.write_list_to_destination(destination=self.path_to_additional_info_file,
+        self.thread_safe_general.write_list_to_destination(destination=self.path_to_additional_info_file,
                                           list_to_write=self.additional_info_file_as_list)
         print(self.path_to_additional_info_file)
 
@@ -238,13 +236,13 @@ class OutputTypeCountTable:
             "unique_profile_analysis": str(num_unique_profiles_in_analysis),
             "instances_profile_analysis": str(num_profile_instances)}
         da_meta_js_path = os.path.join(self.html_dir, 'study_data.js')
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getDataAnalysisMetaInfo', 'python_obj': data_analysis_meta_info_dict}],
             js_outpath=da_meta_js_path)
 
     def _chunk_query_cct_objs_from_at_objs(self, da_obj_list):
         cct_obj_list = []
-        for at_obj in general.chunks(da_obj_list):
+        for at_obj in self.thread_safe_general.chunks(da_obj_list):
             cct_obj_list.extend(list(CladeCollectionType.objects.filter(analysis_type_of__in=at_obj)))
         return cct_obj_list
 
@@ -274,14 +272,14 @@ class OutputTypeCountTable:
             profile_meta_dict[k]['seq_abund_string'] = prof_meta_only.at[
                 k, 'Average defining sequence proportions and [stdev]']
             profile_meta_dict[k]['color'] = prof_colour_dict[k]
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getProfileMetaInfo', 'python_obj': profile_meta_dict}],
             js_outpath=profile_meta_js_path)
         return prof_colour_dict, sorted_profile_uids_by_local_abund
 
     def _set_colour_dict(self, sorted_profile_uids_by_local_abund,):
         colour_palette_pas = ['#%02x%02x%02x' % rgb_tup for rgb_tup in
-                              general.create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=1000, num_cols=50,
+                              self.thread_safe_general.create_colour_list(mix_col=(255, 255, 255), sq_dist_cutoff=1000, num_cols=50,
                                                  time_out_iterations=10000)]
 
         grey_palette = ['#D0CFD4', '#89888D', '#4A4A4C', '#8A8C82', '#D4D5D0', '#53544F']
@@ -343,7 +341,7 @@ class OutputTypeCountTable:
         # and we have the maximum abundance
         # now write these out as js file and functions to return.
         js_file_path = os.path.join(self.html_dir, 'study_data.js')
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataProfileBySample', 'python_obj': profile_rect_dict},
              {'function_name': 'getRectDataProfileBySampleMaxSeq', 'python_obj': max_cumulative_abs},
              {'function_name': 'getProfColor', 'python_obj': prof_colour_dict}],
@@ -441,7 +439,7 @@ class OutputTypeCountTable:
 
     def _chunk_query_ds_objs_from_ds_uids(self):
         ds_obj_list = []
-        for uid_list in general.chunks(self.data_set_uid_set_to_output):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_uid_set_to_output):
             ds_obj_list.extend(list(DataSet.objects.filter(id__in=uid_list)))
         return ds_obj_list
 
@@ -645,13 +643,13 @@ class OutputTypeCountTable:
 
     def _chunk_query_dss_objs_from_ds_uids(self):
         temp_data_set_sample_obj_list = []
-        for uid_list in general.chunks(self.data_set_uid_set_to_output):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_uid_set_to_output):
             temp_data_set_sample_obj_list.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return temp_data_set_sample_obj_list
 
     def _chunk_query_distinct_dss_objs_from_dss_uids(self):
         temp_data_set_obj_set = set()
-        for uid_list in general.chunks(self.data_set_sample_uid_set_to_output):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_sample_uid_set_to_output):
             temp_data_set_obj_set.update(list(DataSet.objects.filter(datasetsample__in=uid_list)))
         temp_data_set_obj_list = list(temp_data_set_obj_set)
         return temp_data_set_obj_list
@@ -685,7 +683,7 @@ class OutputTypeCountTable:
 
     def _chunk_query_distinct_at_obj_from_dss_uids(self):
         temp_analysis_type_obj_set = set()
-        for uid_list in general.chunks(self.data_set_sample_uid_set_to_output):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_sample_uid_set_to_output):
             temp_analysis_type_obj_set.update(list(AnalysisType.objects.filter(
                 cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list,
                 data_analysis_from=self.data_analysis_obj)))
@@ -877,6 +875,7 @@ class SequenceCountTableCreator:
             self, symportal_root_dir, call_type, num_proc, html_dir, js_output_path_dict, date_time_str,
             no_pre_med_seqs, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
             sorted_sample_uid_list=None, analysis_obj=None):
+        self.thread_safe_general = ThreadSafeGeneral()
         self._init_core_vars(
             symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
             output_dir, sorted_sample_uid_list, date_time_str, html_dir)
@@ -893,6 +892,7 @@ class SequenceCountTableCreator:
         self.similarity_based_sample_ordered_uids = None
         # False by default. If true do not output premed seq info
         self.no_pre_med_seqs = no_pre_med_seqs
+        
 
 
     def _init_core_vars(self, symportal_root_dir, analysis_obj, call_type, dss_uids_output_str,
@@ -928,32 +928,32 @@ class SequenceCountTableCreator:
 
     def _chunk_query_set_rs_objs_from_dss_objs(self):
         temp_ref_seqs_in_datasets_set = set()
-        for uid_list in general.chunks(self.list_of_dss_objects):
+        for uid_list in self.thread_safe_general.chunks(self.list_of_dss_objects):
             temp_ref_seqs_in_datasets_set.update(
                 list(ReferenceSequence.objects.filter(datasetsamplesequence__data_set_sample_from__in=uid_list)))
         return list(temp_ref_seqs_in_datasets_set)
 
     def _chunk_query_set_dss_objs_from_ds_objs(self):
         temp_list_of_dss_objects = []
-        for uid_list in general.chunks(self.ds_objs_to_output):
+        for uid_list in self.thread_safe_general.chunks(self.ds_objs_to_output):
             temp_list_of_dss_objects.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return temp_list_of_dss_objects
 
     def _chunk_query_set_ds_objs_from_ds_uids(self, uids_of_data_sets_to_output):
         temp_ds_objs_to_output = []
-        for uid_list in general.chunks(uids_of_data_sets_to_output):
+        for uid_list in self.thread_safe_general.chunks(uids_of_data_sets_to_output):
             temp_ds_objs_to_output.extend(list(DataSet.objects.filter(id__in=uid_list)))
         return temp_ds_objs_to_output
 
     def _chunk_query_set_distinct_ds_objs_from_dss_objs(self):
         temp_ds_objs_to_output_set = set()
-        for uid_list in general.chunks(self.list_of_dss_objects):
+        for uid_list in self.thread_safe_general.chunks(self.list_of_dss_objects):
             temp_ds_objs_to_output_set.update(list(DataSet.objects.filter(datasetsample__in=uid_list)))
         return list(temp_ds_objs_to_output_set)
 
     def _chunk_query_set_dss_objs_from_dss_uids(self, dss_uids_for_query):
         temp_list_of_dss_objects = []
-        for uid_list in general.chunks(dss_uids_for_query):
+        for uid_list in self.thread_safe_general.chunks(dss_uids_for_query):
             temp_list_of_dss_objects.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return temp_list_of_dss_objects
 
@@ -1150,7 +1150,7 @@ class SequenceCountTableCreator:
             print(path_item)
 
     def _write_out_additional_info_seqs(self):
-        general.write_list_to_destination(destination=self.additional_info_file_path,
+        self.thread_safe_general.write_list_to_destination(destination=self.additional_info_file_path,
                                           list_to_write=self.additional_info_file)
         self.output_paths_list.append(self.additional_info_file_path)
 
@@ -1166,7 +1166,7 @@ class SequenceCountTableCreator:
 
     def _write_out_seq_fasta_for_loading(self):
         # we created the fasta above.
-        general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
+        self.thread_safe_general.write_list_to_destination(self.output_fasta_path, self.output_seqs_fasta_as_list)
         self.output_paths_list.append(self.output_fasta_path)
 
     def _write_out_abund_only_dfs_seqs(self):
@@ -1210,7 +1210,7 @@ class SequenceCountTableCreator:
 
         js_file_path = os.path.join(self.html_dir, 'study_data.js')
 
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getSampleMetaInfo', 'python_obj': sample_meta_dict},
              {'function_name': 'getSampleSortedArrays', 'python_obj': sorted_sample_arrays},
              {'function_name': 'getSampleProportions', 'python_obj': sample_clade_proportion_dict}],
@@ -1242,7 +1242,7 @@ class SequenceCountTableCreator:
             'sym_seqs_absolute_av': str(int(self.df_abs_no_meta_rows['post_med_absolute'].mean())),
             "sym_seqs_unique_av": str(int(self.df_abs_no_meta_rows['post_med_unique'].mean()))
         }
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getDataSetMetaData', 'python_obj': data_set_meta_info}],
             js_outpath=js_file_path)
 
@@ -1319,7 +1319,7 @@ class SequenceCountTableCreator:
         # created so we will have to create the col
         # dict here and then read it back in for making the pre_seq rect array.
         # We will then read these in for the plotting.
-        seq_colour_dict = general.set_seq_colour_dict(sorted_seq_names)
+        seq_colour_dict = self.thread_safe_general.set_seq_colour_dict(sorted_seq_names)
         with open(os.path.join(self.html_dir, 'color_dict_post_med.json'), 'w') as f:
             json.dump(fp=f, obj=seq_colour_dict)
 
@@ -1328,7 +1328,7 @@ class SequenceCountTableCreator:
         # and we have the maximum abundance
         # now write these out as js file and functions to return.
         js_file_path = os.path.join(self.html_dir, 'study_data.js')
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getRectDataPostMEDBySample', 'python_obj': post_med_rect_dict},
              {'function_name': 'getRectDataPostMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
              {'function_name': 'getSeqColorPostMED', 'python_obj': seq_colour_dict}],
@@ -1529,7 +1529,7 @@ class SequenceCountTableCreator:
 
     def _chunk_query_rs_objs_with_name_from_dss_objs(self):
         reference_sequences_in_data_sets_no_name_set = set()
-        for uid_list in general.chunks(self.list_of_dss_objects):
+        for uid_list in self.thread_safe_general.chunks(self.list_of_dss_objects):
             reference_sequences_in_data_sets_no_name_set.update(list(
                 ReferenceSequence.objects.filter(datasetsamplesequence__data_set_sample_from__in=uid_list,
                                                  has_name=True)))
@@ -1538,7 +1538,7 @@ class SequenceCountTableCreator:
 
     def _chunk_query_rs_objs_no_name_from_dss_objs(self):
         reference_sequences_in_data_sets_no_name_set = set()
-        for uid_list in general.chunks(self.list_of_dss_objects):
+        for uid_list in self.thread_safe_general.chunks(self.list_of_dss_objects):
             reference_sequences_in_data_sets_no_name_set.update(list(
                 ReferenceSequence.objects.filter(datasetsamplesequence__data_set_sample_from__in=uid_list,
                                                  has_name=False)))
@@ -1820,7 +1820,7 @@ class SequenceCountTableCreator:
             # get the colour dict
             with open(os.path.join(self.html_dir, 'color_dict_post_med.json'), 'r') as f:
                 c_dict_post_med = json.load(f)
-            seq_colour_dict = general.set_seq_colour_dict_w_reference_c_dict(sorted_seq_names, c_dict_post_med)
+            seq_colour_dict = self.parent.thread_safe_general.set_seq_colour_dict_w_reference_c_dict(sorted_seq_names, c_dict_post_med)
             with open(os.path.join(self.html_dir, 'color_dict_pre_med.json'), 'w') as f:
                 json.dump(fp=f, obj=seq_colour_dict)
             # merge the two colour dictionaries and add to the html output
@@ -1840,7 +1840,7 @@ class SequenceCountTableCreator:
             #      {'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
             #      {'function_name': 'getSeqColor', 'python_obj': combi_color_dict}],
             #     js_outpath=js_file_path)
-            general.write_out_js_file_to_return_python_objs_as_js_objs(
+            self.parent.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
                 [{'function_name': 'getRectDataPreMEDBySampleMaxSeq', 'python_obj': max_cumulative_abs},
                  {'function_name': 'getSeqColor', 'python_obj': combi_color_dict}],
                 js_outpath=js_file_path)
@@ -1881,7 +1881,7 @@ class SequenceCountTableCreator:
                 fasta_out.append(f'>{seq_name}')
                 fasta_out.append(f'{seq}')
 
-            general.write_list_to_destination(self.parent.pre_med_fasta_out_path, fasta_out)
+            self.parent.thread_safe_general.write_list_to_destination(self.parent.pre_med_fasta_out_path, fasta_out)
 
         def _write_out_dfs_as_csv(self):
             print('\nWriting out pre-med sequence count tables: \n')

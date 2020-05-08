@@ -10,9 +10,8 @@ from scipy.spatial.distance import braycurtis
 from skbio.diversity import beta_diversity
 from skbio.stats.ordination import pcoa
 from skbio.tree import TreeNode
-
 import django_general
-import general
+from general import ThreadSafeGeneral
 from dbApp.models import (
     ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
     CladeCollection, CladeCollectionType)
@@ -27,7 +26,7 @@ class BaseUnifracDistPCoACreator:
             self, num_proc, output_dir, data_set_uid_list, js_output_path_dict,
             html_dir, data_set_sample_uid_list, cct_set_uid_list,
             call_type, date_time_str):
-
+        self.thread_safe_general = ThreadSafeGeneral()
         self.num_proc = num_proc
         self.output_dir = output_dir
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
@@ -87,25 +86,22 @@ class BaseUnifracDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output, clade_cols_of_output
 
-    @staticmethod
-    def _chunk_query_distinct_dss_objs_from_cc_objs(clade_cols_of_output):
+    def _chunk_query_distinct_dss_objs_from_cc_objs(self, clade_cols_of_output):
         data_set_samples_of_output_set = set()
-        for uid_list in general.chunks(clade_cols_of_output):
+        for uid_list in self.thread_safe_general.chunks(clade_cols_of_output):
             data_set_samples_of_output_set.update(
                 list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
         return list(data_set_samples_of_output_set)
 
-    @staticmethod
-    def _chunk_query_distinct_cc_objs_from_cct_uids(cct_set_uid_list):
+    def _chunk_query_distinct_cc_objs_from_cct_uids(self, cct_set_uid_list):
         clade_cols_of_output_set = set()
-        for uid_list in general.chunks(cct_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(cct_set_uid_list):
             clade_cols_of_output_set.update(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
         return list(clade_cols_of_output_set)
 
-    @staticmethod
-    def _chunk_query_distinct_rs_objs_from_rs_uids(rs_uid_list):
+    def _chunk_query_distinct_rs_objs_from_rs_uids(self, rs_uid_list):
         rs_obj_of_output_set = set()
-        for rs_list in general.chunks(rs_uid_list):
+        for rs_list in self.thread_safe_general.chunks(rs_uid_list):
             rs_obj_of_output_set.update(list(ReferenceSequence.objects.filter(id__in=rs_list)))
         return list(rs_obj_of_output_set)
 
@@ -115,24 +111,21 @@ class BaseUnifracDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output
 
-    @staticmethod
-    def _chunk_query_cc_objs_from_dss_objs(data_set_samples_of_output):
+    def _chunk_query_cc_objs_from_dss_objs(self, data_set_samples_of_output):
         clade_cols_of_output = []
-        for uid_list in general.chunks(data_set_samples_of_output):
+        for uid_list in self.thread_safe_general.chunks(data_set_samples_of_output):
             clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return clade_cols_of_output
 
-    @staticmethod
-    def _chunk_query_dss_objs_from_dss_uids(data_set_sample_uid_list):
+    def _chunk_query_dss_objs_from_dss_uids(self, data_set_sample_uid_list):
         data_set_samples_of_output = []
-        for uid_list in general.chunks(data_set_sample_uid_list):
+        for uid_list in self.thread_safe_general.chunks(data_set_sample_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return data_set_samples_of_output
 
-    @staticmethod
-    def _chunk_query_dss_objs_from_ds_uids(data_set_uid_list):
+    def _chunk_query_dss_objs_from_ds_uids(self, data_set_uid_list):
         data_set_samples_of_output = []
-        for uid_list in general.chunks(data_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(data_set_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return data_set_samples_of_output
 
@@ -165,6 +158,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             date_time_str=date_time_str, js_output_path_dict=js_output_path_dict,
             html_dir=html_dir)
 
+        self.thread_safe_general = ThreadSafeGeneral()
         self.data_analysis_obj = data_analysis_obj
         self.cct_set_uid_list = cct_set_uid_list
         if self.cct_set_uid_list is not None:
@@ -183,22 +177,21 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def _chunk_query_set_distinct_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
-        for uid_list in general.chunks(self.data_set_sample_uid_list):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_sample_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(
                 data_analysis_from=self.data_analysis_obj,
                 cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
         return list(temp_at_set)
 
-    @staticmethod
-    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(cct_set_uid_list):
+    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
-        for uid_list in general.chunks(cct_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(cct_set_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
         return list(temp_at_set)
 
     def _chunk_query_set_cct_objs_from_cct_uids(self):
         temp_clade_col_type_objs_list = []
-        for uid_list in general.chunks(self.cct_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(self.cct_set_uid_list):
             temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
         return temp_clade_col_type_objs_list
 
@@ -280,7 +273,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self._write_output_paths_to_stdout()
 
     def _write_out_js_objects(self):
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getBtwnProfileDistCoordsUFNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistPCVariancesUFNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistPCAvailableUFNoSqrt',
@@ -438,6 +431,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         def __init__(self, parent, clade):
             self.parent = parent
             self.clade = clade
+            self.thread_safe_general = ThreadSafeGeneral()
             # Added as part of the mcminds enhancement
             # A default dict that will have clade as key and list of reference sequence objects as value
             self.reference_seq_uid_set = set()
@@ -462,7 +456,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
                 self.reference_seq_uid_set.update(ref_seq_uids_of_analysis_type)
 
-                df_sqrt = general.sqrt_transform_abundance_df(df_sqrt)
+                df_sqrt = self.thread_safe_general.sqrt_transform_abundance_df(df_sqrt)
 
                 # A dictionary that will hold the abundance of the reference sequences in the given AnalysisType
                 # object. Key is RefSeq_obj uid and value is abundance normalised to 10000 reads.
@@ -612,7 +606,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
     def _chunk_query_set_cc_obj_from_dss_uids(self):
         temp_clade_col_objs = []
-        for uid_list in general.chunks(self.data_set_sample_uid_list, 100):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_sample_uid_list, 100):
             temp_clade_col_objs.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return temp_clade_col_objs
 
@@ -687,7 +681,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         self._write_output_paths_to_stdout()
 
     def _write_out_js_objects(self):
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getBtwnSampleDistCoordsUFNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
              {'function_name': 'getBtwnSampleDistPCVariancesUFNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
              {'function_name': 'getBtwnSampleDistPCAvailableUFNoSqrt',
@@ -914,6 +908,7 @@ class TreeCreatorForUniFrac:
         self.tree_out_path_unrooted = self.fasta_aligned_path + '.treefile'
         self.tree_out_path_rooted = self.tree_out_path_unrooted.replace('.treefile', '.rooted.treefile')
         self.rooted_tree = None
+        self.thread_safe_general = ThreadSafeGeneral()
 
     def make_tree(self):
 
@@ -921,12 +916,12 @@ class TreeCreatorForUniFrac:
         print(f'Writing out {self.num_seqs} unaligned sequences')
         self._write_out_unaligned_seqs()
 
-        if len(general.read_defined_file_to_list(self.fasta_unaligned_path)) < 5:
+        if len(self.thread_safe_general.read_defined_file_to_list(self.fasta_unaligned_path)) < 5:
             raise InsufficientSequencesInAlignment
 
         # align the sequences
         print(f'Aligning {self.num_seqs} sequences')
-        general.mafft_align_fasta(
+        self.thread_safe_general.mafft_align_fasta(
             input_path=self.fasta_unaligned_path, output_path=self.fasta_aligned_path,
             method='unifrac', num_proc=self.parent.num_proc)
 
@@ -985,6 +980,7 @@ class BaseBrayCurtisDistPCoACreator:
         self.pc_availabaility_dict_no_sqrt = {}
         self.pc_availabaility_dict_sqrt = {}
         self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
+        self.thread_safe_general = ThreadSafeGeneral()
 
     def _compute_pcoa_coords(self, clade, sqrt):
         # simultaneously grab the sample names in the order of the distance matrix and put the matrix into
@@ -993,12 +989,12 @@ class BaseBrayCurtisDistPCoACreator:
             self.clade_pcoa_coord_file_path_sqrt = os.path.join(
                 self.clade_output_dir,
                 f'{self.date_time_str}.braycurtis_{self.profiles_or_samples}_PCoA_coords_{clade}_sqrt.csv')
-            raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path_sqrt)
+            raw_dist_file = self.thread_safe_general.read_defined_file_to_list(self.clade_dist_file_path_sqrt)
         else:
             self.clade_pcoa_coord_file_path_no_sqrt = os.path.join(
                 self.clade_output_dir,
                 f'{self.date_time_str}.braycurtis_{self.profiles_or_samples}_PCoA_coords_{clade}_no_sqrt.csv')
-            raw_dist_file = general.read_defined_file_to_list(self.clade_dist_file_path_no_sqrt)
+            raw_dist_file = self.thread_safe_general.read_defined_file_to_list(self.clade_dist_file_path_no_sqrt)
 
         temp_two_d_list = []
         object_names_from_dist_matrix = []
@@ -1072,18 +1068,16 @@ class BaseBrayCurtisDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output, clade_cols_of_output
 
-    @staticmethod
-    def _chunk_query_distinct_dss_objs_from_cc_objs(clade_cols_of_output):
+    def _chunk_query_distinct_dss_objs_from_cc_objs(self, clade_cols_of_output):
         data_set_samples_of_output_set = set()
-        for uid_list in general.chunks(clade_cols_of_output):
+        for uid_list in self.thread_safe_general.chunks(clade_cols_of_output):
             data_set_samples_of_output_set.update(
                 list(DataSetSample.objects.filter(cladecollection__in=uid_list)))
         return list(data_set_samples_of_output_set)
 
-    @staticmethod
-    def _chunk_query_distinct_cc_objs_from_cct_uids(cct_set_uid_list):
+    def _chunk_query_distinct_cc_objs_from_cct_uids(self, cct_set_uid_list):
         clade_cols_of_output_set = set()
-        for uid_list in general.chunks(cct_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(cct_set_uid_list):
             clade_cols_of_output_set.update(list(CladeCollection.objects.filter(cladecollectiontype__id__in=uid_list)))
         return list(clade_cols_of_output_set)
 
@@ -1093,24 +1087,21 @@ class BaseBrayCurtisDistPCoACreator:
             cc.id for cc in clade_cols_of_output]
         return clade_col_uids_of_output
 
-    @staticmethod
-    def _chunk_query_cc_objs_from_dss_objs(data_set_samples_of_output):
+    def _chunk_query_cc_objs_from_dss_objs(self, data_set_samples_of_output):
         clade_cols_of_output = []
-        for uid_list in general.chunks(data_set_samples_of_output):
+        for uid_list in self.thread_safe_general.chunks(data_set_samples_of_output):
             clade_cols_of_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return clade_cols_of_output
 
-    @staticmethod
-    def _chunk_query_dss_objs_from_dss_uids(data_set_sample_uid_list):
+    def _chunk_query_dss_objs_from_dss_uids(self, data_set_sample_uid_list):
         data_set_samples_of_output = []
-        for uid_list in general.chunks(data_set_sample_uid_list):
+        for uid_list in self.thread_safe_general.chunks(data_set_sample_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(id__in=uid_list)))
         return data_set_samples_of_output
 
-    @staticmethod
-    def _chunk_query_dss_objs_from_ds_uids(data_set_uid_list):
+    def _chunk_query_dss_objs_from_ds_uids(self, data_set_uid_list):
         data_set_samples_of_output = []
-        for uid_list in general.chunks(data_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(data_set_uid_list):
             data_set_samples_of_output.extend(list(DataSetSample.objects.filter(data_submission_from__in=uid_list)))
         return data_set_samples_of_output
 
@@ -1205,12 +1196,12 @@ class BaseBrayCurtisDistPCoACreator:
             for line in self.clade_dist_file_as_list_sqrt[1:]:
                 self._append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line)
             self.clade_dist_file_as_list_sqrt = dist_with_obj_name
-            general.write_list_to_destination(self.clade_dist_file_path_sqrt, self.clade_dist_file_as_list_sqrt)
+            self.thread_safe_general.write_list_to_destination(self.clade_dist_file_path_sqrt, self.clade_dist_file_as_list_sqrt)
         else:
             for line in self.clade_dist_file_as_list_no_sqrt[1:]:
                 self._append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line)
             self.clade_dist_file_as_list_no_sqrt = dist_with_obj_name
-            general.write_list_to_destination(self.clade_dist_file_path_no_sqrt, self.clade_dist_file_as_list_no_sqrt)
+            self.thread_safe_general.write_list_to_destination(self.clade_dist_file_path_no_sqrt, self.clade_dist_file_as_list_no_sqrt)
 
     @staticmethod
     def _append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line):
@@ -1222,17 +1213,15 @@ class BaseBrayCurtisDistPCoACreator:
         new_line = '\t'.join(temp_list)
         dist_with_obj_name.append(new_line)
 
-    @staticmethod
-    def _chunk_query_at_obj_from_at_uids(list_of_obj_uids):
+    def _chunk_query_at_obj_from_at_uids(self, list_of_obj_uids):
         objs_of_outputs = []
-        for uid_list in general.chunks(list_of_obj_uids):
+        for uid_list in self.thread_safe_general.chunks(list_of_obj_uids):
             objs_of_outputs.extend(list(AnalysisType.objects.filter(id__in=uid_list)))
         return objs_of_outputs
 
-    @staticmethod
-    def _chunk_query_cc_objs_from_cc_uids(list_of_cc_ids):
+    def _chunk_query_cc_objs_from_cc_uids(self, list_of_cc_ids):
         cc_of_outputs = []
-        for uid_list in general.chunks(list_of_cc_ids):
+        for uid_list in self.thread_safe_general.chunks(list_of_cc_ids):
             cc_of_outputs.extend(list(CladeCollection.objects.filter(id__in=uid_list)))
         return cc_of_outputs
 
@@ -1281,11 +1270,12 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
 
         self.clades_of_ccs = list(set([a.clade for a in self.cc_list_for_output]))
         self.output_dir = os.path.join(output_dir, 'between_sample_distances')
+        self.thread_safe_general = ThreadSafeGeneral()
         os.makedirs(self.output_dir, exist_ok=True)
 
     def _chunk_query_set_cc_list_from_dss_uids(self):
         temp_cc_list_for_output = []
-        for uid_list in general.chunks(self.data_set_sample_uid_list):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_sample_uid_list):
             temp_cc_list_for_output.extend(list(CladeCollection.objects.filter(data_set_sample_from__in=uid_list)))
         return temp_cc_list_for_output
 
@@ -1324,7 +1314,7 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self._write_output_paths_to_stdout()
 
     def _write_out_js_objects(self):
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getBtwnSampleDistCoordsBCSqrt', 'python_obj': self.pc_coordinates_dict_sqrt},
              {'function_name': 'getBtwnSampleDistPCVariancesBCSqrt', 'python_obj': self.pc_variances_dict_sqrt},
              {'function_name': 'getBtwnSampleDistPCAvailableBCSqrt', 'python_obj': self.pc_availabaility_dict_sqrt},
@@ -1450,22 +1440,21 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.output_dir = os.path.join(output_dir, 'between_profile_distances')
         self.local = local_abunds_only
 
-    @staticmethod
-    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(cct_set_uid_list):
+    def _chunk_query_set_distinct_at_list_for_output_from_cct_uids(self, cct_set_uid_list):
         temp_at_set = set()
-        for uid_list in general.chunks(cct_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(cct_set_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(cladecollectiontype__id__in=uid_list)))
         return list(temp_at_set)
 
     def _chunk_query_set_clade_col_type_objs_from_cct_uids(self):
         temp_clade_col_type_objs_list = []
-        for uid_list in general.chunks(self.cct_set_uid_list):
+        for uid_list in self.thread_safe_general.chunks(self.cct_set_uid_list):
             temp_clade_col_type_objs_list.extend(list(CladeCollectionType.objects.filter(id__in=uid_list)))
         return temp_clade_col_type_objs_list
 
     def _chunk_query_set_at_list_for_output_from_dss_uids(self):
         temp_at_set = set()
-        for uid_list in general.chunks(self.data_set_sample_uid_list):
+        for uid_list in self.thread_safe_general.chunks(self.data_set_sample_uid_list):
             temp_at_set.update(list(AnalysisType.objects.filter(
                 data_analysis_from=self.data_analysis_obj,
                 cladecollectiontype__clade_collection_found_in__data_set_sample_from__in=uid_list)))
@@ -1506,7 +1495,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self._write_output_paths_to_stdout()
 
     def _write_out_js_objects(self):
-        general.write_out_js_file_to_return_python_objs_as_js_objs(
+        self.thread_safe_general.write_out_js_file_to_return_python_objs_as_js_objs(
             [{'function_name': 'getBtwnProfileDistCoordsBCNoSqrt', 'python_obj': self.pc_coordinates_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistPCVariancesBCNoSqrt', 'python_obj': self.pc_variances_dict_no_sqrt},
              {'function_name': 'getBtwnProfileDistPCAvailableBCNoSqrt',
@@ -1567,7 +1556,7 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             df_no_sqrt = pd.DataFrame(at.get_ratio_list())
             df_sqrt = pd.DataFrame(at.get_ratio_list())
 
-            df_sqrt = general.sqrt_transform_abundance_df(df_sqrt)
+            df_sqrt = self.thread_safe_general.sqrt_transform_abundance_df(df_sqrt)
 
             if self.local:
                 normalised_abundance_of_divs_dict_no_sqrt = self._create_norm_abund_dict_from_local_clade_cols(

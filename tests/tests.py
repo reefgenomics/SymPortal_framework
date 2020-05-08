@@ -1,9 +1,7 @@
 #!/usr/bin/env python3.6
 import os
 import main
-import general
 import django_general
-from pathlib import Path
 import shutil
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from dbApp.models import DataAnalysis, DataSet

@@ -15,7 +15,7 @@ import os
 import numpy as np
 import sys
 from datetime import datetime
-import general
+from general import ThreadSafeGeneral
 import json
 plt.ioff()
 
@@ -495,7 +495,8 @@ class SeqStackedBarPlotter():
         self.max_n_cols = 8
         self.max_n_rows = 7
         self.num_leg_cells = self.max_n_rows * self.max_n_cols
-        self.colour_dict = general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
+        self.thread_safe_general = ThreadSafeGeneral()
+        self.colour_dict = self.thread_safe_general.set_seq_colour_dict(self.ordered_list_of_seqs_names)
         # plotting vars
         self.ordered_sample_uid_list = self._set_ordered_sample_uid_list_and_reorder_df(ordered_sample_uid_list)
         self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
@@ -777,6 +778,7 @@ class SeqStackedBarPlotter():
     class PreMedSeqPlotter():
         def __init__(self, parent):
             self.parent = parent
+            self.thread_safe_general = ThreadSafeGeneral()
             self.root_output_directory = self.parent.root_output_directory
             self.fig_output_base = os.path.join(self.parent.pre_med_output_directory, f'{self.parent.date_time_str}')
             self.smp_uid_to_smp_name_dict = None
@@ -786,7 +788,7 @@ class SeqStackedBarPlotter():
             self.max_n_cols = 8
             self.max_n_rows = 7
             self.num_leg_cells = self.max_n_rows * self.max_n_cols
-            self.colour_dict = general.set_seq_colour_dict_w_reference_c_dict(self.ordered_list_of_seqs_names, self.parent.colour_dict)
+            self.colour_dict = self.thread_safe_general.set_seq_colour_dict_w_reference_c_dict(self.ordered_list_of_seqs_names, self.parent.colour_dict)
             # plotting vars
             self.num_samples = len(self.output_count_table_as_df.index.values.tolist())
             self.samples_per_subplot = 50

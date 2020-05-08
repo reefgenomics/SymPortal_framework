@@ -1,10 +1,7 @@
 from collections import defaultdict
 import subprocess
 import os
-import sys
-from general import (read_defined_file_to_list, write_list_to_destination, create_dict_from_fasta,
-                     combine_two_fasta_files, decode_utf8_binary_to_list,
-                     create_seq_name_to_abundance_dict_from_name_file)
+from general import ThreadSafeGeneral
 
 class BlastnAnalysis:
     def __init__(
@@ -22,6 +19,7 @@ class BlastnAnalysis:
         self.num_threads = num_threads
         self.blastn_exec_path = blastn_exec_path
         self.pipe_stdout_sterr = pipe_stdout_sterr
+        self.thread_safe_general = ThreadSafeGeneral()
 
     def execute_blastn_analysis(self, pipe_stdout_sterr=True):
         if not pipe_stdout_sterr:
@@ -44,7 +42,7 @@ class BlastnAnalysis:
         return completed_process
 
     def return_blast_output_as_list(self):
-        return read_defined_file_to_list(self.output_file_path)
+        return self.thread_safe_general.read_defined_file_to_list(self.output_file_path)
 
     def return_blast_results_dict(self):
         blast_output_file_as_list = self.return_blast_output_as_list()
@@ -100,6 +98,7 @@ class MothurAnalysis:
         # if there were error messages raised during the make.contigs
         self.make_contigs_error = False
         self.stdout_as_list = None
+        self.thread_safe_general = ThreadSafeGeneral()
 
 
     # ########################################
@@ -124,7 +123,7 @@ class MothurAnalysis:
         self.fasta_path = self.dot_file_file_path.replace('.file', '.trim.contigs.fasta')
 
         try:
-            num_contigs = len(read_defined_file_to_list(self.fasta_path))/2
+            num_contigs = len(self.thread_safe_general.read_defined_file_to_list(self.fasta_path))/2
         except FileNotFoundError:
             raise RuntimeError('Make.contigs out fasta not found')
 
@@ -176,7 +175,7 @@ class MothurAnalysis:
         # Purposefully do not update the name file here.
         # TODO check that the old name file remains untouched.
 
-        remove_primer_mismatch_annotations_from_fasta(fwd_output_good_fasta_path)
+        self.remove_primer_mismatch_annotations_from_fasta(fwd_output_good_fasta_path)
 
         # In some uncommon cases, all amplicons gave a PCR match and there is no scrapped fastsa to do a rev PCR on
         # then we should clean up the output_bad_fasta
@@ -184,7 +183,7 @@ class MothurAnalysis:
         # then do a pcr on it again using the same oligo set as the first run
         # we should then get the output from that pcr and add it to the previous run
         if do_reverse_pcr_as_well and self._if_scrap_fasta_exists_clean_and_write_out(fwd_output_scrapped_fasta_path):
-            remove_primer_mismatch_annotations_from_fasta(fwd_output_scrapped_fasta_path)
+            self.remove_primer_mismatch_annotations_from_fasta(fwd_output_scrapped_fasta_path)
             self.fasta_path = fwd_output_scrapped_fasta_path
             self._rev_comp_make_and_write_mothur_batch_file()
 
@@ -194,24 +193,34 @@ class MothurAnalysis:
             print(f'{self.name}: starting rev PCR. This may take some time.')
             self._run_mothur_batch_file_command()
             rev_output_good_fasta_path = self.fasta_path.replace('.fasta', '.pcr.fasta')
-            remove_primer_mismatch_annotations_from_fasta(rev_output_good_fasta_path)
+            self.remove_primer_mismatch_annotations_from_fasta(rev_output_good_fasta_path)
             self._make_new_fasta_path_for_fwd_rev_combined(rev_output_good_fasta_path)
 
             # now create a fasta that is the good fasta from both of the pcrs.
             # this will become the new mothuranalysis fasta.
-            combine_two_fasta_files(
+            self.thread_safe_general.combine_two_fasta_files(
                 path_one=fwd_output_good_fasta_path,
                 path_two=rev_output_good_fasta_path,
                 path_for_combined=self.fasta_path
             )
         else:
             self.fasta_path = fwd_output_good_fasta_path
-        if len(read_defined_file_to_list(self.fasta_path)) == 0:
+        if len(self.thread_safe_general.read_defined_file_to_list(self.fasta_path)) == 0:
             raise RuntimeError('PCR fasta file is blank')
 
 
-
-
+    def remove_primer_mismatch_annotations_from_fasta(self, fasta_path):
+        temp_fasta = []
+        fasta_to_clean = self.thread_safe_general.read_defined_file_to_list(fasta_path)
+        for i in range(len(fasta_to_clean) - 1):
+            if fasta_to_clean[i]:
+                if fasta_to_clean[i][0] == '>' and fasta_to_clean[i + 1]:
+                    if '|' in fasta_to_clean[i]:
+                        temp_fasta.extend([fasta_to_clean[i].split('|')[0], fasta_to_clean[i + 1]])
+                    else:
+                        temp_fasta.extend([fasta_to_clean[i].split('\t')[0], fasta_to_clean[i + 1]])
+        self.thread_safe_general.write_list_to_destination(fasta_path, temp_fasta)
+    
     def check_fasta_and_name_valid(self):
         if self.name_file_path is None or self.fasta_path is None:
             raise RuntimeError
@@ -260,11 +269,11 @@ class MothurAnalysis:
         if fwd_output_scrapped_fasta_path == '':
             return False
         else:
-            scrapped_fasta_as_list = read_defined_file_to_list(fwd_output_scrapped_fasta_path)
+            scrapped_fasta_as_list = self.thread_safe_general.read_defined_file_to_list(fwd_output_scrapped_fasta_path)
             if scrapped_fasta_as_list:
                 new_scrapped_fasta = self._make_new_fasta_no_multi_match_lines(scrapped_fasta_as_list)
                 if new_scrapped_fasta:
-                    write_list_to_destination(fwd_output_scrapped_fasta_path, new_scrapped_fasta)
+                    self.thread_safe_general.write_list_to_destination(fwd_output_scrapped_fasta_path, new_scrapped_fasta)
                     return True
                 else:
                     return False
@@ -280,7 +289,7 @@ class MothurAnalysis:
 
 
     def _split_abund_extract_output_path_name_and_fasta(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+        stdout_string_as_list = self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
 
             if 'Output File Names' in stdout_string_as_list[i]:
@@ -293,7 +302,7 @@ class MothurAnalysis:
             f'split.abund(fasta={self.fasta_path}, name={self.name_file_path}, cutoff=2)'
         ]
 
-        write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
+        self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
     def _unique_seqs_make_and_write_mothur_batch(self):
         if self.name_file_path:
@@ -308,7 +317,7 @@ class MothurAnalysis:
                 f'set.dir(output={self.output_dir})',
                 f'unique.seqs(fasta={self.fasta_path})'
             ]
-        write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
+        self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
     def _summarise_make_and_write_mothur_batch(self):
         if self.name_file_path:
@@ -324,7 +333,7 @@ class MothurAnalysis:
                 f'summary.seqs(fasta={self.fasta_path})'
             ]
 
-        write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
+        self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
     def _make_contig_make_and_write_mothur_batch(self):
         mothur_batch_file = [
@@ -332,19 +341,19 @@ class MothurAnalysis:
             f'set.dir(output={self.output_dir})',
             f'make.contigs(file={self.dot_file_file_path})'
         ]
-        write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
+        self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
     def _make_contig_make_and_write_out_dot_file(self):
         dot_file_file = [f'{self.fastq_gz_fwd_path} {self.fastq_gz_rev_path}']
         self.dot_file_file_path = os.path.join(self.input_dir, f'{self.name}_fastq_pair.file')
-        write_list_to_destination(self.dot_file_file_path, dot_file_file)
+        self.thread_safe_general.write_list_to_destination(self.dot_file_file_path, dot_file_file)
 
     def _make_new_fasta_path_for_fwd_rev_combined(self, rev_output_good_fasta_path):
         self.fasta_path = rev_output_good_fasta_path.replace('.scrap.pcr.rc.pcr', '.pcr.combined')
 
     def _rev_comp_make_and_write_mothur_batch_file(self):
         self.mothur_batch_file = self._make_rev_complement_mothur_batch_file()
-        write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
+        self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
     def _make_rev_complement_mothur_batch_file(self):
         mothur_batch_file = [
@@ -356,7 +365,7 @@ class MothurAnalysis:
 
     def _extract_output_paths_screen_seqs_with_name_file_command(self, output_as_list=None):
         if output_as_list is None:
-            stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+            stdout_string_as_list = self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         else:
             stdout_string_as_list = output_as_list
         for i in range(len(stdout_string_as_list)):
@@ -365,7 +374,7 @@ class MothurAnalysis:
 
     def _extract_output_path_first_line_command(self, output_as_list=None):
         if output_as_list is None:
-            stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+            stdout_string_as_list = self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         else:
             stdout_string_as_list = output_as_list
         for i in range(len(stdout_string_as_list)):
@@ -373,25 +382,25 @@ class MothurAnalysis:
                 return stdout_string_as_list[i+1]
 
     def _extract_output_path_second_line_command(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+        stdout_string_as_list = self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i+2]
 
     def _extract_output_path_first_line_summary(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_summary.stdout)
+        stdout_string_as_list = self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_summary.stdout)
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i+1]
 
     def _extract_output_path_two_lines(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+        stdout_string_as_list = self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
                 return stdout_string_as_list[i + 1], stdout_string_as_list[i + 2]
 
     def _pcr_extract_good_and_scrap_output_paths(self):
-        stdout_string_as_list = decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
+        stdout_string_as_list = self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_command.stdout)
         for i in range(len(stdout_string_as_list)):
             if 'Output File Names' in stdout_string_as_list[i]:
                 output_good_fasta_path = stdout_string_as_list[i + 1]
@@ -409,7 +418,7 @@ class MothurAnalysis:
                 ['mothur', self.mothur_batch_file_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
-            for line in decode_utf8_binary_to_list(self.latest_completed_process_command.stdout):
+            for line in self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_command.stdout):
                 print(line)
 
     def _run_mothur_batch_file_command_make_contigs(self):
@@ -450,16 +459,16 @@ class MothurAnalysis:
                 ['mothur', self.mothur_batch_file_path],
                 stdout=subprocess.PIPE, stderr=subprocess.PIPE
             )
-            for line in decode_utf8_binary_to_list(self.latest_completed_process_summary.stdout):
+            for line in self.thread_safe_general.decode_utf8_binary_to_list(self.latest_completed_process_summary.stdout):
                 print(line)
 
     def _pcr_make_and_write_mothur_batch_file(self):
         self._pcr_make_mothur_batch_file()
-        write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
+        self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
     def _screen_seqs_make_and_write_mothur_batch_file(self):
         self._screen_seqs_make_mothur_batch_file()
-        write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
+        self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
 
     def _screen_seqs_make_mothur_batch_file(self):
@@ -485,7 +494,7 @@ class MothurAnalysis:
                 f'reverse\t{self.pcr_rev_primer}'
             ]
             self.pcr_oligo_file_path = os.path.join(self.input_dir, f'{self.name}_oligo_file.oligo')
-            write_list_to_destination(self.pcr_oligo_file_path, oligo_file)
+            self.thread_safe_general.write_list_to_destination(self.pcr_oligo_file_path, oligo_file)
 
 
 class NucleotideSequence:
@@ -496,14 +505,3 @@ class NucleotideSequence:
         self.abundance = abundance
 
 
-def remove_primer_mismatch_annotations_from_fasta(fasta_path):
-    temp_fasta = []
-    fasta_to_clean = read_defined_file_to_list(fasta_path)
-    for i in range(len(fasta_to_clean) - 1):
-        if fasta_to_clean[i]:
-            if fasta_to_clean[i][0] == '>' and fasta_to_clean[i + 1]:
-                if '|' in fasta_to_clean[i]:
-                    temp_fasta.extend([fasta_to_clean[i].split('|')[0], fasta_to_clean[i + 1]])
-                else:
-                    temp_fasta.extend([fasta_to_clean[i].split('\t')[0], fasta_to_clean[i + 1]])
-    write_list_to_destination(fasta_path, temp_fasta)
