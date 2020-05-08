@@ -7,6 +7,7 @@ from pathlib import Path
 import shutil
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from dbApp.models import DataAnalysis, DataSet
+import pandas as pd
 
 
 class SymPortalTester:
@@ -14,10 +15,12 @@ class SymPortalTester:
         self.work_flow_manager = None
         self.symportal_testing_root_dir = os.path.abspath(os.path.dirname(__file__))
         self.symportal_root_dir = os.path.abspath(os.path.join(self.symportal_testing_root_dir, '..'))
-        self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data', 'smith_subsampled_data')
-        self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input.csv')
+        self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data', 'smith_subsampled_data', 'lite')
+        self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input_lite.csv')
         self.num_proc=6
         self.name='testing'
+        self.assertion_matching_dir = os.path.join(self.test_data_dir_path, 'assertion_testing')
+
 
     def execute_integrated_tests(self):
         self.cleanup_after_previous_tests()
@@ -30,6 +33,75 @@ class SymPortalTester:
                             str(self.num_proc), '--data_sheet', self.data_sheet_file_path, '--debug']
         self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
         self.work_flow_manager.start_work_flow()
+        # Let's see if we can read in some of the outputs and work with them as assertions
+        foo = 'ar'
+        # here we should develop some real tests
+        # Check the md5sum of the output post_med_seq abund only relative and absolute files
+        
+        # Post-MED objects to check.
+        for path in self.work_flow_manager.data_loading_object.output_path_list:
+            if 'seqs.absolute.abund_only' in path:
+                absolute_abund_path = path
+            if 'seqs.relative.abund_only' in path:
+                relative_abund_path = path
+            if '.seqs.fasta' in path:
+                post_med_fasta_path = path
+        
+        # Pre-MED objects to check.
+        pre_med_absolute_count_table_path = self.work_flow_manager.data_loading_object.sequence_count_table_creator.pre_med_absolute_df_path
+        pre_med_relative_count_table_path = self.work_flow_manager.data_loading_object.sequence_count_table_creator.pre_med_relative_df_path
+        pre_med_fasta_path = self.work_flow_manager.data_loading_object.sequence_count_table_creator.pre_med_fasta_out_path
+
+        # Now compare the DataFrames
+        # post_med absolute
+        self._compare_abund_dfs_post_med(
+            assertion_df_path=os.path.join(self.assertion_matching_dir, 'seqs.absolute.abund_only.txt'), 
+            tested_df_path=absolute_abund_path, absolute=True
+            )
+        # post_med relative
+        self._compare_abund_dfs_post_med(
+            assertion_df_path=os.path.join(self.assertion_matching_dir, 'seqs.relative.abund_only.txt'), 
+            tested_df_path=relative_abund_path, absolute=False
+            )
+        # pre_med absolute
+        self._compare_abund_dfs_pre_med(
+            assertion_df_path=os.path.join(self.assertion_matching_dir, 'pre_med_absolute_abundance_df.csv'), 
+            tested_df_path=pre_med_absolute_count_table_path, absolute=True
+            )
+        # pre_med relative
+        self._compare_abund_dfs_pre_med(
+            assertion_df_path=os.path.join(self.assertion_matching_dir, 'pre_med_relative_abundance_df.csv'), 
+            tested_df_path=pre_med_relative_count_table_path, absolute=False
+            )
+        
+    def _compare_abund_dfs_post_med(self, assertion_df_path, tested_df_path, absolute):
+        if absolute:
+            a_df = pd.read_table(assertion_df_path, index_col=0)
+            t_df = pd.read_table(tested_df_path, index_col=0)
+        else:
+            a_df = (pd.read_table(assertion_df_path, index_col=0) * 1000).astype(int)
+            t_df = (pd.read_table(tested_df_path, index_col=0) * 1000).astype(int)
+        # We have implemented sorting by abund and then name for the sequences so the orders should match
+        if list(a_df) != list(t_df): raise AssertionError(f'Sequence orders do not match in {tested_df_path}')
+        # Check that the values for each sequence match
+        for seq in list(a_df):
+            if sum(a_df[seq]) != sum(t_df[seq]): raise AssertionError('Sequence abundances do not match')
+        foo = 'bar'
+    
+    def _compare_abund_dfs_pre_med(self, assertion_df_path, tested_df_path, absolute=True):
+        # We multiply by 1000 and convert to int so that floats can be compared.
+        if absolute:
+            a_df = pd.read_csv(assertion_df_path, index_col=0).drop(columns=['sample_name'])
+            t_df = pd.read_csv(tested_df_path, index_col=0).drop(columns=['sample_name'])
+        else:
+            a_df = (pd.read_csv(assertion_df_path, index_col=0).drop(columns=['sample_name']) * 1000).astype(int)
+            t_df = (pd.read_csv(tested_df_path, index_col=0).drop(columns=['sample_name']) * 1000).astype(int)
+        
+        if list(a_df) != list(t_df): raise AssertionError(f'Sequence orders do not match in {tested_df_path}')
+        # Check that the sums of the columns match
+        for seq in list(a_df):
+            if sum(a_df[seq]) != sum(t_df[seq]): raise AssertionError('Sequence abundances do not match')
+        foo = 'bar'
 
     def _test_data_loading_work_flow_no_datasheet(self):
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc',
@@ -74,6 +146,17 @@ class SymPortalTester:
         if os.path.exists(directory_to_delete):
             print(f'Deleting {directory_to_delete}')
             shutil.rmtree(directory_to_delete)
+
+# To get md5sum
+import hashlib
+from functools import partial
+
+def md5sum(filename):
+    with open(filename, mode='rb') as f:
+        d = hashlib.md5()
+        for buf in iter(partial(f.read, 128), b''):
+            d.update(buf)
+    return d.hexdigest()
 
 if __name__ == "__main__":
     symportal_tester = SymPortalTester()

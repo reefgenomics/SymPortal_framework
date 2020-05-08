@@ -1882,7 +1882,10 @@ class SequenceCountTableCreator:
 
         def _populate_dfs_in_parent_sample_order(self):
             print('\nPopulating pre-MED dfs\n')
-            ordered_seq_names = [_[0] for _ in sorted(self.master_sequence_count_dict.items(), key=lambda x: x[1], reverse=True)]
+            ordered_seq_names = list(self.master_sequence_count_dict.items())
+            ordered_seq_names.sort(key=lambda x: x[0], reverse=True)
+            ordered_seq_names.sort(key=lambda x: x[1], reverse=True)
+            ordered_seq_names = [_[0] for _ in ordered_seq_names]
 
             # fastest way to create the df from the dictionaries is to create a list of dictionaries and then
             # fill in the nan values and rearrange the columns
@@ -1895,7 +1898,7 @@ class SequenceCountTableCreator:
 
             self.abs_count_df = pd.DataFrame(list_of_dicts)
             self.abs_count_df.set_index('sample_uid', inplace=True, drop=True)
-            self.abs_count_df = self.abs_count_df.reindex(ordered_seq_names, axis=1).fillna(0)
+            self.abs_count_df = self.abs_count_df.reindex(ordered_seq_names, axis=1).fillna(0).astype(int)
 
             self.rel_count_df = self.abs_count_df.div(self.abs_count_df.sum(axis=1), axis=0)
             sample_names_list = [self.sample_uid_to_name_dict[sample_uid] for sample_uid in
