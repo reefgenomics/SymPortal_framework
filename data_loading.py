@@ -2722,14 +2722,14 @@ class PerformMEDWorker:
             subprocess.run(
                 [self.path_to_med_decompose_executable, '-M', str(self.med_m_value), '--skip-gexf-files',
                  '--skip-gen-figures',
-                 '--skip-gen-html', '--skip-check-input', '-o',
+                 '--skip-gen-html', '--skip-check-input', '-T', '-o',
                  self.med_output_dir, self.redundant_fasta_path_padded], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         elif self.debug:
             subprocess.run(
                 [self.path_to_med_decompose_executable, '-M', str(self.med_m_value), '--skip-gexf-files',
                  '--skip-gen-figures',
                  '--skip-gen-html',
-                 '--skip-check-input', '-o',
+                 '--skip-check-input', '-T', '-o',
                  self.med_output_dir, self.redundant_fasta_path_padded])
 
     def _get_med_m_value(self):
