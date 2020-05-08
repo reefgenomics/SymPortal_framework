@@ -10,7 +10,9 @@ import general
 import json
 from collections import Counter
 from django import db
-from multiprocessing import Queue, Manager, Process, Lock
+from multiprocessing import Queue as mp_Queue, Manager, Process, Lock as mp_Lock
+from threading import Lock as mt_Lock, Thread
+from queue import Queue as mt_Queue
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
 from datetime import datetime
 import distance
@@ -33,7 +35,7 @@ class DataLoading:
 
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, no_pre_med_seqs, debug=False):
+            distance_method, no_pre_med_seqs, threads, debug=False):
         self.parent = parent_work_flow_obj
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
@@ -151,6 +153,7 @@ class DataLoading:
         # The timers for meausring how long it takes to create the DataSetSampleSequencePM
         self.pre_med_seq_start_time = None
         self.pre_med_seq_stop_time = None
+        self.threads = threads
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
@@ -1708,21 +1711,26 @@ class DSSAttributeAssignmentHolder:
 class InitialMothurHandler:
     def __init__(self, data_loading_parent):
         self.parent = data_loading_parent
-        self.input_queue_containing_pairs_of_fastq_file_paths = Queue()
-        self.worker_manager = Manager()
-        self.samples_that_caused_errors_in_qc_mp_list = self.worker_manager.list()
-        self.output_queue_for_attribute_data = Queue()
-        self._populate_input_queue()
+        if self.parent.threads:
+            self.input_queue_containing_pairs_of_fastq_file_paths = mt_Queue()
+            self.samples_that_caused_errors_in_qc_mp_list = []
+            self.output_queue_for_attribute_data = mt_Queue()
+            self._populate_input_queue()
+        else:
+            self.input_queue_containing_pairs_of_fastq_file_paths = mp_Queue()
+            self.worker_manager = Manager()
+            self.samples_that_caused_errors_in_qc_mp_list = self.worker_manager.list()
+            self.output_queue_for_attribute_data = mp_Queue()
+            self._populate_input_queue()
 
     def _populate_input_queue(self):
         for fastq_path_pair in self.parent.sample_fastq_pairs:
-            
             sample_name = fastq_path_pair.split('\t')[0].replace('[dS]', '-')
             data_set_sample = DataSetSample.objects.get(
                     name=sample_name, data_submission_from=self.parent.dataset_object
                 )
             dss_att_holder = DSSAttributeAssignmentHolder(name=data_set_sample.name, uid=data_set_sample.id)
-            self.input_queue_containing_pairs_of_fastq_file_paths.put((fastq_path_pair,dss_att_holder))
+            self.input_queue_containing_pairs_of_fastq_file_paths.put((fastq_path_pair, dss_att_holder))
             
         for n in range(self.parent.num_proc):
             self.input_queue_containing_pairs_of_fastq_file_paths.put('STOP')
@@ -1734,13 +1742,22 @@ class InitialMothurHandler:
 
         sys.stdout.write('\nPerforming initial mothur QC\n')
         for n in range(self.parent.num_proc):
-            p = Process(target=self._worker_initial_mothur,
+            if self.parent.threads:
+                p = Thread(target=self._worker_initial_mothur,
                         args=(self.input_queue_containing_pairs_of_fastq_file_paths, 
                         self.samples_that_caused_errors_in_qc_mp_list, 
                         self.output_queue_for_attribute_data, 
                         self.parent.temp_working_directory, 
                         self.parent.debug)
                         )
+            else:
+                p = Process(target=self._worker_initial_mothur,
+                            args=(self.input_queue_containing_pairs_of_fastq_file_paths, 
+                            self.samples_that_caused_errors_in_qc_mp_list, 
+                            self.output_queue_for_attribute_data, 
+                            self.parent.temp_working_directory, 
+                            self.parent.debug)
+                            )
 
             all_processes.append(p)
             p.start()
@@ -1957,7 +1974,7 @@ class PotentialSymTaxScreeningHandler:
     against our symclade.fa reference sequences database. We read in the blast.out file in the later functions.
     """
     def __init__(self, samples_that_caused_errors_in_qc_list, checked_samples_list, list_of_samples_names, num_proc):
-        self.input_queue = Queue()
+        self.input_queue = mp_Queue()
         self.manager = Manager()
         self.sub_evalue_sequence_to_num_sampes_found_in_mp_dict = self.manager.dict()
         self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = self.manager.dict()
@@ -1978,7 +1995,7 @@ class PotentialSymTaxScreeningHandler:
     def execute_potential_sym_tax_screening(
             self, data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug):
         all_processes = []
-        lock = Lock
+        lock = mp_Lock()
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         sys.stdout.write('\nPerforming potential sym tax screening QC\n')
@@ -2189,12 +2206,12 @@ class SymNonSymTaxScreeningHandler:
     def __init__(
             self, data_loading_samples_that_caused_errors_in_qc_mp_list, data_loading_list_of_samples_names,
             data_loading_num_proc):
-        self.sample_name_mp_input_queue = Queue()
+        self.sample_name_mp_input_queue = mp_Queue()
         self.sym_non_sym_mp_manager = Manager()
         self.samples_that_caused_errors_in_qc_mp_list = self.sym_non_sym_mp_manager.list(
             data_loading_samples_that_caused_errors_in_qc_mp_list
         )
-        self.sample_attributes_mp_output_queue = Queue()
+        self.sample_attributes_mp_output_queue = mp_Queue()
         self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
         self.num_proc = data_loading_num_proc
         self._populate_input_queue(data_loading_list_of_samples_names)
@@ -2210,7 +2227,7 @@ class SymNonSymTaxScreeningHandler:
             non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path,
             data_loading_debug):
         all_processes = []
-        lock = Lock()
+        lock = mp_Lock()
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         sys.stdout.write('\nPerforming sym non sym tax screening QC\n')
@@ -2649,7 +2666,7 @@ class PerformMEDHandler:
         self.num_proc = data_loading_num_proc
         self.list_of_redundant_fasta_paths = []
         self._populate_list_of_redundant_fasta_paths()
-        self.input_queue_of_redundant_fasta_paths = Queue()
+        self.input_queue_of_redundant_fasta_paths = mp_Queue()
         self._populate_input_queue_of_redundant_fasta_paths()
         self.list_of_med_result_dirs = [
             os.path.join(os.path.dirname(path_to_redundant_fasta), 'MEDOUT') for

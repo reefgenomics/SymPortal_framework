@@ -144,6 +144,7 @@ class SymPortalWorkFlowManager:
         parser.add_argument('--no_pre_med_seqs',
                             help="When passed, DataSetSampleSequencePM objects will not be created"
                                  "[False]", action='store_true', default=False)
+        parser.add_argument('--threads', help="When passed, the multithreading rather an multiprocessing will be used to achieve parallelism.", action='store_true', default=False)
 
     @staticmethod
     def _define_mutually_exclusive_args(group):
@@ -553,7 +554,7 @@ class SymPortalWorkFlowManager:
             parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug)
+            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, threads=self.args.threads)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given_load(self):

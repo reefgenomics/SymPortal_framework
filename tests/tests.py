@@ -21,7 +21,6 @@ class SymPortalTester:
         self.name='testing'
         self.assertion_matching_dir = os.path.join(self.test_data_dir_path, 'assertion_testing')
 
-
     def execute_integrated_tests(self):
         # self.cleanup_after_previous_tests()
         self._test_data_loading_work_flow()
@@ -30,7 +29,7 @@ class SymPortalTester:
 
     def _test_data_loading_work_flow(self):
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc',
-                            str(self.num_proc), '--data_sheet', self.data_sheet_file_path, '--debug']
+                            str(self.num_proc), '--data_sheet', self.data_sheet_file_path, '--debug', '--threads']
         self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
         self.work_flow_manager.start_work_flow()
         # Let's see if we can read in some of the outputs and work with them as assertions
