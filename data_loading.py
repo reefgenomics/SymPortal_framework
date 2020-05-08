@@ -10,7 +10,7 @@ import general
 import json
 from collections import Counter
 from django import db
-from multiprocessing import Queue, Manager, Process
+from multiprocessing import Queue, Manager, Process, Lock
 from general import write_list_to_destination, read_defined_file_to_list, create_dict_from_fasta, make_new_blast_db, decode_utf8_binary_to_list, return_list_of_file_paths_in_directory, return_list_of_file_names_in_directory
 from datetime import datetime
 import distance
@@ -335,10 +335,8 @@ class DataLoading:
     def _delete_temp_working_directory_and_log_files(self):
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)
-        # del any log file in the database directory that may have been created by mothur analyses
-        log_file_list = [f for f in os.listdir(os.path.dirname(self.symclade_db_full_path)) if f.endswith(".logfile")]
-        for f in log_file_list:
-            os.remove(os.path.join(os.path.dirname(self.symclade_db_full_path), f))
+        # Delete any log files that are found anywhere in the SymPortal directory
+        subprocess.run(f'find {self.symportal_root_directory} -name "*.logfile" -delete', shell=True, check=True)
 
     def _perform_sequence_drop(self):
         sequence_drop_file = self._generate_sequence_drop_file()
@@ -1783,7 +1781,7 @@ class InitialMothurHandler:
 
     # We will attempt to fix the weakref pickling issue we are having by maing this a static method.
     @staticmethod
-    def _worker_initial_mothur(in_q_paths, out_q_error_samples, out_q_attr_data, temp_working_directory, debug):
+    def _worker_initial_mothur(in_q_paths, out_list_error_samples, out_q_attr_data, temp_working_directory, debug):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
         This QC includes making contigs, screening for ambigous calls (0 allowed),
@@ -1805,7 +1803,7 @@ class InitialMothurHandler:
                 initial_morthur_worker.start_initial_mothur_worker()
                 out_q_attr_data.put(initial_morthur_worker.dss_att_holder)
             except RuntimeError as e:
-                out_q_error_samples.append(e.args[0]['sample_name'])
+                out_list_error_samples.append(e.args[0]['sample_name'])
         out_q_attr_data.put('DONE')
         return
 
@@ -1980,6 +1978,7 @@ class PotentialSymTaxScreeningHandler:
     def execute_potential_sym_tax_screening(
             self, data_loading_temp_working_directory, data_loading_path_to_symclade_db, data_loading_debug):
         all_processes = []
+        lock = Lock
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         sys.stdout.write('\nPerforming potential sym tax screening QC\n')
@@ -1994,7 +1993,7 @@ class PotentialSymTaxScreeningHandler:
                     self.sub_evalue_nucleotide_sequence_to_clade_mp_dict,
                     data_loading_temp_working_directory,
                     data_loading_path_to_symclade_db,
-                    data_loading_debug
+                    data_loading_debug, lock
                     ))
 
             all_processes.append(new_process)
@@ -2011,7 +2010,7 @@ class PotentialSymTaxScreeningHandler:
             sub_evalue_nucleotide_sequence_to_clade_mp_dict, 
             data_loading_temp_working_directory, 
             data_loading_path_to_symclade_db, 
-            data_loading_debug):
+            data_loading_debug, lock):
         """
         input_q: The multiprocessing queue that holds a list of the sample names
         e_val_collection_dict: This is a managed dictionary where key is a nucleotide sequence that has:
@@ -2043,7 +2042,7 @@ class PotentialSymTaxScreeningHandler:
                 path_to_symclade_db=data_loading_path_to_symclade_db, debug=data_loading_debug,
                 checked_samples_mp_list=checked_samples_mp_list,
                 e_val_collection_mp_dict=sub_evalue_sequence_to_num_sampes_found_in_mp_dict,
-                sub_evalue_nucleotide_sequence_to_clade_mp_dict=sub_evalue_nucleotide_sequence_to_clade_mp_dict)
+                sub_evalue_nucleotide_sequence_to_clade_mp_dict=sub_evalue_nucleotide_sequence_to_clade_mp_dict, lock=lock)
 
             taxonomic_screening_worker.execute_tax_screening()
 
@@ -2051,7 +2050,7 @@ class PotentialSymTaxScreeningHandler:
 class PotentialSymTaxScreeningWorker:
     def __init__(
             self, sample_name, wkd, path_to_symclade_db, debug, e_val_collection_mp_dict,
-            checked_samples_mp_list, sub_evalue_nucleotide_sequence_to_clade_mp_dict):
+            checked_samples_mp_list, sub_evalue_nucleotide_sequence_to_clade_mp_dict, lock):
         self.sample_name = sample_name
         self.cwd = os.path.join(wkd, self.sample_name)
         self.fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
@@ -2079,6 +2078,7 @@ class PotentialSymTaxScreeningWorker:
         # this is a managed list that holds the names of samples from which no sequences were thrown out from
         # it will be used in downstream processes.
         self.checked_samples_mp_list = checked_samples_mp_list
+        self.lock = lock
 
     def execute_tax_screening(self):
         sys.stdout.write(f'{self.sample_name}: verifying seqs are Symbiodinium and determining clade\n')
@@ -2157,13 +2157,14 @@ class PotentialSymTaxScreeningWorker:
             # incorporate the size cutoff here that would normally happen in the further mothur qc later in the code
             self.potential_non_symbiodinium_sequences_list.append(name_of_current_sequence)
             if 184 < len(self.fasta_dict[name_of_current_sequence]) < 310:
-                if self.fasta_dict[name_of_current_sequence] in self.e_val_collection_mp_dict.keys():
-                    self.e_val_collection_mp_dict[self.fasta_dict[name_of_current_sequence]] += 1
-                else:
-                    self.e_val_collection_mp_dict[self.fasta_dict[name_of_current_sequence]] = 1
-                    self.sub_evalue_nucleotide_sequence_to_clade_mp_dict[
-                        self.fasta_dict[name_of_current_sequence]
-                    ] = self.sequence_name_to_clade_dict[name_of_current_sequence]
+                with self.lock:
+                    if self.fasta_dict[name_of_current_sequence] in self.e_val_collection_mp_dict.keys():
+                        self.e_val_collection_mp_dict[self.fasta_dict[name_of_current_sequence]] += 1
+                    else:
+                        self.e_val_collection_mp_dict[self.fasta_dict[name_of_current_sequence]] = 1
+                        self.sub_evalue_nucleotide_sequence_to_clade_mp_dict[
+                            self.fasta_dict[name_of_current_sequence]
+                        ] = self.sequence_name_to_clade_dict[name_of_current_sequence]
 
     def _add_seqs_with_no_blast_match_to_non_sym_list(self):
         sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - \
@@ -2209,6 +2210,7 @@ class SymNonSymTaxScreeningHandler:
             non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path,
             data_loading_debug):
         all_processes = []
+        lock = Lock()
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         sys.stdout.write('\nPerforming sym non sym tax screening QC\n')
@@ -2222,7 +2224,7 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_dataset_object,
                 non_symb_and_size_violation_base_dir_path, 
                 data_loading_pre_med_sequence_output_directory_path,
-                data_loading_debug))
+                data_loading_debug, lock))
             all_processes.append(p)
             p.start()
 
@@ -2240,11 +2242,12 @@ class SymNonSymTaxScreeningHandler:
         data_loading_dataset_object,
         data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
         data_loading_pre_med_sequence_output_directory_path,
-        data_loading_debug):
+        data_loading_debug, lock):
 
         for sample_name in iter(in_q.get, 'STOP'):
-            if sample_name in samples_that_caused_errors_in_qc_mp_list:
-                continue
+            with lock:
+                if sample_name in samples_that_caused_errors_in_qc_mp_list:
+                    continue
 
             sym_non_sym_tax_screening_worker_object = SymNonSymTaxScreeningWorker(
                 data_loading_temp_working_directory=data_loading_temp_working_directory,
@@ -2259,7 +2262,8 @@ class SymNonSymTaxScreeningHandler:
             try:
                 sym_non_sym_tax_screening_worker_object.identify_sym_non_sym_seqs()
             except RuntimeError as e:
-                samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
+                with lock:
+                    samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
         sample_attributes_mp_output_queue.put('DONE')
 
     def _associate_info_to_dss_objects(self, data_loading_dataset_object):
@@ -2718,6 +2722,7 @@ class PerformMEDWorker:
         sys.stdout.write(f'{self.sample_name}: MED analysis complete\n')
 
     def _do_the_decomposition(self):
+        # We cannot add check=True to the subprocess calls as we are expecting some of them to fail when there are too few sequences
         if not self.debug:
             subprocess.run(
                 [self.path_to_med_decompose_executable, '-M', str(self.med_m_value), '--skip-gexf-files',

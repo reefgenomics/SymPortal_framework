@@ -753,12 +753,14 @@ class OutputTypeCountTable:
                             pass
                     else:
                         raise RuntimeError('vdss associated with vcc seems to not be part of the output')
-            sorted_vdss_uid_list.extend([tup[0] for tup in sorted(temp_set_vcc_rel_abund_tups, key=lambda x:x[1], reverse=True)])
-        # add the samples that didn't have a type associated to them
-        sorted_vdss_uid_list.extend(
-            [dss_uid for dss_uid in
-             self.data_set_sample_uid_set_to_output if dss_uid not in sorted_vdss_uid_list])
-
+            temp_set_vcc_rel_abund_tups = list(temp_set_vcc_rel_abund_tups)
+            temp_set_vcc_rel_abund_tups.sort(key=lambda x: x[0], reverse=True)
+            temp_set_vcc_rel_abund_tups.sort(key=lambda x: x[1], reverse=True)
+            sorted_vdss_uid_list.extend([tup[0] for tup in temp_set_vcc_rel_abund_tups])
+        # add the samples that didn't have a type associated to them in a specific order
+        samples_to_add = [dss_uid for dss_uid in self.data_set_sample_uid_set_to_output if dss_uid not in sorted_vdss_uid_list]
+        samples_to_add.sort(reverse=True)
+        sorted_vdss_uid_list.extend(samples_to_add)
         return sorted_vdss_uid_list
 
     def _set_clade_sorted_list_of_vats_to_output(self):
@@ -774,6 +776,7 @@ class OutputTypeCountTable:
                     vccs_of_output_of_vat.append(vcc)
             list_of_tup_vat_to_vccs_of_output.append((vat, len(vccs_of_output_of_vat)))
 
+        #TODO sorted
         self.overall_sorted_list_of_vats = [vat for vat, num_vcc_of_output in
                               sorted(list_of_tup_vat_to_vccs_of_output, key=lambda x: x[1], reverse=True) if num_vcc_of_output != 0]
 
@@ -1308,7 +1311,10 @@ class SequenceCountTableCreator:
         for col in list(self.df_abs_no_meta_rows)[index_of_first_seq:]:
             abundance_dict[col] = sum(self.df_abs_no_meta_rows[col])
         # get the names of the sequences sorted according to their totalled abundance
-        sorted_seq_names = [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
+        sorted_sorted_seq_names = list(abundance_dict.items())
+        sorted_sorted_seq_names.sort(key=lambda x: x[0], reverse=True)
+        sorted_sorted_seq_names.sort(key=lambda x: x[1], reverse=True)
+        sorted_seq_names = [x[0] for x in sorted_sorted_seq_names]
         # The col_dict output happens before the plotting where the col dict is
         # created so we will have to create the col
         # dict here and then read it back in for making the pre_seq rect array.
@@ -1622,17 +1628,21 @@ class SequenceCountTableCreator:
                 continue
             # now get an ordered list of the sequences for this clade
             sys.stdout.write('\rOrdering clade {} seqs'.format(clade))
-
-            ordered_sequence_of_clade_list = [x[0] for x in sorted(tup_list_of_clade, key=lambda x: x[1], reverse=True)]
+            tup_list_of_clade.sort(key=lambda x: x[0], reverse=True)
+            tup_list_of_clade.sort(key=lambda x: x[1], reverse=True)
+            ordered_sequence_of_clade_list = [x[0] for x in tup_list_of_clade]
 
             for seq_to_order_samples_by in ordered_sequence_of_clade_list:
                 sys.stdout.write('\r{}'.format(seq_to_order_samples_by))
                 tup_list_of_samples_that_had_sequence_as_most_abund = seq_to_samp_ddict[seq_to_order_samples_by]
+                tup_list_of_samples_that_had_sequence_as_most_abund.sort(key=lambda x: x[0], reverse=True)
+                tup_list_of_samples_that_had_sequence_as_most_abund.sort(key=lambda x: x[1], reverse=True)
                 ordered_list_of_samples_for_seq_ordered = \
                     [x[0] for x in
-                     sorted(tup_list_of_samples_that_had_sequence_as_most_abund, key=lambda x: x[1], reverse=True)]
+                     tup_list_of_samples_that_had_sequence_as_most_abund]
                 ordered_sample_list_by_uid.extend(ordered_list_of_samples_for_seq_ordered)
         # finally add in the samples that didn't have a maj sequence
+        no_maj_samps.sort(reverse=True)
         ordered_sample_list_by_uid.extend(no_maj_samps)
         return ordered_sample_list_by_uid
 
@@ -1900,7 +1910,7 @@ class SequenceCountTableCreator:
             self.abs_count_df.set_index('sample_uid', inplace=True, drop=True)
             self.abs_count_df = self.abs_count_df.reindex(ordered_seq_names, axis=1).fillna(0).astype(int)
 
-            self.rel_count_df = self.abs_count_df.div(self.abs_count_df.sum(axis=1), axis=0)
+            self.rel_count_df = self.abs_count_df.div(self.abs_count_df.sum(axis=1), axis=0).fillna(0).astype(float)
             sample_names_list = [self.sample_uid_to_name_dict[sample_uid] for sample_uid in
                                  self.abs_count_df.index.values.tolist()]
             self.abs_count_df['sample_name'] = sample_names_list
@@ -1998,7 +2008,7 @@ class SequenceCountTableCollectAbundanceHandler:
 
     def execute_sequence_count_table_ordered_seqs_worker(self):
         all_processes = []
-
+        
         # close all connections to the db so that they are automatically recreated for each process
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
@@ -2110,10 +2120,11 @@ class SequenceCountTableCollectAbundanceWorker:
 
     def _associate_sample_abundances_to_mp_dicts(self, clade_summary_absolute_dict, clade_summary_relative_dict,
                                                  smple_seq_count_aboslute_dict, smple_seq_count_relative_dict):
-        self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict[self.dss.id] = [smple_seq_count_aboslute_dict,
-                                                                                                         smple_seq_count_relative_dict]
-        self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict[self.dss.id] = [
-            clade_summary_absolute_dict, clade_summary_relative_dict]
+        with self.lock:
+            self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict[self.dss.id] = [smple_seq_count_aboslute_dict,
+                                                                                                            smple_seq_count_relative_dict]
+            self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict[self.dss.id] = [
+                clade_summary_absolute_dict, clade_summary_relative_dict]
 
     def _populate_abs_and_rel_abundances_for_dsss(self, dsss, name_unit, smple_seq_count_aboslute_dict,
                                                   smple_seq_count_relative_dict):
@@ -2159,7 +2170,7 @@ class SeqOutputSeriesGeneratorHandler:
 
     def execute_sequence_count_table_dataframe_contructor_handler(self):
         all_processes = []
-
+        lock = Lock()
         # close all connections to the db so that they are automatically recreated for each process
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
@@ -2172,7 +2183,7 @@ class SeqOutputSeriesGeneratorHandler:
                 self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
                 self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list,
                 self.dss_id_to_pandas_series_results_list_mp_dict,
-                self.output_df_header))
+                self.output_df_header, lock))
             all_processes.append(p)
             p.start()
 
@@ -2186,7 +2197,7 @@ class SeqOutputSeriesGeneratorHandler:
         dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
         clade_abundance_ordered_ref_seq_list,
         dss_id_to_pandas_series_results_list_mp_dict,
-        output_df_header):
+        output_df_header, lock):
         for dss in iter(in_q.get, 'STOP'):
             seq_output_series_generator_worker = SeqOutputSeriesGeneratorWorker(
                 dss=dss,
@@ -2194,7 +2205,7 @@ class SeqOutputSeriesGeneratorHandler:
                 list_of_abs_and_rel_abund_of_contained_dsss_dicts=dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict[dss.id],
                 clade_abundance_ordered_ref_seq_list=clade_abundance_ordered_ref_seq_list,
                 dss_id_to_pandas_series_results_list_mp_dict=dss_id_to_pandas_series_results_list_mp_dict,
-                output_df_header=output_df_header)
+                output_df_header=output_df_header, lock=lock)
             seq_output_series_generator_worker.make_series()
 
     def _populate_dss_input_queue(self):
@@ -2228,7 +2239,7 @@ class SeqOutputSeriesGeneratorWorker:
     def __init__(
             self, dss, list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs,
             list_of_abs_and_rel_abund_of_contained_dsss_dicts,
-            dss_id_to_pandas_series_results_list_mp_dict, clade_abundance_ordered_ref_seq_list, output_df_header):
+            dss_id_to_pandas_series_results_list_mp_dict, clade_abundance_ordered_ref_seq_list, output_df_header, lock):
 
         self.dss = dss
         # dss.id : [{dsss:absolute abundance in dss}, {dsss:relative abundance in dss}]
@@ -2243,6 +2254,7 @@ class SeqOutputSeriesGeneratorWorker:
         self.sample_row_data_absolute = []
         self.sample_row_data_relative = []
         self.sample_seq_tot = sum([int(a) for a in json.loads(dss.cladal_seq_totals)])
+        self.lock = lock
 
     def make_series(self):
         sys.stdout.write(f'\r{self.dss.name}: Creating data ouput row')
@@ -2262,8 +2274,9 @@ class SeqOutputSeriesGeneratorWorker:
     def _output_the_successful_sample_pandas_series(self):
         sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.output_df_header, name=self.dss.id)
         sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.output_df_header, name=self.dss.id)
-        self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [
-            sample_series_absolute, sample_series_relative]
+        with self.lock:
+            self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [
+                sample_series_absolute, sample_series_relative]
 
     def _populate_quality_control_data_of_successful_sample(self):
         self._populate_qc_meta_successful_sample()
@@ -2287,6 +2300,7 @@ class SeqOutputSeriesGeneratorWorker:
     def _populate_no_name_seq_clade_summaries_successful_sample(self):
         # now add the clade divided summaries of the clades
         for clade in list('ABCDEFGHI'):
+            
             self.sample_row_data_absolute.append(
                 self.list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs[0][clade])
             self.sample_row_data_relative.append(
@@ -2350,8 +2364,9 @@ class SeqOutputSeriesGeneratorWorker:
     def _output_the_failed_sample_pandas_series(self):
         sample_series_absolute = pd.Series(self.sample_row_data_absolute, index=self.output_df_header, name=self.dss.id)
         sample_series_relative = pd.Series(self.sample_row_data_relative, index=self.output_df_header, name=self.dss.id)
-        self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [sample_series_absolute,
-                                                                                  sample_series_relative]
+        with self.lock:
+            self.dss_id_to_pandas_series_results_list_mp_dict[self.dss.id] = [sample_series_absolute,
+                                                                                    sample_series_relative]
 
     def _populate_quality_control_data_of_failed_sample(self):
         # Add in the qc totals if possible
