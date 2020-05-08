@@ -26,9 +26,11 @@ from Oligotyping.utils import parsers
 parser = parsers.decomposer()
 decomposer = Decomposer(parser.parse_args())
 
-try:
-    decomposer.decompose()
-except ConfigError as e:
-    print(e)
-    sys.exit(-1)
+if __name__ == '__main__':
+
+    try:
+        decomposer.decompose()
+    except ConfigError as e:
+        print(e)
+        sys.exit(-1)
 
