@@ -2043,9 +2043,13 @@ class SequenceCountTableCollectAbundanceHandler:
                     # then this is a seq of the clade in Q and we should add to the temp list
                     temp_within_clade_list_for_sorting.append((seq_name, abund_val))
             # now sort the temp_within_clade_list_for_sorting and add to the cladeAbundanceOrderedRefSeqList
-            sorted_within_clade = [
-                a[0] for a in sorted(temp_within_clade_list_for_sorting, key=lambda x: x[1], reverse=True)]
-
+            # We want this sort order to be constant. To enusre this we should sort by both cummulative rel abund
+            # and then by the seq name
+            # https://docs.python.org/3/howto/sorting.html
+            # The python8 docs say to sort by secondary parameter first then the primary parameter
+            temp_within_clade_list_for_sorting.sort(key=lambda x: x[0], reverse=True)
+            temp_within_clade_list_for_sorting.sort(key=lambda x: x[1], reverse=True)
+            sorted_within_clade = [a[0] for a in temp_within_clade_list_for_sorting]
             self.clade_abundance_ordered_ref_seq_list.extend(sorted_within_clade)
 
     def _populate_input_dss_mp_queue(self):
