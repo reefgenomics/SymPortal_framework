@@ -1,6 +1,8 @@
 from dbApp.models import (DataSet, ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
                           DataAnalysis, DataSetSampleSequencePM, CladeCollectionType)
-from multiprocessing import Queue, Process, Manager, Lock
+from multiprocessing import Queue as mp_Queue, Process, Manager, Lock as mp_Lock
+from queue import Queue as mt_Queue
+from threading import Thread, Lock as mt_Lock
 import sys
 from django import db
 import os
@@ -873,8 +875,9 @@ class SequenceCountTableCreator:
     """
     def __init__(
             self, symportal_root_dir, call_type, num_proc, html_dir, js_output_path_dict, date_time_str,
-            no_pre_med_seqs, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
+            no_pre_med_seqs, threads, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
             sorted_sample_uid_list=None, analysis_obj=None):
+        self.threads = threads
         self.thread_safe_general = ThreadSafeGeneral()
         self._init_core_vars(
             symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
@@ -1983,24 +1986,32 @@ class SequenceCountTableCollectAbundanceHandler:
     def __init__(self, parent_seq_count_tab_creator):
 
         self.seq_count_table_creator = parent_seq_count_tab_creator
-        self.mp_manager = Manager()
-        self.input_dss_mp_queue = Queue()
-        self._populate_input_dss_mp_queue()
-        self.ref_seq_names_clade_annotated = [
-        ref_seq.name if ref_seq.has_name else str(ref_seq) for
-            ref_seq in self.seq_count_table_creator.ref_seqs_in_datasets]
-
-        # We were previously creating an MP dictionary for every proc used. We were then collecting them afterwards
-        # I'm not sure if there was a good reason for doing this, but I don't see any comments to the contrary.
-        # it should not be necessary to have a dict for every proc. Instead we can just have on mp dict.
-        # we should check that this is still working as expected.
-        # self.list_of_dictionaries_for_processes = self._generate_list_of_dicts_for_processes()
-        self.dss_id_to_list_of_dsss_objects_mp_dict = self.mp_manager.dict()
-        self._populate_dss_id_to_list_of_dsss_objects()
-        self.annotated_dss_name_to_cummulative_rel_abund_mp_dict = self.mp_manager.dict(
+        if self.seq_count_table_creator.threads:
+            self.input_dss_mp_queue = mt_Queue()
+            self._populate_input_dss_mp_queue()
+            self.ref_seq_names_clade_annotated = [
+                ref_seq.name if ref_seq.has_name else str(ref_seq) for
+                ref_seq in self.seq_count_table_creator.ref_seqs_in_datasets]
+            self.dss_id_to_list_of_dsss_objects_mp_dict = {}
+            self._populate_dss_id_to_list_of_dsss_objects()
+            self.annotated_dss_name_to_cummulative_rel_abund_mp_dict = {refSeq_name: 0 for refSeq_name in self.ref_seq_names_clade_annotated}
+            self.lock = mt_Lock()
+            self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = {}
+            self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = {}
+        else:
+            self.mp_manager = Manager()
+            self.input_dss_mp_queue = mp_Queue()
+            self._populate_input_dss_mp_queue()
+            self.ref_seq_names_clade_annotated = [
+                ref_seq.name if ref_seq.has_name else str(ref_seq) for
+                ref_seq in self.seq_count_table_creator.ref_seqs_in_datasets]
+            self.dss_id_to_list_of_dsss_objects_mp_dict = self.mp_manager.dict()
+            self._populate_dss_id_to_list_of_dsss_objects()
+            self.annotated_dss_name_to_cummulative_rel_abund_mp_dict = self.mp_manager.dict(
             {refSeq_name: 0 for refSeq_name in self.ref_seq_names_clade_annotated})
-        self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = self.mp_manager.dict()
-        self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = self.mp_manager.dict()
+            self.lock = mp_Lock()
+            self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = self.mp_manager.dict()
+            self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = self.mp_manager.dict()
 
         # this is the list that we will use the self.annotated_dss_name_to_cummulative_rel_abund_mp_dict to create
         # it is a list of the ref_seqs_ordered first by clade then by abundance.
@@ -2012,14 +2023,21 @@ class SequenceCountTableCollectAbundanceHandler:
         # close all connections to the db so that they are automatically recreated for each process
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
-        lock = Lock()
         for n in range(self.seq_count_table_creator.num_proc):
-            p = Process(target=self._sequence_count_table_ordered_seqs_worker, args=(
-                self.input_dss_mp_queue, 
-                self.dss_id_to_list_of_dsss_objects_mp_dict, 
-                self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
-                self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
-                self.annotated_dss_name_to_cummulative_rel_abund_mp_dict, self.ref_seq_names_clade_annotated, lock))
+            if self.seq_count_table_creator.threads:
+                p = Thread(target=self._sequence_count_table_ordered_seqs_worker, args=(
+                    self.input_dss_mp_queue, 
+                    self.dss_id_to_list_of_dsss_objects_mp_dict, 
+                    self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
+                    self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
+                    self.annotated_dss_name_to_cummulative_rel_abund_mp_dict, self.ref_seq_names_clade_annotated, self.lock))
+            else:
+                p = Process(target=self._sequence_count_table_ordered_seqs_worker, args=(
+                    self.input_dss_mp_queue, 
+                    self.dss_id_to_list_of_dsss_objects_mp_dict, 
+                    self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
+                    self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
+                    self.annotated_dss_name_to_cummulative_rel_abund_mp_dict, self.ref_seq_names_clade_annotated, self.lock))
             all_processes.append(p)
             p.start()
 
@@ -2162,28 +2180,44 @@ class SeqOutputSeriesGeneratorHandler:
     def __init__(self, parent):
         self.seq_count_table_creator = parent
         self.output_df_header = self._create_output_df_header()
-        self.worker_manager = Manager()
-        # dss.id : [pandas_series_for_absolute_abundace, pandas_series_for_absolute_abundace]
-        self.dss_id_to_pandas_series_results_list_mp_dict = self.worker_manager.dict()
-        self.dss_input_queue = Queue()
-        self._populate_dss_input_queue()
+        if self.seq_count_table_creator.threads:
+            # dss.id : [pandas_series_for_absolute_abundace, pandas_series_for_absolute_abundace]
+            self.dss_id_to_pandas_series_results_list_mp_dict = {}
+            self.dss_input_queue = mt_Queue()
+            self._populate_dss_input_queue()
+            self.lock = mt_Lock()
+        else:
+            self.worker_manager = Manager()
+            # dss.id : [pandas_series_for_absolute_abundace, pandas_series_for_absolute_abundace]
+            self.dss_id_to_pandas_series_results_list_mp_dict = self.worker_manager.dict()
+            self.dss_input_queue = mp_Queue()
+            self._populate_dss_input_queue()
+            self.lock = mp_Lock()
 
     def execute_sequence_count_table_dataframe_contructor_handler(self):
         all_processes = []
-        lock = Lock()
         # close all connections to the db so that they are automatically recreated for each process
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
 
         sys.stdout.write('\n\nOutputting seq data\n')
         for n in range(self.seq_count_table_creator.num_proc):
-            p = Process(target=self._output_df_contructor_worker, args=(
+            if self.seq_count_table_creator.threads:
+                p = Thread(target=self._output_df_contructor_worker, args=(
                 self.dss_input_queue,
                 self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
                 self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
                 self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list,
                 self.dss_id_to_pandas_series_results_list_mp_dict,
-                self.output_df_header, lock))
+                self.output_df_header, self.lock))
+            else:
+                p = Process(target=self._output_df_contructor_worker, args=(
+                    self.dss_input_queue,
+                    self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
+                    self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
+                    self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list,
+                    self.dss_id_to_pandas_series_results_list_mp_dict,
+                    self.output_df_header, self.lock))
             all_processes.append(p)
             p.start()
 

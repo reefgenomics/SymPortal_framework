@@ -322,7 +322,7 @@ class DataLoading:
             no_pre_med_seqs=self.no_pre_med_seqs, ds_uids_output_str=str(self.dataset_object.id),
             num_proc=self.num_proc, date_time_str=self.date_time_str,
             html_dir=self.html_dir,
-            js_output_path_dict=self.js_output_path_dict)
+            js_output_path_dict=self.js_output_path_dict, threads=self.threads)
         self.sequence_count_table_creator.make_seq_output_tables()
         self.seq_abund_relative_df_post_med = self.sequence_count_table_creator.output_df_relative_post_med
         self.output_path_list.extend(self.sequence_count_table_creator.output_paths_list)
