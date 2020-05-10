@@ -35,7 +35,7 @@ class OutputTypeCountTable:
     def __init__(
             self, num_proc, within_clade_cutoff, call_type, output_dir, html_dir, js_output_path_dict, date_time_str, data_set_uids_to_output=None, data_set_sample_uid_set_to_output=None,
             data_analysis_obj=None, data_analysis_uid=None, virtual_object_manager=None):
-
+        self.thread_safe_general = ThreadSafeGeneral()
         self.data_set_uid_set_to_output, self.data_set_sample_uid_set_to_output = self._init_dss_and_ds_uids(
             data_set_sample_uid_set_to_output, data_set_uids_to_output)
 
@@ -48,7 +48,6 @@ class OutputTypeCountTable:
 
         self.vcc_uids_to_output = self._set_vcc_uids_to_output()
         self.date_time_str = date_time_str
-        self.thread_safe_general = ThreadSafeGeneral()
         self.clades_of_output = set()
         # A sorting of the vats of the output only by the len of the vccs of the output that they associate with
         # i.e. before they are then sorted by clade. This will be used when calculating the order of the samples
@@ -875,9 +874,9 @@ class SequenceCountTableCreator:
     """
     def __init__(
             self, symportal_root_dir, call_type, num_proc, html_dir, js_output_path_dict, date_time_str,
-            no_pre_med_seqs, threads, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
+            no_pre_med_seqs, multiprocess, dss_uids_output_str=None, ds_uids_output_str=None, output_dir=None,
             sorted_sample_uid_list=None, analysis_obj=None):
-        self.threads = threads
+        self.multiprocess = multiprocess
         self.thread_safe_general = ThreadSafeGeneral()
         self._init_core_vars(
             symportal_root_dir, analysis_obj, call_type, dss_uids_output_str, ds_uids_output_str, num_proc,
@@ -1984,21 +1983,8 @@ class SequenceCountTableCollectAbundanceHandler:
     abundance across all samples in the output.
     """
     def __init__(self, parent_seq_count_tab_creator):
-
         self.seq_count_table_creator = parent_seq_count_tab_creator
-        if self.seq_count_table_creator.threads:
-            self.input_dss_mp_queue = mt_Queue()
-            self._populate_input_dss_mp_queue()
-            self.ref_seq_names_clade_annotated = [
-                ref_seq.name if ref_seq.has_name else str(ref_seq) for
-                ref_seq in self.seq_count_table_creator.ref_seqs_in_datasets]
-            self.dss_id_to_list_of_dsss_objects_mp_dict = {}
-            self._populate_dss_id_to_list_of_dsss_objects()
-            self.annotated_dss_name_to_cummulative_rel_abund_mp_dict = {refSeq_name: 0 for refSeq_name in self.ref_seq_names_clade_annotated}
-            self.lock = mt_Lock()
-            self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = {}
-            self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = {}
-        else:
+        if self.seq_count_table_creator.multiprocess:
             self.mp_manager = Manager()
             self.input_dss_mp_queue = mp_Queue()
             self._populate_input_dss_mp_queue()
@@ -2012,6 +1998,18 @@ class SequenceCountTableCollectAbundanceHandler:
             self.lock = mp_Lock()
             self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = self.mp_manager.dict()
             self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = self.mp_manager.dict()
+        else:
+            self.input_dss_mp_queue = mt_Queue()
+            self._populate_input_dss_mp_queue()
+            self.ref_seq_names_clade_annotated = [
+                ref_seq.name if ref_seq.has_name else str(ref_seq) for
+                ref_seq in self.seq_count_table_creator.ref_seqs_in_datasets]
+            self.dss_id_to_list_of_dsss_objects_mp_dict = {}
+            self._populate_dss_id_to_list_of_dsss_objects()
+            self.annotated_dss_name_to_cummulative_rel_abund_mp_dict = {refSeq_name: 0 for refSeq_name in self.ref_seq_names_clade_annotated}
+            self.lock = mt_Lock()
+            self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict = {}
+            self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict = {}
 
         # this is the list that we will use the self.annotated_dss_name_to_cummulative_rel_abund_mp_dict to create
         # it is a list of the ref_seqs_ordered first by clade then by abundance.
@@ -2024,15 +2022,15 @@ class SequenceCountTableCollectAbundanceHandler:
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         for n in range(self.seq_count_table_creator.num_proc):
-            if self.seq_count_table_creator.threads:
-                p = Thread(target=self._sequence_count_table_ordered_seqs_worker, args=(
+            if self.seq_count_table_creator.multiprocess:
+                p = Process(target=self._sequence_count_table_ordered_seqs_worker, args=(
                     self.input_dss_mp_queue, 
                     self.dss_id_to_list_of_dsss_objects_mp_dict, 
                     self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
                     self.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
                     self.annotated_dss_name_to_cummulative_rel_abund_mp_dict, self.ref_seq_names_clade_annotated, self.lock))
             else:
-                p = Process(target=self._sequence_count_table_ordered_seqs_worker, args=(
+                p = Thread(target=self._sequence_count_table_ordered_seqs_worker, args=(
                     self.input_dss_mp_queue, 
                     self.dss_id_to_list_of_dsss_objects_mp_dict, 
                     self.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict, 
@@ -2180,19 +2178,19 @@ class SeqOutputSeriesGeneratorHandler:
     def __init__(self, parent):
         self.seq_count_table_creator = parent
         self.output_df_header = self._create_output_df_header()
-        if self.seq_count_table_creator.threads:
-            # dss.id : [pandas_series_for_absolute_abundace, pandas_series_for_absolute_abundace]
-            self.dss_id_to_pandas_series_results_list_mp_dict = {}
-            self.dss_input_queue = mt_Queue()
-            self._populate_dss_input_queue()
-            self.lock = mt_Lock()
-        else:
+        if self.seq_count_table_creator.multiprocess:
             self.worker_manager = Manager()
             # dss.id : [pandas_series_for_absolute_abundace, pandas_series_for_absolute_abundace]
             self.dss_id_to_pandas_series_results_list_mp_dict = self.worker_manager.dict()
             self.dss_input_queue = mp_Queue()
             self._populate_dss_input_queue()
             self.lock = mp_Lock()
+        else:
+            # dss.id : [pandas_series_for_absolute_abundace, pandas_series_for_absolute_abundace]
+            self.dss_id_to_pandas_series_results_list_mp_dict = {}
+            self.dss_input_queue = mt_Queue()
+            self._populate_dss_input_queue()
+            self.lock = mt_Lock()
 
     def execute_sequence_count_table_dataframe_contructor_handler(self):
         all_processes = []
@@ -2202,15 +2200,7 @@ class SeqOutputSeriesGeneratorHandler:
 
         sys.stdout.write('\n\nOutputting seq data\n')
         for n in range(self.seq_count_table_creator.num_proc):
-            if self.seq_count_table_creator.threads:
-                p = Thread(target=self._output_df_contructor_worker, args=(
-                self.dss_input_queue,
-                self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
-                self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
-                self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list,
-                self.dss_id_to_pandas_series_results_list_mp_dict,
-                self.output_df_header, self.lock))
-            else:
+            if self.seq_count_table_creator.multiprocess:
                 p = Process(target=self._output_df_contructor_worker, args=(
                     self.dss_input_queue,
                     self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
@@ -2218,6 +2208,14 @@ class SeqOutputSeriesGeneratorHandler:
                     self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list,
                     self.dss_id_to_pandas_series_results_list_mp_dict,
                     self.output_df_header, self.lock))
+            else:
+                p = Thread(target=self._output_df_contructor_worker, args=(
+                self.dss_input_queue,
+                self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs_mp_dict,
+                self.seq_count_table_creator.dss_id_to_list_of_abs_and_rel_abund_of_contained_dsss_dicts_mp_dict,
+                self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list,
+                self.dss_id_to_pandas_series_results_list_mp_dict,
+                self.output_df_header, self.lock))
             all_processes.append(p)
             p.start()
 

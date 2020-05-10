@@ -47,9 +47,11 @@ import data_analysis
 from general import ThreadSafeGeneral
 import django_general
 from shutil import which
+import time
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
+        self.start_time = time.time()
         self.args = self._define_args(custom_args_list)
         # general attributes
         self.thread_safe_general = ThreadSafeGeneral()
@@ -145,7 +147,7 @@ class SymPortalWorkFlowManager:
         parser.add_argument('--no_pre_med_seqs',
                             help="When passed, DataSetSampleSequencePM objects will not be created"
                                  "[False]", action='store_true', default=False)
-        parser.add_argument('--threads', help="When passed, the multithreading rather an multiprocessing will be used to achieve parallelism.", action='store_true', default=False)
+        parser.add_argument('--multiprocess', help="When passed, concurrency will be acheived using multiprocessing rather than multithreading.", action='store_true', default=False)
 
     @staticmethod
     def _define_mutually_exclusive_args(group):
@@ -522,7 +524,7 @@ class SymPortalWorkFlowManager:
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
-            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, multiprocess=self.args.multiprocess)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _make_data_analysis_output_type_tables(self):
@@ -555,7 +557,7 @@ class SymPortalWorkFlowManager:
             parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, threads=self.args.threads)
+            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess, start_time=self.start_time)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given_load(self):
@@ -594,7 +596,7 @@ class SymPortalWorkFlowManager:
             no_pre_med_seqs=self.args.no_pre_med_seqs,
             ds_uids_output_str=self.args.print_output_seqs,
             num_proc=self.args.num_proc, output_dir=self.output_dir, date_time_str=self.date_time_str,
-            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, multiprocess=self.args.multiprocess)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _stand_alone_sequence_output_data_set_sample(self):
@@ -603,7 +605,7 @@ class SymPortalWorkFlowManager:
             no_pre_med_seqs=self.args.no_pre_med_seqs,
             dss_uids_output_str=self.args.print_output_seqs_sample_set,
             num_proc=self.args.num_proc, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
-            output_dir=self.output_dir, date_time_str=self.date_time_str)
+            output_dir=self.output_dir, date_time_str=self.date_time_str, multiprocess=self.args.multiprocess)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     # STAND_ALONE TYPE OUTPUT
@@ -639,7 +641,8 @@ class SymPortalWorkFlowManager:
             output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
-            date_time_str=self.date_time_str, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            date_time_str=self.date_time_str, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
+            multiprocess=self.args.multiprocess)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _stand_alone_seq_output_from_type_output_data_set_sample(self):
@@ -652,7 +655,8 @@ class SymPortalWorkFlowManager:
             output_dir=self.output_dir,
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
-            date_time_str=self.date_time_str, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            date_time_str=self.date_time_str, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
+            multiprocess=self.args.multiprocess)
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _stand_alone_type_output_data_set(self):

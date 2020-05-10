@@ -13,21 +13,21 @@ class SymPortalTester:
         self.work_flow_manager = None
         self.symportal_testing_root_dir = os.path.abspath(os.path.dirname(__file__))
         self.symportal_root_dir = os.path.abspath(os.path.join(self.symportal_testing_root_dir, '..'))
-        self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data', 'smith_subsampled_data', 'lite')
-        self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input_lite.csv')
+        self.test_data_dir_path = os.path.join(self.symportal_testing_root_dir, 'data', 'smith_subsampled_data')
+        self.data_sheet_file_path = os.path.join(self.test_data_dir_path, 'test_data_submission_input.csv')
         self.num_proc=6
         self.name='testing'
         self.assertion_matching_dir = os.path.join(self.test_data_dir_path, 'assertion_testing')
 
     def execute_integrated_tests(self):
-        # self.cleanup_after_previous_tests()
+        self.cleanup_after_previous_tests()
         self._test_data_loading_work_flow()
         self._test_data_analysis_work_flow()
-        # self.cleanup_after_previous_tests()
+        self.cleanup_after_previous_tests()
 
     def _test_data_loading_work_flow(self):
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc',
-                            str(self.num_proc), '--data_sheet', self.data_sheet_file_path, '--debug', '--threads']
+                            str(self.num_proc), '--data_sheet', self.data_sheet_file_path, '--debug']
         self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
         self.work_flow_manager.start_work_flow()
         # Let's see if we can read in some of the outputs and work with them as assertions

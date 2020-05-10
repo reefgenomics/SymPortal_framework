@@ -526,3 +526,12 @@ class ThreadSafeGeneral:
                 attempt = 0
 
         return new_colours
+
+def chunks(l, n=500):
+        """Yield successive n-sized chunks from l.
+        Modified to explicitly cast to list to cover the case that a set is passed in.
+        Also modified to default to 500 which should be suitably below the SQLITE_MAX_VARIABLE_NUMBER
+        """
+        in_list = list(l)
+        for i in range(0, len(in_list), n):
+            yield in_list[i:i + n]
