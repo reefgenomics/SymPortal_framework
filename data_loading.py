@@ -392,7 +392,7 @@ class DataLoading:
         self.perform_med_handler_instance = PerformMEDHandler(
             data_loading_temp_working_directory=self.temp_working_directory,
             data_loading_num_proc=self.num_proc,
-            data_loading_list_of_samples_names=self.list_of_samples_names)
+            threads=self.threads)
 
         self.perform_med_handler_instance.execute_perform_med_worker(
             data_loading_debug=self.debug,
@@ -476,7 +476,8 @@ class DataLoading:
         self.sym_non_sym_tax_screening_handler = SymNonSymTaxScreeningHandler(
             data_loading_list_of_samples_names=self.list_of_samples_names,
             data_loading_num_proc=self.num_proc,
-            data_loading_samples_that_caused_errors_in_qc_mp_list=self.samples_that_caused_errors_in_qc_list
+            data_loading_samples_that_caused_errors_in_qc_mp_list=self.samples_that_caused_errors_in_qc_list,
+            threads=self.threads
         )
         self.sym_non_sym_tax_screening_handler.execute_sym_non_sym_tax_screening(
             data_loading_temp_working_directory=self.temp_working_directory,
@@ -2236,16 +2237,27 @@ class PotentialSymTaxScreeningWorker:
 class SymNonSymTaxScreeningHandler:
     def __init__(
             self, data_loading_samples_that_caused_errors_in_qc_mp_list, data_loading_list_of_samples_names,
-            data_loading_num_proc):
-        self.sample_name_mp_input_queue = mp_Queue()
-        self.sym_non_sym_mp_manager = Manager()
-        self.samples_that_caused_errors_in_qc_mp_list = self.sym_non_sym_mp_manager.list(
-            data_loading_samples_that_caused_errors_in_qc_mp_list
-        )
-        self.sample_attributes_mp_output_queue = mp_Queue()
-        self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
-        self.num_proc = data_loading_num_proc
-        self._populate_input_queue(data_loading_list_of_samples_names)
+            data_loading_num_proc, threads):
+        self.threads = threads
+        if self.threads:
+            self.sample_name_mp_input_queue = mt_Queue()
+            self.samples_that_caused_errors_in_qc_mp_list =  data_loading_samples_that_caused_errors_in_qc_mp_list
+            self.sample_attributes_mp_output_queue = mt_Queue()
+            self.non_symbiodinium_sequences_list = []
+            self.num_proc = data_loading_num_proc
+            self._populate_input_queue(data_loading_list_of_samples_names)
+            self.lock = mt_Lock()
+        else:
+            self.sample_name_mp_input_queue = mp_Queue()
+            self.sym_non_sym_mp_manager = Manager()
+            self.samples_that_caused_errors_in_qc_mp_list = self.sym_non_sym_mp_manager.list(
+                data_loading_samples_that_caused_errors_in_qc_mp_list
+            )
+            self.sample_attributes_mp_output_queue = mp_Queue()
+            self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
+            self.num_proc = data_loading_num_proc
+            self._populate_input_queue(data_loading_list_of_samples_names)
+            self.lock = mp_Lock()
 
     def _populate_input_queue(self, data_loading_list_of_samples_names):
         for sample_name in data_loading_list_of_samples_names:
@@ -2258,13 +2270,13 @@ class SymNonSymTaxScreeningHandler:
             non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path,
             data_loading_debug):
         all_processes = []
-        lock = mp_Lock()
         # http://stackoverflow.com/questions/8242837/django-multiprocessing-and-database-connections
         db.connections.close_all()
         sys.stdout.write('\nPerforming sym non sym tax screening QC\n')
 
         for n in range(self.num_proc):
-            p = Process(target=self._sym_non_sym_tax_screening_worker, args=(
+            if self.threads:
+                p = Thread(target=self._sym_non_sym_tax_screening_worker, args=(
                 self.sample_name_mp_input_queue, 
                 self.samples_that_caused_errors_in_qc_mp_list, 
                 self.sample_attributes_mp_output_queue,
@@ -2272,7 +2284,17 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_dataset_object,
                 non_symb_and_size_violation_base_dir_path, 
                 data_loading_pre_med_sequence_output_directory_path,
-                data_loading_debug, lock))
+                data_loading_debug, self.lock))
+            else:
+                p = Process(target=self._sym_non_sym_tax_screening_worker, args=(
+                    self.sample_name_mp_input_queue, 
+                    self.samples_that_caused_errors_in_qc_mp_list, 
+                    self.sample_attributes_mp_output_queue,
+                    data_loading_temp_working_directory, 
+                    data_loading_dataset_object,
+                    non_symb_and_size_violation_base_dir_path, 
+                    data_loading_pre_med_sequence_output_directory_path,
+                    data_loading_debug, self.lock))
             all_processes.append(p)
             p.start()
 
@@ -2310,8 +2332,7 @@ class SymNonSymTaxScreeningHandler:
             try:
                 sym_non_sym_tax_screening_worker_object.identify_sym_non_sym_seqs()
             except RuntimeError as e:
-                with lock:
-                    samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
+                samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
         sample_attributes_mp_output_queue.put('DONE')
 
     def _associate_info_to_dss_objects(self, data_loading_dataset_object):
@@ -2346,8 +2367,6 @@ class SymNonSymTaxScreeningHandler:
                     dss_obj.size_violation_unique = dss_proxy.size_violation_unique
                     dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
                     dss_obj.save()
-
-    
 
 
 class SymNonSymTaxScreeningWorker:
@@ -2690,29 +2709,37 @@ class SymNonSymTaxScreeningWorker:
 
 
 class PerformMEDHandler:
-    def __init__(self, data_loading_list_of_samples_names, data_loading_temp_working_directory, data_loading_num_proc):
+    def __init__(self, data_loading_temp_working_directory, data_loading_num_proc, threads):
         # need to get list of the directories in which to perform the MED
         # we want to get a list of the .
-        self.list_of_samples = data_loading_list_of_samples_names
+        self.threads = threads
         self.temp_working_directory = data_loading_temp_working_directory
         self.num_proc = data_loading_num_proc
         self.list_of_redundant_fasta_paths = []
         self._populate_list_of_redundant_fasta_paths()
-        self.input_queue_of_redundant_fasta_paths = mp_Queue()
+        if self.threads:
+            self.input_queue_of_redundant_fasta_paths = mt_Queue()
+        else:
+            self.input_queue_of_redundant_fasta_paths = mp_Queue()
         self._populate_input_queue_of_redundant_fasta_paths()
         self.list_of_med_result_dirs = [
             os.path.join(os.path.dirname(path_to_redundant_fasta), 'MEDOUT') for
             path_to_redundant_fasta in self.list_of_redundant_fasta_paths]
-
+        
     def execute_perform_med_worker(
             self, data_loading_debug, data_loading_path_to_med_padding_executable,
             data_loading_path_to_med_decompose_executable):
         all_processes = []
 
         for n in range(self.num_proc):
-            p = Process(target=self._perform_med_worker, args=(
+            if self.threads:
+                p = Thread(target=self._perform_med_worker, args=(
                 self.input_queue_of_redundant_fasta_paths, data_loading_debug, data_loading_path_to_med_padding_executable,
                 data_loading_path_to_med_decompose_executable))
+            else:
+                p = Process(target=self._perform_med_worker, args=(
+                    self.input_queue_of_redundant_fasta_paths, data_loading_debug, data_loading_path_to_med_padding_executable,
+                    data_loading_path_to_med_decompose_executable))
             all_processes.append(p)
             p.start()
 
