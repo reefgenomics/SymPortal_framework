@@ -479,12 +479,12 @@ class DataLoading:
             data_loading_list_of_samples_names=self.list_of_samples_names,
             data_loading_num_proc=self.num_proc,
             data_loading_samples_that_caused_errors_in_qc_mp_list=self.samples_that_caused_errors_in_qc_list,
-            multiprocess=self.multiprocess
+            multiprocess=self.multiprocess, data_loading_dataset_object=self.dataset_object
         )
         self.sym_non_sym_tax_screening_handler.execute_sym_non_sym_tax_screening(
             data_loading_temp_working_directory=self.temp_working_directory,
             data_loading_pre_med_sequence_output_directory_path=self.pre_med_sequence_output_directory_path,
-            data_loading_dataset_object=self.dataset_object,
+
             non_symb_and_size_violation_base_dir_path=self.non_symb_and_size_violation_base_dir_path,
             data_loading_debug=self.debug
         )
@@ -2239,8 +2239,9 @@ class PotentialSymTaxScreeningWorker:
 class SymNonSymTaxScreeningHandler:
     def __init__(
             self, data_loading_samples_that_caused_errors_in_qc_mp_list, data_loading_list_of_samples_names,
-            data_loading_num_proc, multiprocess):
+            data_loading_num_proc, multiprocess, data_loading_dataset_object):
         self.multiprocess = multiprocess
+        self.ds_object = data_loading_dataset_object
         if self.multiprocess:
             self.sample_name_mp_input_queue = mp_Queue()
             self.sym_non_sym_mp_manager = Manager()
@@ -2263,12 +2264,13 @@ class SymNonSymTaxScreeningHandler:
 
     def _populate_input_queue(self, data_loading_list_of_samples_names):
         for sample_name in data_loading_list_of_samples_names:
-            self.sample_name_mp_input_queue.put(sample_name)
+            self.sample_name_mp_input_queue.put(
+                DataSetSample.objects.get(name=sample_name, data_submission_from=self.ds_object))
         for n in range(self.num_proc):
             self.sample_name_mp_input_queue.put('STOP')
 
     def execute_sym_non_sym_tax_screening(
-            self, data_loading_temp_working_directory, data_loading_dataset_object,
+            self, data_loading_temp_working_directory,
             non_symb_and_size_violation_base_dir_path, data_loading_pre_med_sequence_output_directory_path,
             data_loading_debug):
         all_processes = []
@@ -2282,8 +2284,7 @@ class SymNonSymTaxScreeningHandler:
                     self.sample_name_mp_input_queue, 
                     self.samples_that_caused_errors_in_qc_mp_list, 
                     self.sample_attributes_mp_output_queue,
-                    data_loading_temp_working_directory, 
-                    data_loading_dataset_object,
+                    data_loading_temp_working_directory,
                     non_symb_and_size_violation_base_dir_path, 
                     data_loading_pre_med_sequence_output_directory_path,
                     data_loading_debug, self.lock))               
@@ -2293,14 +2294,13 @@ class SymNonSymTaxScreeningHandler:
                 self.samples_that_caused_errors_in_qc_mp_list, 
                 self.sample_attributes_mp_output_queue,
                 data_loading_temp_working_directory, 
-                data_loading_dataset_object,
-                non_symb_and_size_violation_base_dir_path, 
+                non_symb_and_size_violation_base_dir_path,
                 data_loading_pre_med_sequence_output_directory_path,
                 data_loading_debug, self.lock))
             all_processes.append(p)
             p.start()
 
-        self._associate_info_to_dss_objects(data_loading_dataset_object)
+        self._associate_info_to_dss_objects()
 
         for p in all_processes:
             p.join()
@@ -2311,24 +2311,23 @@ class SymNonSymTaxScreeningHandler:
         samples_that_caused_errors_in_qc_mp_list, 
         sample_attributes_mp_output_queue, 
         data_loading_temp_working_directory, 
-        data_loading_dataset_object,
         data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
         data_loading_pre_med_sequence_output_directory_path,
         data_loading_debug, lock):
 
-        for sample_name in iter(in_q.get, 'STOP'):
-            with lock:
-                if sample_name in samples_that_caused_errors_in_qc_mp_list:
-                    continue
+        for dss in iter(in_q.get, 'STOP'):
+
+            if dss.name in samples_that_caused_errors_in_qc_mp_list:
+                continue
 
             sym_non_sym_tax_screening_worker_object = SymNonSymTaxScreeningWorker(
                 data_loading_temp_working_directory=data_loading_temp_working_directory,
-                data_loading_dataset_object=data_loading_dataset_object, sample_name=sample_name,
+                dss=dss,
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path=
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
                 data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
                 data_loading_debug=data_loading_debug,
-                sample_attributes_mp_output_queue=sample_attributes_mp_output_queue
+                sample_attributes_mp_output_queue=sample_attributes_mp_output_queue, lock=lock
             )
 
             try:
@@ -2337,12 +2336,13 @@ class SymNonSymTaxScreeningHandler:
                 samples_that_caused_errors_in_qc_mp_list.append(e.args[0]['sample_name'])
         sample_attributes_mp_output_queue.put('DONE')
 
-    def _associate_info_to_dss_objects(self, data_loading_dataset_object):
+    def _associate_info_to_dss_objects(self):
         # now save the collected data contained in the sample_attributes_holder_mp_dict to the relevant
         # dss_objs.
         done_count = 0
+
         dss_uid_to_dss_obj_dict = {dss.id: dss for dss in
-                                   DataSetSample.objects.filter(data_submission_from=data_loading_dataset_object)}
+                                   DataSetSample.objects.filter(data_submission_from=self.ds_object)}
         while done_count < self.num_proc:
             dss_proxy = self.sample_attributes_mp_output_queue.get()
             if dss_proxy == 'DONE':
@@ -2373,14 +2373,14 @@ class SymNonSymTaxScreeningHandler:
 
 class SymNonSymTaxScreeningWorker:
     def __init__(
-            self, data_loading_temp_working_directory, sample_name, data_loading_dataset_object,
+            self, data_loading_temp_working_directory, dss,
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
             data_loading_pre_med_sequence_output_directory_path, data_loading_debug,
-            sample_attributes_mp_output_queue
+            sample_attributes_mp_output_queue, lock
     ):
         self._init_core_class_attributes(
-            data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug,
-            sample_attributes_mp_output_queue)
+            dss, data_loading_temp_working_directory, data_loading_debug,
+            sample_attributes_mp_output_queue, lock)
         self._init_fasta_name_blast_and_clade_dict_attributes()
         self._init_non_sym_and_size_violation_output_paths(
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path)
@@ -2442,13 +2442,12 @@ class SymNonSymTaxScreeningWorker:
         }
 
     def _init_core_class_attributes(
-            self, data_loading_dataset_object, data_loading_temp_working_directory, sample_name, data_loading_debug,
-            sample_attributes_mp_output_queue):
-        self.sample_name = sample_name
-        self.cwd = os.path.join(data_loading_temp_working_directory, sample_name)
-        self.datasetsample_object = DataSetSample.objects.get(
-            name=sample_name, data_submission_from=data_loading_dataset_object
-        )
+            self, dss, data_loading_temp_working_directory, data_loading_debug,
+            sample_attributes_mp_output_queue, lock):
+        self.lock = lock
+        self.sample_name = dss.name
+        self.cwd = os.path.join(data_loading_temp_working_directory, dss.name)
+        self.datasetsample_object = dss
         self.sample_att_holder = DSSAttributeAssignmentHolder(name=self.datasetsample_object.name,
                                                               uid=self.datasetsample_object.id)
         self.debug = data_loading_debug
