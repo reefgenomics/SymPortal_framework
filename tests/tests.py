@@ -91,11 +91,11 @@ class SymPortalTester:
             a_df = (pd.read_csv(assertion_df_path, index_col=0).drop(columns=['sample_name']) * 1000).astype(int)
             t_df = (pd.read_csv(tested_df_path, index_col=0).drop(columns=['sample_name']) * 1000).astype(int)
         
-        if list(a_df) != list(t_df): raise AssertionError(f'Sequence orders do not match in {tested_df_path}')
+        # Whilst the order of the actual sequences should be the same, what the sequences are called may differ between
+        # databases as part of the sequence name (if it has no name) is the uid.
         # Check that the sums of the columns match
-        for seq in list(a_df):
-            if sum(a_df[seq]) != sum(t_df[seq]): raise AssertionError('Sequence abundances do not match')
-        foo = 'bar'
+        for i in range(len(list(a_df))):
+            if sum(a_df.iloc[:,i]) != sum(t_df.iloc[:,i]): raise AssertionError('Sequence abundances do not match')
 
     def _test_data_loading_work_flow_no_datasheet(self):
         custom_args_list = ['--load', self.test_data_dir_path, '--name', self.name, '--num_proc',
