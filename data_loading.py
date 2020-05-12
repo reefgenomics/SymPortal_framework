@@ -2252,7 +2252,6 @@ class SymNonSymTaxScreeningHandler:
             self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
             self.num_proc = data_loading_num_proc
             self._populate_input_queue(data_loading_list_of_samples_names)
-            self.lock = mp_Lock()
         else:
             self.sample_name_mp_input_queue = mt_Queue()
             self.samples_that_caused_errors_in_qc_mp_list =  data_loading_samples_that_caused_errors_in_qc_mp_list
@@ -2260,7 +2259,6 @@ class SymNonSymTaxScreeningHandler:
             self.non_symbiodinium_sequences_list = []
             self.num_proc = data_loading_num_proc
             self._populate_input_queue(data_loading_list_of_samples_names)
-            self.lock = mt_Lock()
 
     def _populate_input_queue(self, data_loading_list_of_samples_names):
         for sample_name in data_loading_list_of_samples_names:
@@ -2287,7 +2285,7 @@ class SymNonSymTaxScreeningHandler:
                     data_loading_temp_working_directory,
                     non_symb_and_size_violation_base_dir_path, 
                     data_loading_pre_med_sequence_output_directory_path,
-                    data_loading_debug, self.lock))               
+                    data_loading_debug))
             else:
                 p = Thread(target=self._sym_non_sym_tax_screening_worker, args=(
                 self.sample_name_mp_input_queue, 
@@ -2296,7 +2294,7 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_temp_working_directory, 
                 non_symb_and_size_violation_base_dir_path,
                 data_loading_pre_med_sequence_output_directory_path,
-                data_loading_debug, self.lock))
+                data_loading_debug))
             all_processes.append(p)
             p.start()
 
@@ -2313,7 +2311,7 @@ class SymNonSymTaxScreeningHandler:
         data_loading_temp_working_directory, 
         data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
         data_loading_pre_med_sequence_output_directory_path,
-        data_loading_debug, lock):
+        data_loading_debug):
 
         for dss in iter(in_q.get, 'STOP'):
 
@@ -2327,7 +2325,7 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
                 data_loading_pre_med_sequence_output_directory_path=data_loading_pre_med_sequence_output_directory_path,
                 data_loading_debug=data_loading_debug,
-                sample_attributes_mp_output_queue=sample_attributes_mp_output_queue, lock=lock
+                sample_attributes_mp_output_queue=sample_attributes_mp_output_queue
             )
 
             try:
@@ -2344,31 +2342,11 @@ class SymNonSymTaxScreeningHandler:
         dss_uid_to_dss_obj_dict = {dss.id: dss for dss in
                                    DataSetSample.objects.filter(data_submission_from=self.ds_object)}
         while done_count < self.num_proc:
-            dss_proxy = self.sample_attributes_mp_output_queue.get()
-            if dss_proxy == 'DONE':
+            dss = self.sample_attributes_mp_output_queue.get()
+            if dss == 'DONE':
                 done_count += 1
             else:
-                dss_obj = dss_uid_to_dss_obj_dict[dss_proxy.uid]
-                if dss_proxy.error_in_processing:  # if error occured
-                    dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
-                    dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
-                    dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
-                    dss_obj.size_violation_unique = dss_proxy.size_violation_unique
-                    dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
-                    dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
-                    dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
-                    dss_obj.error_in_processing = dss_proxy.error_in_processing
-                    dss_obj.error_reason = dss_proxy.error_reason
-                    dss_obj.save()
-                else:
-                    dss_obj.unique_num_sym_seqs = dss_proxy.unique_num_sym_seqs
-                    dss_obj.absolute_num_sym_seqs = dss_proxy.absolute_num_sym_seqs
-                    dss_obj.non_sym_unique_num_seqs = dss_proxy.non_sym_unique_num_seqs
-                    dss_obj.non_sym_absolute_num_seqs = dss_proxy.non_sym_absolute_num_seqs
-                    dss_obj.size_violation_absolute = dss_proxy.size_violation_absolute
-                    dss_obj.size_violation_unique = dss_proxy.size_violation_unique
-                    dss_obj.initial_processing_complete = dss_proxy.initial_processing_complete
-                    dss_obj.save()
+                dss.save()
 
 
 class SymNonSymTaxScreeningWorker:
@@ -2376,11 +2354,15 @@ class SymNonSymTaxScreeningWorker:
             self, data_loading_temp_working_directory, dss,
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path,
             data_loading_pre_med_sequence_output_directory_path, data_loading_debug,
-            sample_attributes_mp_output_queue, lock
+            sample_attributes_mp_output_queue
     ):
-        self._init_core_class_attributes(
-            dss, data_loading_temp_working_directory, data_loading_debug,
-            sample_attributes_mp_output_queue, lock)
+        # init core objects
+        self.dss = dss
+        self.cwd = os.path.join(data_loading_temp_working_directory, self.dss.name)
+        self.debug = data_loading_debug
+        self.sample_attributes_mp_output_queue = sample_attributes_mp_output_queue
+        self.thread_safe_general = ThreadSafeGeneral()
+
         self._init_fasta_name_blast_and_clade_dict_attributes()
         self._init_non_sym_and_size_violation_output_paths(
             data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path)
@@ -2400,33 +2382,33 @@ class SymNonSymTaxScreeningWorker:
 
     def _init_sym_non_size_violation_output_paths(self, data_loading_pre_med_sequence_output_directory_path):
         pre_med_sequence_output_directory_for_sample_path = os.path.join(
-            data_loading_pre_med_sequence_output_directory_path, f'{self.datasetsample_object.id}_{self.sample_name}')
+            data_loading_pre_med_sequence_output_directory_path, f'{self.dss.id}_{self.dss.name}')
         os.makedirs(pre_med_sequence_output_directory_for_sample_path, exist_ok=True)
         self.pre_med_fasta_path = os.path.join(
-            pre_med_sequence_output_directory_for_sample_path, f'pre_med_seqs_{self.sample_name}.fasta'
+            pre_med_sequence_output_directory_for_sample_path, f'pre_med_seqs_{self.dss.name}.fasta'
         )
         self.pre_med_names_file_path = os.path.join(
-            pre_med_sequence_output_directory_for_sample_path, f'pre_med_seqs_{self.sample_name}.names'
+            pre_med_sequence_output_directory_for_sample_path, f'pre_med_seqs_{self.dss.name}.names'
         )
 
     def _init_non_sym_and_size_violation_output_paths(
             self, data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path):
         non_symbiodiniaceae_and_size_violation_directory_for_sample_path = os.path.join(
-            data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, self.sample_name)
+            data_loading_non_symbiodiniaceae_and_size_violation_base_directory_path, self.dss.name)
         os.makedirs(non_symbiodiniaceae_and_size_violation_directory_for_sample_path, exist_ok=True)
         self.non_symbiodiniaceae_seqs_fasta_path = os.path.join(
             non_symbiodiniaceae_and_size_violation_directory_for_sample_path,
-            f'{self.sample_name}_non_symbiodiniaceae_sequences.fasta')
+            f'{self.dss.name}_non_symbiodiniaceae_sequences.fasta')
         self.non_symbiodiniaceae_seqs_names_path = os.path.join(
             non_symbiodiniaceae_and_size_violation_directory_for_sample_path,
-            f'{self.sample_name}_non_symbiodiniaceae_sequences.names')
+            f'{self.dss.name}_non_symbiodiniaceae_sequences.names')
         self.symbiodiniaceae_size_violation_seqs_fasta_output_path = os.path.join(
             non_symbiodiniaceae_and_size_violation_directory_for_sample_path,
-            f'{self.sample_name}_symbiodiniaceae_size_violation_sequences.fasta'
+            f'{self.dss.name}_symbiodiniaceae_size_violation_sequences.fasta'
         )
         self.symbiodiniaceae_size_violation_seqs_names_output_path = os.path.join(
             non_symbiodiniaceae_and_size_violation_directory_for_sample_path,
-            f'{self.sample_name}_symbiodiniaceae_size_violation_sequences.names')
+            f'{self.dss.name}_symbiodiniaceae_size_violation_sequences.names')
 
     def _init_fasta_name_blast_and_clade_dict_attributes(self):
         fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
@@ -2441,18 +2423,6 @@ class SymNonSymTaxScreeningWorker:
             blast_out_line in self.blast_dict.values()
         }
 
-    def _init_core_class_attributes(
-            self, dss, data_loading_temp_working_directory, data_loading_debug,
-            sample_attributes_mp_output_queue, lock):
-        self.lock = lock
-        self.sample_name = dss.name
-        self.cwd = os.path.join(data_loading_temp_working_directory, dss.name)
-        self.datasetsample_object = dss
-        self.sample_att_holder = DSSAttributeAssignmentHolder(name=self.datasetsample_object.name,
-                                                              uid=self.datasetsample_object.id)
-        self.debug = data_loading_debug
-        self.sample_attributes_mp_output_queue = sample_attributes_mp_output_queue
-        self.thread_safe_general = ThreadSafeGeneral()
 
     def identify_sym_non_sym_seqs(self):
         """This method completes the pre-med quality control.
@@ -2495,7 +2465,7 @@ class SymNonSymTaxScreeningWorker:
             sample_clade_fasta_path = os.path.join(
                 self.cwd,
                 clade_of_sequences_to_write_out,
-                f'seqs_for_med_{self.sample_name}_clade_{clade_of_sequences_to_write_out}.redundant.fasta'
+                f'seqs_for_med_{self.dss.name}_clade_{clade_of_sequences_to_write_out}.redundant.fasta'
             )
             os.makedirs(os.path.dirname(sample_clade_fasta_path), exist_ok=True)
             with open(sample_clade_fasta_path, 'w') as f:
@@ -2506,7 +2476,7 @@ class SymNonSymTaxScreeningWorker:
                     # separates the sample name from the rest of the sequence name, or we need to use another character
                     # for doing the sample name inference. This can be provided to med using the -t argument.
                     for i in range(len(self.name_dict[sequence_name].split('\t')[1].split(','))):
-                        f.write(f'>{self.sample_name}_{sequence_counter}\n')
+                        f.write(f'>{self.dss.name}_{sequence_counter}\n')
                         f.write(f'{self.fasta_dict[sequence_name]}\n')
                         sequence_counter += 1
 
@@ -2517,9 +2487,9 @@ class SymNonSymTaxScreeningWorker:
             deuniqued_fasta = self.thread_safe_general.read_defined_file_to_list(sample_clade_fasta_path)
             if deuniqued_fasta:
                 if len(deuniqued_fasta) < 100:
-                    print(f'{self.sample_name}: WARNING the dequniqed fasta is < {len(deuniqued_fasta)} lines')
+                    print(f'{self.dss.name}: WARNING the dequniqed fasta is < {len(deuniqued_fasta)} lines')
             else:
-                print(f'{self.sample_name}: ERROR deuniqued fasta is empty')
+                print(f'{self.dss.name}: ERROR deuniqued fasta is empty')
 
     def _get_sequence_names_of_clade_for_no_size_violation_sequences(self, clade_of_sequences_to_write_out):
         sequence_names_of_clade = [
@@ -2545,7 +2515,7 @@ class SymNonSymTaxScreeningWorker:
     def _write_out_no_size_violation_names_file_to_pre_med_dir(self):
         for clade_value in set(self.sequence_name_to_clade_dict.values()):
             pre_med_names_path_clade_specific = self.pre_med_names_file_path.replace(
-                f'pre_med_seqs_{self.sample_name}', f'pre_med_seqs_{clade_value}_{self.sample_name}')
+                f'pre_med_seqs_{self.dss.name}', f'pre_med_seqs_{clade_value}_{self.dss.name}')
 
             with open(pre_med_names_path_clade_specific, 'w') as f:
                 for sequence_name in [
@@ -2560,7 +2530,7 @@ class SymNonSymTaxScreeningWorker:
         """ Write out the pre-med seqs into clade separated .fasta and .name pairs"""
         for clade_value in set(self.sequence_name_to_clade_dict.values()):
             pre_med_fasta_path_clade_specific = self.pre_med_fasta_path.replace(
-                f'pre_med_seqs_{self.sample_name}', f'pre_med_seqs_{clade_value}_{self.sample_name}')
+                f'pre_med_seqs_{self.dss.name}', f'pre_med_seqs_{clade_value}_{self.dss.name}')
 
             with open(pre_med_fasta_path_clade_specific, 'w') as f:
                 for sequence_name in [
@@ -2602,52 +2572,52 @@ class SymNonSymTaxScreeningWorker:
         self._associate_non_sym_seq_attributes_to_datasetsample()
         self._associate_sym_seq_no_size_violation_attributes_to_datasetsample()
         self._associate_sym_seq_size_violation_attributes_to_datasetsample()
-        self.sample_att_holder.initial_processing_complete = True
-        self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
-        print(f'{self.sample_name}: pre-med QC complete')
+        self.dss.initial_processing_complete = True
+        self.sample_attributes_mp_output_queue.put(self.dss)
+        print(f'{self.dss.name}: pre-med QC complete')
 
     def _associate_sym_seq_size_violation_attributes_to_datasetsample(self):
         # it is important that we set these values from the objects of this class rather
         # from the data_set_sample object attributes as some of these have not been set yet
-        self.sample_att_holder.size_violation_absolute = (
-                self.datasetsample_object.post_qc_absolute_num_seqs -
-                self.sample_att_holder.absolute_num_sym_seqs -
-                self.sample_att_holder.non_sym_absolute_num_seqs
+        self.dss.size_violation_absolute = (
+                self.dss.post_qc_absolute_num_seqs -
+                self.dss.absolute_num_sym_seqs -
+                self.dss.non_sym_absolute_num_seqs
         )
-        print(f'{self.sample_name}: size_violation_absolute = {self.sample_att_holder.size_violation_absolute}')
-        self.sample_att_holder.size_violation_unique = (
-                self.datasetsample_object.post_qc_unique_num_seqs -
-                self.sample_att_holder.unique_num_sym_seqs -
-                self.sample_att_holder.non_sym_unique_num_seqs
+        print(f'{self.dss.name}: size_violation_absolute = {self.dss.size_violation_absolute}')
+        self.dss.size_violation_unique = (
+                self.dss.post_qc_unique_num_seqs -
+                self.dss.unique_num_sym_seqs -
+                self.dss.non_sym_unique_num_seqs
         )
-        print(f'{self.sample_name}: size_violation_unique = {self.sample_att_holder.size_violation_unique}')
+        print(f'{self.dss.name}: size_violation_unique = {self.dss.size_violation_unique}')
 
     def _associate_sym_seq_no_size_violation_attributes_to_datasetsample(self):
-        self.sample_att_holder.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
-        self.sample_att_holder.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
-        print(f'{self.sample_name}: unique_num_sym_seqs = {len(self.sym_no_size_violation_sequence_name_set_for_sample)}')
-        print(f'{self.sample_name}: absolute_num_sym_seqs = {self.absolute_number_of_sym_no_size_violation_sequences}')
+        self.dss.unique_num_sym_seqs = len(self.sym_no_size_violation_sequence_name_set_for_sample)
+        self.dss.absolute_num_sym_seqs = self.absolute_number_of_sym_no_size_violation_sequences
+        print(f'{self.dss}: unique_num_sym_seqs = {len(self.sym_no_size_violation_sequence_name_set_for_sample)}')
+        print(f'{self.dss}: absolute_num_sym_seqs = {self.absolute_number_of_sym_no_size_violation_sequences}')
 
     def _associate_non_sym_seq_attributes_to_datasetsample(self):
-        self.sample_att_holder.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.sample_att_holder.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        print(f'{self.sample_name}: non_sym_unique_num_seqs = {len(self.non_symbiodinium_sequence_name_set_for_sample)}')
-        print(f'{self.sample_name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
+        self.dss.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.dss.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        print(f'{self.dss.name}: non_sym_unique_num_seqs = {len(self.non_symbiodinium_sequence_name_set_for_sample)}')
+        print(f'{self.dss.name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
 
     def _log_dataset_attr_and_raise_runtime_error(self):
         # if there are no symbiodiniaceae sequenes then log error and associate meta info
-        print(f'{self.sample_name}: QC error.\n No symbiodiniaceae sequences left in sample after pre-med QC.')
-        self.sample_att_holder.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
-        self.sample_att_holder.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        self.sample_att_holder.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
-        self.sample_att_holder.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
-        self.sample_att_holder.unique_num_sym_seqs = 0
-        self.sample_att_holder.absolute_num_sym_seqs = 0
-        self.sample_att_holder.initial_processing_complete = True
-        self.sample_att_holder.error_in_processing = True
-        self.sample_att_holder.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
-        self.sample_attributes_mp_output_queue.put(self.sample_att_holder)
-        raise RuntimeError({'sample_name': self.sample_name})
+        print(f'{self.dss.name}: QC error.\n No symbiodiniaceae sequences left in sample after pre-med QC.')
+        self.dss.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.dss.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
+        self.dss.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
+        self.dss.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
+        self.dss.unique_num_sym_seqs = 0
+        self.dss.absolute_num_sym_seqs = 0
+        self.dss.initial_processing_complete = True
+        self.dss.error_in_processing = True
+        self.dss.error_reason = 'No symbiodiniaceae sequences left in sample after pre-med QC'
+        self.sample_attributes_mp_output_queue.put(self.dss)
+        raise RuntimeError({'sample_name': self.dss.name})
 
     def _identify_and_write_non_sym_seqs_in_sample(self):
         self._add_seqs_with_no_blast_match_to_non_sym_list()
@@ -2677,7 +2647,7 @@ class SymNonSymTaxScreeningWorker:
                                                set(self.sequence_name_to_clade_dict.keys())
         self.non_symbiodinium_sequence_name_set_for_sample.update(list(sequences_with_no_blast_match_as_set))
         sys.stdout.write(
-            f'{self.sample_name}: {len(sequences_with_no_blast_match_as_set)} sequences thrown out '
+            f'{self.dss.name}: {len(sequences_with_no_blast_match_as_set)} sequences thrown out '
             f'initially due to being too divergent from reference sequences\n')
 
     def _identify_non_sym_seqs_from_below_match_threshold(self):
