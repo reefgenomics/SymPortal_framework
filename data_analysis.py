@@ -15,8 +15,9 @@ import sp_config
 import json
 
 class SPDataAnalysis:
-    def __init__(self, workflow_manager_parent, data_analysis_obj):
+    def __init__(self, workflow_manager_parent, data_analysis_obj, force_basal_lineage_separation):
         self.workflow_manager = workflow_manager_parent
+        self.force_basal_lineage_separation = force_basal_lineage_separation
         self.temp_wkd = os.path.join(self.workflow_manager.symportal_root_directory, 'temp')
         self._del_and_remake_temp_wkd()
         self.data_analysis_obj = data_analysis_obj
@@ -37,7 +38,8 @@ class SPDataAnalysis:
         self.virtual_object_manager = virtual_objects.VirtualObjectManager(
             within_clade_cutoff=self.workflow_manager.within_clade_cutoff,
             num_proc=self.workflow_manager.args.num_proc,
-            list_of_data_set_uids=self.list_of_data_set_uids)
+            list_of_data_set_uids=self.list_of_data_set_uids,
+            force_basal_lineage_separation=self.force_basal_lineage_separation)
         self.thread_safe_general = ThreadSafeGeneral()
 
     def analyse_data(self):
@@ -637,8 +639,8 @@ class SPDataAnalysis:
         artefact_assessor.reassess_support_of_artefact_div_containing_types()
 
     def _collapse_footprints_and_make_analysis_types(self):
-        for clade_fp_dict in self.clade_footp_dicts_list:
-            self.current_clade = self.clade_list[self.clade_footp_dicts_list.index(clade_fp_dict)]
+        for i, clade_fp_dict in enumerate(self.clade_footp_dicts_list):
+            self.current_clade = self.clade_list[i]
             if self._there_are_footprints_of_this_clade(clade_fp_dict):
                 sfi = SupportedFootPrintIdentifier(clade_footprint_dict=clade_fp_dict, parent_sp_data_analysis=self)
                 self.list_of_initial_types_after_collapse = sfi.identify_supported_footprints()
@@ -825,12 +827,15 @@ class ArtefactAssessor:
 class PotentialNewType:
     def __init__(
             self, artefact_ref_seq_uid_set, non_artefact_ref_seq_uid_set,
-            ref_seq_uids_set, list_of_ref_seq_names, resf_seq_obj_set):
+            ref_seq_uids_set, list_of_ref_seq_names, resf_seq_obj_set, force_basal_lineage_separation):
         self.artefact_ref_seq_uid_set = artefact_ref_seq_uid_set
         self.non_artefact_ref_seq_uid_set = non_artefact_ref_seq_uid_set
         self.ref_seq_uids_set = ref_seq_uids_set
         self.name = ','.join(list_of_ref_seq_names)
-        self.basal_seq = self._set_basal_seq(list_of_ref_seq_names)
+        if force_basal_lineage_separation:
+            self.basal_seq = self._set_basal_seq(list_of_ref_seq_names)
+        else:
+            self.basal_seq = None
         self.ref_seq_objects_set = resf_seq_obj_set
 
     def _set_basal_seq(self, list_of_ref_seq_names):
@@ -867,7 +872,6 @@ class CheckVCCToVATAssociations:
 
     def _assess_support_of_pnt_or_vat(self, pnt_or_vat):
         for vcc in self.list_of_vcc_objs_to_check:
-
             cpntsw = self.CheckPNTorVATSupportWorker(
                 virtual_clade_collection_object=vcc, parent_check_type_pairing=self, pnt_or_vat=pnt_or_vat)
             cpntsw.check_pnt_support()
@@ -942,11 +946,13 @@ class CheckVCCToVATAssociations:
                 if self._analysis_type_already_exists_with_profile_of_seqs_in_common():
                     self._add_stranded_ccs_to_existing_at_and_update_dicts()
                 else:
-                    if not self._ref_seqs_in_common_contain_multiple_basal_seqs():
-                        self._add_stranded_ccs_to_new_at_made_from_common_ref_seqs_and_update_dicts()
+                    if self.artefact_assessor.sp_data_analysis.force_basal_lineage_separation:
+                        if not self._ref_seqs_in_common_contain_multiple_basal_seqs():
+                            self._add_stranded_ccs_to_new_at_made_from_common_ref_seqs_and_update_dicts()
+                        else:
+                            self._rehome_cc_individually()
                     else:
                         self._rehome_cc_individually()
-
             else:
                 self._rehome_cc_individually()
         else:
@@ -1073,15 +1079,6 @@ class CheckVCCToVATAssociations:
                 # This could be buggy.
                 raise RuntimeError('Could not find associated AnalysisType with basal seq that matches that of '
                                    'the PotentialNewType')
-
-        # def _another_type_with_divs_in_common_exists(self):
-        #     """ If there is another type in the VCC that has DIVs in common with the PNT or VAT being checked
-        #         other than the current_virtual_analysis_type_of_cc, abandon the match"""
-        #     for vat in self.vcc.analysis_type_obj_to_representative_rel_abund_in_cc_dict.keys():
-        #         divs_in_common = vat.ref_seq_uids_set.intersection(self.pnt_or_vat.ref_seq_uids_set)
-        #         if divs_in_common:
-        #             if vat != self.current_virtual_analysis_type_of_cc:
-        #                 return True
 
         def _get_rel_abund_represented_by_current_at_of_cc(self):
             # if pnt has basal type then make sure that the basal type we are comparing to is either the match
@@ -1361,7 +1358,8 @@ class CheckTypePairingHandler(CheckVCCToVATAssociations):
             non_artefact_ref_seq_uid_set=self.vat_a.non_artefact_ref_seq_uid_set,
             list_of_ref_seq_names=name_of_ref_seqs_in_pnt,
             resf_seq_obj_set=artefact_info_a.footprint_as_ref_seq_objs_set.union(
-                artefact_info_b.footprint_as_ref_seq_objs_set))
+                artefact_info_b.footprint_as_ref_seq_objs_set),
+            force_basal_lineage_separation=self.artefact_assessor.sp_data_analysis.force_basal_lineage_separation)
 
 class StrandedCladeCollectionAnalysisTypeSearcher:
     """For a given stranded CladeCollection it will search the AnalysisTypes to identify the the AnalysisType that
@@ -1473,8 +1471,14 @@ class SupportedFootPrintIdentifier:
     those of length n-1 etc etc. It also tries to find support amongst the collection of footprints of length n
     e.g. if you have 1-2-3-4, 1-2-3-5, 1-2-3-6, 1-2-3-7, 1-2-3-8, it will pull out the 1-2-3 footprint as supported
     even if the 1-2-3 footprint doesnt already exist as an n=3 footprint.
+    20200511. We are going to make the exlusion of C3/C1/C15 sequences flagged as option. For the time
+    being it will be the default NOT to apply it. If we then do choose to apply it, we should do it properly where
+    we classify sequences as C3 basal, C15 basal or C1 basal within the cladocopium. We would then not allow basal
+    sequences to mix in the creation of type profiles. The easiest way to do this could be to treat them in the same
+    way that we treat genera. But... this will be some way down the line. I think we're going to find that actually
+    its perfectly viable for profiles to contain both C1 and C3. C15 might be a different case.
     We are also taking into account not allowing analysis types to contain the C3 and the C15 sequences. We refer to
-    these as the basal sequences. All footprints that contain more than one basal sequencs ill automatically be
+    these as the basal sequences. All footprints that contain more than one basal sequences will automatically be
     put into the unsupported list at first, irrespective of their support. Then they will attempt to be collapsed into
     other footprints just like all other unsupported footprints. If a suitable footprint is foud that they can be
     collapsed into then they will be but the pulled out sequqences can only contain one of the basal
@@ -1488,7 +1492,7 @@ class SupportedFootPrintIdentifier:
         self.supported_list = []
         self.unsupported_list = []
         self.initial_types_list = []
-        self._init_initial_types_list()
+        self._init_initial_types_list(force_basal_lineage_separation=self.sp_data_analysis.force_basal_lineage_separation)
         # number of clade collections a footprint must be found in to be supported
         self.required_support = 4
 
@@ -1517,11 +1521,14 @@ class SupportedFootPrintIdentifier:
         # Attributes used in synthetic footprint collapse
         self.ordered_sig_synth_fps = None
 
-    def _init_initial_types_list(self):
+    def _init_initial_types_list(self, force_basal_lineage_separation):
         for footprint_key, footprint_representative in self.clade_fp_dict.items():
             self.initial_types_list.append(
                 InitialType(
-                    footprint_key, footprint_representative.cc_list, footprint_representative.maj_dss_seq_list))
+                    reference_sequence_set=footprint_key,
+                    clade_collection_list=footprint_representative.cc_list,
+                    force_basal_lineage_separation=force_basal_lineage_separation,
+                    maj_dsss_list=footprint_representative.maj_dss_seq_list))
 
     def _verify_that_all_cc_associated_to_an_initial_type(self):
         set_of_ccs_of_clade = set([cc.id for cc in self.sp_data_analysis.ccs_of_analysis if cc.clade == self.sp_data_analysis.current_clade])
@@ -1542,7 +1549,6 @@ class SupportedFootPrintIdentifier:
         for n in range(longest_footprint, 0, -1):
             self.current_n = n
             self._update_supported_unsupported_lists_for_n()
-
             self._collapse_n_len_initial_types_into_minus_one_initial_types()
 
             if self.current_n > 2:
@@ -1619,9 +1625,9 @@ class SupportedFootPrintIdentifier:
         # fit into a footprint in the unsuported list
         sys.stdout.write('\rChecking new set of synthetic types')
         for synth_fp in self.synthetic_fp_dict.keys():
-
-            if self._does_synth_fp_have_multi_basal_seqs(synth_fp):
-                continue
+            if self.sp_data_analysis.force_basal_lineage_separation:
+                if self._does_synth_fp_have_multi_basal_seqs(synth_fp):
+                    continue
 
             for un_sup_initial_type in self.unsupported_list:
                 # For each of the synth footprints see if they fit within the unsupported types.
@@ -1678,20 +1684,28 @@ class SupportedFootPrintIdentifier:
                 fp_collapser.collapse_footprint()
 
     def _remove_fp_to_collapse_from_unsupported_if_now_supported(self, large_fp_to_collapse):
-        if large_fp_to_collapse.support >= \
-                self.required_support and not large_fp_to_collapse.contains_multiple_basal_sequences:
-            # Then this type has already had some other leftovers put into it so that it now has the required
-            # support. In this case we can remove the type from the unsupported list and continue to the next
-            self.unsupported_list.remove(large_fp_to_collapse)
-            return True
+        if self.sp_data_analysis.force_basal_lineage_separation:
+            if large_fp_to_collapse.support >= \
+                    self.required_support and not large_fp_to_collapse.contains_multiple_basal_sequences:
+                # Then this type has already had some other leftovers put into it so that it now has the required
+                # support. In this case we can remove the type from the unsupported list and continue to the next
+                self.unsupported_list.remove(large_fp_to_collapse)
+                return True
+            else:
+                return False
         else:
-            return False
+            if large_fp_to_collapse.support >= self.required_support:
+                # Then this type has already had some other leftovers put into it so that it now has the required
+                # support. In this case we can remove the type from the unsupported list and continue to the next
+                self.unsupported_list.remove(large_fp_to_collapse)
+                return True
+            else:
+                return False
 
     def _populate_collapse_dict_for_next_n(self):
         self._set_attributes_for_collapse_dict_population()
         if self.n_minus_one_list:
             for longer_initial_type in self.unsupported_list:
-                # sys.stdout.write(f'\rAssessing footprint {longer_initial_type} for supported type')
                 self.top_score = 0
                 for shorter_initial_type in self.n_minus_one_list:
                     collapse_assessor = CollapseAssessor(
@@ -1721,10 +1735,16 @@ class SupportedFootPrintIdentifier:
             initial_type for initial_type in self.initial_types_list if initial_type.profile_length == self.current_n]
 
         for initial_type in n_list:
-            if initial_type.support >= self.required_support and not initial_type.contains_multiple_basal_sequences:
-                self.supported_list.append(initial_type)
+            if self.sp_data_analysis.force_basal_lineage_separation:
+                if initial_type.support >= self.required_support and not initial_type.contains_multiple_basal_sequences:
+                    self.supported_list.append(initial_type)
+                else:
+                    self.unsupported_list.append(initial_type)
             else:
-                self.unsupported_list.append(initial_type)
+                if initial_type.support >= self.required_support:
+                    self.supported_list.append(initial_type)
+                else:
+                    self.unsupported_list.append(initial_type)
 
 class UnsupportedFootprintFinalCollapser:
     def __init__(self, parent_supported_footprint_identifier):
@@ -1785,7 +1805,8 @@ class UnsupportedFootprintFinalCollapser:
     def _create_new_maj_seq_init_type(self, i, maj_dss):
         new_initial_type = InitialType(
             reference_sequence_set=frozenset([maj_dss.reference_sequence_of]),
-            clade_collection_list=[self.fp_to_collapse.clade_collection_list[i]])
+            clade_collection_list=[self.fp_to_collapse.clade_collection_list[i]],
+            force_basal_lineage_separation=self.supported_footprint_identifier.sp_data_analysis.force_basal_lineage_separation)
         self.supported_footprint_identifier.initial_types_list.append(new_initial_type)
 
     def _add_unsup_type_info_to_smll_match_type(self, i, maj_dss):
@@ -1819,13 +1840,15 @@ class CollapseAssessor:
         self.shorter_initial_type = shorter_initial_type
 
     def assess_collapse(self):
-        # see docstring of method for more info
         if self._if_short_initial_type_suitable_for_collapse():
-            if self.longer_intial_type.contains_multiple_basal_sequences:
-                if self.does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint():
-                    # score = number of samples big was found in plus num samples small was found in
-                    self._if_highest_score_so_far_assign_big_fp_to_smll_fp_for_collapse()
-
+            if self.supported_footprint_identifier.sp_data_analysis.force_basal_lineage_separation:
+                if self.longer_intial_type.contains_multiple_basal_sequences:
+                    if self.does_small_footprint_contain_the_required_ref_seqs_of_the_large_footprint():
+                        # score = number of samples big was found in plus num samples small was found in
+                        self._if_highest_score_so_far_assign_big_fp_to_smll_fp_for_collapse()
+                else:
+                    if self.longer_intial_type.set_of_maj_ref_seqs.issubset(self.shorter_initial_type.profile):
+                        self._if_highest_score_so_far_assign_big_fp_to_smll_fp_for_collapse()
             else:
                 if self.longer_intial_type.set_of_maj_ref_seqs.issubset(self.shorter_initial_type.profile):
                     self._if_highest_score_so_far_assign_big_fp_to_smll_fp_for_collapse()
@@ -1911,9 +1934,11 @@ class CollapseAssessor:
         If small basal = C3 then we need to find every on of the large's seqs that isn't C1 or C15x we should
         put this decision into a new function.
         """
-
-        multi_basal = self.shorter_initial_type.contains_multiple_basal_sequences
-        return self.shorter_initial_type.profile.issubset(self.longer_intial_type.profile) and not multi_basal
+        if self.supported_footprint_identifier.sp_data_analysis.force_basal_lineage_separation:
+            multi_basal = self.shorter_initial_type.contains_multiple_basal_sequences
+            return self.shorter_initial_type.profile.issubset(self.longer_intial_type.profile) and not multi_basal
+        else:
+            return self.shorter_initial_type.profile.issubset(self.longer_intial_type.profile)
 
 class SyntheticFootprintCollapser:
     def __init__(self, parent_supported_footprint_identifier):
@@ -1930,13 +1955,16 @@ class SyntheticFootprintCollapser:
                 self.current_fp_to_collapse = self.supported_footprint_identifier.synthetic_fp_dict[synth_fp][k]
                 if self._validate_init_type_is_unsup_and_synth_fp_is_subset():
                     if self._synth_fp_matches_existing_intial_type():
-                        if self._should_extract_rather_than_absorb():
-                            self.matching_existing_init_type_outer.extract_support_from_large_initial_type(
-                                self.current_fp_to_collapse)
-                            if self.current_fp_to_collapse.set_of_maj_ref_seqs:
-                                self._collapse_type_to_matching_init_type_if_exists()
+                        if self.supported_footprint_identifier.sp_data_analysis.force_basal_lineage_separation:
+                            if self._should_extract_rather_than_absorb():
+                                self.matching_existing_init_type_outer.extract_support_from_large_initial_type(
+                                    self.current_fp_to_collapse)
+                                if self.current_fp_to_collapse.set_of_maj_ref_seqs:
+                                    self._collapse_type_to_matching_init_type_if_exists()
+                                else:
+                                    self._del_type_to_collapse()
                             else:
-                                self._del_type_to_collapse()
+                                self._absorb_type_into_match_and_del()
                         else:
                             self._absorb_type_into_match_and_del()
                     else:
@@ -1944,24 +1972,28 @@ class SyntheticFootprintCollapser:
                         # Check to see if the big type contains mutiple basal.
                         # If it does then we should extract as above. This should be exactly the
                         # same code as above but extracting into a new type rather than an existing one
-                        if self.current_fp_to_collapse.contains_multiple_basal_sequences:
-                            new_blank_initial_type = self._create_new_init_type_and_add_to_init_type_list()
+                        if self.supported_footprint_identifier.sp_data_analysis.force_basal_lineage_separation:
+                            if self.current_fp_to_collapse.contains_multiple_basal_sequences:
+                                new_blank_initial_type = self._create_new_init_type_and_add_to_init_type_list()
 
-                            # Now remove the above new type's worth of info from the current big footprint
-                            self.current_fp_to_collapse.substract_init_type_from_other_init_type(
-                                new_blank_initial_type)
+                                # Now remove the above new type's worth of info from the current big footprint
+                                self.current_fp_to_collapse.substract_init_type_from_other_init_type(
+                                    new_blank_initial_type)
 
-                            if self.current_fp_to_collapse.set_of_maj_ref_seqs:
-                                self._collapse_type_to_matching_init_type_if_exists()
+                                if self.current_fp_to_collapse.set_of_maj_ref_seqs:
+                                    self._collapse_type_to_matching_init_type_if_exists()
+                                else:
+                                    self._del_type_to_collapse()
                             else:
-                                self._del_type_to_collapse()
+                                self._create_new_initial_type_from_synth_type_and_del_type_to_collapse()
                         else:
                             self._create_new_initial_type_from_synth_type_and_del_type_to_collapse()
 
     def _create_new_init_type_and_add_to_init_type_list(self):
         new_blank_initial_type = InitialType(
             reference_sequence_set=self.current_synth_fp, clade_collection_list=list(
-                self.current_fp_to_collapse.clade_collection_list))
+                self.current_fp_to_collapse.clade_collection_list),
+            force_basal_lineage_separation=self.supported_footprint_identifier.sp_data_analysis.force_basal_lineage_separation)
         self.supported_footprint_identifier.initial_types_list.append(new_blank_initial_type)
         return new_blank_initial_type
 
@@ -2067,20 +2099,23 @@ class FootprintCollapser:
         self.match = False
 
     def collapse_footprint(self):
-        if not self.should_extract_not_delete:
-            self._collapse_long_into_short_no_extraction()
+        if self.supported_footprint_identifier.sp_data_analysis.force_basal_lineage_separation:
+            if not self.should_extract_not_delete:
+                self._collapse_long_into_short_no_extraction()
+            else:
+                self._collapse_long_into_short_by_extraction()
+                self.match = False
+                for p in range(len(self.supported_footprint_identifier.initial_types_list)):
+                    intial_type_being_checked = self.supported_footprint_identifier.initial_types_list[p]
+                    if self._extracted_long_initial_type_now_has_same_fp_as_another_initial_type(intial_type_being_checked):
+                        self.match = True
+                        self._absorb_long_initial_type_into_matching_intial_type(intial_type_being_checked)
+                        break
+                if not self.match:
+                    if self.long_initial_type.profile_length < self.supported_footprint_identifier.current_n:
+                        self.supported_footprint_identifier.unsupported_list.remove(self.long_initial_type)
         else:
-            self._collapse_long_into_short_by_extraction()
-            self.match = False
-            for p in range(len(self.supported_footprint_identifier.initial_types_list)):
-                intial_type_being_checked = self.supported_footprint_identifier.initial_types_list[p]
-                if self._extracted_long_initial_type_now_has_same_fp_as_another_initial_type(intial_type_being_checked):
-                    self.match = True
-                    self._absorb_long_initial_type_into_matching_intial_type(intial_type_being_checked)
-                    break
-            if not self.match:
-                if self.long_initial_type.profile_length < self.supported_footprint_identifier.current_n:
-                    self.supported_footprint_identifier.unsupported_list.remove(self.long_initial_type)
+            self._collapse_long_into_short_no_extraction()
 
     def _long_initial_type_has_sufficient_support(self):
         if self.long_initial_type.support >= self.supported_footprint_identifier.required_support:
@@ -2133,11 +2168,14 @@ class FootprintCollapser:
         self.supported_footprint_identifier.unsupported_list.remove(self.long_initial_type)
 
 class InitialType:
-    def __init__(self, reference_sequence_set, clade_collection_list, maj_dsss_list=False):
+    def __init__(self, reference_sequence_set, clade_collection_list, force_basal_lineage_separation, maj_dsss_list=False):
         self.profile = reference_sequence_set
         self.profile_length = len(self.profile)
-        self.contains_multiple_basal_sequences, self.basalSequence_list = \
-            self.check_if_initial_type_contains_basal_sequences()
+        if force_basal_lineage_separation:
+            self.contains_multiple_basal_sequences, self.basalSequence_list = \
+                self.check_if_initial_type_contains_basal_sequences()
+        else:
+            self.contains_multiple_basal_sequences, self.basalSequence_list = False, []
         self.clade_collection_list = list(clade_collection_list)
         self.support = len(self.clade_collection_list)
         # We may move away from using the dsss but for the time being we will use it

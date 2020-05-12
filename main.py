@@ -147,7 +147,13 @@ class SymPortalWorkFlowManager:
         parser.add_argument('--no_pre_med_seqs',
                             help="When passed, DataSetSampleSequencePM objects will not be created"
                                  "[False]", action='store_true', default=False)
-        parser.add_argument('--multiprocess', help="When passed, concurrency will be acheived using multiprocessing rather than multithreading.", action='store_true', default=False)
+        parser.add_argument('--multiprocess', help="When passed, concurrency will be acheived using "
+                                                   "multiprocessing rather than multithreading.",
+                            action='store_true', default=False)
+        parser.add_argument('--force_basal_lineage_separation',
+                            help="When passed, cladocopium profiles sequences from the C3, C15 and C1 radiations "
+                                 "will not be allowed to occur together in profiles.",
+                            action='store_true', default=False)
 
     @staticmethod
     def _define_mutually_exclusive_args(group):
@@ -340,7 +346,6 @@ class SymPortalWorkFlowManager:
 
     # DATA ANALYSIS
     def _perform_data_analysis(self):
-
         self._verify_name_arg_given_analysis()
         self.create_new_data_analysis_obj()
         self.output_dir = os.path.join(
@@ -394,7 +399,9 @@ class SymPortalWorkFlowManager:
     def _start_data_analysis(self):
         # Perform the analysis
         self.sp_data_analysis = data_analysis.SPDataAnalysis(
-            workflow_manager_parent=self, data_analysis_obj=self.data_analysis_object)
+            workflow_manager_parent=self,
+            data_analysis_obj=self.data_analysis_object,
+            force_basal_lineage_separation=self.args.force_basal_lineage_separation)
         self.sp_data_analysis.analyse_data()
 
     def _do_data_analysis_output(self):
@@ -536,7 +543,7 @@ class SymPortalWorkFlowManager:
             virtual_object_manager=self.sp_data_analysis.virtual_object_manager,
             data_analysis_obj=self.sp_data_analysis.data_analysis_obj,
             output_dir=self.output_dir, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
-            date_time_str=self.date_time_str)
+            date_time_str=self.date_time_str, force_basal_lineage_separation=self.args.force_basal_lineage_separation)
         self.output_type_count_table_obj.output_types()
 
     def create_new_data_analysis_obj(self):
@@ -666,7 +673,8 @@ class SymPortalWorkFlowManager:
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', date_time_str=self.date_time_str,
             data_set_uids_to_output=set(ds_uid_list), data_analysis_obj=self.data_analysis_object,
-            output_dir=self.output_dir, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            output_dir=self.output_dir, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict,
+            force_basal_lineage_separation=self.args.force_basal_lineage_separation)
         self.output_type_count_table_obj.output_types()
 
     def _check_ds_were_part_of_analysis(self, ds_uid_list):
@@ -682,7 +690,8 @@ class SymPortalWorkFlowManager:
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str,
-            data_set_sample_uid_set_to_output=set(dss_uid_list), data_analysis_obj=self.data_analysis_object)
+            data_set_sample_uid_set_to_output=set(dss_uid_list), data_analysis_obj=self.data_analysis_object,
+            force_basal_lineage_separation=self.args.force_basal_lineage_separation)
         self.output_type_count_table_obj.output_types()
 
     def _check_dss_were_part_of_analysis(self, dss_uid_list):

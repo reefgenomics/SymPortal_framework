@@ -1,9 +1,6 @@
 import pandas as pd
-from multiprocessing import Queue, Manager, Process, current_process
 import sys
 from dbApp.models import DataSetSampleSequence, DataSetSample, CladeCollection, ReferenceSequence
-import pickle
-import os
 import json
 from collections import defaultdict
 import general
@@ -11,8 +8,9 @@ class VirtualObjectManager():
     """This class will link together an instance of a VirtualCladeCollectionManger and a VirtualAnalaysisTypeManger.
     I will therefore allow VirtualAnalysisTypes to access the information in the VirtualCladeCollections.
     """
-    def __init__(self, within_clade_cutoff, num_proc, list_of_data_set_sample_uids=None,
+    def __init__(self, within_clade_cutoff, num_proc, force_basal_lineage_separation, list_of_data_set_sample_uids=None,
                  list_of_data_set_uids=None):
+        self.force_basal_lineage_separation = force_basal_lineage_separation
         if list_of_data_set_sample_uids:
             self.list_of_data_set_sample_uids = list_of_data_set_sample_uids
             data_set_samples = self._chunk_query_dss_from_dss_uids()
@@ -288,8 +286,10 @@ class VirutalAnalysisTypeInit:
 
         self.vat.non_artefact_ref_seq_uid_set = set([
             rs_id for rs_id in self.vat.ref_seq_uids_set if rs_id not in self.vat.artefact_ref_seq_uid_set])
-
-        self._set_basal_seq()
+        if self.vat_manager.obj_manager.force_basal_lineage_separation:
+            self._set_basal_seq()
+        else:
+            self.vat.basal_seq = None
 
         self._generate_name(self.vat.relative_seq_abund_profile_assignment_df)
 
