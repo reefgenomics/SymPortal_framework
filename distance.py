@@ -25,7 +25,7 @@ class BaseUnifracDistPCoACreator:
     def __init__(
             self, num_proc, output_dir, data_set_uid_list, js_output_path_dict,
             html_dir, data_set_sample_uid_list, cct_set_uid_list,
-            call_type, date_time_str):
+            date_time_str):
         self.thread_safe_general = ThreadSafeGeneral()
         self.num_proc = num_proc
         self.output_dir = output_dir
@@ -33,7 +33,6 @@ class BaseUnifracDistPCoACreator:
             data_set_sample_uid_list=data_set_sample_uid_list, data_set_uid_list=data_set_uid_list,
             cct_set_uid_list=cct_set_uid_list)
         self.output_path_list = []
-        self.call_type = call_type
         self.date_time_str = date_time_str
         self.clade_output_dir = None
         self.html_dir = html_dir
@@ -147,14 +146,14 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
      to work out the average relative abundances of the DIVs.
     """
     def __init__(
-            self, num_processors, call_type, data_analysis_obj, js_output_path_dict, html_dir,
+            self, num_processors, data_analysis_obj, js_output_path_dict, html_dir,
             output_dir, date_time_str=None, data_set_uid_list=None, data_set_sample_uid_list=None,
             cct_set_uid_list=None, local_abunds_only=False):
 
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
-            cct_set_uid_list=cct_set_uid_list, call_type=call_type,
+            cct_set_uid_list=cct_set_uid_list,
             date_time_str=date_time_str, js_output_path_dict=js_output_path_dict,
             html_dir=html_dir)
 
@@ -546,15 +545,6 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     One for each clade.
     It will also perform a PCoA for each distance matrix. a .dist file and a .csv with the pcoa coords will be output
 
-    The call_type argument will be used to determine which setting this method is being called from.
-    if it is being called as part of the initial submission call_type='submission',
-    then we will always be working with a single
-    data_set. In this case we should output to the same folder that the submission results were output
-    to. In the case of being output in a standalone manner (call_type='stand_alone') then we may be outputting
-    comparisons from several data_sets. As such we cannot rely on being able to put the ordination results
-    into the initial submissions folder. In this case we will use the directory structure that is already
-    in place which will put it in the ordination folder.
-
     I have been giving some thought as to which level we should be generating these distance matrices on.
     If we do them on the all sequence level, i.e. mixture of clades then we are going to end up with the ordination
     separations based primarily on the presence or absence of clades and this will mask the within clade differences
@@ -584,12 +574,11 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """
 
     def __init__(
-            self, num_processors, html_dir, js_output_path_dict, call_type, output_dir, date_time_str,
+            self, num_processors, html_dir, js_output_path_dict, output_dir, date_time_str,
             data_set_uid_list=None, data_set_sample_uid_list=None):
         super().__init__(
             num_proc=num_processors, output_dir=output_dir,
             data_set_uid_list=data_set_uid_list, data_set_sample_uid_list=data_set_sample_uid_list,
-            call_type=call_type,
             date_time_str=date_time_str, cct_set_uid_list=None, html_dir=html_dir,
             js_output_path_dict=js_output_path_dict)
 
@@ -944,8 +933,7 @@ class TreeCreatorForUniFrac:
 
 # BrayCurtis classes
 class BaseBrayCurtisDistPCoACreator:
-    def __init__(self, call_type, date_time_str, profiles_or_samples, js_output_path_dict, html_dir):
-        self.call_type = call_type
+    def __init__(self, date_time_str, profiles_or_samples, js_output_path_dict, html_dir):
         self.date_time_str = date_time_str
         self.output_path_list = []
         self.clade_output_dir = None
@@ -1257,9 +1245,9 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def __init__(
             self, js_output_path_dict, html_dir, output_dir, date_time_str=None,
             data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None):
+            data_set_uid_list=None, cct_set_uid_list=None):
         super().__init__(
-            call_type=call_type, date_time_str=date_time_str,
+            date_time_str=date_time_str,
             profiles_or_samples='samples', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
 
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(
@@ -1418,9 +1406,9 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
     def __init__(
             self, data_analysis_obj, js_output_path_dict, html_dir, output_dir,
             date_time_str, data_set_sample_uid_list=None,
-            data_set_uid_list=None, cct_set_uid_list=None, call_type=None, local_abunds_only=False):
+            data_set_uid_list=None, cct_set_uid_list=None, local_abunds_only=False):
         super().__init__(
-            call_type=call_type, date_time_str=date_time_str,
+            date_time_str=date_time_str,
             profiles_or_samples='profiles', js_output_path_dict=js_output_path_dict, html_dir=html_dir)
 
         self.data_set_sample_uid_list, self.clade_col_uid_list = self._set_data_set_sample_uid_list(

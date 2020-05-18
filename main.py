@@ -470,7 +470,7 @@ class SymPortalWorkFlowManager:
 
     def _start_analysis_unifrac_sample_distances(self):
         self.unifrac_distance_object = distance.SampleUnifracDistPCoACreator(
-            num_processors=self.args.num_proc, call_type='analysis',
+            num_processors=self.args.num_proc,
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
@@ -479,7 +479,6 @@ class SymPortalWorkFlowManager:
 
     def _start_analysis_braycurtis_sample_distances(self):
         self.braycurtis_distance_object = distance.SampleBrayCurtisDistPCoACreator(
-            call_type='analysis',
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             output_dir=self.output_dir,
@@ -500,7 +499,7 @@ class SymPortalWorkFlowManager:
 
     def _start_analysis_unifrac_type_distances(self):
         self.unifrac_distance_object = distance.TypeUnifracDistPCoACreator(
-            num_processors=self.args.num_proc, call_type='analysis',
+            num_processors=self.args.num_proc,
             data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
@@ -511,7 +510,6 @@ class SymPortalWorkFlowManager:
 
     def _start_analysis_braycurtis_type_distances(self):
         self.braycurtis_distance_object = distance.TypeBrayCurtisDistPCoACreator(
-            call_type='analysis',
             data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
@@ -522,7 +520,6 @@ class SymPortalWorkFlowManager:
 
     def _make_data_analysis_output_seq_tables(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
-            call_type='analysis',
             num_proc=self.args.num_proc,
             symportal_root_dir=self.symportal_root_directory,
             no_pre_med_seqs=self.args.no_pre_med_seqs,
@@ -588,8 +585,92 @@ class SymPortalWorkFlowManager:
             self._stand_alone_sequence_output_data_set()
         self.number_of_samples = len(self.output_seq_count_table_obj.sorted_sample_uid_list)
         self._plot_if_not_too_many_samples(self._plot_sequence_stacked_bar_from_seq_output_table)
+        self._do_sample_ordination()
         self._output_js_output_path_dict()
         self._print_all_outputs_complete()
+
+    def _do_sample_ordination(self):
+        # NB odinations are plot within the below function
+        if not self.args.no_ordinations:
+            self._do_sample_dist_and_pcoa()
+
+    def _do_sample_dist_and_pcoa(self):
+        print('\nCalculating between sample pairwise distances')
+        if self.args.distance_method == 'both':
+            if self._check_if_required_packages_found_in_path():
+                self._do_unifrac_dist_pcoa()
+                self._do_braycurtis_dist_pcoa()
+            else:
+                print('Changing distance method to braycurtis as one or more of the required '
+                      'packages could not be found in your PATH')
+                self.args.distance_method = 'braycurtis'
+        if self.args.distance_method == 'unifrac':
+            self._do_unifrac_dist_pcoa()
+        elif self.args.distance_method == 'braycurtis':
+            self._do_braycurtis_dist_pcoa()
+
+    def _do_braycurtis_dist_pcoa(self):
+        """NB this distance output is part of the perform_stand_alone_sequence_output
+        and this can be called either with a data set input or a data set sample input.
+        The distance PCoACreators have been made so that they can take either sort of input.
+        As such, chance the input accordingly"""
+        if self.args.print_output_seqs:
+            # then we are working with a data set input
+            braycurtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
+                date_time_str=self.date_time_str,
+                data_set_uid_list=[int(_) for _ in self.args.print_output_seqs.split(',')],
+                output_dir=self.output_dir, html_dir=self.html_dir,
+                js_output_path_dict=self.js_output_path_dict)
+        elif self.args.print_output_seqs_sample_set:
+            # then we are working with a data set sample input
+            braycurtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
+                date_time_str=self.date_time_str,
+                data_set_sample_uid_list=[int(_) for _ in self.args.print_output_seqs_sample_set.split(',')],
+                output_dir=self.output_dir, html_dir=self.html_dir,
+                js_output_path_dict=self.js_output_path_dict)
+        braycurtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
+        if not self.args.no_figures:
+            if len(braycurtis_dist_pcoa_creator.clade_col_uid_list) > 1000:
+                print(
+                    f'Too many samples ({len(braycurtis_dist_pcoa_creator.clade_col_uid_list)}) to generate plots')
+            else:
+                for output_path in braycurtis_dist_pcoa_creator.output_path_list:
+                    if self.this_is_pcoa_path(output_path):
+                        clade_of_output = os.path.dirname(output_path).split('/')[-1]
+                        sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
+                        try:
+                            dist_scatter_plotter_samples = plotting.DistScatterPlotterSamples(csv_path=output_path,
+                                                                                              date_time_str=self.date_time_str)
+                            dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
+                        except RuntimeError:
+                            # The error message is printed to stdout at the source
+                            continue
+
+    def _do_unifrac_dist_pcoa(self):
+        unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
+            date_time_str=self.date_time_str, output_dir=self.output_dir,
+            data_set_uid_list=[int(_) for _ in self.args.print_output_seqs.split(',')], num_processors=self.args.num_proc,
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+        unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
+        if not self.args.no_figures:
+            if len(unifrac_dict_pcoa_creator.cc_id_to_sample_id.keys()) > 1000:
+                print(f'Too many samples ({len(unifrac_dict_pcoa_creator.cc_id_to_sample_id.keys())}) to generate plots')
+            else:
+                for output_path in unifrac_dict_pcoa_creator.output_path_list:
+                    if self.this_is_pcoa_path(output_path):
+                        clade_of_output = os.path.dirname(output_path).split('/')[-1]
+                        sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
+                        try:
+                            dist_scatter_plotter_samples = plotting.DistScatterPlotterSamples(csv_path=output_path,
+                                                                                     date_time_str=self.date_time_str)
+                            dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
+                        except RuntimeError:
+                            # The error message is printed to stdout at the source
+                            continue
+
+    @staticmethod
+    def this_is_pcoa_path(output_path):
+        return 'PCoA_coords' in output_path
 
     def _set_html_dir_and_js_out_path_from_output_dir(self):
         self.html_dir = os.path.join(self.output_dir, 'html')
@@ -782,7 +863,7 @@ class SymPortalWorkFlowManager:
     # BRAYCURTIS between its2 type profile distance methods
     def _start_type_braycurtis_cct_set(self):
         self.braycurtis_distance_object = distance.TypeBrayCurtisDistPCoACreator(
-            call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
+            data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             cct_set_uid_list=[int(cct_uid_str) for cct_uid_str in self.args.between_type_distances_cct_set.split(',')],
             local_abunds_only=False, html_dir=self.html_dir,
@@ -792,7 +873,7 @@ class SymPortalWorkFlowManager:
 
     def _start_type_braycurtis_data_sets(self):
         self.braycurtis_distance_object = distance.TypeBrayCurtisDistPCoACreator(
-            call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
+            data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             data_set_uid_list=[int(ds_uid_str) for ds_uid_str in self.args.between_type_distances.split(',')],
             local_abunds_only=self.args.local, html_dir=self.html_dir,
@@ -802,7 +883,7 @@ class SymPortalWorkFlowManager:
 
     def _start_type_braycurtis_data_set_samples(self):
         self.braycurtis_distance_object = distance.TypeBrayCurtisDistPCoACreator(
-            call_type='stand_alone', data_analysis_obj=self.data_analysis_object,
+            data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=[int(ds_uid_str) for ds_uid_str in
                                       self.args.between_type_distances_sample_set.split(',')],
@@ -814,7 +895,6 @@ class SymPortalWorkFlowManager:
     # UNIFRAC between its2 type profile distance methods
     def _start_type_unifrac_cct_set(self):
         self.unifrac_distance_object = distance.TypeUnifracDistPCoACreator(
-            call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             num_processors=self.args.num_proc,
@@ -828,7 +908,6 @@ class SymPortalWorkFlowManager:
 
     def _start_type_unifrac_data_sets(self):
         self.unifrac_distance_object = distance.TypeUnifracDistPCoACreator(
-            call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             num_processors=self.args.num_proc,
@@ -841,7 +920,6 @@ class SymPortalWorkFlowManager:
 
     def _start_type_unifrac_data_set_samples(self):
         self.unifrac_distance_object = distance.TypeUnifracDistPCoACreator(
-            call_type='stand_alone',
             data_analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
             num_processors=self.args.num_proc,
@@ -900,7 +978,6 @@ class SymPortalWorkFlowManager:
     def _start_sample_unifrac_data_set_samples(self):
         dss_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.between_sample_distances_sample_set.split(',')]
         self.unifrac_distance_object = distance.SampleUnifracDistPCoACreator(
-            call_type='stand_alone',
             data_set_sample_uid_list=dss_uid_list,
             num_processors=self.args.num_proc,
             output_dir=self.output_dir,
@@ -910,7 +987,6 @@ class SymPortalWorkFlowManager:
     def _start_sample_unifrac_data_sets(self):
         ds_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.between_sample_distances.split(',')]
         self.unifrac_distance_object = distance.SampleUnifracDistPCoACreator(
-            call_type='stand_alone',
             data_set_uid_list=ds_uid_list,
             num_processors=self.args.num_proc,
             output_dir=self.output_dir,
@@ -922,7 +998,6 @@ class SymPortalWorkFlowManager:
         self.braycurtis_distance_object = distance.SampleBrayCurtisDistPCoACreator(
             date_time_str=self.date_time_str,
             data_set_sample_uid_list=dss_uid_list,
-            call_type='stand_alone',
             output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         self.braycurtis_distance_object.compute_braycurtis_dists_and_pcoa_coords()
@@ -932,7 +1007,6 @@ class SymPortalWorkFlowManager:
         self.braycurtis_distance_object = distance.SampleBrayCurtisDistPCoACreator(
             date_time_str=self.date_time_str,
             data_set_uid_list=ds_uid_list,
-            call_type='stand_alone',
             output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         self.braycurtis_distance_object.compute_braycurtis_dists_and_pcoa_coords()
