@@ -48,6 +48,8 @@ from general import ThreadSafeGeneral
 import django_general
 from shutil import which
 import time
+import subprocess
+import json
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
@@ -56,7 +58,10 @@ class SymPortalWorkFlowManager:
         # general attributes
         self.thread_safe_general = ThreadSafeGeneral()
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
+        self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackup')
+        os.makedirs(self.dbbackup_dir, exist_ok=True)
         self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self._check_username()
         self.submitting_user = sp_config.user_name
         self.submitting_user_email = sp_config.user_email
         self.number_of_samples = None
@@ -90,6 +95,19 @@ class SymPortalWorkFlowManager:
         # Variables that will hold the distance class objects
         self.unifrac_distance_object = None
         self.braycurtis_distance_object = None
+
+    def _check_username(self):
+        if self.args.print_output_types:
+            if sp_config.system_type == 'remote':
+                if self.args.submitting_user_name == 'not supplied':
+                    need_user = input('Do you want to associate a user to this type output? [y/n]: ')
+                    if need_user == 'y':
+                        while True:
+                            username = input('Please provide the username you want to associate: ')
+                            is_correct = input(f'Is {username} correct? [y/n]: ')
+                            if is_correct == 'y':
+                                self.args.submitting_user_name = username
+                                break
 
     def _redefine_arg_analyse(self):
         """When the user passes the argument --analyse_next then we will find the UIDs
@@ -744,7 +762,42 @@ class SymPortalWorkFlowManager:
         if not self.args.no_ordinations:
             self._do_data_analysis_ordinations()
         self._output_js_output_path_dict()
+
+        if sp_config.system_type == 'remote' and self.args.submitting_user_name != 'not supplied':
+            try:
+                self._output_automate_sp_output_items()
+            except NotImplementedError as e:
+                print(e)
         self._print_all_outputs_complete()
+
+    def _output_automate_sp_output_items(self):
+        """Produce the automate_sp_output.json file in the output directory
+        and produce a .bak in the dbBackup directory"""
+        bak_path = os.path.join(self.dbbackup_dir, f'symportal_database_backup_{self.date_time_str}.bak')
+        automate_sp_output_path = os.path.join(self.output_dir, 'automate_sp_output.json')
+        # Now output the .json file
+        temp_dict = {}
+        temp_dict['bak_path'] = bak_path
+        temp_dict["time_stamp_str"] = self.date_time_str
+        temp_dict["user"] = self.args.submitting_user_name
+        data_set_uids = [int(_) for _ in self.args.print_output_types.split(',')]
+        if len(data_set_uids) != 1:
+            raise NotImplementedError('the automate_sp_output system is currently only implemented when there is one'
+                                      'dataset being output. The automate_sp_output objects will not be output.'
+                                      ' Otherwise the output will have proceeded as normal.')
+        temp_dict["study"] = DataSet.objects.get(id=data_set_uids[0]).name
+        temp_dict["data_set_id"] = data_set_uids[0]
+
+        subprocess.run(
+            ['pg_dump', '-U', f'{sp_config.pg_user}', '-Fc', '-f', bak_path, '-w', 'symportal_database'], check=True)
+
+        with open(automate_sp_output_path, 'w') as f:
+            json.dump(obj=temp_dict, fp=f)
+
+        print(f'automate_sp_output items:\n'
+              f'\t{automate_sp_output_path}\n'
+              f'\t{bak_path}')
+
 
     def _stand_alone_seq_output_from_type_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
