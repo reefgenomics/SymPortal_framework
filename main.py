@@ -76,7 +76,11 @@ class SymPortalWorkFlowManager:
         self.sp_data_analysis = None
         self.output_type_count_table_obj = None
         self.type_stacked_bar_plotter = None
-
+        # If the shortcut function analyse_next has been used
+        # look up the uids of the last analysis and use this plus what has been
+        # provided to redefine self.args.analyse
+        if self.args.analyse_next:
+            self._redefine_arg_analyse()
         # these will be used in all but the data loading. in the dataloading an output dir and html dir
         # are created as part of the dataloading object.
         self.output_dir = None
@@ -86,6 +90,22 @@ class SymPortalWorkFlowManager:
         # Variables that will hold the distance class objects
         self.unifrac_distance_object = None
         self.braycurtis_distance_object = None
+
+    def _redefine_arg_analyse(self):
+        """When the user passes the argument --analyse_next then we will find the UIDs
+        that were used for the previous analysis and append the passed UIDs to them
+        to create a new string. We will then change self.args.analyse to this value
+        and work with that."""
+        last_analysis = sorted(DataAnalysis.objects.all(), key=lambda x: x.id, reverse=True)[0]
+        last_uids = [int(_) for _ in last_analysis.list_of_data_set_uids.split(',')]
+        new_uids = [int(_) for _ in self.args.analyse_next.split(',')]
+        if len(set(last_uids).intersection(set(new_uids))) != 0:
+            raise RuntimeError("There appears to be overlap in the uids being provided to the --analyse_next argument "
+                               "and the uids provided to the previous "
+                               f"analysis:\n\tnew = {new_uids}\n\tlast = {last_uids}")
+        last_uids.extend(new_uids)
+        new_uid_css = ','.join([str(_) for _ in last_uids])
+        self.args.analyse = new_uid_css
 
     def _define_args(self, custom_args_list=None):
         parser = argparse.ArgumentParser(
@@ -178,6 +198,13 @@ class SymPortalWorkFlowManager:
                  '--no_figures flag.\nTo skip the generation of ordination files '
                  '(pairwise distances and PCoA coordinates) '
                  'pass the --no_ordinations flag')
+        group.add_argument(
+            '--analyse_next', metavar='DataSet UIDs',
+            help='This is a convenience function that builds on the --analyse function. Instead of providing a comma '
+                 'separated list of the DataSet UIDs to be analysed, the user can provide a comma separated list of '
+                 'UIDs that will be analysed IN ADDITION to the DataSets of the last completed analysis. '
+                 'In other words, this function saves the user the trouble of having to look up which UIDs made up '
+                 'the previous analysis and then adding to this string.')
         group.add_argument(
             '--display_data_sets', action='store_true', help='Display data_sets currently in the framework\'s database')
         group.add_argument(
