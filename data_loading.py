@@ -1205,6 +1205,10 @@ class DataLoading:
                     rev_file_path = self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name']
                 else:
                     file_not_found_list.append(rev_file_path)
+            # NB if we were unable to find either the fwd or rev read then we will not be able
+            # to continue with our checks
+            if  rev_file_path in file_not_found_list or fwd_file_path in file_not_found_list:
+                continue
 
             # Check file size
             if os.path.getsize(fwd_file_path) < 300 or os.path.getsize(rev_file_path) < 300:
