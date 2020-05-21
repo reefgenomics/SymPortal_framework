@@ -787,10 +787,10 @@ class SymPortalWorkFlowManager:
                                       ' Otherwise the output will have proceeded as normal.')
         temp_dict["study"] = DataSet.objects.get(id=data_set_uids[0]).name
         temp_dict["data_set_id"] = data_set_uids[0]
-
+        print(f"pg_dumping {bak_path}. This may take some time...")
         subprocess.run(
             ['pg_dump', '-U', f'{sp_config.pg_user}', '-Fc', '-f', bak_path, '-w', 'symportal_database'], check=True)
-
+        print("pg_dump complete")
         with open(automate_sp_output_path, 'w') as f:
             json.dump(obj=temp_dict, fp=f)
 
