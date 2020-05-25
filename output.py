@@ -1485,25 +1485,15 @@ class SequenceCountTableCreator:
             self.additional_info_file.append(data_set_meta_str)
 
     def _append_meta_info_to_additional_info_file_stand_alone(self):
-        meta_info_string_items = [
-            f'Stand_alone output by {self.output_user} on {self.date_time_str}; '
-            f'Number of data_set objects as part of output = {len(self.ds_objs_to_output)}']
-        temp_series = pd.Series(meta_info_string_items, index=[list(self.output_df_absolute_post_med)[0]],
-                                name='meta_info_summary')
-        self.output_df_absolute_post_med = self.output_df_absolute_post_med.append(temp_series)
-        self.output_df_relative_post_med = self.output_df_relative_post_med.append(temp_series)
-        self._increase_number_meta_series_added()
+        meta_info_string = f'Stand_alone output by {self.output_user} on {self.date_time_str}; ' \
+                           f'Number of data_set objects as part of output = {len(self.ds_objs_to_output)}'
+        self.additional_info_file.append(meta_info_string)
 
         for data_set_object in self.ds_objs_to_output:
-            data_set_meta_list = [
-                f'Data_set ID: {data_set_object.id}; '
-                f'Data_set name: {data_set_object.name}; '
-                f'submitting_user: {data_set_object.submitting_user}; '
-                f'time_stamp: {data_set_object.time_stamp}']
-            temp_series = pd.Series(data_set_meta_list, index=[list(self.output_df_absolute_post_med)[0]], name='data_set_info')
-            self.output_df_absolute_post_med = self.output_df_absolute_post_med.append(temp_series)
-            self.output_df_relative_post_med = self.output_df_relative_post_med.append(temp_series)
-            self._increase_number_meta_series_added()
+            data_set_meta_str = f'Data_set ID: {data_set_object.id}; Data_set name: {data_set_object.name}; ' \
+                                f'submitting_user: {data_set_object.submitting_user}; ' \
+                                f'time_stamp: {data_set_object.time_stamp}'
+            self.additional_info_file.append(data_set_meta_str)
 
     def _add_uids_for_seqs_to_dfs(self):
         """Now add the UID for each of the sequences"""
