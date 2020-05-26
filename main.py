@@ -573,7 +573,8 @@ class SymPortalWorkFlowManager:
             sorted_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
             analysis_obj=self.data_analysis_object,
             date_time_str=self.date_time_str,
-            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, multiprocess=self.args.multiprocess)
+            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict, multiprocess=self.args.multiprocess,
+            call_type='analysis')
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     def _make_data_analysis_output_type_tables(self):
@@ -606,7 +607,8 @@ class SymPortalWorkFlowManager:
             parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess, start_time=self.start_time)
+            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
+            start_time=self.start_time)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given_load(self):
@@ -684,8 +686,8 @@ class SymPortalWorkFlowManager:
                         clade_of_output = os.path.dirname(output_path).split('/')[-1]
                         sys.stdout.write(f'\n\nGenerating between sample distance plot clade {clade_of_output}\n')
                         try:
-                            dist_scatter_plotter_samples = plotting.DistScatterPlotterSamples(csv_path=output_path,
-                                                                                              date_time_str=self.date_time_str)
+                            dist_scatter_plotter_samples = plotting.DistScatterPlotterSamples(
+                                csv_path=output_path, date_time_str=self.date_time_str)
                             dist_scatter_plotter_samples.make_sample_dist_scatter_plot()
                         except RuntimeError:
                             # The error message is printed to stdout at the source
@@ -694,12 +696,13 @@ class SymPortalWorkFlowManager:
     def _do_unifrac_dist_pcoa(self):
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
             date_time_str=self.date_time_str, output_dir=self.output_dir,
-            data_set_uid_list=[int(_) for _ in self.args.print_output_seqs.split(',')], num_processors=self.args.num_proc,
-            html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
+            data_set_uid_list=[int(_) for _ in self.args.print_output_seqs.split(',')],
+            num_processors=self.args.num_proc, html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
         if not self.args.no_figures:
             if len(unifrac_dict_pcoa_creator.cc_id_to_sample_id.keys()) > 1000:
-                print(f'Too many samples ({len(unifrac_dict_pcoa_creator.cc_id_to_sample_id.keys())}) to generate plots')
+                print(
+                    f'Too many samples ({len(unifrac_dict_pcoa_creator.cc_id_to_sample_id.keys())}) to generate plots')
             else:
                 for output_path in unifrac_dict_pcoa_creator.output_path_list:
                     if self.this_is_pcoa_path(output_path):
@@ -797,7 +800,6 @@ class SymPortalWorkFlowManager:
         print(f'automate_sp_output items:\n'
               f'\t{automate_sp_output_path}\n'
               f'\t{bak_path}')
-
 
     def _stand_alone_seq_output_from_type_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(

@@ -220,8 +220,10 @@ class DataLoading:
 
     def _make_new_dataset_object(self):
         self.dataset_object = DataSet(
-            name=self.parent.args.name, time_stamp=self.parent.date_time_str, reference_fasta_database_used=self.parent.reference_db,
-            submitting_user=self.parent.submitting_user, submitting_user_email=self.parent.submitting_user_email)
+            name=self.parent.args.name, time_stamp=self.parent.date_time_str,
+            reference_fasta_database_used=self.parent.reference_db,
+            submitting_user=self.parent.submitting_user,
+            submitting_user_email=self.parent.submitting_user_email)
         self.dataset_object.save()
         self.parent.data_set_object = self.dataset_object
 
@@ -287,7 +289,7 @@ class DataLoading:
     def _do_braycurtis_dist_pcoa(self):
         braycurtis_dist_pcoa_creator = distance.SampleBrayCurtisDistPCoACreator(
             date_time_str=self.date_time_str,
-            data_set_uid_list=[self.dataset_object.id], call_type='submission',
+            data_set_uid_list=[self.dataset_object.id],
             output_dir=self.output_directory, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict)
         braycurtis_dist_pcoa_creator.compute_braycurtis_dists_and_pcoa_coords()
@@ -295,7 +297,7 @@ class DataLoading:
 
     def _do_unifrac_dist_pcoa(self):
         unifrac_dict_pcoa_creator = distance.SampleUnifracDistPCoACreator(
-            call_type='submission', date_time_str=self.date_time_str, output_dir=self.output_directory,
+            date_time_str=self.date_time_str, output_dir=self.output_directory,
             data_set_uid_list=[self.dataset_object.id], num_processors=self.num_proc,
             html_dir=self.html_dir, js_output_path_dict=self.js_output_path_dict)
         unifrac_dict_pcoa_creator.compute_unifrac_dists_and_pcoa_coords()
@@ -1948,11 +1950,6 @@ class InitialMothurWorker:
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {abs_count}\n')
 
-    def check_for_no_seqs_after_pcr_and_raise_runtime_error(self):
-        if len(self.mothur_analysis_object.sequence_collection) == 0:
-            self.log_qc_error_and_continue(errorreason='No seqs left after PCR')
-            raise RuntimeError({'sample_name': self.sample_name})
-
     def check_for_error_and_raise_runtime_error(self, stage_of_qc):
         for stdout_line in self.thread_safe_general.decode_utf8_binary_to_list(
                 self.mothur_analysis_object.latest_completed_process_command.stdout
@@ -2096,7 +2093,8 @@ class PotentialSymTaxScreeningHandler:
                 path_to_symclade_db=data_loading_path_to_symclade_db, debug=data_loading_debug,
                 checked_samples_mp_list=checked_samples_mp_list,
                 e_val_collection_mp_dict=sub_evalue_sequence_to_num_sampes_found_in_mp_dict,
-                sub_evalue_nucleotide_sequence_to_clade_mp_dict=sub_evalue_nucleotide_sequence_to_clade_mp_dict, lock=lock)
+                sub_evalue_nucleotide_sequence_to_clade_mp_dict=sub_evalue_nucleotide_sequence_to_clade_mp_dict,
+                lock=lock)
 
             taxonomic_screening_worker.execute_tax_screening()
 

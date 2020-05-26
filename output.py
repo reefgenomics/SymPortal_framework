@@ -975,7 +975,7 @@ class SequenceCountTableCreator:
         if call_type == 'submission':
             self.output_dir = os.path.abspath(os.path.join(
                 symportal_root_dir, 'outputs', 'loaded_data_sets', data_set_uids_to_output_as_comma_sep_string, self.date_time_str))
-        else:  # call_type == 'analysis
+        else:  # call_type == 'analysis or call_type == 'stand_alone'
             self.output_dir = output_dir
         # the directory where all count tables and plots that are of the post-med seqs will be output.
         self.post_med_output_dir = os.path.join(self.output_dir, 'post_med_seqs')
@@ -1451,7 +1451,7 @@ class SequenceCountTableCreator:
         elif self.call_type == 'analysis':
             self._append_meta_info_to_additional_info_file_analysis()
         else:
-            # call_type=='stand_alone'
+            # =='stand_alone'call_type
             self._append_meta_info_to_additional_info_file_stand_alone()
 
     def _append_meta_info_to_additional_info_file_submission(self):
