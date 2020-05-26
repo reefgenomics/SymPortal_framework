@@ -409,10 +409,10 @@ class OutputTypeCountTable:
     def _append_meta_info_for_stand_alone_call_type(self):
         data_sets_of_analysis = len(self.data_analysis_obj.list_of_data_set_uids.split(','))
         if self.call_type == 'stand_alone_data_sets':
-            meta_info_string_items = self._make_stand_alone_data_set_meta_info_string(data_sets_of_analysis)
+            meta_info_string = self._make_stand_alone_data_set_meta_info_string(data_sets_of_analysis)
         else:
-            meta_info_string_items = self._make_stand_alone_data_set_samples_meta_info_string(data_sets_of_analysis)
-        self._append_meta_info_summary_string_to_additional_info_file(meta_info_string_items)
+            meta_info_string = self._make_stand_alone_data_set_samples_meta_info_string(data_sets_of_analysis)
+        self._append_meta_info_summary_string_to_additional_info_file(meta_info_string)
         self._append_data_set_info_to_additional_info()
 
     def _append_meta_info_for_analysis_call_type(self):
@@ -459,21 +459,19 @@ class OutputTypeCountTable:
         self.additional_info_file_as_list.append(meta_info_string_items)
 
     def _make_stand_alone_data_set_meta_info_string(self, data_sets_of_analysis):
-        meta_info_string_items = [
-            f'Stand_alone_data_sets output by {sp_config.user_name} on {self.date_time_str}; '
-            f'data_analysis ID: {self.data_analysis_obj.id}; '
-            f'Number of data_set objects as part of output = {len(self.data_set_uid_set_to_output)}; '
-            f'Number of data_set objects as part of analysis = {data_sets_of_analysis}']
-        return meta_info_string_items
+        meta_info_string = f'Stand_alone_data_sets output by {sp_config.user_name} on {self.date_time_str}; ' \
+                           f'data_analysis ID: {self.data_analysis_obj.id}; ' \
+                           f'Number of data_set objects as part of output = {len(self.data_set_uid_set_to_output)}; ' \
+                           f'Number of data_set objects as part of analysis = {data_sets_of_analysis}'
+        return meta_info_string
 
     def _make_stand_alone_data_set_samples_meta_info_string(self, data_sets_of_analysis):
         # self.call_type == 'stand_alone_data_set_samples'
-        meta_info_string_items = [
-            f'Stand_alone_data_set_samples output by {sp_config.user_name} on {self.date_time_str}; '
-            f'data_analysis ID: {self.data_analysis_obj.id}; '
-            f'Number of data_set objects as part of output = {len(self.data_set_uid_set_to_output)}; '
-            f'Number of data_set objects as part of analysis = {data_sets_of_analysis}']
-        return meta_info_string_items
+        meta_info_string = f'Stand_alone_data_set_samples output by {sp_config.user_name} on {self.date_time_str}; ' \
+                           f'data_analysis ID: {self.data_analysis_obj.id}; ' \
+                           f'Number of data_set objects as part of output = {len(self.data_set_uid_set_to_output)}; ' \
+                           f'Number of data_set objects as part of analysis = {data_sets_of_analysis}'
+        return meta_info_string
 
     def _populate_main_body_of_dfs(self):
         print('\nPopulating output dfs:')
