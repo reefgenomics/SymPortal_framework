@@ -324,13 +324,13 @@ class MothurAnalysis:
             self.mothur_batch_file = [
                 f'set.dir(input={self.input_dir})',
                 f'set.dir(output={self.output_dir})',
-                f'summary.seqs(fasta={self.fasta_path}, name={self.name_file_path})'
+                f'summary.seqs(fasta={self.fasta_path}, name={self.name_file_path}, processors=1)'
             ]
         else:
             self.mothur_batch_file = [
                 f'set.dir(input={self.input_dir})',
                 f'set.dir(output={self.output_dir})',
-                f'summary.seqs(fasta={self.fasta_path})'
+                f'summary.seqs(fasta={self.fasta_path}, processors=1)'
             ]
 
         self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
@@ -339,7 +339,7 @@ class MothurAnalysis:
         mothur_batch_file = [
             f'set.dir(input={self.input_dir})',
             f'set.dir(output={self.output_dir})',
-            f'make.contigs(file={self.dot_file_file_path})'
+            f'make.contigs(file={self.dot_file_file_path}, processors=1)'
         ]
         self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
@@ -475,7 +475,7 @@ class MothurAnalysis:
         self.mothur_batch_file = [
             f'set.dir(input={self.input_dir})',
             f'set.dir(output={self.output_dir})',
-            f'screen.seqs(fasta={self.fasta_path}, name={self.name_file_path}, maxambig=0)'
+            f'screen.seqs(fasta={self.fasta_path}, name={self.name_file_path}, maxambig=0, processors=1)'
         ]
 
     def _pcr_make_mothur_batch_file(self):
@@ -484,7 +484,7 @@ class MothurAnalysis:
             f'set.dir(output={self.output_dir})',
             f'pcr.seqs(fasta={self.fasta_path}, name={self.name_file_path}, oligos={self.pcr_oligo_file_path}, '
             f'pdiffs={self.pcr_fwd_primer_mismatch}, rdiffs={self.pcr_rev_primer_mismatch}, '
-            f'processors=10)'
+            f'processors=1)'
         ]
 
     def _pcr_make_and_write_oligo_file_if_doesnt_exist(self):

@@ -47,14 +47,14 @@ class DataLoading:
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.dataset_object = None
         # the stability file generated here is used as the base of the initial mothur QC
-        self.list_of_samples_names = None
+        self.list_of_samples_names = []
         self.list_of_fastq_files_in_wkd = []
         self.sample_fastq_pairs = None
         if self.datasheet_path:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
         else:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
-
+        self.num_proc = min(num_proc, len(self.list_of_samples_names))
         self.temp_working_directory = self._setup_temp_working_directory()
         self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self.output_directory = self._setup_output_directory()
@@ -86,7 +86,7 @@ class DataLoading:
         # We will delete the directory if it already exists
 
         self.pre_med_sequence_output_directory_path = self._create_pre_med_write_out_directory_path()
-        self.num_proc = num_proc
+        
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
         # .names and .fasta files of the non_symbiodiniaceae_sequences that were thrown out for that sample
         self.non_symb_and_size_violation_base_dir_path = os.path.join(
@@ -1728,13 +1728,11 @@ class InitialMothurHandler:
             self.samples_that_caused_errors_in_qc_mp_list = self.worker_manager.list()
             self.output_queue_for_attribute_data = mp_Queue()
             self._populate_input_queue()
-            self.lock = mp_Lock()
         else:
             self.input_queue_containing_pairs_of_fastq_file_paths = mt_Queue()
             self.samples_that_caused_errors_in_qc_mp_list = []
             self.output_queue_for_attribute_data = mt_Queue()
             self._populate_input_queue()
-            self.lock = mt_Lock()
 
     def _populate_input_queue(self):
         for fastq_path_pair in self.parent.sample_fastq_pairs:
@@ -1761,7 +1759,7 @@ class InitialMothurHandler:
                             self.samples_that_caused_errors_in_qc_mp_list, 
                             self.output_queue_for_attribute_data, 
                             self.parent.temp_working_directory, 
-                            self.parent.debug, self.lock)
+                            self.parent.debug)
                             )
             else:
                 p = Thread(target=self._worker_initial_mothur,
@@ -1769,7 +1767,7 @@ class InitialMothurHandler:
                         self.samples_that_caused_errors_in_qc_mp_list, 
                         self.output_queue_for_attribute_data, 
                         self.parent.temp_working_directory, 
-                        self.parent.debug, self.lock)
+                        self.parent.debug)
                         )
 
             all_processes.append(p)
@@ -1811,7 +1809,7 @@ class InitialMothurHandler:
 
     # We will attempt to fix the weakref pickling issue we are having by maing this a static method.
     @staticmethod
-    def _worker_initial_mothur(in_q_paths, out_list_error_samples, out_q_attr_data, temp_working_directory, debug, lock):
+    def _worker_initial_mothur(in_q_paths, out_list_error_samples, out_q_attr_data, temp_working_directory, debug):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
         This QC includes making contigs, screening for ambigous calls (0 allowed),
@@ -1825,7 +1823,7 @@ class InitialMothurHandler:
                 dss_att_holder=dss_att_holder, 
                 contig_pair=contigpair, 
                 temp_working_directory=temp_working_directory,
-                debug=debug, out_q_attr_data=out_q_attr_data, lock=lock
+                debug=debug, out_q_attr_data=out_q_attr_data
                 )
 
             try:
@@ -1838,7 +1836,7 @@ class InitialMothurHandler:
 
 
 class InitialMothurWorker:
-    def __init__(self, dss_att_holder, contig_pair, temp_working_directory, debug, out_q_attr_data, lock):
+    def __init__(self, dss_att_holder, contig_pair, temp_working_directory, debug, out_q_attr_data):
         self.sample_name = dss_att_holder.name
         self.dss_att_holder = dss_att_holder
         self.cwd = os.path.join(temp_working_directory, self.sample_name)
@@ -1852,7 +1850,6 @@ class InitialMothurWorker:
             )
         self.output_queue_for_attribute_data = out_q_attr_data
         self.thread_safe_general = ThreadSafeGeneral()
-        self.lock = lock
 
     def start_initial_mothur_worker(self):
         sys.stdout.write(f'{self.sample_name}: QC started\n')
