@@ -16,7 +16,7 @@ from dbApp.models import ReferenceSequence
 
 def populate_db_with_ref_seqs():
     thread_safe_general = ThreadSafeGeneral()
-    fasta_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniumDB', 'refSeqDB.fa'))
+    fasta_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'symbiodiniaceaeDB', 'refSeqDB.fa'))
     fasta_dict = thread_safe_general.create_dict_from_fasta(fasta_path=fasta_path)
     current_ref_seq_names = [rs.name for rs in ReferenceSequence.objects.all()]
     bulk_new_rs_list = []

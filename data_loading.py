@@ -88,7 +88,7 @@ class DataLoading:
         self.pre_med_sequence_output_directory_path = self._create_pre_med_write_out_directory_path()
         self.num_proc = num_proc
         # directory that will contain sub directories for each sample. Each sub directory will contain a pair of
-        # .names and .fasta files of the non_symbiodinium_sequences that were thrown out for that sample
+        # .names and .fasta files of the non_symbiodiniaceae_sequences that were thrown out for that sample
         self.non_symb_and_size_violation_base_dir_path = os.path.join(
             self.output_directory, 'non_sym_and_size_violation_sequences'
         )
@@ -97,7 +97,7 @@ class DataLoading:
         # the afore mentioned paired files.
         self.is_single_file_or_paired_input = self._determine_if_single_file_or_paired_input()
         self.debug = debug
-        self.symclade_db_directory_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB'))
+        self.symclade_db_directory_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniaceaeDB'))
         self.symclade_db_full_path = os.path.join(self.symclade_db_directory_path, 'symClade.fa')
 
         self.path_to_mothur_batch_file_for_dot_file_creation = None
@@ -111,7 +111,7 @@ class DataLoading:
         self.screen_sub_evalue = screen_sub_evalue
         self.new_seqs_added_in_iteration = 0
         self.new_seqs_added_running_total = 0
-        self.checked_samples_with_no_additional_symbiodinium_sequences = []
+        self.checked_samples_with_no_additional_symbiodiniaceae_sequences = []
         self.taxonomic_screening_handler = None
         self.sequences_to_screen_fasta_as_list = []
         self.sequences_to_screen_fasta_path = os.path.join(
@@ -128,7 +128,7 @@ class DataLoading:
         self.required_sample_support_for_sub_evalue_sequencs = 3
         # the number of sequences in the 10 matches that must be annotated as Symbiodinium or Symbiodiniaceae in order
         # for a sequences to be added into the reference symClade database.
-        self.required_symbiodinium_matches = 3
+        self.required_symbiodiniaceae_matches = 3
         # med
         self.list_of_med_output_directories = []
         self.path_to_med_padding_executable = os.path.join(
@@ -426,8 +426,8 @@ class DataLoading:
         1 - identify the sequences that are Symbiodinium/Symbiodiniaceae in origin
         2 - identify the sequences that are non-Symbiodinium/non-Symbiodiniaceae in origin.
         This may sound very straight forwards: Blast each sequence against a reference database and if we get
-        a good enough match, consider this sequence symbiodinium in origin. If not, not.
-        BUT, there is a catch. We cannot be sure that every new sequence that we receive is not symbiodinium just
+        a good enough match, consider this sequence symbiodiniaceae in origin. If not, not.
+        BUT, there is a catch. We cannot be sure that every new sequence that we receive is not symbiodiniaceae just
         because we don't get a good match to our reference database. It may be that new diversity is not yet
         represented in our reference database.
         As a results of this we want to do an extra set of taxonomic screening and that is what this first part of code
@@ -435,13 +435,13 @@ class DataLoading:
         a match to a member of this database, but does not meet the minimum threshold to be directly considered
         Symbiodinium in origin (i.e. not similar enough to a reference sequence in the symClade database) will
         be blasted against the NCBI nt blast database. For a sequence to be blasted against this database, and be
-        in contesion for being considered symbiodinium in origin it must also be found in at least three samples.
-        We will use an iterative screening process to acheive this symbiodinium identification. The sequences to be
-        screened will be referred to as subevalue sequences. Any of these sequences that we deem symbiodinium in
+        in contesion for being considered symbiodiniaceae in origin it must also be found in at least three samples.
+        We will use an iterative screening process to acheive this symbiodiniaceae identification. The sequences to be
+        screened will be referred to as subevalue sequences. Any of these sequences that we deem symbiodiniaceae in
         origin after running against the nt database will be added back into the symClade reference database.
         On the next iteration it will therefore be possible for differnt sequences to be matches given that additional
         sequences may have been added to this reference database. This first part of screening will only be to run
-        the symClade blast, and to screen low identity matches. Non-symbiodinium sequence matches will be made in
+        the symClade blast, and to screen low identity matches. Non-symbiodiniaceae sequence matches will be made in
         the second part of this screening.
         To make this faster, rather than check every sample in every iteration we will keep track of when a sample
         has been found to only contain sequences that are good matches to the symClade database.
@@ -502,7 +502,7 @@ class DataLoading:
         the required evalue cut off. Here we run these sequences against the entire NCBI 'nt' database to verify if they
         or of Symbiodinium origin of not.
         The fasta we are screening only contains seuqences that were found in at least 3 samples.
-        We will call a sequence symbiodinium if it has a match that covers at least 95% of its sequence
+        We will call a sequence symbiodiniaceae if it has a match that covers at least 95% of its sequence
         at a 60% or higher
         identity. It must also have Symbiodinium or Symbiodiniaceae in the name. We will also require that a
         sub_e_value seq has at least the required_sybiodinium_matches (3 at the moment) before we call it Symbiodinium.
@@ -519,21 +519,21 @@ class DataLoading:
 
         blast_output_dict = blastn_analysis_object.return_blast_results_dict()
 
-        query_sequences_verified_as_symbiodinium_list = self._get_list_of_seqs_in_blast_result_that_are_symbiodinium(
+        query_sequences_verified_as_symbiodiniaceae_list = self._get_list_of_seqs_in_blast_result_that_are_symbiodiniaceae(
             blast_output_dict
         )
 
-        self.new_seqs_added_in_iteration = len(query_sequences_verified_as_symbiodinium_list)
+        self.new_seqs_added_in_iteration = len(query_sequences_verified_as_symbiodiniaceae_list)
         self.new_seqs_added_running_total += self.new_seqs_added_in_iteration
 
-        if query_sequences_verified_as_symbiodinium_list:
-            self._taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(
-                query_sequences_verified_as_symbiodinium_list)
+        if query_sequences_verified_as_symbiodiniaceae_list:
+            self._taxa_screening_update_symclade_db_with_new_symbiodiniaceae_seqs(
+                query_sequences_verified_as_symbiodiniaceae_list)
 
-    def _taxa_screening_update_symclade_db_with_new_symbiodinium_seqs(
-            self, query_sequences_verified_as_symbiodinium_list):
+    def _taxa_screening_update_symclade_db_with_new_symbiodiniaceae_seqs(
+            self, query_sequences_verified_as_symbiodiniaceae_list):
         new_symclade_fasta_as_list = self._taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
-            query_sequences_verified_as_symbiodinium_list
+            query_sequences_verified_as_symbiodiniaceae_list
         )
         combined_fasta = self._taxa_screening_combine_new_symclade_seqs_with_current(new_symclade_fasta_as_list)
         self._taxa_screening_make_new_symclade_db(combined_fasta)
@@ -548,22 +548,22 @@ class DataLoading:
         return combined_fasta
 
     def _taxa_screening_make_new_fasta_of_screened_seqs_to_be_added_to_symclade_db(
-            self, query_sequences_verified_as_symbiodinium_list):
+            self, query_sequences_verified_as_symbiodiniaceae_list):
         screened_seqs_fasta_dict = self.thread_safe_general.create_dict_from_fasta(
             fasta_path=self.sequences_to_screen_fasta_path
         )
         new_symclade_fasta_as_list = []
-        for name_of_symbiodinium_sequence_to_add_to_symclade_db in query_sequences_verified_as_symbiodinium_list:
+        for name_of_symbiodiniaceae_sequence_to_add_to_symclade_db in query_sequences_verified_as_symbiodiniaceae_list:
             new_symclade_fasta_as_list.extend(
                 [
-                    f'>{name_of_symbiodinium_sequence_to_add_to_symclade_db}',
-                    f'{screened_seqs_fasta_dict[name_of_symbiodinium_sequence_to_add_to_symclade_db]}'
+                    f'>{name_of_symbiodiniaceae_sequence_to_add_to_symclade_db}',
+                    f'{screened_seqs_fasta_dict[name_of_symbiodiniaceae_sequence_to_add_to_symclade_db]}'
                 ]
             )
         return new_symclade_fasta_as_list
 
-    def _get_list_of_seqs_in_blast_result_that_are_symbiodinium(self, blast_output_dict):
-        query_sequences_verified_as_symbiodinium_list = []
+    def _get_list_of_seqs_in_blast_result_that_are_symbiodiniaceae(self, blast_output_dict):
+        query_sequences_verified_as_symbiodiniaceae_list = []
         for query_sequence_name, blast_result_list_for_query_sequence in blast_output_dict.items():
             sym_count = 0
             for result_str in blast_result_list_for_query_sequence:
@@ -572,10 +572,10 @@ class DataLoading:
                     percentage_identity_match = float(result_str.split('\t')[3])
                     if percentage_coverage > 95 and percentage_identity_match > 60:
                         sym_count += 1
-                        if sym_count == self.required_symbiodinium_matches:
-                            query_sequences_verified_as_symbiodinium_list.append(query_sequence_name)
+                        if sym_count == self.required_symbiodiniaceae_matches:
+                            query_sequences_verified_as_symbiodiniaceae_list.append(query_sequence_name)
                             break
-        return query_sequences_verified_as_symbiodinium_list
+        return query_sequences_verified_as_symbiodiniaceae_list
 
     def _make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening(self):
         """ The below_e_cutoff_dict has nucleotide sequencs as the
@@ -605,10 +605,10 @@ class DataLoading:
             self.thread_safe_general.write_list_to_destination(self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
 
     def _create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
-        back_up_dir = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade_backup'))
+        back_up_dir = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniaceaeDB', 'symClade_backup'))
         os.makedirs(back_up_dir, exist_ok=True)
         symclade_current_path = os.path.abspath(
-            os.path.join(self.symportal_root_directory, 'symbiodiniumDB', 'symClade.fa'))
+            os.path.join(self.symportal_root_directory, 'symbiodiniaceaeDB', 'symClade.fa'))
 
         symclade_backup_path = os.path.join(back_up_dir, f'symClade_{self.date_time_str}.fa')
         symclade_backup_readme_path = os.path.join(back_up_dir, f'symClade_{self.date_time_str}.readme')
@@ -634,14 +634,14 @@ class DataLoading:
         self._make_fasta_of_seqs_found_in_more_than_two_samples_that_need_screening()
 
     def _taxa_screening_update_checked_samples_list(self):
-        self.checked_samples_with_no_additional_symbiodinium_sequences = \
+        self.checked_samples_with_no_additional_symbiodiniaceae_sequences = \
             list(self.taxonomic_screening_handler.checked_samples_mp_list)
 
     def _init_potential_sym_tax_screen_handler(self):
 
         self.taxonomic_screening_handler = PotentialSymTaxScreeningHandler(
             samples_that_caused_errors_in_qc_list=self.samples_that_caused_errors_in_qc_list,
-            checked_samples_list=self.checked_samples_with_no_additional_symbiodinium_sequences,
+            checked_samples_list=self.checked_samples_with_no_additional_symbiodiniaceae_sequences,
             list_of_samples_names=self.list_of_samples_names, num_proc=self.num_proc, multiprocess=self.multiprocess
         )
 
@@ -2121,10 +2121,10 @@ class PotentialSymTaxScreeningWorker:
         # This dictionary will be used outside of the multiprocessing to append the clade of a given sequences
         # that is being added to the symClade reference database
         self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = sub_evalue_nucleotide_sequence_to_clade_mp_dict
-        # The potential_non_symbiodinium_sequences_list is used to see if there are any samples, that don't have
-        # any potential non symbiodnium sequences. i.e. only definite symbiodinium sequences. These samples are added to
+        # The potential_non_symbiodiniaceae_sequences_list is used to see if there are any samples, that don't have
+        # any potential non symbiodnium sequences. i.e. only definite symbiodiniaceae sequences. These samples are added to
         # the checked list and are not checked in following iterations to speed things up.
-        self.potential_non_symbiodinium_sequences_list = []
+        self.potential_non_symbiodiniaceae_sequences_list = []
         self.sequence_name_to_clade_dict = None
         self.blast_output_as_list = None
         self.already_processed_blast_seq_result = []
@@ -2163,7 +2163,7 @@ class PotentialSymTaxScreeningWorker:
         # process each sequence once.
         self._identify_and_allocate_non_sym_and_sub_e_seqs()
 
-        if not self.potential_non_symbiodinium_sequences_list:
+        if not self.potential_non_symbiodiniaceae_sequences_list:
             self.checked_samples_mp_list.append(self.sample_name)
 
     def _identify_and_allocate_non_sym_and_sub_e_seqs(self):
@@ -2176,8 +2176,8 @@ class PotentialSymTaxScreeningWorker:
             coverage = float(line.split('\t')[5])
 
             # noinspection PyPep8,PyBroadException
-            # here we are looking for sequences to add to the non_symbiodinium_sequence_list
-            # if a sequence fails at any of our if statements it will be added to the non_symbiodinium_sequence_list
+            # here we are looking for sequences to add to the non_symbiodiniaceae_sequence_list
+            # if a sequence fails at any of our if statements it will be added to the non_symbiodiniaceae_sequence_list
             try:
                 evalue_power = int(line.split('\t')[3].split('-')[1])
                 # With the smallest sequences i.e. 185bp it is impossible to get above the 100 threshold
@@ -2201,14 +2201,14 @@ class PotentialSymTaxScreeningWorker:
         happen later in the code during further mothur qc.
         Finally, it will also populate a nucleotide sequence to clade dictionary that will be used outside of
         the MPing to append the clade of a given sequences that is being added to the symClade reference database.
-        The potential_non_symbiodinium_sequences_list is used to see if there are any samples, that don't have
-        any potential non symbiodnium sequences. i.e. only definite symbiodinium sequences. These samples are added to
+        The potential_non_symbiodiniaceae_sequences_list is used to see if there are any samples, that don't have
+        any potential non symbiodnium sequences. i.e. only definite symbiodiniaceae sequences. These samples are added to
         the checked list and are not checked in following iterations to speed things up.
         """
 
         if identity < 80 or coverage < 95:
             # incorporate the size cutoff here that would normally happen in the further mothur qc later in the code
-            self.potential_non_symbiodinium_sequences_list.append(name_of_current_sequence)
+            self.potential_non_symbiodiniaceae_sequences_list.append(name_of_current_sequence)
             if 184 < len(self.fasta_dict[name_of_current_sequence]) < 310:
                 with self.lock:
                     if self.fasta_dict[name_of_current_sequence] in self.e_val_collection_mp_dict.keys():
@@ -2222,7 +2222,7 @@ class PotentialSymTaxScreeningWorker:
     def _add_seqs_with_no_blast_match_to_non_sym_list(self):
         sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - \
                                                set(self.sequence_name_to_clade_dict.keys())
-        self.potential_non_symbiodinium_sequences_list.extend(list(sequences_with_no_blast_match_as_set))
+        self.potential_non_symbiodiniaceae_sequences_list.extend(list(sequences_with_no_blast_match_as_set))
         sys.stdout.write(
             f'{self.sample_name}: {len(sequences_with_no_blast_match_as_set)} sequences thrown out '
             f'initially due to being too divergent from reference sequences\n')
@@ -2251,14 +2251,14 @@ class SymNonSymTaxScreeningHandler:
                 data_loading_samples_that_caused_errors_in_qc_mp_list
             )
             self.sample_attributes_mp_output_queue = mp_Queue()
-            self.non_symbiodinium_sequences_list = self.sym_non_sym_mp_manager.list()
+            self.non_symbiodiniaceae_sequences_list = self.sym_non_sym_mp_manager.list()
             self.num_proc = data_loading_num_proc
             self._populate_input_queue(data_loading_list_of_samples_names)
         else:
             self.sample_name_mp_input_queue = mt_Queue()
             self.samples_that_caused_errors_in_qc_mp_list =  data_loading_samples_that_caused_errors_in_qc_mp_list
             self.sample_attributes_mp_output_queue = mt_Queue()
-            self.non_symbiodinium_sequences_list = []
+            self.non_symbiodiniaceae_sequences_list = []
             self.num_proc = data_loading_num_proc
             self._populate_input_queue(data_loading_list_of_samples_names)
 
@@ -2378,7 +2378,7 @@ class SymNonSymTaxScreeningWorker:
         self.absolute_number_of_sym_size_violation_sequences = 0
 
     def _init_sets_for_categorizing_sequences(self):
-        self.non_symbiodinium_sequence_name_set_for_sample = set()
+        self.non_symbiodiniaceae_sequence_name_set_for_sample = set()
         self.sym_size_violation_sequence_name_set_for_sample = set()
         self.sym_no_size_violation_sequence_name_set_for_sample = set()
 
@@ -2564,7 +2564,7 @@ class SymNonSymTaxScreeningWorker:
 
     def _get_size_violation_and_non_size_violations_seq_sets(self):
         for query_sequence_name, blast_line in self.blast_dict.items():
-            if query_sequence_name not in self.non_symbiodinium_sequence_name_set_for_sample:
+            if query_sequence_name not in self.non_symbiodiniaceae_sequence_name_set_for_sample:
                 if 184 < len(self.fasta_dict[query_sequence_name]) < 310:
                     self.sym_no_size_violation_sequence_name_set_for_sample.add(query_sequence_name)
                 else:
@@ -2601,15 +2601,15 @@ class SymNonSymTaxScreeningWorker:
         print(f'{self.dss}: absolute_num_sym_seqs = {self.absolute_number_of_sym_no_size_violation_sequences}')
 
     def _associate_non_sym_seq_attributes_to_datasetsample(self):
-        self.dss.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.dss.non_sym_unique_num_seqs = len(self.non_symbiodiniaceae_sequence_name_set_for_sample)
         self.dss.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        print(f'{self.dss.name}: non_sym_unique_num_seqs = {len(self.non_symbiodinium_sequence_name_set_for_sample)}')
+        print(f'{self.dss.name}: non_sym_unique_num_seqs = {len(self.non_symbiodiniaceae_sequence_name_set_for_sample)}')
         print(f'{self.dss.name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
 
     def _log_dataset_attr_and_raise_runtime_error(self):
         # if there are no symbiodiniaceae sequenes then log error and associate meta info
         print(f'{self.dss.name}: QC error.\n No symbiodiniaceae sequences left in sample after pre-med QC.')
-        self.dss.non_sym_unique_num_seqs = len(self.non_symbiodinium_sequence_name_set_for_sample)
+        self.dss.non_sym_unique_num_seqs = len(self.non_symbiodiniaceae_sequence_name_set_for_sample)
         self.dss.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
         self.dss.size_violation_absolute = self.absolute_number_of_sym_size_violation_sequences
         self.dss.size_violation_unique = len(self.sym_size_violation_sequence_name_set_for_sample)
@@ -2627,33 +2627,33 @@ class SymNonSymTaxScreeningWorker:
         self._write_out_non_sym_fasta_and_names_files_for_sample()
 
     def _write_out_non_sym_fasta_and_names_files_for_sample(self):
-        if self.non_symbiodinium_sequence_name_set_for_sample:
+        if self.non_symbiodiniaceae_sequence_name_set_for_sample:
             self._write_out_non_sym_fasta_for_sample()
             self._write_out_non_sym_names_file_for_sample()
 
     def _write_out_non_sym_names_file_for_sample(self):
         with open(self.non_symbiodiniaceae_seqs_names_path, 'w') as f:
-            for sequence_name in list(self.non_symbiodinium_sequence_name_set_for_sample):
+            for sequence_name in list(self.non_symbiodiniaceae_sequence_name_set_for_sample):
                 f.write(f'{self.name_dict[sequence_name]}\n')
                 self.absolute_number_of_non_sym_sequences += len(
                     self.name_dict[sequence_name].split('\t')[1].split(','))
 
     def _write_out_non_sym_fasta_for_sample(self):
         with open(self.non_symbiodiniaceae_seqs_fasta_path, 'w') as f:
-            for sequence_name in list(self.non_symbiodinium_sequence_name_set_for_sample):
+            for sequence_name in list(self.non_symbiodiniaceae_sequence_name_set_for_sample):
                 f.write(f'>{sequence_name}\n')
                 f.write(f'{self.fasta_dict[sequence_name]}\n')
 
     def _add_seqs_with_no_blast_match_to_non_sym_list(self):
         sequences_with_no_blast_match_as_set = set(self.fasta_dict.keys()) - \
                                                set(self.sequence_name_to_clade_dict.keys())
-        self.non_symbiodinium_sequence_name_set_for_sample.update(list(sequences_with_no_blast_match_as_set))
+        self.non_symbiodiniaceae_sequence_name_set_for_sample.update(list(sequences_with_no_blast_match_as_set))
         sys.stdout.write(
             f'{self.dss.name}: {len(sequences_with_no_blast_match_as_set)} sequences thrown out '
             f'initially due to being too divergent from reference sequences\n')
 
     def _identify_non_sym_seqs_from_below_match_threshold(self):
-        """ This method is where the non_symbiodinium sequences for the sample are identified. If they fall below
+        """ This method is where the non_symbiodiniaceae sequences for the sample are identified. If they fall below
         the given identity, coverage and evalues for their match to the symClade db then they are conisdered
         non-symbiodinum. This does not take into size at all. We will screen and report size seperately.
         """
@@ -2678,7 +2678,7 @@ class SymNonSymTaxScreeningWorker:
         percentage_coverage = float(blast_line.split('\t')[5])
         if percentage_identity < 80 or percentage_coverage < 95:
             # incorporate the size cutoff here that would normally happen in the further mothur qc later in the code
-            self.non_symbiodinium_sequence_name_set_for_sample.add(name_of_current_sequence)
+            self.non_symbiodiniaceae_sequence_name_set_for_sample.add(name_of_current_sequence)
 
 
 class PerformMEDHandler:

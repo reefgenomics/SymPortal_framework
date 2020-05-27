@@ -257,14 +257,14 @@ class SPDataAnalysis:
             self.query_fasta_as_list = []
             self.query_fasta_path = os.path.join(
                 self.sp_data_analysis.workflow_manager.symportal_root_directory,
-                'symbiodiniumDB', 'unnamedRefSeqs.fasta')
+                'symbiodiniaceaeDB', 'unnamedRefSeqs.fasta')
             self.db_fasta_as_list = []
             self.db_fasta_path = os.path.join(
                 self.sp_data_analysis.workflow_manager.symportal_root_directory,
-                'symbiodiniumDB', 'named_seqs_in_SP_remote_db.fa')
+                'symbiodiniaceaeDB', 'named_seqs_in_SP_remote_db.fa')
             self.blast_output_path = os.path.join(
                 self.sp_data_analysis.workflow_manager.symportal_root_directory,
-                'symbiodiniumDB', 'blast.out')
+                'symbiodiniaceaeDB', 'blast.out')
 
             self.blast_analysis_object = symportal_utils.BlastnAnalysis(
                 input_file_path=self.query_fasta_path, output_file_path=self.blast_output_path,

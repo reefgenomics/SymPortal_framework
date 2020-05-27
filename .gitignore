@@ -23,5 +23,4 @@ outputs/
 /**/tempData
 *.logfile
 /dbBackUp/*
-symbiodiniumDB/
 tests/data/smith_subsampled_data/lite/test_data_submission_input_lite_w_abs_paths.csv

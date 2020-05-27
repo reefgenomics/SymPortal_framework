@@ -1385,14 +1385,14 @@ class SequenceCountTableCreator:
             sample_meta_dict[k]['uid'] = k
             sample_meta_dict[k]['name'] = self.df_abs_no_meta_rows.at[k, 'sample_name']
             sample_meta_dict[k]['raw_contigs'] = self.df_abs_no_meta_rows.at[k, 'raw_contigs']
-            sample_meta_dict[k]['post_taxa_id_absolute_symbiodinium_seqs'] = self.df_abs_no_meta_rows.at[
-                k, 'post_taxa_id_absolute_symbiodinium_seqs']
-            sample_meta_dict[k]['post_taxa_id_unique_symbiodinium_seqs'] = self.df_abs_no_meta_rows.at[
-                k, 'post_taxa_id_unique_symbiodinium_seqs']
-            sample_meta_dict[k]['post_taxa_id_absolute_non_symbiodinium_seqs'] = self.df_abs_no_meta_rows.at[
-                k, 'post_taxa_id_absolute_non_symbiodinium_seqs']
-            sample_meta_dict[k]['post_taxa_id_unique_non_symbiodinium_seqs'] = self.df_abs_no_meta_rows.at[
-                k, 'post_taxa_id_unique_non_symbiodinium_seqs']
+            sample_meta_dict[k]['post_taxa_id_absolute_symbiodiniaceae_seqs'] = self.df_abs_no_meta_rows.at[
+                k, 'post_taxa_id_absolute_symbiodiniaceae_seqs']
+            sample_meta_dict[k]['post_taxa_id_unique_symbiodiniaceae_seqs'] = self.df_abs_no_meta_rows.at[
+                k, 'post_taxa_id_unique_symbiodiniaceae_seqs']
+            sample_meta_dict[k]['post_taxa_id_absolute_non_symbiodiniaceae_seqs'] = self.df_abs_no_meta_rows.at[
+                k, 'post_taxa_id_absolute_non_symbiodiniaceae_seqs']
+            sample_meta_dict[k]['post_taxa_id_unique_non_symbiodiniaceae_seqs'] = self.df_abs_no_meta_rows.at[
+                k, 'post_taxa_id_unique_non_symbiodiniaceae_seqs']
             sample_meta_dict[k]['post_med_absolute'] = self.df_abs_no_meta_rows.at[k, 'post_med_absolute']
             sample_meta_dict[k]['post_med_unique'] = self.df_abs_no_meta_rows.at[k, 'post_med_unique']
             sample_meta_dict[k]['sample_type'] = self.df_abs_no_meta_rows.at[k, 'sample_type']
@@ -1583,10 +1583,10 @@ class SequenceCountTableCreator:
         output_df_relative = output_df_relative.T
         # now remove the rest of the non abundance columns
         non_seq_columns = [
-            'sample_name', 'raw_contigs', 'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_qc_absolute_seqs',
-            'post_qc_unique_seqs', 'post_taxa_id_unique_non_symbiodinium_seqs',
-            'post_taxa_id_absolute_symbiodinium_seqs',
-            'post_taxa_id_unique_symbiodinium_seqs', 'post_med_absolute', 'post_med_unique',
+            'sample_name', 'raw_contigs', 'post_taxa_id_absolute_non_symbiodiniaceae_seqs', 'post_qc_absolute_seqs',
+            'post_qc_unique_seqs', 'post_taxa_id_unique_non_symbiodiniaceae_seqs',
+            'post_taxa_id_absolute_symbiodiniaceae_seqs',
+            'post_taxa_id_unique_symbiodiniaceae_seqs', 'post_med_absolute', 'post_med_unique',
             'size_screening_violation_absolute', 'size_screening_violation_unique']
         no_name_seq_columns = ['noName Clade {}'.format(clade) for clade in list('ABCDEFGHI')]
         user_supplied_stats = [
@@ -2244,10 +2244,10 @@ class SeqOutputSeriesGeneratorHandler:
         header_pre = self.seq_count_table_creator.clade_abundance_ordered_ref_seq_list
         no_name_summary_strings = ['noName Clade {}'.format(cl) for cl in ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']]
         qc_stats = [
-            'raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs', 'post_taxa_id_absolute_symbiodinium_seqs',
-            'post_taxa_id_unique_symbiodinium_seqs', 'size_screening_violation_absolute',
+            'raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs', 'post_taxa_id_absolute_symbiodiniaceae_seqs',
+            'post_taxa_id_unique_symbiodiniaceae_seqs', 'size_screening_violation_absolute',
             'size_screening_violation_unique',
-            'post_taxa_id_absolute_non_symbiodinium_seqs', 'post_taxa_id_unique_non_symbiodinium_seqs',
+            'post_taxa_id_absolute_non_symbiodiniaceae_seqs', 'post_taxa_id_unique_non_symbiodiniaceae_seqs',
             'post_med_absolute',
             'post_med_unique']
         user_supplied_stats = [
@@ -2335,7 +2335,7 @@ class SeqOutputSeriesGeneratorWorker:
         # Here we add in the post qc and post-taxa id counts
         # For the absolute counts we will report the absolute seq number
         # For the relative counts we will report these as proportions of the sampleSeqTot.
-        # I.e. we will have numbers larger than 1 for many of the values and the symbiodinium seqs should be 1
+        # I.e. we will have numbers larger than 1 for many of the values and the symbiodiniaceae seqs should be 1
         self.sample_row_data_absolute.append(self.dss.name)
         self.sample_row_data_relative.append(self.dss.name)
         # CONTIGS
@@ -2354,13 +2354,13 @@ class SeqOutputSeriesGeneratorWorker:
         self.sample_row_data_relative.append(post_qc_unique / self.sample_seq_tot)
         # POST TAXA-ID
         # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
-        tax_id_symbiodinium_absolute = self.dss.absolute_num_sym_seqs
-        self.sample_row_data_absolute.append(tax_id_symbiodinium_absolute)
-        self.sample_row_data_relative.append(tax_id_symbiodinium_absolute / self.sample_seq_tot)
+        tax_id_symbiodiniaceae_absolute = self.dss.absolute_num_sym_seqs
+        self.sample_row_data_absolute.append(tax_id_symbiodiniaceae_absolute)
+        self.sample_row_data_relative.append(tax_id_symbiodiniaceae_absolute / self.sample_seq_tot)
         # Same as above but the number of unique seqs
-        tax_id_symbiodinium_unique = self.dss.unique_num_sym_seqs
-        self.sample_row_data_absolute.append(tax_id_symbiodinium_unique)
-        self.sample_row_data_relative.append(tax_id_symbiodinium_unique / self.sample_seq_tot)
+        tax_id_symbiodiniaceae_unique = self.dss.unique_num_sym_seqs
+        self.sample_row_data_absolute.append(tax_id_symbiodiniaceae_unique)
+        self.sample_row_data_relative.append(tax_id_symbiodiniaceae_unique / self.sample_seq_tot)
         # store the absolute number of sequences lost to size cutoff violations
         size_violation_aboslute = self.dss.size_violation_absolute
         self.sample_row_data_absolute.append(size_violation_aboslute)
@@ -2374,9 +2374,9 @@ class SeqOutputSeriesGeneratorWorker:
         self.sample_row_data_absolute.append(tax_id_non_symbiodinum_abosulte)
         self.sample_row_data_relative.append(tax_id_non_symbiodinum_abosulte / self.sample_seq_tot)
         # This is the number of unique sequences that were not considered Symbiodinium
-        tax_id_non_symbiodinium_unique = self.dss.non_sym_unique_num_seqs
-        self.sample_row_data_absolute.append(tax_id_non_symbiodinium_unique)
-        self.sample_row_data_relative.append(tax_id_non_symbiodinium_unique / self.sample_seq_tot)
+        tax_id_non_symbiodiniaceae_unique = self.dss.non_sym_unique_num_seqs
+        self.sample_row_data_absolute.append(tax_id_non_symbiodiniaceae_unique)
+        self.sample_row_data_relative.append(tax_id_non_symbiodiniaceae_unique / self.sample_seq_tot)
         # Post MED absolute
         post_med_absolute = self.dss.post_med_absolute
         self.sample_row_data_absolute.append(post_med_absolute)
@@ -2494,16 +2494,16 @@ class SeqOutputSeriesGeneratorWorker:
         # POST TAXA-ID
         # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
         if self.dss.absolute_num_sym_seqs:
-            tax_id_symbiodinium_absolute = self.dss.absolute_num_sym_seqs
-            self.sample_row_data_absolute.append(tax_id_symbiodinium_absolute)
+            tax_id_symbiodiniaceae_absolute = self.dss.absolute_num_sym_seqs
+            self.sample_row_data_absolute.append(tax_id_symbiodiniaceae_absolute)
             self.sample_row_data_relative.append(0)
         else:
             self.sample_row_data_absolute.append(0)
             self.sample_row_data_relative.append(0)
         # Same as above but the number of unique seqs
         if self.dss.unique_num_sym_seqs:
-            tax_id_symbiodinium_unique = self.dss.unique_num_sym_seqs
-            self.sample_row_data_absolute.append(tax_id_symbiodinium_unique)
+            tax_id_symbiodiniaceae_unique = self.dss.unique_num_sym_seqs
+            self.sample_row_data_absolute.append(tax_id_symbiodiniaceae_unique)
             self.sample_row_data_relative.append(0)
         else:
             self.sample_row_data_absolute.append(0)
@@ -2534,8 +2534,8 @@ class SeqOutputSeriesGeneratorWorker:
             self.sample_row_data_relative.append(0)
         # This is the number of unique sequences that were not considered Symbiodinium
         if self.dss.non_sym_unique_num_seqs:
-            tax_id_non_symbiodinium_unique = self.dss.non_sym_unique_num_seqs
-            self.sample_row_data_absolute.append(tax_id_non_symbiodinium_unique)
+            tax_id_non_symbiodiniaceae_unique = self.dss.non_sym_unique_num_seqs
+            self.sample_row_data_absolute.append(tax_id_non_symbiodiniaceae_unique)
             self.sample_row_data_relative.append(0)
         else:
             self.sample_row_data_absolute.append(0)
