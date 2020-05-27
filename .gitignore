@@ -24,3 +24,7 @@ outputs/
 *.logfile
 /dbBackUp/*
 tests/data/smith_subsampled_data/lite/test_data_submission_input_lite_w_abs_paths.csv
+symbiodiniaceaeDB/blast.out
+symbiodiniaceaeDB/named_seqs_in_SP_remote_db.fa
+symbiodiniaceaeDB/symClade_backup/
+symbiodiniaceaeDB/unnamedRefSeqs.fasta
