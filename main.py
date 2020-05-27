@@ -58,7 +58,7 @@ class SymPortalWorkFlowManager:
         # general attributes
         self.thread_safe_general = ThreadSafeGeneral()
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
-        self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackup')
+        self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackUp')
         os.makedirs(self.dbbackup_dir, exist_ok=True)
         self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
         self._check_username()
