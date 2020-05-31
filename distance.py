@@ -319,6 +319,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
 
         ser = pd.Series(var_explained_list, index=list(renamed_pcoa_dataframe), name='proportion_explained')
         renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(ser)
+        renamed_pcoa_dataframe['analysis_type_uid'] = renamed_pcoa_dataframe['analysis_type_uid'].astype(int)
         # now output the pcoa
         if sqrt:
             clade_pcoa_file_path = os.path.join(
@@ -718,6 +719,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         var_explained_list.extend(pcoa_output.proportion_explained.values.tolist())
         ser = pd.Series(var_explained_list, index=list(renamed_pcoa_dataframe), name='proportion_explained')
         renamed_pcoa_dataframe = renamed_pcoa_dataframe.append(ser)
+        renamed_pcoa_dataframe['sample_uid'] = renamed_pcoa_dataframe['sample_uid'].astype(int)
         # now output the pcoa
         if sqrt:
             clade_pcoa_file_path = os.path.join(
