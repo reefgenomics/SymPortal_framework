@@ -1170,9 +1170,18 @@ class DataLoading:
         If filenames are given in the datasheet then convert these to full paths
         before checking for their existence. This way, all locations of seq files
         are full paths.
+        Ensure that we lstrip and rstrip the entries to remove any spaces.
         Also check for size of file and require a 300B minimum. Remove from the sample from the data sheet if
         smaller than this.
         """
+
+        self.sample_meta_info_df['fastq_fwd_file_name'] = self.sample_meta_info_df['fastq_fwd_file_name'].astype(str)
+        self.sample_meta_info_df['fastq_fwd_file_name'] = self.sample_meta_info_df['fastq_fwd_file_name'].str.rstrip() \
+            .str.lstrip()
+        self.sample_meta_info_df['fastq_rev_file_name'] = self.sample_meta_info_df['fastq_rev_file_name'].astype(str)
+        self.sample_meta_info_df['fastq_rev_file_name'] = self.sample_meta_info_df['fastq_rev_file_name'].str.rstrip() \
+            .str.lstrip()
+
         file_not_found_list = []
         rows_to_drop = []
         for df_ind in self.sample_meta_info_df.index.values.tolist():
