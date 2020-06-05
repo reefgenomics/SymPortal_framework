@@ -1,6 +1,6 @@
 numpy==1.17.1
 biopython==1.71
-Django==3.0.2
+Django==3.0.7
 matplotlib==2.0.2
 pandas==0.25.0
 plumbum==1.6.6
