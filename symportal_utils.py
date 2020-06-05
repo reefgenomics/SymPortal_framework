@@ -123,7 +123,7 @@ class MothurAnalysis:
         self.fasta_path = self.dot_file_file_path.replace('.file', '.trim.contigs.fasta')
 
         try:
-            num_contigs = len(self.thread_safe_general.read_defined_file_to_list(self.fasta_path))/2
+            num_contigs = int(len(self.thread_safe_general.read_defined_file_to_list(self.fasta_path))/2)
         except FileNotFoundError:
             raise RuntimeError('Make.contigs out fasta not found')
 
