@@ -36,14 +36,14 @@ class DataSetSample(models.Model):
     # This is the unique number of sequences after inital mothur QC i.e. before tax and size screening
     post_qc_unique_num_seqs = models.IntegerField(default=0)
 
-    # Absolute number of sequences after sequencing QC and screening for Symbiodinium (i.e. Symbiodinium only)
+    # Absolute number of sequences after sequencing QC and screening for Symbiodiniaceae (i.e. Symbiodiniaceae only)
     absolute_num_sym_seqs = models.IntegerField(default=0)
     # Same as above but the number of unique seqs
     unique_num_sym_seqs = models.IntegerField(default=0)
 
-    # store the abosolute number of sequenes that were not considered Symbiodinium
+    # store the abosolute number of sequenes that were not considered Symbiodiniaceae
     non_sym_absolute_num_seqs = models.IntegerField(default=0)
-    # This is the number of unique sequences that were not considered Symbiodinium
+    # This is the number of unique sequences that were not considered Symbiodiniaceae
     non_sym_unique_num_seqs = models.IntegerField(default=0)
 
     # store the abosulte number of sequences that were lost during the size selection
