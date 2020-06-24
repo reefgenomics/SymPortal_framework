@@ -94,7 +94,7 @@ class Study(models.Model):
     additional_markers = models.CharField(max_length=200, null=True)
     creation_time_stamp = models.CharField(
         max_length=100,
-        default=str(datetime.now()).replace(' ', '_').replace(':', '-')
+        default=str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
     )
 
 class User(models.Model):

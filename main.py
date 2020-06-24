@@ -60,7 +60,7 @@ class SymPortalWorkFlowManager:
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackUp')
         os.makedirs(self.dbbackup_dir, exist_ok=True)
-        self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self._check_username()
         self.submitting_user = sp_config.user_name
         self.submitting_user_email = sp_config.user_email
@@ -409,8 +409,7 @@ class SymPortalWorkFlowManager:
             self._output_js_output_path_dict()
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
                   f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
-            self.data_analysis_object.analysis_complete_time_stamp = str(
-                datetime.now()).replace(' ', '_').replace(':', '-')
+            self.data_analysis_object.analysis_complete_time_stamp = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
             self.data_analysis_object.save()
             print(f'DataSet analysis_complete_time_stamp: '
                   f'{self.data_analysis_object.analysis_complete_time_stamp}\n\n\n')
@@ -419,8 +418,7 @@ class SymPortalWorkFlowManager:
             print('\nOutputs skipped at user\'s request\n')
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
                   f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
-            self.data_analysis_object.analysis_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':',
-                                                                                                                  '-')
+            self.data_analysis_object.analysis_complete_time_stamp = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
             self.data_analysis_object.save()
             print(f'DataSet analysis_complete_time_stamp: '
                   f'{self.data_analysis_object.analysis_complete_time_stamp}\n\n\n')

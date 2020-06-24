@@ -56,7 +56,7 @@ class DataLoading:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
         self.num_proc = min(num_proc, len(self.list_of_samples_names))
         self.temp_working_directory = self._setup_temp_working_directory()
-        self.date_time_str = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.output_directory = self._setup_output_directory()
         # directory for the data_explorer outputs
         self.html_dir = os.path.join(self.output_directory, 'html')
@@ -204,7 +204,7 @@ class DataLoading:
         print('\n\nDATA LOADING COMPLETE')
         print(f'DataSet id: {self.dataset_object.id}')
         print(f'DataSet name: {self.dataset_object.name}')
-        self.dataset_object.loading_complete_time_stamp = str(datetime.now()).replace(' ', '_').replace(':', '-')
+        self.dataset_object.loading_complete_time_stamp = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.dataset_object.save()
         print(f'Loading completed in {time.time() - self.start_time}s')
         print(f'DataSet loading_complete_time_stamp: {self.dataset_object.loading_complete_time_stamp}\n\n\n')
