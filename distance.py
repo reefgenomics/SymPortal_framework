@@ -324,11 +324,11 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         if sqrt:
             clade_pcoa_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}.unifrac_profiles_PCoA_coords_{clade_in_question}_sqrt.csv')
+                f'{self.date_time_str}_unifrac_profiles_PCoA_coords_{clade_in_question}_sqrt.csv')
         else:
             clade_pcoa_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}.unifrac_profiles_PCoA_coords_{clade_in_question}_no_sqrt.csv')
+                f'{self.date_time_str}_unifrac_profiles_PCoA_coords_{clade_in_question}_no_sqrt.csv')
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
@@ -724,11 +724,11 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         if sqrt:
             clade_pcoa_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}.unifrac_sample_PCoA_coords_{clade_in_question}_sqrt.csv')
+                f'{self.date_time_str}_unifrac_sample_PCoA_coords_{clade_in_question}_sqrt.csv')
         else:
             clade_pcoa_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}.unifrac_sample_PCoA_coords_{clade_in_question}_no_sqrt.csv')
+                f'{self.date_time_str}_unifrac_sample_PCoA_coords_{clade_in_question}_no_sqrt.csv')
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
@@ -978,12 +978,12 @@ class BaseBrayCurtisDistPCoACreator:
         if sqrt:
             self.clade_pcoa_coord_file_path_sqrt = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}.braycurtis_{self.profiles_or_samples}_PCoA_coords_{clade}_sqrt.csv')
+                f'{self.date_time_str}_braycurtis_{self.profiles_or_samples}_PCoA_coords_{clade}_sqrt.csv')
             raw_dist_file = self.thread_safe_general.read_defined_file_to_list(self.clade_dist_file_path_sqrt)
         else:
             self.clade_pcoa_coord_file_path_no_sqrt = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}.braycurtis_{self.profiles_or_samples}_PCoA_coords_{clade}_no_sqrt.csv')
+                f'{self.date_time_str}_braycurtis_{self.profiles_or_samples}_PCoA_coords_{clade}_no_sqrt.csv')
             raw_dist_file = self.thread_safe_general.read_defined_file_to_list(self.clade_dist_file_path_no_sqrt)
 
         temp_two_d_list = []
@@ -1345,11 +1345,11 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         self.clade_output_dir = os.path.join(self.output_dir, clade_in_question)
 
         self.clade_dist_file_path_sqrt = os.path.join(
-            self.clade_output_dir, f'{self.date_time_str}.braycurtis_sample_distances_{clade_in_question}_sqrt.dist')
+            self.clade_output_dir, f'{self.date_time_str}_braycurtis_sample_distances_{clade_in_question}_sqrt.dist')
 
         self.clade_dist_file_path_no_sqrt = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_str}.braycurtis_sample_distances_{clade_in_question}_no_sqrt.dist')
+            f'{self.date_time_str}_braycurtis_sample_distances_{clade_in_question}_no_sqrt.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_samples(self, dss_obj_to_cct_obj_dict, sqrt):
@@ -1529,11 +1529,11 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         # path for the sqrt transformed distance file
         self.clade_dist_file_path_sqrt = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_str}.braycurtis_within_clade_profile_distances_{clade_in_question}_sqrt.dist')
+            f'{self.date_time_str}_braycurtis_within_clade_profile_distances_{clade_in_question}_sqrt.dist')
         # path for the non transformed distance file
         self.clade_dist_file_path_no_sqrt = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_str}.braycurtis_within_clade_profile_distances_{clade_in_question}_no_sqrt.dist')
+            f'{self.date_time_str}_braycurtis_within_clade_profile_distances_{clade_in_question}_no_sqrt.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_profiles(self):
