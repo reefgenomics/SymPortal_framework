@@ -384,11 +384,11 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         if sqrt:
             clade_dist_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}_unifrac_btwn_profile_distances_{clade_in_question}_sqrt.dist')
+                f'{self.date_time_str}_unifrac_profile_distances_{clade_in_question}_sqrt.dist')
         else:
             clade_dist_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}_unifrac_btwn_profile_distances_{clade_in_question}_no_sqrt.dist')
+                f'{self.date_time_str}_unifrac_profile_distances_{clade_in_question}_no_sqrt.dist')
         dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
         return clade_dist_file_path, ordered_at_names
 
@@ -783,11 +783,11 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         if sqrt:
             clade_dist_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}_unifrac_btwn_sample_distances_{clade_in_question}_sqrt.dist')
+                f'{self.date_time_str}_unifrac_sample_distances_{clade_in_question}_sqrt.dist')
         else:
             clade_dist_file_path = os.path.join(
                 self.clade_output_dir,
-                f'{self.date_time_str}_unifrac_btwn_sample_distances_{clade_in_question}_no_sqrt.dist')
+                f'{self.date_time_str}_unifrac_sample_distances_{clade_in_question}_no_sqrt.dist')
         dist_df.to_csv(header=False, index=True, path_or_buf=clade_dist_file_path, sep='\t')
         return clade_dist_file_path, ordered_sample_names
 
