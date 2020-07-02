@@ -989,7 +989,7 @@ class BaseBrayCurtisDistPCoACreator:
         temp_two_d_list = []
         object_names_from_dist_matrix = []
         object_ids_from_dist_matrix = []
-        for line in raw_dist_file[1:]:
+        for line in raw_dist_file:
             temp_elements = line.split('\t')
             object_names_from_dist_matrix.append(temp_elements[0].replace(' ', ''))
             object_ids_from_dist_matrix.append(int(temp_elements[1]))
@@ -1142,9 +1142,9 @@ class BaseBrayCurtisDistPCoACreator:
 
     def _generate_distance_file(self, sqrt):
         if sqrt:
-            self.clade_dist_file_as_list_sqrt = [len(self.objs_of_clade)]
+            self.clade_dist_file_as_list_sqrt = []
         else:
-            self.clade_dist_file_as_list_no_sqrt = [len(self.objs_of_clade)]
+            self.clade_dist_file_as_list_no_sqrt = []
         for obj_outer in self.objs_of_clade:
             temp_at_string = [obj_outer.id]
 
@@ -1169,11 +1169,11 @@ class BaseBrayCurtisDistPCoACreator:
         # for the output version lets also append the sample name to each line so that we can see which sample it is
         # it is important that we otherwise work eith the sample ID as the sample names may not be unique.
         if sqrt:
-            dist_with_obj_name = [self.clade_dist_file_as_list_sqrt[0]]
-            list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list_sqrt[1:]]
+            dist_with_obj_name = []
+            list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list_sqrt]
         else:
-            dist_with_obj_name = [self.clade_dist_file_as_list_no_sqrt[0]]
-            list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list_no_sqrt[1:]]
+            dist_with_obj_name = []
+            list_of_obj_uids = [int(line.split('\t')[0]) for line in self.clade_dist_file_as_list_no_sqrt]
 
         if self.profiles_or_samples == 'samples':
             objs_of_outputs = self._chunk_query_dss_objs_from_dss_uids(list_of_obj_uids)
@@ -1183,12 +1183,12 @@ class BaseBrayCurtisDistPCoACreator:
             dict_of_obj_id_to_obj_name = {obj.id: obj.name for obj in objs_of_outputs}
 
         if sqrt:
-            for line in self.clade_dist_file_as_list_sqrt[1:]:
+            for line in self.clade_dist_file_as_list_sqrt:
                 self._append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line)
             self.clade_dist_file_as_list_sqrt = dist_with_obj_name
             self.thread_safe_general.write_list_to_destination(self.clade_dist_file_path_sqrt, self.clade_dist_file_as_list_sqrt)
         else:
-            for line in self.clade_dist_file_as_list_no_sqrt[1:]:
+            for line in self.clade_dist_file_as_list_no_sqrt:
                 self._append_obj_name_to_dist_line(dict_of_obj_id_to_obj_name, dist_with_obj_name, line)
             self.clade_dist_file_as_list_no_sqrt = dist_with_obj_name
             self.thread_safe_general.write_list_to_destination(self.clade_dist_file_path_no_sqrt, self.clade_dist_file_as_list_no_sqrt)
