@@ -1529,11 +1529,11 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
         # path for the sqrt transformed distance file
         self.clade_dist_file_path_sqrt = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_str}_braycurtis_within_clade_profile_distances_{clade_in_question}_sqrt.dist')
+            f'{self.date_time_str}_braycurtis_profile_distances_{clade_in_question}_sqrt.dist')
         # path for the non transformed distance file
         self.clade_dist_file_path_no_sqrt = os.path.join(
             self.clade_output_dir,
-            f'{self.date_time_str}_braycurtis_within_clade_profile_distances_{clade_in_question}_no_sqrt.dist')
+            f'{self.date_time_str}_braycurtis_profile_distances_{clade_in_question}_no_sqrt.dist')
         os.makedirs(self.clade_output_dir, exist_ok=True)
 
     def _create_rs_uid_to_normalised_abund_dict_for_each_obj_profiles(self):
