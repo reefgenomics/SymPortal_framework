@@ -78,6 +78,9 @@ class DataSetSample(models.Model):
     def __str__(self):
         return self.name
 
+def get_creation_time_stamp_string():
+    return str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+
 class Study(models.Model):
     objects = models.Manager()
     data_set_samples = models.ManyToManyField(DataSetSample)
@@ -89,13 +92,37 @@ class Study(models.Model):
     article_url = models.CharField(max_length=250, null=True)
     data_url = models.CharField(max_length=250, null=True)
     data_explorer = models.BooleanField(default=False)
+    display_online = models.BooleanField(default=False)
     analysis = models.BooleanField(default=True)
     author_list_string = models.CharField(max_length=500, null=True)
     additional_markers = models.CharField(max_length=200, null=True)
     creation_time_stamp = models.CharField(
         max_length=100,
-        default=str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+        default=get_creation_time_stamp_string
     )
+
+    def __print__(self):
+        print(f'< Study: id {self.id}, name {self.name} >')
+        print(f'title: {self.title}')
+        print(f'is_published: {self.is_published}')
+        print(f'location: {self.location}')
+        print(f'run_type: {self.run_type}')
+        print(f'article_url: {self.article_url}')
+        print(f'data_url: {self.data_url}')
+        print(f'data_explorer: {self.data_explorer}')
+        print(f'display_online: {self.display_online}')
+        print(f'analysis: {self.analysis}')
+        print(f'author_list_string: {self.author_list_string}')
+        print(f'additional_markers: {self.additional_markers}')
+        print(f'creation_time_stamp: {self.creation_time_stamp}')
+        print(f'related to {len(list(self.data_set_samples))} '
+              f'DataSetSamples objects, the first being {list(self.data_set_samples)[0].name}')
+
+    def __str__(self):
+        return f'< Study: id {self.id}, name {self.name} >'
+
+    def __repr__(self):
+        return f'< Study: id {self.id}, name {self.name} >'
 
 class User(models.Model):
     objects = models.Manager()
@@ -107,8 +134,16 @@ class User(models.Model):
     # This value will be set to true, and the ID of the User in the app.db database
     # will be stored in app_db_key below.
     # The id of this object will also be stored in the app.db User object that matches
+    # UPDATE we will phase the use of these out and work directly with the name
+    # that should be unique.
     app_db_key_is_set = models.BooleanField(default=False)
     app_db_key_id = models.IntegerField(null=True)
+
+    def __str__(self):
+        return f'< User: id {self.id}, name {self.name} >'
+
+    def __repr__(self):
+        return f'< User: id {self.id}, name {self.name} >'
 
 class DataAnalysis(models.Model):
     # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis

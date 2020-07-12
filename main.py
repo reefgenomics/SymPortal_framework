@@ -32,7 +32,7 @@ from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 # Your application specific imports
-from dbApp.models import DataSet, DataAnalysis, DataSetSample
+from dbApp.models import DataSet, DataAnalysis, DataSetSample, Study, User
 ############################################
 
 
@@ -50,6 +50,7 @@ from shutil import which
 import time
 import subprocess
 import json
+from django.core.exceptions import ObjectDoesNotExist
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
@@ -61,7 +62,8 @@ class SymPortalWorkFlowManager:
         self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackUp')
         os.makedirs(self.dbbackup_dir, exist_ok=True)
         self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
-        self._check_username()
+        #TODO this is going to be got rid of with the new User and Study system.
+        # self._check_username()
         self.submitting_user = sp_config.user_name
         self.submitting_user_email = sp_config.user_email
         self.number_of_samples = None
@@ -71,6 +73,7 @@ class SymPortalWorkFlowManager:
         self.screen_sub_eval_bool = None
         if sp_config.system_type == 'remote':
             self.screen_sub_eval_bool = True
+            self.study = None
         else:
             self.screen_sub_eval_bool = False
         self.reference_db = 'symClade.fa'
@@ -98,7 +101,11 @@ class SymPortalWorkFlowManager:
 
     def _check_username(self):
         if self.args.print_output_types:
+            # TODO this will be got rid of with the new system. The only thing we will need to keep
+            # is the database write out.
             if sp_config.system_type == 'remote':
+                #TODO this is where we want to implement new logic with regards
+                # to associating a dataset and user. Although actually
                 if self.args.submitting_user_name == 'not supplied':
                     need_user = input('Do you want to associate a user to this type output? [y/n]: ')
                     if need_user == 'y':
@@ -237,26 +244,39 @@ class SymPortalWorkFlowManager:
                  'The input to this function should be a comma separated string of '
                  'the UIDs of the DataSetSample instances '
                  'in question. e.g. 345,346,347,348')
-        group.add_argument(
-            '--print_output_types', metavar='DataSet UIDs, DataAnalysis UID',
-            help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
-                 'data_sets that have been run in a given analysis. '
-                 'Give the data_set uids that you wish to make outputs '
-                 'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
-                 'comma separate the uids of the data_set objects, '
-                 'e.g. 44,45,46. Give the ID of the analysis you wish to '
-                 'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
-                 '--no_figures flag.')
-        group.add_argument(
-            '--print_output_types_sample_set', metavar='DataSetSample UIDs, DataAnalysis UID',
-            help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
-                 'DataSetSample objects that have been run in a given DataAnalysis. Give the DataSetSample '
-                 'UIDs that you wish to make outputs from as arguments to the --print_output_types_sample_set flag. '
-                 'To output for '
-                 'multiple DataSetSample objects, comma separate the UIDs of the DataSetSample objects, '
-                 'e.g. 5644,5645,5646. Give the UID of the DataAnalysis you wish to output these from using the '
-                 '--data_analysis_id flag.\nTo skip the generation of figures pass the '
-                 '--no_figures flag.')
+        if sp_config.system_type == 'local':
+            group.add_argument(
+                '--print_output_types', metavar='DataSet UIDs, DataAnalysis UID',
+                help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
+                     'data_sets that have been run in a given analysis. '
+                     'Give the data_set uids that you wish to make outputs '
+                     'for as arguments to the --print_output_types flag. To output for multiple data_set objects, '
+                     'comma separate the uids of the data_set objects, '
+                     'e.g. 44,45,46. Give the ID of the analysis you wish to '
+                     'output these from using the --data_analysis_id flag.\nTo skip the generation of figures pass the '
+                     '--no_figures flag.')
+            group.add_argument(
+                '--print_output_types_sample_set', metavar='DataSetSample UIDs, DataAnalysis UID',
+                help='Use this function to output the ITS2 sequence and ITS2 type profile count tables for a given set of '
+                     'DataSetSample objects that have been run in a given DataAnalysis. Give the DataSetSample '
+                     'UIDs that you wish to make outputs from as arguments to the --print_output_types_sample_set flag. '
+                     'To output for '
+                     'multiple DataSetSample objects, comma separate the UIDs of the DataSetSample objects, '
+                     'e.g. 5644,5645,5646. Give the UID of the DataAnalysis you wish to output these from using the '
+                     '--data_analysis_id flag.\nTo skip the generation of figures pass the '
+                     '--no_figures flag.')
+        elif sp_config.system_type == 'remote':
+            group.add_argument(
+                '--output_study_from_analysis', metavar='Study UID or name',
+                help='Use this function to output the ITS2 sequence and ITS2 type profile count tables'
+                     ' as well as the associated dissimilarity distances for a given Study object. '
+                     'Give the Study UID or name that you wish to output '
+                     ' as arguments to the --output_study_from_analysis flag. '
+                     'NB. Names should not be numerical. '
+                     'Give the ID of the analysis you wish to '
+                     'output the Study from using the --data_analysis_id flag.', )
+        else:
+            raise NotImplementedError
         group.add_argument(
             '--between_type_distances', metavar='DataSetSample UIDs, DataAnalysis UID',
             help='Use this function to output UniFrac pairwise distances between ITS2 type profiles clade separated')
@@ -299,6 +319,11 @@ class SymPortalWorkFlowManager:
             self.perform_stand_alone_sequence_output()
         elif self.args.print_output_seqs_sample_set:
             self.perform_stand_alone_sequence_output()
+        elif self.args.output_study_from_analysis:
+            # Then we will call one of the below functions after
+            # checking that the study exists and whether the Study's
+            # collection is set by a number of DataSet or DataSetSample UIDs
+            self.output_study_from_analysis()
         elif self.args.print_output_types:
             self.perform_stand_alone_type_output()
         elif self.args.print_output_types_sample_set:
@@ -743,6 +768,28 @@ class SymPortalWorkFlowManager:
         self.output_seq_count_table_obj.make_seq_output_tables()
 
     # STAND_ALONE TYPE OUTPUT
+
+    def output_study_from_analysis(self):
+        # Check that the provided Study object exists
+        # Then run print_output_types_sample_set based on the data_set_samples attribute of the study
+
+        self.study = self._try_to_get_study_object()
+        # Now check to see if its study collection is defined by datasets or by datasetsamples
+        self.args.print_output_types_sample_set = ','.join([dss.id for dss in self.study.data_set_samples])
+
+        # Now rejoin the logic flow for performing a type output as though it were a normal type output
+        self.perform_stand_alone_type_output()
+
+    def _try_to_get_study_object(self):
+        try:
+            return Study.objects.get(name=self.args.output_study_from_analysis)
+        except ObjectDoesNotExist:
+            pass
+        try:
+            return Study.objects.get(id=self.args.output_study_from_analysis)
+        except ObjectDoesNotExist:
+            raise RuntimeError(f'Cannot find Study {self.args.output_study_from_analysis} in the database.')
+
     def perform_stand_alone_type_output(self):
         self._set_data_analysis_obj_from_arg_analysis_uid()
         self.output_dir = os.path.join(
@@ -764,30 +811,27 @@ class SymPortalWorkFlowManager:
             self._do_data_analysis_ordinations()
         self._output_js_output_path_dict()
 
-        if sp_config.system_type == 'remote' and self.args.submitting_user_name != 'not supplied':
+        if sp_config.system_type == 'remote' and self.args.output_study_from_analysis:
             try:
-                self._output_automate_sp_output_items()
+                self._output_study_output_info_items()
             except NotImplementedError as e:
                 print(e)
         self._print_all_outputs_complete()
 
-    def _output_automate_sp_output_items(self):
-        """Produce the automate_sp_output.json file in the output directory
-        and produce a .bak in the dbBackup directory"""
+    def _output_study_output_info_items(self):
+        """
+        Produce the study_output_info.json file in the output directory
+        and produce a .bak in the dbBackup directory
+        """
         bak_path = os.path.join(self.dbbackup_dir, f'symportal_database_backup_{self.date_time_str}.bak')
-        automate_sp_output_path = os.path.join(self.output_dir, 'automate_sp_output.json')
+        study_output_info_path = os.path.join(self.output_dir, 'study_output_info.json')
         # Now output the .json file
         temp_dict = {}
         temp_dict['bak_path'] = bak_path
         temp_dict["time_stamp_str"] = self.date_time_str
-        temp_dict["user"] = self.args.submitting_user_name
-        data_set_uids = [int(_) for _ in self.args.print_output_types.split(',')]
-        if len(data_set_uids) != 1:
-            raise NotImplementedError('the automate_sp_output system is currently only implemented when there is one'
-                                      'dataset being output. The automate_sp_output objects will not be output.'
-                                      ' Otherwise the output will have proceeded as normal.')
-        temp_dict["study"] = DataSet.objects.get(id=data_set_uids[0]).name
-        temp_dict["data_set_id"] = data_set_uids[0]
+        temp_dict["study"] = self.study.name
+
+
         print(f"pg_dumping {bak_path}. This may take some time...")
         try:
             subprocess.run(
@@ -800,11 +844,11 @@ class SymPortalWorkFlowManager:
                 check=True)
 
         print("pg_dump complete")
-        with open(automate_sp_output_path, 'w') as f:
+        with open(study_output_info_path, 'w') as f:
             json.dump(obj=temp_dict, fp=f)
 
-        print(f'automate_sp_output items:\n'
-              f'\t{automate_sp_output_path}\n'
+        print(f'study_output_info items:\n'
+              f'\t{study_output_info_path}\n'
               f'\t{bak_path}')
 
     def _stand_alone_seq_output_from_type_output_data_set(self):

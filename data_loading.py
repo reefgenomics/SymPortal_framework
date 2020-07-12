@@ -1,5 +1,6 @@
 from dbApp.models import (
-    DataSet, ReferenceSequence, DataSetSample, DataSetSampleSequence, CladeCollection, DataSetSampleSequencePM)
+    DataSet, ReferenceSequence, DataSetSample, DataSetSampleSequence,
+    CladeCollection, DataSetSampleSequencePM, Study, User)
 import sys
 import os
 import shutil
@@ -26,6 +27,8 @@ from collections import defaultdict
 import itertools
 import time
 from shutil import which
+import sp_config
+from django.core.exceptions import ObjectDoesNotExist
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -54,6 +57,7 @@ class DataLoading:
             self._get_sample_names_and_create_new_dataset_object_with_datasheet()
         else:
             end_index = self._get_sample_names_and_create_new_dataset_object_without_datasheet()
+
         self.num_proc = min(num_proc, len(self.list_of_samples_names))
         self.temp_working_directory = self._setup_temp_working_directory()
         self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
@@ -71,6 +75,8 @@ class DataLoading:
             self.sample_name_to_seq_files_dict = dict()
             self._generate_stability_file_and_data_set_sample_objects_without_datasheet(end_index)
         self.list_of_dss_objects = DataSetSample.objects.filter(data_submission_from=self.dataset_object)
+        if sp_config.system_type == 'remote':
+            self._associate_study_and_users()
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
@@ -155,6 +161,191 @@ class DataLoading:
         self.pre_med_seq_stop_time = None
         self.multiprocess = multiprocess
         self.start_time = start_time
+
+    def _study_of_name_exists(self, study_name=None):
+        try:
+            if study_name == None:
+                return Study.objects.get(name=self.dataset_object.name)
+            else:
+                return Study.objects.get(name=study_name)
+        except ObjectDoesNotExist:
+            return False
+
+    def _associate_study_and_users(self):
+        """
+        At this point we have checked the datasheet and created a new DataSet object
+        We have also created the DataSetSample objects. We will now ask whether the user
+        would like to associate a Study object if on the remote system and whether
+        users should be associated. We will make a default Study object and give the user
+        the option to change the attributes associated with the object.
+        We will then ask if a user or multiple users should be associated to the given dataset
+        If the users don't exist then we can create them.
+        :return:
+        """
+        while True:
+            restart = False
+            print("\nYou can enter '3' at any of the command prompts to start this process again")
+            continue_text = input(f'Associate DataSet {self.dataset_object.name} to a Study [y/n]: ')
+            if continue_text == 'y':
+                if not self._study_of_name_exists():
+                    new_study_object, restart = self._create_study_object(restart)
+                else:
+                    study_name = self.dataset_object.name
+                    while True:
+                        print(f"Study with name '{study_name}' already exists.")
+                        continue_text = input('Do you want to update/overwrite the current data_set_samples '
+                                              'associated with this study to the current DataSetSamples? [y/n]: ')
+                        if continue_text == 'y':
+                            # We will simply set new_study_object to point to the current Study object
+                            # The new DataSetSample objects will be updated later.
+                            new_study_object = Study.objects.get(name=study_name)
+                            break
+                        elif continue_text == '3':
+                            restart = True
+                            break
+                        elif continue_text == 'n':
+                            study_name = input('Please provide a name for the new dataset: ')
+                            if self._study_of_name_exists(study_name):
+                                continue
+                            else:
+                                new_study_object, restart = self._create_study_object(restart=restart, name=study_name)
+                                break
+                # If we were given a '3', restart the process
+                if restart:
+                    continue
+
+                while True:
+                    continue_text = input('Associate one or more users to this Study? [y/n]: ')
+                    if continue_text == 'y':
+                        continue_text = input("Enter a comma separated string of the usernames for the users you "
+                                              "wish to create. For example: 'jbloggs,vshnazzy': ")
+                        user_names_to_associate = continue_text.split(',')
+                        if len(user_names_to_associate) == 0:
+                            # Then it was left blank
+                            # Go back to the prompt
+                            print('Please enter at least one username.')
+                            continue
+                        users_that_already_exist, users_that_do_not_exist = self._check_to_see_if_users_exist(
+                            user_names_to_associate)
+                        self._print_out_users(users_that_already_exist, users_that_do_not_exist)
+                        continue_text = input("\nIs this correct? [y/n]")
+                        if continue_text == 'y':
+                            self._create_study_users_and_associate(new_study_object, users_that_already_exist,
+                                                                   users_that_do_not_exist)
+                            break
+                        elif continue_text == 'n':
+                            # Then something went wrong and we should start again
+                            continue
+                    elif continue_text == 'n':
+                        new_study_object.save()
+                        print(f'setting data_set_samples list for Study {new_study_object}')
+                        new_study_object.data_set_samples.set(self.list_of_dss_objects)
+                        new_study_object.save()
+                        print(f'Created {new_study_object} with no users associated.')
+                        break
+                    elif continue_text == '3':
+                        restart = True
+                        break
+                if restart:
+                    continue
+                else:
+                    # If we are not restarting then we have successfuly associated any necessary
+                    # Study and User objects and we can return
+                    print(f'\n\nDataSet {self.dataset_object.name} now associated to Study {new_study_object}')
+                    print(f'Study {new_study_object} now associated to user(s):')
+                    for user in new_study_object.user_set.all():
+                        print(f'\t{user}')
+                    return
+            elif continue_text == 'n':
+                return
+            elif continue_text == '3':
+                continue
+            else:
+                print('Unrecognised response. Please answer y or n.')
+
+    def _create_study_users_and_associate(self, new_study_object, users_that_already_exist, users_that_do_not_exist):
+        # Now we can create the Study
+        new_study_object.save()
+        new_study_object.data_set_samples.set(self.list_of_dss_objects)
+        new_study_object.save()
+        # First make the new users
+        if users_that_do_not_exist:
+            print('Creating new users:')
+            for user in users_that_do_not_exist:
+                new_user = User(name=user)
+                new_user.save()
+                new_user.studies.add(new_study_object)
+                new_user.save()
+                print(f'\t{new_user}')
+        # Then associate the study to existing Users
+        if users_that_already_exist:
+            for user in users_that_already_exist:
+                user.studies.add(new_study_object)
+                user.save()
+        # At this point we have completed the associations
+
+    def _print_out_users(self, users_that_already_exist, users_that_do_not_exist):
+        if users_that_already_exist:
+            print('The following users already exist and the Study will be associated to them:')
+            for user in users_that_already_exist:
+                print(f'\t{user}')
+        if users_that_do_not_exist:
+            print('\nThe following users will be created:')
+            for user in users_that_do_not_exist:
+                print(f'\t{user}')
+
+    def _check_to_see_if_users_exist(self, list_of_usernames):
+        # This will be the actual database ORM User objects
+        exists = []
+        # This will be a list of usernames to create as strings
+        do_not_exist = []
+        for username in list_of_usernames:
+            try:
+                exists.append(User.objects.get(name=username))
+            except ObjectDoesNotExist:
+                do_not_exist.append(username)
+        return exists, do_not_exist
+
+    def _print_non_init_study_summary(self, study):
+        print(f'< Study >')
+        print(f'name: {study.name}')
+        print(f'title: {study.title}')
+        print(f'is_published: {study.is_published}')
+        print(f'location: {study.location}')
+        print(f'run_type: {study.run_type}')
+        print(f'article_url: {study.article_url}')
+        print(f'data_url: {study.data_url}')
+        print(f'data_explorer: {study.data_explorer}')
+        print(f'display_online: {study.display_online}')
+        print(f'analysis: {study.analysis}')
+        print(f'author_list_string: {study.author_list_string}')
+        print(f'additional_markers: {study.additional_markers}')
+        print(f'creation_time_stamp: {study.creation_time_stamp}')
+
+    def _create_study_object(self, restart, name=None):
+        while True:
+            print('The default Study object that will be created will be:\n')
+            if name is None:
+                new_study_object = Study(
+                    name=self.dataset_object.name,
+                    creation_time_stamp=self.date_time_str, title=self.dataset_object.name)
+            else:
+                new_study_object = Study(
+                    name=name,
+                    creation_time_stamp=self.date_time_str, title=name)
+            self._print_non_init_study_summary(new_study_object)
+            continue_text = input('Continue? [y/n]: ')
+            if continue_text == 'y':
+                break
+            elif continue_text == 'n':
+                restart = True
+                break
+            elif continue_text == '3':
+                restart = True
+                break
+            else:
+                pass
+        return new_study_object, restart
 
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
