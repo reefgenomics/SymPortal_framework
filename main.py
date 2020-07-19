@@ -432,21 +432,28 @@ class SymPortalWorkFlowManager:
 
             # here output the js_output_path item for the DataExplorer
             self._output_js_output_path_dict()
-            print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
-                  f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
-            self.data_analysis_object.analysis_complete_time_stamp = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
-            self.data_analysis_object.save()
-            print(f'DataSet analysis_complete_time_stamp: '
-                  f'{self.data_analysis_object.analysis_complete_time_stamp}\n\n\n')
+            self._print_analysis_obj_attributes()
 
         else:
             print('\nOutputs skipped at user\'s request\n')
+            self._print_analysis_obj_attributes()
+
+    def _print_analysis_obj_attributes(self):
+        try:
+            print(f'\n ANALYSIS COMPLETE:\n'
+                  f'\tDataAnalysis name: {self.data_analysis_object.name}\n'
+                  f'\tDataAnalysis UID: {self.data_analysis_object.id}\n'
+                  f'\tStudy name: {self.study.name}\n'
+                  f'\tStudy UID: {self.study.name}')
+        except AttributeError:
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
                   f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
-            self.data_analysis_object.analysis_complete_time_stamp = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
-            self.data_analysis_object.save()
-            print(f'DataSet analysis_complete_time_stamp: '
-                  f'{self.data_analysis_object.analysis_complete_time_stamp}\n\n\n')
+        self.data_analysis_object.analysis_complete_time_stamp = str(
+            datetime.now()
+        ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
+        self.data_analysis_object.save()
+        print(f'DataSet analysis_complete_time_stamp: '
+              f'{self.data_analysis_object.analysis_complete_time_stamp}\n\n\n')
 
     def _verify_name_arg_given_analysis(self):
         if self.args.name == 'noName':
