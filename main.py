@@ -256,6 +256,8 @@ class SymPortalWorkFlowManager:
                      'NB. Names should not be numerical. '
                      'Give the ID of the analysis you wish to '
                      'output the Study from using the --data_analysis_id flag.', )
+            group.add_argument(
+            '--display_studies', action='store_true', help='Display studies currently in the framework\'s database')
         else:
             raise NotImplementedError
         group.add_argument(
@@ -316,16 +318,29 @@ class SymPortalWorkFlowManager:
             self._perform_sample_distance_stand_alone()
 
         # DB display functions
-        elif self.args.display_data_sets:
-            self.perform_display_data_sets()
-        elif self.args.display_analyses:
-            self.perform_display_analysis_types()
-        elif self.args.vacuum_database:
-            self.perform_vacuum_database()
+        elif self._check_for_display_arguments():
+            return
 
         # Apply datasheet
         elif self.args.apply_data_sheet:
             self.apply_datasheet_to_dataset_samples()
+
+    def _check_for_display_arguments(self):
+        if self.args.display_data_sets:
+            self.perform_display_data_sets()
+            return True
+        elif self.args.display_analyses:
+            self.perform_display_analysis_types()
+            return True
+        elif self.args.vacuum_database:
+            self.perform_vacuum_database()
+            return True
+        # Only if we are running as remote, check for study output
+        if sp_config.system_type == 'remote':
+            if self.args.display_studies:
+                self.perform_display_studies()
+                return True
+        return False
 
     def _check_for_type_output(self):
         if sp_config.system_type == 'local':
@@ -1178,6 +1193,16 @@ class SymPortalWorkFlowManager:
         for ds_id in sorted_list_of_ids:
             ds_in_q = data_set_id_to_obj_dict[ds_id]
             print(f'{ds_in_q.id}: {ds_in_q.name}\t{ds_in_q.time_stamp}')
+
+    @ staticmethod
+    def perform_display_studies():
+        ordered_studies = Study.objects.order_by('id')
+        for study in ordered_studies:
+            print(f'{study.id}\t{study.name}: {",".join([user.name for user in study.user_set.all()])}')
+            # print('Users:')
+            # for user in study.user_set.all():
+            #     print(f'{user.id}\t{user.name}')
+            # print('\n\n')
 
     @staticmethod
     def perform_display_analysis_types():
