@@ -62,8 +62,6 @@ class SymPortalWorkFlowManager:
         self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackUp')
         os.makedirs(self.dbbackup_dir, exist_ok=True)
         self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
-        #TODO this is going to be got rid of with the new User and Study system.
-        # self._check_username()
         self.submitting_user = sp_config.user_name
         self.submitting_user_email = sp_config.user_email
         self.number_of_samples = None
@@ -98,23 +96,6 @@ class SymPortalWorkFlowManager:
         # Variables that will hold the distance class objects
         self.unifrac_distance_object = None
         self.braycurtis_distance_object = None
-
-    def _check_username(self):
-        if self.args.print_output_types:
-            # TODO this will be got rid of with the new system. The only thing we will need to keep
-            # is the database write out.
-            if sp_config.system_type == 'remote':
-                #TODO this is where we want to implement new logic with regards
-                # to associating a dataset and user. Although actually
-                if self.args.submitting_user_name == 'not supplied':
-                    need_user = input('Do you want to associate a user to this type output? [y/n]: ')
-                    if need_user == 'y':
-                        while True:
-                            username = input('Please provide the username you want to associate: ')
-                            is_correct = input(f'Is {username} correct? [y/n]: ')
-                            if is_correct == 'y':
-                                self.args.submitting_user_name = username
-                                break
 
     def _redefine_arg_analyse(self):
         """When the user passes the argument --analyse_next then we will find the UIDs
@@ -319,16 +300,9 @@ class SymPortalWorkFlowManager:
             self.perform_stand_alone_sequence_output()
         elif self.args.print_output_seqs_sample_set:
             self.perform_stand_alone_sequence_output()
-        elif self.args.output_study_from_analysis:
-            # Then we will call one of the below functions after
-            # checking that the study exists and whether the Study's
-            # collection is set by a number of DataSet or DataSetSample UIDs
-            self.output_study_from_analysis()
-        elif self.args.print_output_types:
-            self.perform_stand_alone_type_output()
-        elif self.args.print_output_types_sample_set:
-            self.perform_stand_alone_type_output()
-
+        elif self._check_for_type_output():
+            # Type profile outputs dependent on sp_config.system_type
+            return
         # Distances
         elif self.args.between_type_distances:
             self.perform_type_distance_stand_alone()
@@ -352,6 +326,24 @@ class SymPortalWorkFlowManager:
         # Apply datasheet
         elif self.args.apply_data_sheet:
             self.apply_datasheet_to_dataset_samples()
+
+    def _check_for_type_output(self):
+        if sp_config.system_type == 'local':
+            if self.args.print_output_types:
+                self.perform_stand_alone_type_output()
+            elif self.args.print_output_types_sample_set:
+                self.perform_stand_alone_type_output()
+            else:
+                return False
+        elif sp_config.system_type == 'remote':
+            if self.args.output_study_from_analysis:
+                # Then we will call one of the below functions after
+                # checking that the study exists and whether the Study's
+                # collection is set by a number of DataSet or DataSetSample UIDs
+                self.output_study_from_analysis()
+            else:
+                return False
+        return True
 
     # GENERAL
     def _plot_if_not_too_many_samples(self, plotting_function):

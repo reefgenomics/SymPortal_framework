@@ -228,7 +228,7 @@ class DataLoading:
                         users_that_already_exist, users_that_do_not_exist = self._check_to_see_if_users_exist(
                             user_names_to_associate)
                         self._print_out_users(users_that_already_exist, users_that_do_not_exist)
-                        continue_text = input("\nIs this correct? [y/n]")
+                        continue_text = input("\nIs this correct? [y/n]: ")
                         if continue_text == 'y':
                             self._create_study_users_and_associate(new_study_object, users_that_already_exist,
                                                                    users_that_do_not_exist)
@@ -1196,7 +1196,7 @@ class DataLoading:
 
         self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].astype(str)
         self.sample_meta_info_df['sample_name'] = self.sample_meta_info_df['sample_name'].str.rstrip()\
-            .str.lstrip().str.replace(' ', '_').str.replace('/', '_')
+            .str.lstrip().str.replace(' ', '_').str.replace('/', '_').str.replace('α', 'alpha').str.replace('β', 'beta')
 
         self.sample_meta_info_df.set_index('sample_name', inplace=True, drop=True)
 
