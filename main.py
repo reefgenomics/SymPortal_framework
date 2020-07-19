@@ -788,8 +788,8 @@ class SymPortalWorkFlowManager:
         # Then run print_output_types_sample_set based on the data_set_samples attribute of the study
 
         self.study = self._try_to_get_study_object()
-        # Now check to see if its study collection is defined by datasets or by datasetsamples
-        self.args.print_output_types_sample_set = ','.join([dss.id for dss in self.study.data_set_samples])
+        
+        self.args.print_output_types_sample_set = ','.join([str(dss.id) for dss in self.study.data_set_samples.all()])
 
         # Now rejoin the logic flow for performing a type output as though it were a normal type output
         self.perform_stand_alone_type_output()
