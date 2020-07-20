@@ -301,13 +301,19 @@ class SPDataAnalysis:
                 self.blast_output_dict = {blast_line.split('\t')[0]:blast_line.split('\t')[1:] for blast_line in
                                           self.blast_analysis_object.return_blast_output_as_list()}
 
+                # It will be possible that some of the queries did not return a match
+                # as such, we should assert that all did
+                assert(set([int(_) for _ in self.blast_output_dict.keys()]) == set(self.unamed_div_uid_to_div_obj.keys()))
+                
                 self._generate_and_assign_new_names()
 
                 self._regenerate_vat_names()
 
         def _regenerate_vat_names(self):
-            """Some of the DIVs were not names and so their ID was being used in the vat name.
-            Now that all DIVs have names, use these names."""
+            """
+            Some of the DIVs were not names and so their ID was being used in the vat name.
+            Now that all DIVs have names, use these names. Not that we will need to refreash
+            the ReferenceSequence objects that didn't have names now that we have done the naming."""
             print('Regenerating VirtualAnalysisType names')
             for vat in self.sp_data_analysis.virtual_object_manager.vat_manager.vat_dict.values():
                 vat.generate_name(at_df=vat.multi_modal_detection_rel_abund_df)
@@ -315,6 +321,11 @@ class SPDataAnalysis:
 
         def _generate_and_assign_new_names(self):
             # Now assign names to those that aren't exact matches
+            # NB this was causing us issues as although we have updated the db object,
+            # and we have updated one of th instances of the ref seq we are hold in memory
+            # if there were multiple instances of the refseq objects, these other instances
+            # will not have been updated.
+            # We will update these in the following method
             for no_name_ref_seq_id, output_items in self.blast_output_dict.items():
                 ref_seq_in_question = self.unamed_div_uid_to_div_obj[int(no_name_ref_seq_id)]
                 if not ref_seq_in_question.has_name:

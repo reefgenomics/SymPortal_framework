@@ -419,7 +419,7 @@ class VirutalAnalysisTypeInit:
                 for ref_seq in self.vat.footprint_as_ref_seq_objs_set:
                     if ref_seq.id == ref_seq_id:
                         ordered_list_of_ref_seqs.append(ref_seq)
-            self.vat.name = '-'.join(rs.name for rs in ordered_list_of_ref_seqs)
+            self.vat.name = '-'.join(rs.name if rs.has_name else str(rs.id) for rs in ordered_list_of_ref_seqs)
 
 
 class VirtualAnalysisTypeManager():
@@ -649,6 +649,23 @@ class VirtualAnalysisTypeManager():
                 self.species = None
 
         def generate_name(self, at_df, use_rs_ids_rather_than_names=False):
+            """
+            If we are here, and use_rs_ids_rather_than_names is False
+            then we are naming the vats after the DIVs should have been named.
+            As such we can run assertions to check that all DIVs have names.
+            """
+            if not use_rs_ids_rather_than_names:
+                if not all([rs.has_name for rs in self.footprint_as_ref_seq_objs_set]):
+                    # Then some of the ReferenceSequence do not have names assigned.
+                    # Something has gone wrong.
+                    # First try to reload all of the ReferenceSeqeunce objects
+                    # and then test again. Then raise error if still wrong.
+                    self.footprint_as_ref_seq_objs_set = frozenset(ReferenceSequence.objects.filter(id__in=[_.id for _ in self.footprint_as_ref_seq_objs_set]))
+                    if not all([rs.has_name for rs in self.footprint_as_ref_seq_objs_set]):
+                        raise RuntimeError('Unamed DIVs remain despite renaming occuring')
+                    else:
+                        # The refresh has solved the problem
+                        pass
             if self.co_dominant:
                 list_of_maj_ref_seq = [rs for rs in self.footprint_as_ref_seq_objs_set if
                                        rs.id in self.majority_reference_sequence_uid_set]
