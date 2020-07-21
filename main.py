@@ -794,10 +794,6 @@ class SymPortalWorkFlowManager:
         # Now rejoin the logic flow for performing a type output as though it were a normal type output
         self.perform_stand_alone_type_output()
 
-        # Finaly set the display_online and the data_explorer attribute of the study to True
-        self.study.display_online = True
-        self.study.data_explorer = True
-        self.study.save()
 
     def _try_to_get_study_object(self):
         try:
@@ -850,6 +846,10 @@ class SymPortalWorkFlowManager:
         temp_dict["time_stamp_str"] = self.date_time_str
         temp_dict["study"] = self.study.name
 
+        # Set the display_online and the data_explorer attribute of the study to True
+        self.study.display_online = True
+        self.study.data_explorer = True
+        self.study.save()
 
         print(f"pg_dumping {bak_path}. This may take some time...")
         try:
