@@ -778,7 +778,6 @@ class OutputTypeCountTable:
                     vccs_of_output_of_vat.append(vcc)
             list_of_tup_vat_to_vccs_of_output.append((vat, len(vccs_of_output_of_vat)))
 
-        #TODO sorted
         self.overall_sorted_list_of_vats = [vat for vat, num_vcc_of_output in
                               sorted(list_of_tup_vat_to_vccs_of_output, key=lambda x: x[1], reverse=True) if num_vcc_of_output != 0]
 

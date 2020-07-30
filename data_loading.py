@@ -29,6 +29,7 @@ import time
 from shutil import which
 import sp_config
 from django.core.exceptions import ObjectDoesNotExist
+from django_general import CreateStudyAndAssociateUsers
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -36,7 +37,8 @@ class DataLoading:
     clade_list = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']
 
     def __init__(
-            self, parent_work_flow_obj, user_input_path, datasheet_path, screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
+            self, parent_work_flow_obj, user_input_path, datasheet_path,
+            screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
             distance_method, no_pre_med_seqs, multiprocess, start_time, debug=False):
         self.parent = parent_work_flow_obj
         self.thread_safe_general = ThreadSafeGeneral()
@@ -76,7 +78,9 @@ class DataLoading:
             self._generate_stability_file_and_data_set_sample_objects_without_datasheet(end_index)
         self.list_of_dss_objects = DataSetSample.objects.filter(data_submission_from=self.dataset_object)
         if sp_config.system_type == 'remote':
-            self._associate_study_and_users()
+            csaau = CreateStudyAndAssociateUsers(
+                date_time_str=self.date_time_str, ds=self.dataset_object, list_of_dss_objects=self.list_of_dss_objects)
+            csaau.create_study_and_user_objects()
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
@@ -103,7 +107,8 @@ class DataLoading:
         # the afore mentioned paired files.
         self.is_single_file_or_paired_input = self._determine_if_single_file_or_paired_input()
         self.debug = debug
-        self.symclade_db_directory_path = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniaceaeDB'))
+        self.symclade_db_directory_path = os.path.abspath(os.path.join(
+            self.symportal_root_directory, 'symbiodiniaceaeDB'))
         self.symclade_db_full_path = os.path.join(self.symclade_db_directory_path, 'symClade.fa')
 
         self.path_to_mothur_batch_file_for_dot_file_creation = None
@@ -162,191 +167,6 @@ class DataLoading:
         self.multiprocess = multiprocess
         self.start_time = start_time
 
-    def _study_of_name_exists(self, study_name=None):
-        try:
-            if study_name == None:
-                return Study.objects.get(name=self.dataset_object.name)
-            else:
-                return Study.objects.get(name=study_name)
-        except ObjectDoesNotExist:
-            return False
-
-    def _associate_study_and_users(self):
-        """
-        At this point we have checked the datasheet and created a new DataSet object
-        We have also created the DataSetSample objects. We will now ask whether the user
-        would like to associate a Study object if on the remote system and whether
-        users should be associated. We will make a default Study object and give the user
-        the option to change the attributes associated with the object.
-        We will then ask if a user or multiple users should be associated to the given dataset
-        If the users don't exist then we can create them.
-        :return:
-        """
-        while True:
-            restart = False
-            print("\nYou can enter '3' at any of the command prompts to start this process again")
-            continue_text = input(f'Associate DataSet {self.dataset_object.name} to a Study [y/n]: ')
-            if continue_text == 'y':
-                if not self._study_of_name_exists():
-                    new_study_object, restart = self._create_study_object(restart)
-                else:
-                    study_name = self.dataset_object.name
-                    while True:
-                        print(f"Study with name '{study_name}' already exists.")
-                        continue_text = input('Do you want to update/overwrite the current data_set_samples '
-                                              'associated with this study to the current DataSetSamples? [y/n]: ')
-                        if continue_text == 'y':
-                            # We will simply set new_study_object to point to the current Study object
-                            # The new DataSetSample objects will be updated later.
-                            new_study_object = Study.objects.get(name=study_name)
-                            break
-                        elif continue_text == '3':
-                            restart = True
-                            break
-                        elif continue_text == 'n':
-                            study_name = input('Please provide a name for the new dataset: ')
-                            if self._study_of_name_exists(study_name):
-                                continue
-                            else:
-                                new_study_object, restart = self._create_study_object(restart=restart, name=study_name)
-                                break
-                # If we were given a '3', restart the process
-                if restart:
-                    continue
-
-                while True:
-                    continue_text = input('Associate one or more users to this Study? [y/n]: ')
-                    if continue_text == 'y':
-                        continue_text = input("Enter a comma separated string of the usernames for the users you "
-                                              "wish to create. For example: 'jbloggs,vshnazzy': ")
-                        user_names_to_associate = continue_text.split(',')
-                        if len(user_names_to_associate) == 0:
-                            # Then it was left blank
-                            # Go back to the prompt
-                            print('Please enter at least one username.')
-                            continue
-                        users_that_already_exist, users_that_do_not_exist = self._check_to_see_if_users_exist(
-                            user_names_to_associate)
-                        self._print_out_users(users_that_already_exist, users_that_do_not_exist)
-                        continue_text = input("\nIs this correct? [y/n]: ")
-                        if continue_text == 'y':
-                            self._create_study_users_and_associate(new_study_object, users_that_already_exist,
-                                                                   users_that_do_not_exist)
-                            break
-                        elif continue_text == 'n':
-                            # Then something went wrong and we should start again
-                            continue
-                    elif continue_text == 'n':
-                        new_study_object.save()
-                        print(f'setting data_set_samples list for Study {new_study_object}')
-                        new_study_object.data_set_samples.set(self.list_of_dss_objects)
-                        new_study_object.save()
-                        print(f'Created {new_study_object} with no users associated.')
-                        break
-                    elif continue_text == '3':
-                        restart = True
-                        break
-                if restart:
-                    continue
-                else:
-                    # If we are not restarting then we have successfuly associated any necessary
-                    # Study and User objects and we can return
-                    print(f'\n\nDataSet {self.dataset_object.name} now associated to Study {new_study_object}')
-                    print(f'Study {new_study_object} now associated to user(s):')
-                    for user in new_study_object.user_set.all():
-                        print(f'\t{user}')
-                    return
-            elif continue_text == 'n':
-                return
-            elif continue_text == '3':
-                continue
-            else:
-                print('Unrecognised response. Please answer y or n.')
-
-    def _create_study_users_and_associate(self, new_study_object, users_that_already_exist, users_that_do_not_exist):
-        # Now we can create the Study
-        new_study_object.save()
-        new_study_object.data_set_samples.set(self.list_of_dss_objects)
-        new_study_object.save()
-        # First make the new users
-        if users_that_do_not_exist:
-            print('Creating new users:')
-            for user in users_that_do_not_exist:
-                new_user = User(name=user)
-                new_user.save()
-                new_user.studies.add(new_study_object)
-                new_user.save()
-                print(f'\t{new_user}')
-        # Then associate the study to existing Users
-        if users_that_already_exist:
-            for user in users_that_already_exist:
-                user.studies.add(new_study_object)
-                user.save()
-        # At this point we have completed the associations
-
-    def _print_out_users(self, users_that_already_exist, users_that_do_not_exist):
-        if users_that_already_exist:
-            print('The following users already exist and the Study will be associated to them:')
-            for user in users_that_already_exist:
-                print(f'\t{user}')
-        if users_that_do_not_exist:
-            print('\nThe following users will be created:')
-            for user in users_that_do_not_exist:
-                print(f'\t{user}')
-
-    def _check_to_see_if_users_exist(self, list_of_usernames):
-        # This will be the actual database ORM User objects
-        exists = []
-        # This will be a list of usernames to create as strings
-        do_not_exist = []
-        for username in list_of_usernames:
-            try:
-                exists.append(User.objects.get(name=username))
-            except ObjectDoesNotExist:
-                do_not_exist.append(username)
-        return exists, do_not_exist
-
-    def _print_non_init_study_summary(self, study):
-        print(f'< Study >')
-        print(f'name: {study.name}')
-        print(f'title: {study.title}')
-        print(f'is_published: {study.is_published}')
-        print(f'location: {study.location}')
-        print(f'run_type: {study.run_type}')
-        print(f'article_url: {study.article_url}')
-        print(f'data_url: {study.data_url}')
-        print(f'data_explorer: {study.data_explorer}')
-        print(f'display_online: {study.display_online}')
-        print(f'analysis: {study.analysis}')
-        print(f'author_list_string: {study.author_list_string}')
-        print(f'additional_markers: {study.additional_markers}')
-        print(f'creation_time_stamp: {study.creation_time_stamp}')
-
-    def _create_study_object(self, restart, name=None):
-        while True:
-            print('The default Study object that will be created will be:\n')
-            if name is None:
-                new_study_object = Study(
-                    name=self.dataset_object.name,
-                    creation_time_stamp=self.date_time_str, title=self.dataset_object.name)
-            else:
-                new_study_object = Study(
-                    name=name,
-                    creation_time_stamp=self.date_time_str, title=name)
-            self._print_non_init_study_summary(new_study_object)
-            continue_text = input('Continue? [y/n]: ')
-            if continue_text == 'y':
-                break
-            elif continue_text == 'n':
-                restart = True
-                break
-            elif continue_text == '3':
-                restart = True
-                break
-            else:
-                pass
-        return new_study_object, restart
-
     def load_data(self):
         self._copy_and_decompress_input_files_to_temp_wkd()
 
@@ -395,7 +215,8 @@ class DataLoading:
         print('\n\nDATA LOADING COMPLETE')
         print(f'DataSet id: {self.dataset_object.id}')
         print(f'DataSet name: {self.dataset_object.name}')
-        self.dataset_object.loading_complete_time_stamp = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+        self.dataset_object.loading_complete_time_stamp = str(
+            datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.dataset_object.save()
         print(f'Loading completed in {time.time() - self.start_time}s')
         print(f'DataSet loading_complete_time_stamp: {self.dataset_object.loading_complete_time_stamp}\n\n\n')
@@ -731,7 +552,8 @@ class DataLoading:
 
     def _taxa_screening_make_new_symclade_db(self, combined_fasta):
         self.thread_safe_general.write_list_to_destination(self.symclade_db_full_path, combined_fasta)
-        self.thread_safe_general.make_new_blast_db(input_fasta_to_make_db_from=self.symclade_db_full_path, db_title='symClade')
+        self.thread_safe_general.make_new_blast_db(
+            input_fasta_to_make_db_from=self.symclade_db_full_path, db_title='symClade')
 
     def _taxa_screening_combine_new_symclade_seqs_with_current(self, new_symclade_fasta_as_list):
         old_symclade_fasta_as_list = self.thread_safe_general.read_defined_file_to_list(self.symclade_db_full_path)
@@ -793,7 +615,8 @@ class DataLoading:
                 )
                 sequence_number_counter += 1
         if self.sequences_to_screen_fasta_as_list:
-            self.thread_safe_general.write_list_to_destination(self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
+            self.thread_safe_general.write_list_to_destination(
+                self.sequences_to_screen_fasta_path, self.sequences_to_screen_fasta_as_list)
 
     def _create_symclade_backup_incase_of_accidental_deletion_of_corruption(self):
         back_up_dir = os.path.abspath(os.path.join(self.symportal_root_directory, 'symbiodiniaceaeDB', 'symClade_backup'))
@@ -874,7 +697,9 @@ class DataLoading:
                 self.list_of_fastq_files_in_wkd.append(file)
 
         if len(self.list_of_fastq_files_in_wkd) < 3:
-            raise RuntimeError(f'Cannot auto infer names from {len(self.list_of_fastq_files_in_wkd)} fastq files. Please use a datasheet.')
+            raise RuntimeError(
+                f'Cannot auto infer names from {len(self.list_of_fastq_files_in_wkd)} fastq files. '
+                f'Please use a datasheet.')
 
         end_index = self._identify_sample_names_without_datasheet()
 
@@ -952,7 +777,8 @@ class DataLoading:
         # Reinit the list_of_samples_names so from the sample_name_to_seq_files_dict so that
         # the samples that had files that were below the 300 byte size threshold are removed form the list
         self.list_of_samples_names = list(self.sample_name_to_seq_files_dict.keys())
-        self.thread_safe_general.write_list_to_destination(r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
+        self.thread_safe_general.write_list_to_destination(
+            r'{0}/stability.files'.format(self.temp_working_directory), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
 
     @staticmethod
@@ -1072,7 +898,8 @@ class DataLoading:
                 )
             )
             sample_fastq_pairs.append('\t'.join(temp_list))
-        self.thread_safe_general.write_list_to_destination(os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
+        self.thread_safe_general.write_list_to_destination(
+            os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
 
     def _create_data_set_sample_objects_in_bulk_with_datasheet(self):
@@ -1871,7 +1698,9 @@ class FastDataSetSampleSequencePMCreator:
 
             # Now get the newly create ref seq objects back and create a dict form them
             # with rs sequence as key and the rs object itself as the value
-            new_rs_seq_to_obj_dict = {rs.sequence: rs for rs in ReferenceSequence.objects.filter(sequence__in=list(self.non_match_dict.keys()))}
+            new_rs_seq_to_obj_dict = {
+                rs.sequence: rs for rs in ReferenceSequence.objects.filter(
+                    sequence__in=list(self.non_match_dict.keys()))}
             # Now go back through the no match dict and use this dictionary to poulate the match dictionary
             for c_seq in self.non_match_dict.keys():
                 self.match_dict[new_rs_seq_to_obj_dict[c_seq]] = self.non_match_dict[c_seq]
@@ -2095,7 +1924,8 @@ class InitialMothurWorker:
                 raise RuntimeError({'sample_name': self.sample_name})
 
     def _write_out_final_name_and_fasta_for_tax_screening(self):
-        name_file_as_list = self.thread_safe_general.read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
+        name_file_as_list = self.thread_safe_general.read_defined_file_to_list(
+            self.mothur_analysis_object.name_file_path)
         taxonomic_screening_name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
         self.thread_safe_general.write_list_to_destination(taxonomic_screening_name_file_path, name_file_as_list)
         fasta_file_as_list = self.thread_safe_general.read_defined_file_to_list(self.mothur_analysis_object.fasta_path)
@@ -2178,7 +2008,9 @@ class PotentialSymTaxScreeningHandler:
     screening against the NCBI database. We also rely on this method to do the blast of our each samples sequences
     against our symclade.fa reference sequences database. We read in the blast.out file in the later functions.
     """
-    def __init__(self, samples_that_caused_errors_in_qc_list, checked_samples_list, list_of_samples_names, num_proc, multiprocess):
+    def __init__(
+            self, samples_that_caused_errors_in_qc_list,
+            checked_samples_list, list_of_samples_names, num_proc, multiprocess):
         self.multiprocess = multiprocess
         if self.multiprocess:
             self.input_queue = mp_Queue()
@@ -2306,7 +2138,8 @@ class PotentialSymTaxScreeningWorker:
         self.fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
         self.fasta_dict = self.thread_safe_general.create_dict_from_fasta(fasta_path=self.fasta_file_path)
         self.name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
-        self.name_dict = {a.split('\t')[0]: a for a in self.thread_safe_general.read_defined_file_to_list(self.name_file_path)}
+        self.name_dict = {
+            a.split('\t')[0]: a for a in self.thread_safe_general.read_defined_file_to_list(self.name_file_path)}
         self.path_to_symclade_db = path_to_symclade_db
         self.debug = debug
         # This is a managed dictionary where key is a nucleotide sequence that has:
@@ -2319,7 +2152,8 @@ class PotentialSymTaxScreeningWorker:
         # that is being added to the symClade reference database
         self.sub_evalue_nucleotide_sequence_to_clade_mp_dict = sub_evalue_nucleotide_sequence_to_clade_mp_dict
         # The potential_non_symbiodiniaceae_sequences_list is used to see if there are any samples, that don't have
-        # any potential non symbiodnium sequences. i.e. only definite symbiodiniaceae sequences. These samples are added to
+        # any potential non symbiodnium sequences. i.e. only definite symbiodiniaceae sequences.
+        # These samples are added to
         # the checked list and are not checked in following iterations to speed things up.
         self.potential_non_symbiodiniaceae_sequences_list = []
         self.sequence_name_to_clade_dict = None
@@ -2399,7 +2233,8 @@ class PotentialSymTaxScreeningWorker:
         Finally, it will also populate a nucleotide sequence to clade dictionary that will be used outside of
         the MPing to append the clade of a given sequences that is being added to the symClade reference database.
         The potential_non_symbiodiniaceae_sequences_list is used to see if there are any samples, that don't have
-        any potential non symbiodnium sequences. i.e. only definite symbiodiniaceae sequences. These samples are added to
+        any potential non symbiodnium sequences. i.e. only definite symbiodiniaceae sequences.
+        These samples are added to
         the checked list and are not checked in following iterations to speed things up.
         """
 
@@ -2613,7 +2448,8 @@ class SymNonSymTaxScreeningWorker:
         fasta_file_path = os.path.join(self.cwd, 'fasta_file_for_tax_screening.fasta')
         self.fasta_dict = self.thread_safe_general.create_dict_from_fasta(fasta_path=fasta_file_path)
         name_file_path = os.path.join(self.cwd, 'name_file_for_tax_screening.names')
-        self.name_dict = {a.split('\t')[0]: a for a in self.thread_safe_general.read_defined_file_to_list(name_file_path)}
+        self.name_dict = {
+            a.split('\t')[0]: a for a in self.thread_safe_general.read_defined_file_to_list(name_file_path)}
         blast_output_path = os.path.join(self.cwd, 'blast.out')
         self.blast_dict = {blast_line.split('\t')[0]: blast_line for blast_line in
                            self.thread_safe_general.read_defined_file_to_list(blast_output_path)}
@@ -2800,7 +2636,8 @@ class SymNonSymTaxScreeningWorker:
     def _associate_non_sym_seq_attributes_to_datasetsample(self):
         self.dss.non_sym_unique_num_seqs = len(self.non_symbiodiniaceae_sequence_name_set_for_sample)
         self.dss.non_sym_absolute_num_seqs = self.absolute_number_of_non_sym_sequences
-        print(f'{self.dss.name}: non_sym_unique_num_seqs = {len(self.non_symbiodiniaceae_sequence_name_set_for_sample)}')
+        print(
+            f'{self.dss.name}: non_sym_unique_num_seqs = {len(self.non_symbiodiniaceae_sequence_name_set_for_sample)}')
         print(f'{self.dss.name}: non_sym_absolute_num_seqs = {self.absolute_number_of_non_sym_sequences}')
 
     def _log_dataset_attr_and_raise_runtime_error(self):
@@ -2904,11 +2741,13 @@ class PerformMEDHandler:
         for n in range(self.num_proc):
             if self.multiprocess:
                 p = Process(target=self._perform_med_worker, args=(
-                    self.input_queue_of_redundant_fasta_paths, data_loading_debug, data_loading_path_to_med_padding_executable,
+                    self.input_queue_of_redundant_fasta_paths, data_loading_debug,
+                    data_loading_path_to_med_padding_executable,
                     data_loading_path_to_med_decompose_executable))
             else:
                 p = Thread(target=self._perform_med_worker, args=(
-                self.input_queue_of_redundant_fasta_paths, data_loading_debug, data_loading_path_to_med_padding_executable,
+                self.input_queue_of_redundant_fasta_paths, data_loading_debug,
+                data_loading_path_to_med_padding_executable,
                 data_loading_path_to_med_decompose_executable))
             all_processes.append(p)
             p.start()
@@ -2969,7 +2808,8 @@ class PerformMEDWorker:
         sys.stdout.write(f'{self.sample_name}: MED analysis complete\n')
 
     def _do_the_decomposition(self):
-        # We cannot add check=True to the subprocess calls as we are expecting some of them to fail when there are too few sequences
+        # We cannot add check=True to the subprocess calls as we are expecting some of them to fail
+        # when there are too few sequences
         if not self.debug:
             subprocess.run(
                 [self.path_to_med_decompose_executable, '-M', str(self.med_m_value), '--skip-gexf-files',
@@ -2992,7 +2832,8 @@ class PerformMEDWorker:
         # calculated when working with a modelling project where I was subsampling to 1000 sequences. In this
         # scenario the M was set to 4.
         # We should also take care that M doesn't go below 4, so we should use a max choice for the M
-        num_of_seqs_to_decompose = len(self.thread_safe_general.read_defined_file_to_list(self.redundant_fasta_path_unpadded)) / 2
+        num_of_seqs_to_decompose = len(
+            self.thread_safe_general.read_defined_file_to_list(self.redundant_fasta_path_unpadded)) / 2
         return max(4, int(0.004 * num_of_seqs_to_decompose))
 
 

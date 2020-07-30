@@ -4,11 +4,13 @@ os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
-from dbApp.models import DataSet, DataAnalysis, DataSetSample
+from dbApp.models import DataSet, DataAnalysis, DataSetSample, Study, User
 import pandas as pd
 import sys
 from collections import Counter
 from numpy import NaN
+from django.core.exceptions import ObjectDoesNotExist
+from datetime import datetime
 
 
 def delete_data_set(uid):
@@ -288,3 +290,292 @@ class ApplyDatasheetToDataSetSamples:
 
     def _apply_datasheet_to_dataset_samples(self):
         foo = 'bar'
+
+class CreateStudyAndAssociateUsers:
+    """
+    Currently there are two situations in which we may want to be creating a new Study object
+    As part of this we may also want to be creating new User objects to associate to it
+    The first instance is when we are doing a loading operation.
+    The second is when we are updating citations
+    This Class provides the user input series to allow us to create a new Study object
+    and optionally create Users to associate to it.
+    """
+    def __init__(self, ds=None, citation=None, date_time_str=None, list_of_dss_objects=None):
+        # We should be provided either a DataSet or a citation
+        # if ds provided then we are doing a loading operation
+        # else if citation provided then we are updating citations
+        if ds is not None and citation is not None:
+            raise RuntimeError('Please provide either a DataSet object or a citation argument')
+        if ds is not None:
+            self.dataset_object = ds
+            self.citation = None
+            assert(date_time_str is not None)
+            self.date_time_str = date_time_str
+            assert(list_of_dss_objects is not None)
+            self.list_of_dss_objects = list_of_dss_objects
+        else:
+            self.dataset_object = None
+            self.citation = citation
+            self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+            self.list_of_dss_objects = None
+        self.restart = False
+
+    def create_study_and_user_objects(self):
+        while True:
+            restart = False
+            print("\nYou can enter '4' at any of the command prompts to start this process again")
+            if self.dataset_object is not None:
+                continue_text = input(f'Associate DataSet {self.dataset_object.name} to a Study [y/n]: ')
+                study_name = self.dataset_object.name
+            else:
+                # If we are working with citation then we already know that the user wants to create a new
+                # Study object
+                while True:
+                    print('The citation is:')
+                    print(f'\ttitle: {self.citation["title"]}')
+                    print(f'\tauthors: {self.citation["authors"]}')
+                    print(f'\tyear: {self.citation["year"]}')
+                    study_name = input('Please provide a name for the new Study: ')
+                    continue_text = input(f'Is {study_name} correct? [y/n]: ')
+                    if continue_text == 'y':
+                        break
+            if continue_text == 'y':
+                if not self._study_of_name_exists(study_name=study_name):
+                    new_study_object, restart = self._create_study_object(name=study_name, restart=restart)
+                else:
+                    new_study_object, restart = self._create_study_object_name_exists(restart, study_name)
+
+                # If we were given a '4', restart the process
+                if restart:
+                    continue
+
+                while True:
+                    continue_text = input('Associate one or more users to this Study? [y/n]: ')
+                    if continue_text == 'y':
+                        continue_text = input("Enter a comma separated string of the usernames for the users you "
+                                              "wish to create. For example: 'jbloggs,vshnazzy': ")
+                        user_names_to_associate = continue_text.split(',')
+                        if len(user_names_to_associate) == 0:
+                            # Then it was left blank
+                            # Go back to the prompt
+                            print('Please enter at least one username.')
+                            continue
+                        users_that_already_exist, users_that_do_not_exist = self._check_to_see_if_users_exist(
+                            user_names_to_associate)
+                        self._print_out_users(users_that_already_exist, users_that_do_not_exist)
+                        continue_text = input("\nIs this correct? [y/n]: ")
+                        if continue_text == 'y':
+                            self._create_study_users_and_associate(new_study_object, users_that_already_exist,
+                                                                   users_that_do_not_exist)
+                            break
+                        elif continue_text == 'n':
+                            # Then something went wrong and we should start again
+                            continue
+                    elif continue_text == 'n':
+                        self._create_study_associate_dss_objects(new_study_object=new_study_object)
+                        print(f'Created {new_study_object} with no users associated.')
+                        break
+                    elif continue_text == '4':
+                        restart = True
+                        break
+
+                if restart:
+                    continue
+                else:
+                    # If we are not restarting then we have successfuly associated any necessary
+                    # Study and User objects and we can return
+                    if self.dataset_object is not None:
+                        print(f'\n\nDataSet {self.dataset_object.name} now associated to Study {new_study_object}')
+                    else:
+                        print(f'citation now associated to Study {new_study_object}')
+                    print(f'Study {new_study_object} now associated to user(s):')
+                    for user in new_study_object.user_set.all():
+                        print(f'\t{user}')
+                    return
+            elif continue_text == 'n':
+                return
+            elif continue_text == '4':
+                continue
+            else:
+                print('Unrecognised response. Please answer y or n.')
+
+    def _create_study_users_and_associate(self, new_study_object, users_that_already_exist, users_that_do_not_exist):
+        # Now we can create the Study
+        self._create_study_associate_dss_objects(new_study_object)
+
+        self._create_and_associate_users(new_study_object, users_that_already_exist, users_that_do_not_exist)
+
+    def _create_and_associate_users(self, new_study_object, users_that_already_exist, users_that_do_not_exist):
+        # First make the new users
+        if users_that_do_not_exist:
+            print('Creating new users:')
+            for user in users_that_do_not_exist:
+                new_user = User(name=user)
+                new_user.save()
+                new_user.studies.add(new_study_object)
+                new_user.save()
+                print(f'\t{new_user}')
+        # Then associate the study to existing Users
+        if users_that_already_exist:
+            for user in users_that_already_exist:
+                user.studies.add(new_study_object)
+                user.save()
+        # At this point we have completed the associations
+
+    def _create_study_associate_dss_objects(self, new_study_object):
+        new_study_object.save()
+        if self.dataset_object is not None:
+            new_study_object.data_set_samples.set(self.list_of_dss_objects)
+            new_study_object.save()
+        else:
+            while True:
+                associate_data_set = input('Associate a DataSet to the study? [y/n]: ')
+                if associate_data_set == 'y':
+                    uids = input('Please input a comma separated string of the dataset UIDs. E.g. 43,56: ')
+                    try:
+                        ds_to_associate = DataSet.objects.filter(id__in=[int(_) for _ in uids.split(',')])
+                        # Associate the assocaited datasetsamples to the Study
+                        self.list_of_dss_objects = DataSetSample.objects.filter(
+                            data_submission_from__in=ds_to_associate
+                        )
+                        new_study_object.data_set_samples.set(self.list_of_dss_objects)
+                        new_study_object.save()
+                    except Exception as e:
+                        print(e)
+                        print('\nOne or more of the datasets could not be found')
+                        continue
+                    new_study_object.save()
+                    break
+                elif associate_data_set == 'n':
+                    break
+
+    def _print_out_users(self, users_that_already_exist, users_that_do_not_exist):
+        if users_that_already_exist:
+            print('The following users already exist and the Study will be associated to them:')
+            for user in users_that_already_exist:
+                print(f'\t{user}')
+        if users_that_do_not_exist:
+            print('\nThe following users will be created:')
+            for user in users_that_do_not_exist:
+                print(f'\t{user}')
+
+    def _check_to_see_if_users_exist(self, list_of_usernames):
+        # This will be the actual database ORM User objects
+        exists = []
+        # This will be a list of usernames to create as strings
+        do_not_exist = []
+        for username in list_of_usernames:
+            try:
+                exists.append(User.objects.get(name=username))
+            except ObjectDoesNotExist:
+                do_not_exist.append(username)
+        return exists, do_not_exist
+
+    def _create_study_object_name_exists(self, restart, study_name):
+        new_study_object = None
+        while True:
+            # If we are doing the loading then give the option to overwrite the current
+            # DataSetSamples with the new DataSetSamples of the loaded DataSet
+            # Otherwise, if we are doing citations, ask if the user wants to associate this citation
+            # to the Study. This will mean changing the title etc. to match the citation title
+            print(f"Study with name '{study_name}' already exists.")
+            if self.dataset_object is not None:
+                continue_text = input('Do you want to update/overwrite the current data_set_samples '
+                                      'associated with this study to the current DataSetSamples? [y/n]: ')
+            else:  # Working with citations
+                continue_text = input('Do you want to associate the current citation to this Study?\n'
+                                      'This will overwrite the attributes such as title '
+                                      'and author_list_string of the '
+                                      'Study so that they match those of the citation. [y/n]: ')
+
+            if continue_text == 'y':
+                # We will simply set new_study_object to point to the current Study object
+                # The new DataSetSample objects will be updated later.
+                new_study_object = Study.objects.get(name=study_name)
+                break
+            elif continue_text == '4':
+                restart = True
+                break
+            elif continue_text == 'n':
+                study_name = input('Please provide a name for the new dataset: ')
+                if self._study_of_name_exists(study_name):
+                    continue
+                else:
+                    new_study_object, restart = self._create_study_object(restart=restart, name=study_name)
+                    break
+        return new_study_object, restart
+
+    def _create_study_object(self, restart, name=None):
+        while True:
+            print('The default Study object that will be created will be:\n')
+            if self.dataset_object is not None:
+                new_study_object = self._create_study_object_from_dataset_object(name)
+            else: # create from the citation object
+                new_study_object = self._create_study_object_from_citation(name)
+            self._print_non_init_study_summary(new_study_object)
+            continue_text = input('Continue? [y/n]: ')
+            if continue_text == 'y':
+                break
+            elif continue_text == 'n':
+                restart = True
+                break
+            elif continue_text == '4':
+                restart = True
+                break
+            else:
+                pass
+        return new_study_object, restart
+
+    def _print_non_init_study_summary(self, study):
+        print(f'< Study >')
+        print(f'name: {study.name}')
+        print(f'title: {study.title}')
+        print(f'is_published: {study.is_published}')
+        print(f'location: {study.location}')
+        print(f'run_type: {study.run_type}')
+        print(f'article_url: {study.article_url}')
+        print(f'data_url: {study.data_url}')
+        print(f'data_explorer: {study.data_explorer}')
+        print(f'display_online: {study.display_online}')
+        print(f'analysis: {study.analysis}')
+        print(f'author_list_string: {study.author_list_string}')
+        print(f'additional_markers: {study.additional_markers}')
+        print(f'creation_time_stamp: {study.creation_time_stamp}')
+
+    def _create_study_object_from_citation(self, name):
+        print('Please supply values for the following attributes (leave blank for null):')
+        attribute_dict = {}
+        attribute_dict['location'] = input('location: ')
+        attribute_dict['run_type'] = input('run_type: ')
+        attribute_dict['data_url'] = input('data_url: ')
+        attribute_dict['additional_markers'] = input('additional_markers: ')
+        new_study_object = Study(
+            name=name,
+            creation_time_stamp=self.date_time_str,
+            title=self.citation['title'],
+            is_published=True, display_online=True,
+            author_list_string=self.citation['authors'], article_url=self.citation['article_url'])
+        for k, v in attribute_dict.items():
+            if v != '':
+                setattr(new_study_object, k, v)
+        return new_study_object
+
+    def _create_study_object_from_dataset_object(self, name):
+        if name is None:
+            new_study_object = Study(
+                name=self.dataset_object.name,
+                creation_time_stamp=self.date_time_str, title=self.dataset_object.name)
+        else:
+            new_study_object = Study(
+                name=name,
+                creation_time_stamp=self.date_time_str, title=name)
+        return new_study_object
+
+    def _study_of_name_exists(self, study_name=None):
+        try:
+            if study_name == None:
+                return Study.objects.get(name=self.dataset_object.name)
+            else:
+                return Study.objects.get(name=study_name)
+        except ObjectDoesNotExist:
+            return False

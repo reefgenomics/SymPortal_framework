@@ -173,7 +173,6 @@ class MothurAnalysis:
         fwd_output_scrapped_fasta_path = self.fasta_path.replace('.fasta', '.scrap.pcr.fasta')
         fwd_output_good_fasta_path = self.fasta_path.replace('.fasta', '.pcr.fasta')
         # Purposefully do not update the name file here.
-        # TODO check that the old name file remains untouched.
 
         self.remove_primer_mismatch_annotations_from_fasta(fwd_output_good_fasta_path)
 

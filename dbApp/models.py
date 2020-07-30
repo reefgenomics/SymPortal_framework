@@ -124,6 +124,16 @@ class Study(models.Model):
     def __repr__(self):
         return f'< Study: id {self.id}, name {self.name} >'
 
+class Citation(models.Model):
+    """
+    An object to keep track of SymPortal citations that we are aware of that should not be linked to a Study
+    """
+    objects = models.Manager()
+    title = models.CharField(max_length=250, null=True, unique=True)
+    article_url = models.CharField(max_length=250, null=True)
+    author_list_string = models.CharField(max_length=500, null=True)
+    year = models.CharField(max_length=4, null=True)
+
 class User(models.Model):
     objects = models.Manager()
     name = models.CharField(max_length=100, null=False, unique=True)

@@ -32,7 +32,7 @@ from django.conf import settings
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 # Your application specific imports
-from dbApp.models import DataSet, DataAnalysis, DataSetSample, Study, User
+from dbApp.models import DataSet, DataAnalysis, DataSetSample, Study, User, Citation
 ############################################
 
 
@@ -43,8 +43,16 @@ import distance
 import argparse
 import data_loading
 import sp_config
+if sp_config.system_type == 'remote':
+    from scholarly import scholarly
+    import textdistance
+    from bs4 import BeautifulSoup
+    import requests
+    import re
+    import compress_pickle
 import data_analysis
 from general import ThreadSafeGeneral
+from django_general import CreateStudyAndAssociateUsers
 import django_general
 from shutil import which
 import time
@@ -225,6 +233,7 @@ class SymPortalWorkFlowManager:
                  'The input to this function should be a comma separated string of '
                  'the UIDs of the DataSetSample instances '
                  'in question. e.g. 345,346,347,348')
+        group.add_argument('--update_citations', help='Check for new articles citing the SymPortal MS.', action='store_true')
         if sp_config.system_type == 'local':
             group.add_argument(
                 '--print_output_types', metavar='DataSet UIDs, DataAnalysis UID',
@@ -324,6 +333,20 @@ class SymPortalWorkFlowManager:
         # Apply datasheet
         elif self.args.apply_data_sheet:
             self.apply_datasheet_to_dataset_samples()
+
+        # Finally, if we are on remote check for citation updates
+        elif self.args.update_citations:
+            if sp_config.system_type == 'remote':
+                citation_updater = CitationUpdate()
+                try:
+                    print('Checking for citation updates')
+                    citation_updater.update()
+                    print('Complete')
+                except Exception as e:
+                    print(e)
+                    print('ERROR: Citation updating failed.')
+            else:
+                print('Operation only available on remote system')
 
     def _check_for_display_arguments(self):
         if self.args.display_data_sets:
@@ -1212,6 +1235,206 @@ class SymPortalWorkFlowManager:
             da_in_q = data_analysis_id_to_obj_dict[da_id]
             print(f'{da_in_q.id}: {da_in_q.name}\t{da_in_q.time_stamp}')
 
+class CitationUpdate:
+    def __init__(self):
+        # Try to get the citing pubs live from Google Scholar
+        # If this fails fall back to loadinging in the .csv files that have been downloaded manually
+        try:
+            # self.citing_pubs = compress_pickle.load('citing_pubs.p.bz')
+            self.citing_pubs = self._get_citing_pubs()
+            # temporarily lets pickle this out so that we can debug without having to do the requrests
+            # compress_pickle.dump(self.citing_pubs, 'citing_pubs.p.bz')
+        except Exception as e:
+            print(e)
+            print('Loading citing articles from .csv')
+            raise NotImplementedError
+        self.current_study_objects_query = Study.objects.all()
+        self.current_citation_objects_query = Citation.objects.all()
+        self.current_citation_titles = [citation.title for citation in self.current_citation_objects_query]
+
+    def _get_citing_pubs(self):
+        """
+        Attempt to query google scholar to get a list of the articles that cite the SymPortal paper
+        """
+        citing_pubs = []
+        headers = {
+            'accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.9',
+            'accept-encoding': 'gzip, deflate, br',
+            'accept-language': 'en-GB,en-US;q=0.9,en;q=0.8',
+            'cache-control': 'max-age=0',
+            'cookie': 'CONSENT=YES+GB.en+20150712-15-0; SEARCH_SAMESITE=CgQIwo8B; ANID=AHWqTUm-NmPN57OwDDERHKOBw9y6CVGj4lBjL8wM6rkfQb-n7712Ab9vofLH9IrY; SID=zgeBmCoAbuLSe5Ye_TQZADF7wxrgPyoajoBT2tYif1Ie7ZBIR3fqzF4yJeXQkrGzQD3PcA.; __Secure-3PSID=zgeBmCoAbuLSe5Ye_TQZADF7wxrgPyoajoBT2tYif1Ie7ZBId5hEurpvAVRB939sr0wK-w.; HSID=AcLCYk7FF8YbFq8YU; SSID=A3lWM-dBOlKYk160r; APISID=jVhpX9WDFTTPhfFk/Aw6hW_bfATMuUOkbm; SAPISID=u4BlUiVIy486neYK/AtnzEUHzoLnfPlVfN; __Secure-HSID=AcLCYk7FF8YbFq8YU; __Secure-SSID=A3lWM-dBOlKYk160r; __Secure-APISID=jVhpX9WDFTTPhfFk/Aw6hW_bfATMuUOkbm; __Secure-3PAPISID=u4BlUiVIy486neYK/AtnzEUHzoLnfPlVfN; __Secure-3PSIDCC=AJi4QfE3goWyj5XBPQfnMcFvaV0-jwyVW1d6uGOr--vNC6Og-FodbE1XZNBb-hdAleu9_YEg; GSP=IN=acfa7a445dbbf298:LD=en:NR=20:LM=1595959706:S=dIrB7oXzhJr2pQWU; NID=204=a0Fv1TbEg7cZ6ADV_FJB5vi6qMg0XL_Cs-Vb-Gqh4aQeGQH04XKhUrbqK5GCKOoLBg7jQ54rguhthZQHSsnqKW8_UlVM3nk0KfaNKN7v3h3upA21XH8HzB8W5Iu8uYs5Di1VOG7mK4YuGxKgP1HcVUQw57NVJOx72WLPYcvfy4pBudQB28P6nKcVCYdjdSZpoxJb6AEabOFC4JZgSREpldfvm0HKPb2tdlBax8HYPY-HmKlcQwagdAyZQZolhJd2ZEaFegppFSSjTRCL86kJkbFqLKAOnZR_soXQFvshLU-g_3BF4-DvEns5__KYRSVR1zdUnFN06H61pub_uipBpw; 1P_JAR=2020-7-29-5; SIDCC=AJi4QfGwhs-FXe-vApcaO2CwX_VFBaw0xVrk1drZxmV4zz5zsV_6VDFD6CjEQ8lLupG-nWRq-M0',
+            'referer': 'https://scholar.google.com/scholar?hl=en&as_sdt=0%2C5&q=SymPortal+novel+analytical+framework&btnG=&oq=symportal',
+            'sec-fetch-dest': 'document',
+            'sec-fetch-mode': 'navigate',
+            'sec-fetch-site': 'same-origin',
+            'sec-fetch-user': '?1',
+            'upgrade-insecure-requests': '1',
+            'user-agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_14_6) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/84.0.4147.89 Safari/537.36',
+            'x-client-data': 'CKC1yQEIhbbJAQijtskBCMS2yQEIqZ3KAQjyoMoBCI2sygEI/7zKAQjnyMoB'
+        }
+
+        current_url = 'https://scholar.google.com/scholar?cites=12056348124469462278&amp;as_sdt=2005&amp;sciodt=0,5&amp;hl=en&amp;oe=ASCII'
+        soup = BeautifulSoup(requests.get(
+            current_url,
+            headers=headers).text, features="html.parser")
+
+        # Find out how many pagntions of articles there are
+        # And grab the articles for each page.
+        pags = soup.find_all(class_='gs_nma')
+        assert(len(pags) != 0)
+        for pag in pags:
+            if int(pag.text) != 1:
+                # Then we need to create a new soup
+                # Lets wait for 30s before making the query
+                time.sleep(30)
+                full_url = 'https://scholar.google.com' + pag['href']
+                headers['referer'] = current_url
+                current_url = full_url
+                soup = BeautifulSoup(requests.get(full_url, headers=headers).text, features="html.parser")
+
+            articles = soup.find_all('div', class_='gs_ri')
+            assert(len(articles) != 0)
+            year_re = re.compile('20\d{2}')
+            for article_div in articles:
+                title = article_div.find('h3').find('a').text
+                authors = article_div.find(class_='gs_a').text.split('-')[0].rstrip()
+                year_search = year_re.search(article_div.find(class_='gs_a').text)
+                if year_search is not None:
+                    year = year_search.group()
+                else:
+                    year = ''
+                article_url = article_div.find('h3').find('a')['href']
+                citing_pubs.append({'title': title, 'authors': authors, 'year': year, 'article_url': article_url})
+        # Once we have been through the first set of articles we will need to do another set of articles if there is one
+        return citing_pubs
+
+    def update(self):
+        """
+        For each of the citing_pubs see if there is a matching Study or Citation object
+        If there is not, then we will either create a Citation object, associate to an existing Study object
+        or create a new study object.
+        The Study and Citation objects will then be used by the symportal.org code to populate the published articles
+        using SymPortal table. The citation list will be populated directly using the scholarly API.
+        """
+        for citation in self.citing_pubs:
+            while True:
+                print(f'Checking for: "{citation["title"]}"')
+                print(f'\t{citation["authors"]} {citation["year"]}')
+                if citation["title"] in self.current_citation_titles:
+                    print('\tFound a Citation object matching the citation')
+                else:
+                    print('\tCitation does not match a Citation object')
+                    self._deal_with_unassociated_citation(citation)
+
+                if self._update_db_objs_and_verify_citation_association(citation=citation):
+                    break
+
+
+    def _update_db_objs_and_verify_citation_association(self, citation):
+        # At this point we should have either a Study or citation object created
+        # Verify then break
+        self.current_study_objects_query = Study.objects.all()
+        self.current_citation_objects_query = Citation.objects.all()
+        self.current_citation_titles = [citation.title for citation in self.current_citation_objects_query]
+        if citation['title'] not in self.current_citation_titles:
+            raise RuntimeError(f'Citation {citation.title} still not associated to a Study or Citation object')
+        else:
+            return True
+
+    def _deal_with_unassociated_citation(self, citation):
+        """
+        1 = No Study object. Only create Citation object
+        2 = Create Study object. Create Citation object if doesn't exist
+        3 = Associate to existing study object. Create Citation object if doesn't exist
+        :param citation:
+        :return:
+        """
+        option = self._present_user_options(citation)
+        if option == '1':
+            self._create_new_citation_object(citation)
+        elif option == '2':
+            self._create_new_study_object(citation)
+        elif option == '3':
+            self._associate_to_existing_study(citation)
+        else:
+            raise RuntimeError
+
+    def _present_user_options(self, citation):
+        # Present the User with the Study that has the most similar title according to a damerau_levenshtein
+        # metric
+        study_with_most_similar_title = self._get_most_similar_study(citation)
+        print('The most similar Study to the citation in question is: ')
+        print(f'< Study: id {study_with_most_similar_title.id}, name {study_with_most_similar_title.name} >')
+        print(f'title: {study_with_most_similar_title.title}')
+        while True:
+            option = input('\n\nPlease select one of the following options: \n'
+                           '1 - Citation should not have a Study object associated to it\n'
+                           '\t(a Citation object will still be created)\n'
+                           '2 - Create a new Study object to associate the citation to\n'
+                           '3 - Associate the citation to an existing Study object\n\n[1,2,3]: ')
+            if option not in list('123'):
+                continue
+            else:
+                break
+        return option
+
+    def _create_new_citation_object(self, citation):
+        # Create a citation object
+        new_citation = Citation(
+            title=citation["title"], article_url=citation['article_url'],
+            author_list_string=citation['authors'], year=citation['year']
+        )
+        new_citation.save()
+
+    def _create_new_study_object(self, citation):
+        # Create a new Study object
+        csaau = CreateStudyAndAssociateUsers(citation=citation)
+        csaau.create_study_and_user_objects()
+        self._create_new_citation_object_if_no_exist(citation)
+
+    def _create_new_citation_object_if_no_exist(self, citation):
+        if citation['title'] not in self.current_citation_titles:
+            print('No Citation object found. Creating new Citation object')
+            self._create_new_citation_object(citation=citation)
+        else:
+            print('Citation object already exists with same title.')
+
+    def _associate_to_existing_study(self, citation):
+        while True:
+            study_uid = input('Study UID: ')
+            try:
+                existing_study = Study.objects.get(id=int(study_uid))
+                print(f'Study is {existing_study}')
+                print(f'\ttitle: {existing_study.title}')
+                continue_text = input(f'Study is {existing_study}. Is this correct? [y/n]: ')
+                if continue_text == 'y':
+                    break
+                else:
+                    continue
+            except ObjectDoesNotExist as e:
+                print(e)
+                print('Study not found. Please try again.')
+        print(f'Updating Study {existing_study}')
+        existing_study.title = citation["title"]
+        existing_study.author_list_string = citation["authors"]
+        existing_study.article_url = citation["article_url"]
+        existing_study.is_published = True
+        existing_study.display_online = True
+        existing_study.save()
+        self._create_new_citation_object_if_no_exist(citation=citation)
+
+    def _get_most_similar_study(self, citation):
+        max_sim = 0
+        max_sim_obj = None
+        for study in self.current_study_objects_query:
+            sim = textdistance.damerau_levenshtein.normalized_similarity(citation["title"], study.title)
+            if sim > max_sim:
+                max_sim = sim
+                max_sim_obj = study
+        return max_sim_obj
+
+
 if __name__ == "__main__":
     spwfm = SymPortalWorkFlowManager()
     spwfm.start_work_flow()
+
