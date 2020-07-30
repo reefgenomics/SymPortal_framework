@@ -44,7 +44,6 @@ import argparse
 import data_loading
 import sp_config
 if sp_config.system_type == 'remote':
-    from scholarly import scholarly
     import textdistance
     from bs4 import BeautifulSoup
     import requests
