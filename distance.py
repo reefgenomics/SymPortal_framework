@@ -636,8 +636,16 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                       f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
-            wu_no_sqrt = self._perform_unifrac(clade_abund_df_no_sqrt, tree)
-            wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
+            # wu_no_sqrt = self._perform_unifrac(clade_abund_df_no_sqrt, tree)
+            # wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
+            try:
+                wu_no_sqrt = self._perform_unifrac(clade_abund_df_no_sqrt, tree)
+                wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
+            except ValueError as e:
+                if 'must be rooted' in str(e):
+                    print('WARNING a tree rooting error occured')
+                    print(f"Distance information will not be computed for clade {clade_in_question}")
+                    continue
 
             clade_dist_file_path_no_sqrt, ordered_sample_names_no_sqrt = self._write_out_dist_df(
                 clade_abund_df_no_sqrt, wu_no_sqrt, clade_in_question, sqrt=False)
