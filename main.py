@@ -450,7 +450,6 @@ class SymPortalWorkFlowManager:
         self.create_new_data_analysis_obj()
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
-        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         self._start_data_analysis()
 
@@ -686,7 +685,6 @@ class SymPortalWorkFlowManager:
     def perform_stand_alone_sequence_output(self):
         self.output_dir = os.path.abspath(
             os.path.join(self.symportal_root_directory, 'outputs', 'non_analysis', self.date_time_str))
-        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         if self.args.print_output_seqs_sample_set:
             self._stand_alone_sequence_output_data_set_sample()
@@ -787,6 +785,7 @@ class SymPortalWorkFlowManager:
         self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
         os.makedirs(self.output_dir, exist_ok=True)
         os.makedirs(self.html_dir, exist_ok=True)
+        self._set_logging_path()
 
     def _stand_alone_sequence_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
@@ -834,7 +833,6 @@ class SymPortalWorkFlowManager:
         self._set_data_analysis_obj_from_arg_analysis_uid()
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
-        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         if self.args.print_output_types_sample_set:
             self._stand_alone_type_output_data_set_sample()
@@ -996,7 +994,6 @@ class SymPortalWorkFlowManager:
         """Start an instance of the correct distance class running."""
         self.output_dir = os.path.join(
                     self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
-        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
 
         if self.args.distance_method == 'both':
@@ -1112,7 +1109,6 @@ class SymPortalWorkFlowManager:
     def _perform_sample_distance_stand_alone(self):
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
-        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         self._run_sample_distances_dependent_on_methods()
         if self.args.distance_method == 'both':
