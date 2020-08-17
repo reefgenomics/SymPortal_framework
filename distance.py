@@ -3,7 +3,7 @@ import math
 import os
 import subprocess
 import sys
-
+import logging
 import numpy as np
 import pandas as pd
 from scipy.spatial.distance import braycurtis
@@ -236,8 +236,8 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
             except ValueError as e:
                 if 'must be rooted' in str(e):
-                    print('WARNING a tree rooting error occured')
-                    print(f"Distance information will not be computed for clade {clade_in_question}")
+                    logging.error('a tree rooting error occured')
+                    logging.error(f"Distance information will not be computed for clade {clade_in_question}")
                     continue
 
             clade_dist_file_path_no_sqrt, ordered_at_names_no_sqrt = self._write_out_dist_df(
@@ -636,15 +636,13 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                       f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
-            # wu_no_sqrt = self._perform_unifrac(clade_abund_df_no_sqrt, tree)
-            # wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
             try:
                 wu_no_sqrt = self._perform_unifrac(clade_abund_df_no_sqrt, tree)
                 wu_sqrt = self._perform_unifrac(clade_abund_df_sqrt, tree)
             except ValueError as e:
                 if 'must be rooted' in str(e):
-                    print('WARNING a tree rooting error occured')
-                    print(f"Distance information will not be computed for clade {clade_in_question}")
+                    logging.error('a tree rooting error occured')
+                    logging.error(f"Distance information will not be computed for clade {clade_in_question}")
                     continue
 
             clade_dist_file_path_no_sqrt, ordered_sample_names_no_sqrt = self._write_out_dist_df(

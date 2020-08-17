@@ -58,6 +58,7 @@ import time
 import subprocess
 import json
 from django.core.exceptions import ObjectDoesNotExist
+import logging
 
 class SymPortalWorkFlowManager:
     def __init__(self, custom_args_list=None):
@@ -449,6 +450,7 @@ class SymPortalWorkFlowManager:
         self.create_new_data_analysis_obj()
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
+        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         self._start_data_analysis()
 
@@ -667,7 +669,7 @@ class SymPortalWorkFlowManager:
             screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
             no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
             no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
-            start_time=self.start_time)
+            start_time=self.start_time, date_time_str=self.date_time_str)
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given_load(self):
@@ -684,6 +686,7 @@ class SymPortalWorkFlowManager:
     def perform_stand_alone_sequence_output(self):
         self.output_dir = os.path.abspath(
             os.path.join(self.symportal_root_directory, 'outputs', 'non_analysis', self.date_time_str))
+        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         if self.args.print_output_seqs_sample_set:
             self._stand_alone_sequence_output_data_set_sample()
@@ -831,6 +834,7 @@ class SymPortalWorkFlowManager:
         self._set_data_analysis_obj_from_arg_analysis_uid()
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
+        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         if self.args.print_output_types_sample_set:
             self._stand_alone_type_output_data_set_sample()
@@ -992,6 +996,7 @@ class SymPortalWorkFlowManager:
         """Start an instance of the correct distance class running."""
         self.output_dir = os.path.join(
                     self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
+        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
 
         if self.args.distance_method == 'both':
@@ -1107,6 +1112,7 @@ class SymPortalWorkFlowManager:
     def _perform_sample_distance_stand_alone(self):
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
+        self._set_logging_path()
         self._set_html_dir_and_js_out_path_from_output_dir()
         self._run_sample_distances_dependent_on_methods()
         if self.args.distance_method == 'both':
@@ -1233,6 +1239,13 @@ class SymPortalWorkFlowManager:
         for da_id in sorted_list_of_ids:
             da_in_q = data_analysis_id_to_obj_dict[da_id]
             print(f'{da_in_q.id}: {da_in_q.name}\t{da_in_q.time_stamp}')
+
+    def _set_logging_path(self):
+        logging.basicConfig(
+            format='%(levelname)s:%(message)s',
+            filename=os.path.join(self.output_dir, f'{self.date_time_str}_log.log'),
+            filemode='w', level=logging.INFO)
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
 
 class CitationUpdate:
     def __init__(self):

@@ -30,6 +30,7 @@ from shutil import which
 import sp_config
 from django.core.exceptions import ObjectDoesNotExist
 from django_general import CreateStudyAndAssociateUsers
+import logging
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -39,7 +40,7 @@ class DataLoading:
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path,
             screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, no_pre_med_seqs, multiprocess, start_time, debug=False):
+            distance_method, no_pre_med_seqs, multiprocess, start_time, date_time_str, debug=False):
         self.parent = parent_work_flow_obj
         self.thread_safe_general = ThreadSafeGeneral()
         # check and generate the sample_meta_info_df first before creating the DataSet object
@@ -62,8 +63,12 @@ class DataLoading:
 
         self.num_proc = min(num_proc, len(self.list_of_samples_names))
         self.temp_working_directory = self._setup_temp_working_directory()
-        self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+        self.date_time_str = date_time_str
         self.output_directory = self._setup_output_directory()
+        logging.basicConfig(format='%(levelname)s:%(message)s',
+                            filename=os.path.join(self.output_directory, f'{self.date_time_str}_log.log'), filemode='w',
+                            level=logging.INFO)
+        logging.getLogger().addHandler(logging.StreamHandler(sys.stdout))
         # directory for the data_explorer outputs
         self.html_dir = os.path.join(self.output_directory, 'html')
         self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
@@ -371,19 +376,20 @@ class DataLoading:
         return sequence_drop_list
 
     def _print_sample_successful_or_failed_summary(self):
-        print(f'\n\n SAMPLE PROCESSING SUMMARY')
+        logging.info('SAMPLE PROCESSING SUMMARY')
         failed_count = 0
         successful_count = 0
         for data_set_sample in DataSetSample.objects.filter(data_submission_from=self.dataset_object):
             if data_set_sample.error_in_processing:
                 failed_count += 1
-                print(f'{data_set_sample.name}: Error in processing: {data_set_sample.error_reason}')
+                logging.info(f'{data_set_sample.name}: Error in processing: {data_set_sample.error_reason}')
             else:
                 successful_count += 1
-                print(f'{data_set_sample.name}: Successful')
+                logging.info(f'{data_set_sample.name}: Successful')
 
-        print(f'\n\n{successful_count} out of {successful_count + failed_count} samples successfully passed QC.\n'
-              f'{failed_count} samples produced erorrs\n')
+        logging.info(f'\n\n{successful_count} out of {successful_count + failed_count} '
+                     f'samples successfully passed QC.\n'
+                     f'{failed_count} samples produced erorrs\n')
 
     def _create_data_set_sample_sequences_from_med_nodes(self):
         self.data_set_sample_creator_handler_instance = DataSetSampleCreatorHandler()
