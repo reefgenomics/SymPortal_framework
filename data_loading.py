@@ -389,7 +389,7 @@ class DataLoading:
 
         logging.info(f'\n\n{successful_count} out of {successful_count + failed_count} '
                      f'samples successfully passed QC.\n'
-                     f'{failed_count} samples produced erorrs\n')
+                     f'{failed_count} samples produced errors\n')
 
     def _create_data_set_sample_sequences_from_med_nodes(self):
         self.data_set_sample_creator_handler_instance = DataSetSampleCreatorHandler()
