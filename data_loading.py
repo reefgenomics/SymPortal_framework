@@ -31,6 +31,8 @@ import sp_config
 from django.core.exceptions import ObjectDoesNotExist
 from django_general import CreateStudyAndAssociateUsers
 import logging
+import copy
+import compress_pickle
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
@@ -165,6 +167,9 @@ class DataLoading:
         # we will use this sequence stacked bar plotter when plotting the pre_MED seqs so that the plotting
         # can be put in the same order
         self.seq_stacked_bar_plotter = None
+        # path to executable for multithreading the checking pre-MED sequences against existing ReferenceSequences
+        self.path_to_seq_match_executable = os.path.join(
+            self.symportal_root_directory, 'seq_match.py')
         # Timers
         # The timers for meausring how long it takes to create the DataSetSampleSequencePM
         self.pre_med_seq_start_time = None
@@ -404,7 +409,9 @@ class DataLoading:
         self.pre_med_seq_start_time = time.time()
         data_set_sample_pre_med_obj_creator = FastDataSetSampleSequencePMCreator(
             dataset_object=self.dataset_object,
-            pre_med_sequence_output_directory_path=self.pre_med_sequence_output_directory_path)
+            pre_med_sequence_output_directory_path=self.pre_med_sequence_output_directory_path,
+            num_proc=self.num_proc, path_to_seq_match_executable=self.path_to_seq_match_executable,
+            temp_working_directory=self.temp_working_directory)
         data_set_sample_pre_med_obj_creator.make_data_set_sample_pm_objects()
         self.pre_med_seq_stop_time = time.time()
         print(f'\n\nCreation of DataSetSampleSequencePM objects took '
@@ -1381,10 +1388,14 @@ class DataLoading:
 
 
 class FastDataSetSampleSequencePMCreator:
-    def __init__(self, pre_med_sequence_output_directory_path, dataset_object):
+    def __init__(
+            self, pre_med_sequence_output_directory_path, dataset_object, num_proc,
+            path_to_seq_match_executable, temp_working_directory):
         # dictionaries to save us having to do lots of database look ups
+        self.path_to_seq_match_executable = path_to_seq_match_executable
         self.pre_med_sequence_output_directory_path = pre_med_sequence_output_directory_path
         self.thread_safe_general = ThreadSafeGeneral()
+        self.num_proc = num_proc
         self.dataset_object = dataset_object
         clades = list('ABCDEFGHI')
         self.ref_seq_sequence_to_ref_seq_obj_dict = {}
@@ -1409,6 +1420,7 @@ class FastDataSetSampleSequencePMCreator:
         self.ref_seq_match_obj_to_seq_sample_abundance_dict = defaultdict(dict)
         # This is the dictionary where the non matched sequences will be put
         self.no_match_consolidated_seq_to_sample_and_abund_dict = defaultdict(dict)
+        self.temp_working_directory = temp_working_directory
 
     def _populate_list_of_pre_med_sample_dirs(self):
         return self.thread_safe_general.return_list_of_directory_paths_in_directory(
@@ -1458,12 +1470,16 @@ class FastDataSetSampleSequencePMCreator:
             seq_matcher = self.SeqMatcher(
                 clade=clade, seq_dict=seq_dict, rs_dict=self.ref_seq_sequence_to_ref_seq_obj_dict[clade],
                 match_dict=self.ref_seq_match_obj_to_seq_sample_abundance_dict[clade],
-                non_match_dict=self.no_match_consolidated_seq_to_sample_and_abund_dict[clade]
+                non_match_dict=self.no_match_consolidated_seq_to_sample_and_abund_dict[clade],
+                num_proc=self.num_proc, path_to_seq_match_executable=self.path_to_seq_match_executable,
+                temp_working_directory=self.temp_working_directory
             )
             seq_matcher.match_and_make_ref_seqs()
 
     class SeqMatcher:
-        def __init__(self, clade, rs_dict, seq_dict, match_dict, non_match_dict):
+        def __init__(
+                self, clade, rs_dict, seq_dict, match_dict, non_match_dict,
+                num_proc, path_to_seq_match_executable, temp_working_directory):
             # The current clade we are working with
             self.clade = clade
             # Dict of nucleotide sequence to ref seq obj for all ref seq objs of this clade
@@ -1478,13 +1494,98 @@ class FastDataSetSampleSequencePMCreator:
             # The consolidation path that we will follow to consolidate the non refseq match sequences
             self.consolidation_path_list = []
             self.thread_safe_general = ThreadSafeGeneral()
+            self.num_proc = num_proc
+            self.path_to_seq_match_executable = path_to_seq_match_executable
+            self.temp_working_directory = temp_working_directory
 
         def match_and_make_ref_seqs(self):
-            self._assign_sequence_to_match_or_non_match_dicts()
+            # self._assign_sequence_to_match_or_non_match_dicts()
+            self._assign_sequence_to_match_or_non_match_dicts_mp()
+            # Assess whether this has helped us out of the bottle neck or not
             if self.non_match_dict:
                 self._consolidate_non_match_seqs()
                 self._make_new_reference_sequences_and_populate_match_dict()
             self._create_data_set_sample_sequence_pm_objects()
+
+        @staticmethod
+        def _make_seq_match_dicts(
+                pre_med_seq_chunk_path, rs_dict_path, path_to_seq_match_executable, match_dict_out_path):
+            subprocess.run(
+                [path_to_seq_match_executable, pre_med_seq_chunk_path, rs_dict_path, match_dict_out_path], check=True)
+
+        def _assign_sequence_to_match_or_non_match_dicts_mp(self):
+            matching_start_time = time.time()
+            print('Attempting to match sequences to ReferenceSequence objects')
+            # A generator that returns self.seq_dict, split up into chunks
+            seqs_to_match = len(self.seq_dict)
+            pre_med_seq_chunks = self.thread_safe_general.chunks(self.seq_dict.keys(), n=self.num_proc)
+            all_processes = []
+            # A digit to make path names unique
+            count = 0
+            output_dict_paths = []
+            print('Multithreading match finding. This make take some time...')
+            # Rather than dumping the self.rs_dict that contains ReferenceSequence objects
+            # we will work with a list of the ReferenceSequence nucleotide sequences and we will match to these
+            # This way we don't have to import Django settings and models for a second time and this will hopefully
+            # help us avoid the problems with the multiprocessing and the Django testing framework
+            # This will mean that we need to do a further look up to connect the matched sequence back to a
+            # ReferenceSequence, but this should still be much faster than the serial way we were doing it before
+            # as we can split up the many to many searches across the threads.
+            rs_set_to_dump = set(self.rs_dict.keys())
+            for pre_med_seq_chunk in pre_med_seq_chunks:
+                # Dump out the dictionaries that will be read in by the executable
+                # Make the names unique to prevent any need for Lock.
+                pre_med_seq_chunk_path = os.path.join(self.temp_working_directory, f'pre_med_seq_chunk_{count}.p.bz')
+                rs_set_path = os.path.join(self.temp_working_directory, f'rs_set_{count}.p.bz')
+                match_dict_out_path = os.path.join(self.temp_working_directory, f'pre_med_match_dict_{count}.p.bz')
+                output_dict_paths.append(match_dict_out_path)
+                compress_pickle.dump(pre_med_seq_chunk, pre_med_seq_chunk_path)
+                compress_pickle.dump(rs_set_to_dump, rs_set_path)
+
+                p = Thread(target=self._make_seq_match_dicts,
+                            args=(
+                                pre_med_seq_chunk_path, rs_set_path,
+                                self.path_to_seq_match_executable, match_dict_out_path)
+                            )
+
+                all_processes.append(p)
+                p.start()
+                count += 1
+
+            for p in all_processes:
+                p.join()
+
+            match_dict = {}
+            non_match_list = []
+            for output_dict_path in output_dict_paths:
+                sub_match_dict = compress_pickle.load(output_dict_path)
+                sub_non_match_list = compress_pickle.load(output_dict_path.replace('match_dict', 'non_match_list'))
+                match_dict.update(sub_match_dict)
+                non_match_list.extend(sub_non_match_list)
+            assert (seqs_to_match == (len(match_dict) + len(non_match_list)))
+            # Here we now know exatly which pre_med seqs had a match and which did not
+            # For each of the seqs that had a match, we need to now log the match
+
+            print("Logging matches\n")
+            match_count = 0
+            tot_matches = len(match_dict)
+            for nuc_seq, matching_ref_seq in match_dict.items():
+                sys.stdout.write(f'\rprocessing {match_count} out of {tot_matches} matches.')
+                self._log_match(nuc_seq, self.rs_dict[matching_ref_seq])
+                match_count += 1
+
+            # For those that did not have a match add them to the non_match_dict
+            print("Logging non_matches\n")
+            non_match_count = 0
+            tot_non_matches = len(non_match_list)
+            for nuc_seq in non_match_list:
+                sys.stdout.write(f'\rprocessing {non_match_count} out of {tot_non_matches} matches.')
+                self.non_match_dict[nuc_seq] = self.seq_dict[nuc_seq]
+                non_match_count += 1
+
+            matching_finish_time = time.time() - matching_start_time
+            logging.info(f'pre-MED to ReferenceSequence matching took {matching_finish_time}s to complete '
+                         f'using multithreading')
 
         def _assign_sequence_to_match_or_non_match_dicts(self):
             """Here we go through each of the sequences for the given clade and attempt to match them
@@ -1500,7 +1601,16 @@ class FastDataSetSampleSequencePMCreator:
             representatives that they may contain the same DataSetSample objects and the abundances will need to
             be summed for these.)
             However, I don't think we need to implement this as it is already quite fast.
+
+            # I think the time consuming part is likely the for loop looking for nested sequences
+            # The django testing framework does not play well wih multiprocessing so we should
+            # implement this using multithreading. Because all of the processing will be done in python
+            # we will write a module that can be exectured
+            # We will have to multiprocess rather than multithread as this will be python based computing
+            # The multiprocessing will likely cause the django test framework to break again so we will
+            # need to incorporate a switch, for the testing.
             """
+            matching_start_time = time.time()
             print('Attempting to match sequences to ReferenceSequence objects')
             count = 0
             tot = len(self.seq_dict.keys())
@@ -1535,6 +1645,9 @@ class FastDataSetSampleSequencePMCreator:
                     else:
                         match_count += 1
             sys.stdout.write(f'\rsequence {count} out of {tot}: match {match_count}; no-match {non_match_count}')
+            matching_finish_time = time.time() - matching_start_time
+            logging.info(f'pre-MED to ReferenceSequence matching took {matching_finish_time}s to complete '
+                         f'without multithreading')
 
         def _log_match(self, nuc_seq, rs_obj):
             # Check to see if the rs_obj is already representing in the match
