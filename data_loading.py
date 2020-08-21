@@ -230,6 +230,7 @@ class DataLoading:
         self.dataset_object.save()
         print(f'Loading completed in {time.time() - self.start_time}s')
         print(f'DataSet loading_complete_time_stamp: {self.dataset_object.loading_complete_time_stamp}\n\n\n')
+        print(f"Log written to {os.path.join(self.output_directory, f'{self.date_time_str}_log.log')}")
 
     def _check_mothur_version(self):
         mothur_version_cmd = subprocess.run(
@@ -1585,7 +1586,7 @@ class FastDataSetSampleSequencePMCreator:
 
             matching_finish_time = time.time() - matching_start_time
             logging.info(f'pre-MED to ReferenceSequence matching took {matching_finish_time}s to complete '
-                         f'using multithreading')
+                         f'using multithreading for clade {self.clade}')
 
         def _assign_sequence_to_match_or_non_match_dicts(self):
             """Here we go through each of the sequences for the given clade and attempt to match them
