@@ -3,15 +3,18 @@
 # from dbApp.models import ReferenceSequence
 import compress_pickle
 import sys
+import json
 
 class SeqMatcher:
     def __init__(self):
         # Dict: k= nucleotide sequence, v=dict (k=DataSetSample object, key=absolute abund of seq in dss)
-        self.seq_list = compress_pickle.load(sys.argv[1])
+        with open(sys.argv[1], 'r') as f:
+            self.seq_list = json.load(f)
         # Dict: k= nucleotide sequence, v=corresponding ReferenceSequence object
-        self.rs_set = compress_pickle.load(sys.argv[2])
+        with open(sys.argv[2], 'r') as f:
+            self.rs_list = json.load(f)
         # Make a list for faster parseing
-        self.rs_list = list(self.rs_set)
+        self.rs_set = set(self.rs_list)
         # The full path to which the match and non-match dicts should be output via compress pickle
         self.match_dict_output_path = sys.argv[3]
         self.non_match_list_output_path = self.match_dict_output_path.replace('match_dict', 'non_match_list')
@@ -24,8 +27,10 @@ class SeqMatcher:
             if not self._match_found(nuc_seq):
                 self.non_match_list.append(nuc_seq)
 
-        compress_pickle.dump(self.match_dict, self.match_dict_output_path)
-        compress_pickle.dump(self.non_match_list, self.non_match_list_output_path)
+        with open(self.match_dict_output_path, 'w') as f:
+            json.dump(self.match_dict, f)
+        with open(self.non_match_list_output_path, 'w') as f:
+            json.dump(self.non_match_list, f)
 
     def _match_found(self, nuc_seq):
         # Try to match the exact sequence

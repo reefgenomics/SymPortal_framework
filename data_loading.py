@@ -11,7 +11,7 @@ import json
 from collections import Counter
 from django import db
 from multiprocessing import Queue as mp_Queue, Manager, Process, Lock as mp_Lock
-from threading import Lock as mt_Lock, Thread
+from threading import Lock as mt_Lock, Thread, get_ident
 from queue import Queue as mt_Queue
 from general import ThreadSafeGeneral
 from datetime import datetime
@@ -1511,15 +1511,20 @@ class FastDataSetSampleSequencePMCreator:
         @staticmethod
         def _make_seq_match_dicts(
                 pre_med_seq_chunk_path, rs_dict_path, path_to_seq_match_executable, match_dict_out_path):
+            print(f'Starting match seq_match with thread {get_ident()}')
             subprocess.run(
                 [path_to_seq_match_executable, pre_med_seq_chunk_path, rs_dict_path, match_dict_out_path], check=True)
+            print(f'seq_match execution complete for thread {get_ident()}')
 
         def _assign_sequence_to_match_or_non_match_dicts_mp(self):
             matching_start_time = time.time()
             print('Attempting to match sequences to ReferenceSequence objects')
             # A generator that returns self.seq_dict, split up into chunks
             seqs_to_match = len(self.seq_dict)
-            pre_med_seq_chunks = self.thread_safe_general.chunks(self.seq_dict.keys(), n=self.num_proc)
+            # We add the one so that we always have slightly more sequences per chunk, so that we don't use
+            # more than self.num_proc number of sequence
+            print(f'Chunking in to {int(1 + (len(self.seq_dict)/self.num_proc))} sequence chunks for {self.num_proc} threads')
+            pre_med_seq_chunks = self.thread_safe_general.chunks(self.seq_dict.keys(), n=int(1 + (len(self.seq_dict)/self.num_proc)))
             all_processes = []
             # A digit to make path names unique
             count = 0
@@ -1532,16 +1537,26 @@ class FastDataSetSampleSequencePMCreator:
             # This will mean that we need to do a further look up to connect the matched sequence back to a
             # ReferenceSequence, but this should still be much faster than the serial way we were doing it before
             # as we can split up the many to many searches across the threads.
-            rs_set_to_dump = set(self.rs_dict.keys())
+            rs_set_to_dump = list(self.rs_dict.keys())
+            rs_set_path = os.path.join(self.temp_working_directory, f'rs_set_seqs')
+            print(f'Writing out {rs_set_path}')
+            with open(rs_set_path, 'w') as f:
+                json.dump(rs_set_to_dump, f)
+            # compress_pickle.dump(rs_set_to_dump, rs_set_path)
+            print('Done')
             for pre_med_seq_chunk in pre_med_seq_chunks:
                 # Dump out the dictionaries that will be read in by the executable
                 # Make the names unique to prevent any need for Lock.
-                pre_med_seq_chunk_path = os.path.join(self.temp_working_directory, f'pre_med_seq_chunk_{count}.p.bz')
-                rs_set_path = os.path.join(self.temp_working_directory, f'rs_set_{count}.p.bz')
-                match_dict_out_path = os.path.join(self.temp_working_directory, f'pre_med_match_dict_{count}.p.bz')
+                pre_med_seq_chunk_path = os.path.join(self.temp_working_directory, f'pre_med_seq_chunk_{count}')
+
+                match_dict_out_path = os.path.join(self.temp_working_directory, f'pre_med_match_dict_{count}')
                 output_dict_paths.append(match_dict_out_path)
-                compress_pickle.dump(pre_med_seq_chunk, pre_med_seq_chunk_path)
-                compress_pickle.dump(rs_set_to_dump, rs_set_path)
+                print(f'Writing out {pre_med_seq_chunk_path}')
+                with open(pre_med_seq_chunk_path, 'w') as f:
+                    json.dump(pre_med_seq_chunk, f)
+                # compress_pickle.dump(pre_med_seq_chunk, pre_med_seq_chunk_path)
+                print('Done')
+
 
                 p = Thread(target=self._make_seq_match_dicts,
                             args=(
@@ -1550,17 +1565,24 @@ class FastDataSetSampleSequencePMCreator:
                             )
 
                 all_processes.append(p)
+                print(f'Starting thread {count}')
                 p.start()
                 count += 1
 
+            print('All threads started.\nCollecting threads.')
             for p in all_processes:
                 p.join()
+                print('Collected a thread')
 
+            print('Processing thread outputs.')
             match_dict = {}
             non_match_list = []
             for output_dict_path in output_dict_paths:
-                sub_match_dict = compress_pickle.load(output_dict_path)
-                sub_non_match_list = compress_pickle.load(output_dict_path.replace('match_dict', 'non_match_list'))
+                with open(output_dict_path, 'r') as f:
+                    sub_match_dict = json.load(f)
+                with open(output_dict_path.replace('match_dict', 'non_match_list'), 'r') as f:
+                    sub_non_match_list = json.load(f)
+
                 match_dict.update(sub_match_dict)
                 non_match_list.extend(sub_non_match_list)
             assert (seqs_to_match == (len(match_dict) + len(non_match_list)))
@@ -1576,7 +1598,7 @@ class FastDataSetSampleSequencePMCreator:
                 match_count += 1
 
             # For those that did not have a match add them to the non_match_dict
-            print("Logging non_matches\n")
+            print("\nLogging non_matches\n")
             non_match_count = 0
             tot_non_matches = len(non_match_list)
             for nuc_seq in non_match_list:
@@ -1587,6 +1609,11 @@ class FastDataSetSampleSequencePMCreator:
             matching_finish_time = time.time() - matching_start_time
             logging.info(f'pre-MED to ReferenceSequence matching took {matching_finish_time}s to complete '
                          f'using multithreading for clade {self.clade}')
+
+            # Now clean up the files
+            for output_dict_path in output_dict_paths:
+                os.remove(output_dict_path)
+                os.remove(output_dict_path.replace('match_dict', 'non_match_list'))
 
         def _assign_sequence_to_match_or_non_match_dicts(self):
             """Here we go through each of the sequences for the given clade and attempt to match them
