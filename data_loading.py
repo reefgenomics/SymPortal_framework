@@ -1800,14 +1800,14 @@ class FastDataSetSampleSequencePMCreator:
                 }
                 del self.non_match_dict[small_seq]
 
-        def _make_new_reference_sequences_and_populate_match_dict(self, testing=True):
+        def _make_new_reference_sequences_and_populate_match_dict(self, testing=False):
             """Here we are going to make reference sequences for the non_match representative sequences.
             Essentially we want to end up with the same dictionary that we have for the match sequences,
             i.e. a reference sequence representing the DataSetSample and abundance information so that we can
-            evenutally get to the business of creating the DataSetSampleSequencePM objects.
+            eventually get to the business of creating the DataSetSampleSequencePM objects.
 
-            We will make implement a santiy check at this point that can be removed once we have completed testing
-            This will check to make sure that none of the seqeunces of the reference sequences we are about to make
+            We will make implement a sanity check at this point that can be removed once we have completed testing
+            This will check to make sure that none of the sequences of the reference sequences we are about to make
             match or fit into any of the existing reference sequences. We will also check that none of the sequences
             match of fit into any of the other sequences. This will be very slow but worth the price considering
             that we don't want to pollute the referenceSequence pool of the database.
@@ -1834,9 +1834,7 @@ class FastDataSetSampleSequencePMCreator:
                         if (c_seq in rs_seq) or (rs_seq in c_seq):
                             raise RuntimeError(
                                 'Consolidated sequence is already found in the ReferenceSequence object collection')
-                # Create the new reference sequence. Unfortunately creating the reference squences one by one
-                # will likely slow us down quite a lot but I see know way around it given that we need to associate
-                # add the reference sequence object as the representative to the match dict
+                # Create the new reference sequence.
                 new_rs_list.append(ReferenceSequence(clade=self.clade, sequence=c_seq))
 
             print(f'\ncreating {len(new_rs_list)} new ReferenceSequence objects in bulk for clade {self.clade}')
@@ -1851,7 +1849,6 @@ class FastDataSetSampleSequencePMCreator:
             # Now go back through the no match dict and use this dictionary to poulate the match dictionary
             for c_seq in self.non_match_dict.keys():
                 self.match_dict[new_rs_seq_to_obj_dict[c_seq]] = self.non_match_dict[c_seq]
-            # Done. Now check the speed up.
 
         def _create_data_set_sample_sequence_pm_objects(self):
             """Finally now that we have a reference sqeuence object representing
