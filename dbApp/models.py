@@ -217,7 +217,7 @@ class AnalysisType(models.Model):
     # Note that this is therefore in no particular order
     majority_reference_sequence_set = models.CharField(max_length=40, null=True)
 
-    list_of_clade_collections = models.CharField(max_length=100000, null=True)
+    list_of_clade_collections = models.CharField(max_length=1000000, null=True)
     # This is a 2D list, a list for each clade collection in order of the listofCladeCollections
     # Within each list the absolute abundances of the defining seqs in order of ordered_footprint_list
     footprint_sequence_abundances = models.CharField(max_length=100000, null=True)
