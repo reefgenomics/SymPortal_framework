@@ -220,10 +220,10 @@ class AnalysisType(models.Model):
     list_of_clade_collections = models.CharField(max_length=1000000, null=True)
     # This is a 2D list, a list for each clade collection in order of the listofCladeCollections
     # Within each list the absolute abundances of the defining seqs in order of ordered_footprint_list
-    footprint_sequence_abundances = models.CharField(max_length=100000, null=True)
+    footprint_sequence_abundances = models.CharField(max_length=1000000, null=True)
 
     # Same as above but the proportion of the seqs to each other in the cladecollection.
-    footprint_sequence_ratios = models.CharField(max_length=100000, null=True)
+    footprint_sequence_ratios = models.CharField(max_length=1000000, null=True)
 
     clade = models.CharField(max_length=1)
     co_dominant = models.BooleanField(default=False)
