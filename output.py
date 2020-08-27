@@ -104,9 +104,9 @@ class OutputTypeCountTable:
         self.path_to_absolute_count_table_profiles_meta_only = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
                              f'{self.data_analysis_obj.name}_'
-                             f'{self.date_time_str}.profiles.absolute.meta_only.txt')
+                             f'{self.date_time_str}.profiles.meta_only.txt')
         self.js_output_path_dict[
-            "profile_absolute_meta_only_count"] = self.path_to_absolute_count_table_profiles_meta_only
+            "profile_meta"] = self.path_to_absolute_count_table_profiles_meta_only
 
         self.path_to_relative_count_table_profiles_abund_and_meta = os.path.join(
             self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
@@ -121,13 +121,6 @@ class OutputTypeCountTable:
                              f'{self.date_time_str}.profiles.relative.abund_only.txt')
         self.js_output_path_dict[
             "profile_relative_abund_only_count"] = self.path_to_relative_count_table_profiles_abund_only
-
-        self.path_to_relative_count_table_profiles_meta_only = os.path.join(
-            self.profiles_output_dir, f'{self.data_analysis_obj.id}_'
-                             f'{self.data_analysis_obj.name}_'
-                             f'{self.date_time_str}.profiles.relative.meta_only.txt')
-        self.js_output_path_dict[
-            "profile_relative_meta_only_count"] = self.path_to_relative_count_table_profiles_meta_only
 
         self.path_to_additional_info_file = os.path.join(self.profiles_output_dir, 'additional_info.txt')
         self.js_output_path_dict[
