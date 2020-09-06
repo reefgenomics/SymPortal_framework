@@ -137,6 +137,49 @@ class BaseUnifracDistPCoACreator:
         else:
             print("There are no output files")
 
+    @staticmethod
+    def _rescale_array(max_val, min_val):
+        # work through the magnitudes of order and see what the bigest scaler we can work with is
+        # whilst still remaining below 1
+        # Return the scaler by which we should multiply
+        query = 0.1
+        scaler = 10
+        while 1:
+            if max_val > query:
+                # then we cannot multiply by the scaler
+                # revert back and break
+                scaler /= 10
+                break
+            else:
+                # then we can safely multiply by the scaler
+                # increase by order of magnitude and test again
+                # we also need to test the negative if it is negative
+                if min_val < 0:
+                    if min_val > (-1 * query):
+                        scaler *= 10
+                        query /= 10
+                    else:
+                        scaler /= 10
+                        break
+                else:
+                    scaler *= 10
+                    query /= 10
+        # now scale the df by the scaler unless it is 1
+        return scaler
+
+    def _scale_and_compute_pcoa(self, wu):
+        dist_array_scaler = self._rescale_array(max_val=wu.data.max(), min_val=wu.data.min())
+        wu.data = wu.data * dist_array_scaler
+        pcoa_output = pcoa(wu.data)
+        # When the pcoa calculation converts very small eigen values to 0
+        # In doing this, if there were not large enougher eigen values,
+        # the sum of the eigen values will add to 0. This will cause a TrueDivide error.
+        if pcoa_output.eigvals.sum() == 0:
+            raise EigenValsTooSmallError
+        pcoa_scaler = self._rescale_array(max_val=pcoa_output.samples.max().max(),
+                                          min_val=pcoa_output.samples.min().min())
+        pcoa_output.samples = pcoa_output.samples * pcoa_scaler
+        return pcoa_output
 
 class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
     """Class for calculating the UniFrac distances between ITS2 type profiles, producing PCoA coordinates from
@@ -333,10 +376,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
     def _compute_pcoa(self, wu):
-        # compute the pcoa
-        pcoa_output = pcoa(wu.data)
-        self._rescale_pcoa(pcoa_output)
-        # analysis_type_uid
+        pcoa_output = self._scale_and_compute_pcoa(wu)
         pcoa_output.samples['analysis_type_uid'] = wu.ids
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
@@ -744,48 +784,8 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         renamed_pcoa_dataframe.to_csv(header=True, index=True, path_or_buf=clade_pcoa_file_path, sep=',')
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
-    @staticmethod
-    def _rescale_array(max_val, min_val):
-        # work through the magnitudes of order and see what the bigest scaler we can work with is
-        # whilst still remaining below 1
-        # Return the scaler by which we should multiply
-        query = 0.1
-        scaler = 10
-        while 1:
-            if max_val > query:
-                # then we cannot multiply by the scaler
-                # revert back and break
-                scaler /= 10
-                break
-            else:
-                # then we can safely multiply by the scaler
-                # increase by order of magnitude and test again
-                # we also need to test the negative if it is negative
-                if min_val < 0:
-                    if min_val > (-1 * query):
-                        scaler *= 10
-                        query /= 10
-                    else:
-                        scaler /= 10
-                        break
-                else:
-                    scaler *= 10
-                    query /= 10
-        # now scale the df by the scaler unless it is 1
-        return scaler
-
     def _compute_pcoa(self, wu):
-        dist_array_scaler = self._rescale_array(max_val=wu.data.max(), min_val=wu.data.min())
-        wu.data = wu.data * dist_array_scaler
-        pcoa_output = pcoa(wu.data)
-
-        # When the pcoa calculation converts very small eigen values to 0
-        # In doing this, if there were not large enougher eigen values,
-        # the sum of the eigen values will add to 0. This will cause a TrueDivide error.
-        if pcoa_output.eigvals.sum() == 0:
-            raise EigenValsTooSmallError
-        pcoa_scaler = self._rescale_array(max_val=pcoa_output.samples.max().max(), min_val=pcoa_output.samples.min().min())
-        pcoa_output.samples = pcoa_output.samples * pcoa_scaler
+        pcoa_output = self._scale_and_compute_pcoa(wu)
         pcoa_output.samples['sample_uid'] = [self.cc_id_to_sample_id[int(cc_id)] for cc_id in wu.ids]
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output
@@ -1019,7 +1019,19 @@ class BaseBrayCurtisDistPCoACreator:
 
         sys.stdout.write('\rcalculating PCoA coordinates')
 
+        dist_array_scaler = self._rescale_array(max_val=dist_as_np_array.max(), min_val=dist_as_np_array.min())
+
+        dist_as_np_array = dist_as_np_array * dist_array_scaler
+
         pcoa_output = pcoa(dist_as_np_array)
+        # When the pcoa calculation converts very small eigen values to 0
+        # In doing this, if there were not large enougher eigen values,
+        # the sum of the eigen values will add to 0. This will cause a TrueDivide error.
+        if pcoa_output.eigvals.sum() == 0:
+            raise EigenValsTooSmallError
+        pcoa_scaler = self._rescale_array(max_val=pcoa_output.samples.max().max(),
+                                          min_val=pcoa_output.samples.min().min())
+        pcoa_output.samples = pcoa_output.samples * pcoa_scaler
 
         # rename the pcoa dataframe index as the sample names
         pcoa_output.samples['sample'] = object_names_from_dist_matrix
@@ -1042,6 +1054,36 @@ class BaseBrayCurtisDistPCoACreator:
         else:
             renamed_pcoa_dataframe.to_csv(self.clade_pcoa_coord_file_path_no_sqrt, index=True, header=True, sep=',')
         return renamed_pcoa_dataframe
+
+    @staticmethod
+    def _rescale_array(max_val, min_val):
+        # work through the magnitudes of order and see what the bigest scaler we can work with is
+        # whilst still remaining below 1
+        # Return the scaler by which we should multiply
+        query = 0.1
+        scaler = 10
+        while 1:
+            if max_val > query:
+                # then we cannot multiply by the scaler
+                # revert back and break
+                scaler /= 10
+                break
+            else:
+                # then we can safely multiply by the scaler
+                # increase by order of magnitude and test again
+                # we also need to test the negative if it is negative
+                if min_val < 0:
+                    if min_val > (-1 * query):
+                        scaler *= 10
+                        query /= 10
+                    else:
+                        scaler /= 10
+                        break
+                else:
+                    scaler *= 10
+                    query /= 10
+        # now scale the df by the scaler unless it is 1
+        return scaler
 
     def _set_data_set_sample_uid_list(self, data_set_sample_uid_list, data_set_uid_list, cct_set_uid_list):
         if data_set_sample_uid_list:
