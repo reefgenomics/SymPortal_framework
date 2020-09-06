@@ -15,7 +15,7 @@ from general import ThreadSafeGeneral
 from dbApp.models import (
     ReferenceSequence, DataSetSampleSequence, AnalysisType, DataSetSample,
     CladeCollection, CladeCollectionType)
-from exceptions import InsufficientSequencesInAlignment
+from exceptions import InsufficientSequencesInAlignment, EigenValsTooSmallError
 
 
 class BaseUnifracDistPCoACreator:
@@ -650,8 +650,14 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             clade_dist_file_path_sqrt, ordered_sample_names_sqrt = self._write_out_dist_df(
                 clade_abund_df_sqrt, wu_sqrt, clade_in_question, sqrt=True)
 
-            pcoa_output_no_sqrt = self._compute_pcoa(wu_no_sqrt)
-            pcoa_output_sqrt = self._compute_pcoa(wu_sqrt)
+            try:
+                pcoa_output_no_sqrt = self._compute_pcoa(wu_no_sqrt)
+                pcoa_output_sqrt = self._compute_pcoa(wu_sqrt)
+            except EigenValsTooSmallError:
+                logging.error(f"The eigenvalues for the clade {clade_in_question} PCoA were too small and were "
+                              f"converted to 0s by skbio's implementation of PCoA.")
+                logging.error(f"Unifrac Distances cannot be calculated for clade {clade_in_question}")
+                continue
 
             clade_pcoa_file_path_no_sqrt, pcoa_coords_df_no_sqrt = self._write_out_pcoa(
                 ordered_sample_names_no_sqrt, pcoa_output_no_sqrt, clade_in_question, sqrt=False)
@@ -739,13 +745,14 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
         return clade_pcoa_file_path, renamed_pcoa_dataframe
 
     @staticmethod
-    def _rescale_pcoa(pcoa_output):
+    def _rescale_array(max_val, min_val):
         # work through the magnitudes of order and see what the bigest scaler we can work with is
         # whilst still remaining below 1
+        # Return the scaler by which we should multiply
         query = 0.1
         scaler = 10
         while 1:
-            if pcoa_output.samples.max().max() > query:
+            if max_val > query:
                 # then we cannot multiply by the scaler
                 # revert back and break
                 scaler /= 10
@@ -754,7 +761,6 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                 # then we can safely multiply by the scaler
                 # increase by order of magnitude and test again
                 # we also need to test the negative if it is negative
-                min_val = pcoa_output.samples.min().min()
                 if min_val < 0:
                     if min_val > (-1 * query):
                         scaler *= 10
@@ -766,12 +772,20 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
                     scaler *= 10
                     query /= 10
         # now scale the df by the scaler unless it is 1
-        if scaler != 1:
-            pcoa_output.samples = pcoa_output.samples * scaler
+        return scaler
 
     def _compute_pcoa(self, wu):
+        dist_array_scaler = self._rescale_array(max_val=wu.data.max(), min_val=wu.data.min())
+        wu.data = wu.data * dist_array_scaler
         pcoa_output = pcoa(wu.data)
-        self._rescale_pcoa(pcoa_output)
+
+        # When the pcoa calculation converts very small eigen values to 0
+        # In doing this, if there were not large enougher eigen values,
+        # the sum of the eigen values will add to 0. This will cause a TrueDivide error.
+        if pcoa_output.eigvals.sum() == 0:
+            raise EigenValsTooSmallError
+        pcoa_scaler = self._rescale_array(max_val=pcoa_output.samples.max().max(), min_val=pcoa_output.samples.min().min())
+        pcoa_output.samples = pcoa_output.samples * pcoa_scaler
         pcoa_output.samples['sample_uid'] = [self.cc_id_to_sample_id[int(cc_id)] for cc_id in wu.ids]
         pcoa_output.samples = pcoa_output.samples[list(pcoa_output.samples)[-1:] + list(pcoa_output.samples)[:-1]]
         return pcoa_output

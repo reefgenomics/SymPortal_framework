@@ -17,3 +17,9 @@ class DistanceTypeNotIdentifiedError(Error):
     """Raised when looking for the distance type i.e. unifrac or braycurtis in the path of the PCoA csv.
     Will also be raised if the transofrmation type cannot be inferred i.e. sqrt or no_sqrt"""
     pass
+
+class EigenValsTooSmallError(Error):
+    """Raised when the eigen values of a PCoA sum to 0. This happens because
+    the scipy code converts very small eigen values to 0. As such if all eigen values are small
+    we end up with TrueDivide errors when trying to calculate variance."""
+    pass
