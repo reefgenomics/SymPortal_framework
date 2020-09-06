@@ -280,7 +280,7 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             except ValueError as e:
                 if 'must be rooted' in str(e):
                     logging.error('a tree rooting error occured')
-                    logging.error(f"Distance information will not be computed for clade {clade_in_question}")
+                    logging.error(f"Between profile Unifrac distance information will not be computed for clade {clade_in_question}")
                     continue
 
             clade_dist_file_path_no_sqrt, ordered_at_names_no_sqrt = self._write_out_dist_df(
@@ -288,8 +288,15 @@ class TypeUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             clade_dist_file_path_sqrt, ordered_at_names_sqrt = self._write_out_dist_df(
                 clade_abund_df_sqrt, wu_sqrt, clade_in_question, sqrt=True)
 
-            pcoa_output_no_sqrt = self._compute_pcoa(wu_no_sqrt)
-            pcoa_output_sqrt = self._compute_pcoa(wu_sqrt)
+            try:
+                pcoa_output_no_sqrt = self._compute_pcoa(wu_no_sqrt)
+                pcoa_output_sqrt = self._compute_pcoa(wu_sqrt)
+            except EigenValsTooSmallError:
+                logging.error(f"The eigenvalues for the clade {clade_in_question} PCoA were too small and were "
+                              f"converted to 0s by skbio's implementation of PCoA.")
+                logging.error(f" Between profile Unifrac distances cannot be calculated for clade {clade_in_question}")
+                continue
+
 
             clade_pcoa_file_path_no_sqrt, pcoa_coords_df_no_sqrt = self._write_out_pcoa(
                 ordered_at_names_no_sqrt, pcoa_output_no_sqrt, clade_in_question, sqrt=False)
@@ -673,7 +680,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             if str(tree).count(')') == 1:
                 print(f'There are no internal nodes on the rooted tree. '
                       f'This is likely caused by a lack of variation in the sequences used to build the tree. '
-                      f'UniFrac distances cannot be calculated for clade {clade_in_question}.')
+                      f'Between sample UniFrac distances cannot be calculated for clade {clade_in_question}.')
                 continue
 
             try:
@@ -696,7 +703,7 @@ class SampleUnifracDistPCoACreator(BaseUnifracDistPCoACreator):
             except EigenValsTooSmallError:
                 logging.error(f"The eigenvalues for the clade {clade_in_question} PCoA were too small and were "
                               f"converted to 0s by skbio's implementation of PCoA.")
-                logging.error(f"Unifrac Distances cannot be calculated for clade {clade_in_question}")
+                logging.error(f"Between sample Unifrac Distances cannot be calculated for clade {clade_in_question}")
                 continue
 
             clade_pcoa_file_path_no_sqrt, pcoa_coords_df_no_sqrt = self._write_out_pcoa(
@@ -1348,8 +1355,15 @@ class SampleBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self._generate_distance_file(sqrt=False)
             self._add_obj_uids_to_dist_file_and_write(sqrt=True)
             self._add_obj_uids_to_dist_file_and_write(sqrt=False)
-            pcoa_coords_df_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=True)
-            pcoa_coords_df_no_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=False)
+            try:
+                pcoa_coords_df_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=True)
+                pcoa_coords_df_no_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=False)
+            except EigenValsTooSmallError:
+                logging.error(f"The eigenvalues for the clade {clade_in_question} PCoA were too small and were "
+                              f"converted to 0s by skbio's implementation of PCoA.")
+                logging.error(f"Between sample Bray-Curtis distances cannot be calculated for clade {clade_in_question}")
+                continue
+
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df_sqrt, sqrt=True)
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df_no_sqrt, sqrt=False)
             self._append_output_files_to_output_list()
@@ -1527,8 +1541,15 @@ class TypeBrayCurtisDistPCoACreator(BaseBrayCurtisDistPCoACreator):
             self._add_obj_uids_to_dist_file_and_write(sqrt=True)
             self._add_obj_uids_to_dist_file_and_write(sqrt=False)
 
-            pcoa_coords_df_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=True)
-            pcoa_coords_df_no_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=False)
+            try:
+                pcoa_coords_df_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=True)
+                pcoa_coords_df_no_sqrt = self._compute_pcoa_coords(clade=clade_in_question, sqrt=False)
+            except EigenValsTooSmallError:
+                logging.error(f"The eigenvalues for the clade {clade_in_question} PCoA were too small and were "
+                              f"converted to 0s by skbio's implementation of PCoA.")
+                logging.error(f"Between profile Bray-Curtis distances cannot be calculated for clade {clade_in_question}")
+                continue
+
 
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df_sqrt, sqrt=True)
             self._populate_js_output_objects(clade_in_question, pcoa_coords_df_no_sqrt, sqrt=False)
