@@ -169,8 +169,8 @@ class BaseUnifracDistPCoACreator:
 
     def _scale_and_compute_pcoa(self, wu):
         dist_array_scaler = self._rescale_array(max_val=wu.data.max(), min_val=wu.data.min())
-        wu.data = wu.data * dist_array_scaler
-        pcoa_output = pcoa(wu.data)
+        wu_data = wu.data * dist_array_scaler
+        pcoa_output = pcoa(wu_data)
         # When the pcoa calculation converts very small eigen values to 0
         # In doing this, if there were not large enougher eigen values,
         # the sum of the eigen values will add to 0. This will cause a TrueDivide error.
