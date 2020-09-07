@@ -19,7 +19,7 @@
 
 
     """
-__version__ = '0.3.19'
+__version__ = '0.3.20'
 
 
 # Django specific settings
