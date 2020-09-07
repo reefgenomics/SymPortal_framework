@@ -19,7 +19,7 @@
 
 
     """
-
+__version__ = '0.3.19'
 
 
 # Django specific settings
@@ -48,7 +48,6 @@ if sp_config.system_type == 'remote':
     from bs4 import BeautifulSoup
     import requests
     import re
-    import compress_pickle
 import data_analysis
 from general import ThreadSafeGeneral
 from django_general import CreateStudyAndAssociateUsers
@@ -299,6 +298,9 @@ class SymPortalWorkFlowManager:
                                 'the DataSetSample names exactly. Unpopulated columns in the datasheet will be ignored.'
                                 ' I.e. existing meta-information will not be removed from the DataSetSampes if '
                                 'information is missing in the datasheet.')
+        group.add_argument(
+            '--version', '-v', action='store_true',
+            help='Output version')
 
     def start_work_flow(self):
         if self.args.load:
@@ -357,6 +359,9 @@ class SymPortalWorkFlowManager:
             return True
         elif self.args.vacuum_database:
             self.perform_vacuum_database()
+            return True
+        elif self.args.version:
+            print(__version__)
             return True
         # Only if we are running as remote, check for study output
         if sp_config.system_type == 'remote':

@@ -1,11 +1,10 @@
 from dbApp.models import (
     DataSet, ReferenceSequence, DataSetSample, DataSetSampleSequence,
-    CladeCollection, DataSetSampleSequencePM, Study, User)
+    CladeCollection, DataSetSampleSequencePM)
 import sys
 import os
 import shutil
 import subprocess
-import glob
 import pandas as pd
 import json
 from collections import Counter
@@ -28,11 +27,9 @@ import itertools
 import time
 from shutil import which
 import sp_config
-from django.core.exceptions import ObjectDoesNotExist
 from django_general import CreateStudyAndAssociateUsers
 import logging
-import copy
-import compress_pickle
+
 
 class DataLoading:
     # The clades refer to the phylogenetic divisions of the Symbiodiniaceae. Most of them are represented at the genera
