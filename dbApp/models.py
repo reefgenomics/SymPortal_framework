@@ -24,7 +24,6 @@ class DataSet(models.Model):
 
 
 class DataSetSample(models.Model):
-
     objects = models.Manager()
     data_submission_from = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=200, default='None')
@@ -81,6 +80,7 @@ class DataSetSample(models.Model):
 def get_creation_time_stamp_string():
     return str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
 
+
 class Study(models.Model):
     objects = models.Manager()
     data_set_samples = models.ManyToManyField(DataSetSample)
@@ -100,6 +100,11 @@ class Study(models.Model):
         max_length=100,
         default=get_creation_time_stamp_string
     )
+    # This will be either compilation or dataset_representative
+    # A dataset_representative type study will be created for every DataSet object created
+    # compilation type Study objects will be made when a study is associated with DataSetSamples that are
+    # not exactly represented by a single DataSet object
+    study_type = models.CharField(max_length=50, default="dataset_representative")
 
     def __print__(self):
         print(f'< Study: id {self.id}, name {self.name} >')
@@ -123,6 +128,33 @@ class Study(models.Model):
 
     def __repr__(self):
         return f'< Study: id {self.id}, name {self.name} >'
+
+
+class Submission(models.Model):
+    """
+    A class for representing a user dataset submission.
+    It will hold information that will allow the chron jobs to process
+    data that has been uploaded to the SymPortal.org webpage
+    """
+    # This name will be used for the DataSet object and the Study object that will be associated to this object
+    name = models.CharField(max_length=60, null=False, unique=True)
+    # The optional title that will be given to the Study object that is created
+    title = models.CharField(max_length=250, null=True)
+    # The optional location to be transferred to the associated Study object
+    location = models.CharField(max_length=50, null=True)
+    # The location of the directory holding the seq files and datasheet on the web hosting server, i.e. linode
+    web_local_dir_path = models.CharField(max_length=300, null=False, unique=True)
+    # The location of the directory holding the seq files and datasheet on the symportal framework server, i.e. zygote
+    framework_local_dir_path = models.CharField(max_length=300, null=False, unique=True)
+    # The progress of the submission
+    progress_status = models.CharField(max_length=50, null=False, default='pending_submission')
+    # If an Error has occured
+    error_has_occured = models.BooleanField(default=False)
+    # associated DataSet
+    associated_dataset = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
+    # associated Study
+    associated_study = models.ForeignKey(Study, on_delete=models.CASCADE, null=True)
+
 
 class Citation(models.Model):
     """
