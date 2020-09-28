@@ -130,6 +130,28 @@ class Study(models.Model):
         return f'< Study: id {self.id}, name {self.name} >'
 
 
+class User(models.Model):
+    objects = models.Manager()
+    name = models.CharField(max_length=100, null=False, unique=True)
+    studies = models.ManyToManyField(Study)
+    # This is set to False when User is created. Upon upload to symportal.org
+    # a user that matches this name will be searched for in the app.db database.
+    # If no matching user if found, an error will be thrown. If a user is found,
+    # This value will be set to true, and the ID of the User in the app.db database
+    # will be stored in app_db_key below.
+    # The id of this object will also be stored in the app.db User object that matches
+    # UPDATE we will phase the use of these out and work directly with the name
+    # that should be unique.
+    app_db_key_is_set = models.BooleanField(default=False)
+    app_db_key_id = models.IntegerField(null=True)
+
+    def __str__(self):
+        return f'< User: id {self.id}, name {self.name} >'
+
+    def __repr__(self):
+        return f'< User: id {self.id}, name {self.name} >'
+
+
 class Submission(models.Model):
     """
     A class for representing a user dataset submission.
@@ -154,7 +176,8 @@ class Submission(models.Model):
     associated_dataset = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
     # associated Study
     associated_study = models.ForeignKey(Study, on_delete=models.CASCADE, null=True)
-
+    # submitting User
+    submitting_user = models.ForeignKey(User, on_delete=models.CASCADE, null=False)
 
 class Citation(models.Model):
     """
@@ -166,26 +189,6 @@ class Citation(models.Model):
     author_list_string = models.CharField(max_length=500, null=True)
     year = models.CharField(max_length=4, null=True)
 
-class User(models.Model):
-    objects = models.Manager()
-    name = models.CharField(max_length=100, null=False, unique=True)
-    studies = models.ManyToManyField(Study)
-    # This is set to False when User is created. Upon upload to symportal.org
-    # a user that matches this name will be searched for in the app.db database.
-    # If no matching user if found, an error will be thrown. If a user is found,
-    # This value will be set to true, and the ID of the User in the app.db database
-    # will be stored in app_db_key below.
-    # The id of this object will also be stored in the app.db User object that matches
-    # UPDATE we will phase the use of these out and work directly with the name
-    # that should be unique.
-    app_db_key_is_set = models.BooleanField(default=False)
-    app_db_key_id = models.IntegerField(null=True)
-
-    def __str__(self):
-        return f'< User: id {self.id}, name {self.name} >'
-
-    def __repr__(self):
-        return f'< User: id {self.id}, name {self.name} >'
 
 class DataAnalysis(models.Model):
     # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
