@@ -78,7 +78,7 @@ class DataSetSample(models.Model):
         return self.name
 
 def get_creation_time_stamp_string():
-    return str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+    return str(datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
 
 
 class Study(models.Model):
@@ -178,6 +178,18 @@ class Submission(models.Model):
     associated_study = models.ForeignKey(Study, on_delete=models.CASCADE, null=True)
     # submitting User
     submitting_user = models.ForeignKey(User, on_delete=models.CASCADE, null=False)
+    # These fields will hold the times that various checkpoints are reached
+    # submission time
+    submission_date_time = models.CharField(max_length=25, null=False, default=get_creation_time_stamp_string)
+    transfer_to_framework_server_date_time = models.CharField(max_length=25, null=True)
+    loading_started_date_time = models.CharField(max_length=25, null=True)
+    loading_complete_date_time = models.CharField(max_length=25, null=True)
+    analysis_started_date_time = models.CharField(max_length=25, null=True)
+    analysis_complete_date_time = models.CharField(max_length=25, null=True)
+    study_output_started_date_time = models.CharField(max_length=25, null=True)
+    study_output_complete_date_time = models.CharField(max_length=25, null=True)
+    transfer_to_web_server_date_time = models.CharField(max_length=25, null=True)
+
 
 class Citation(models.Model):
     """
