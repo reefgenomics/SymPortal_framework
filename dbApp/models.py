@@ -178,6 +178,8 @@ class Submission(models.Model):
     associated_study = models.ForeignKey(Study, on_delete=models.CASCADE, null=True)
     # submitting User
     submitting_user = models.ForeignKey(User, on_delete=models.CASCADE, null=False)
+    # number of samples
+    number_samples = models.IntegerField(null=False, default=0)
     # These fields will hold the times that various checkpoints are reached
     # submission time
     submission_date_time = models.CharField(max_length=25, null=False, default=get_creation_time_stamp_string)
