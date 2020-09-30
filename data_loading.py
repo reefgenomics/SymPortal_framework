@@ -85,6 +85,7 @@ class DataLoading:
             csaau = CreateStudyAndAssociateUsers(
                 date_time_str=self.date_time_str, ds=self.dataset_object, list_of_dss_objects=self.list_of_dss_objects)
             csaau.create_study_and_user_objects()
+            self.study = csaau.study
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord

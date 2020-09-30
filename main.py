@@ -666,6 +666,10 @@ class SymPortalWorkFlowManager:
     def perform_data_loading(self):
         self._verify_name_arg_given_load()
         self._execute_data_loading()
+        if sp_config.system_type == 'remote' and self.data_loading_object.study:
+            self.output_dir = self.data_loading_object.output_directory
+            self.study = self.data_loading_object.study
+            self._output_study_output_info_items()
 
     def _execute_data_loading(self):
         self.data_loading_object = data_loading.DataLoading(
@@ -876,8 +880,14 @@ class SymPortalWorkFlowManager:
         temp_dict["study"] = self.study.name
 
         # Set the display_online and the data_explorer attribute of the study to True
+        # Also set analysis to True
         self.study.display_online = True
         self.study.data_explorer = True
+        if self.args.output_study_from_analysis:
+            self.study.analysis = True
+        elif self.args.load:
+            # This is already set as False as default but let's be explicit
+            self.study.analysis = False
         self.study.save()
 
         print(f"pg_dumping {bak_path}. This may take some time...")
