@@ -196,7 +196,7 @@ class DataLoading:
 
         self._perform_sequence_drop()
 
-        self._delete_temp_working_directory_and_log_files()
+        self._delete_temp_dir__log_files_and_pre_med_dir()
 
         self._write_data_set_info_to_stdout()
 
@@ -360,11 +360,15 @@ class DataLoading:
             if 'relative.abund_and_meta' in path:
                 self.seq_abundance_relative_output_path_post_med = path
 
-    def _delete_temp_working_directory_and_log_files(self):
+    def _delete_temp_dir__log_files_and_pre_med_dir(self):
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)
         # Delete any log files that are found anywhere in the SymPortal directory
         subprocess.run(f'find {self.symportal_root_directory} -name "*.logfile" -delete', shell=True, check=True)
+        # Delete the pre_med_seq directories holding the .fasta and .names pairs
+        # as this information is now stored in the database and output in a count table.
+        for pre_med_sub_dir_path in [x[0] for x in os.walk(self.pre_med_sequence_output_directory_path) if not x[1] and not x[0].endswith('pre_med_seqs')]:
+            shutil.rmtree(pre_med_sub_dir_path)
 
     def _perform_sequence_drop(self):
         sequence_drop_file = self._generate_sequence_drop_file()
