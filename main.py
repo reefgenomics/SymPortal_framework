@@ -666,7 +666,7 @@ class SymPortalWorkFlowManager:
     def perform_data_loading(self):
         self._verify_name_arg_given_load()
         self._execute_data_loading()
-        if sp_config.system_type == 'remote' and self.data_loading_object.study:
+        if sp_config.system_type == 'remote' and self.data_loading_object.study and not self.args.no_output:
             self.output_dir = self.data_loading_object.output_directory
             self.study = self.data_loading_object.study
             self._output_study_output_info_items()
