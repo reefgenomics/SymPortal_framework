@@ -368,7 +368,8 @@ class DataLoading:
         # Delete the pre_med_seq directories holding the .fasta and .names pairs
         # as this information is now stored in the database and output in a count table.
         for pre_med_sub_dir_path in [x[0] for x in os.walk(self.pre_med_sequence_output_directory_path) if not x[1] and not x[0].endswith('pre_med_seqs')]:
-            shutil.rmtree(pre_med_sub_dir_path)
+            if 'pre_med_seqs' in pre_med_sub_dir_path:
+                shutil.rmtree(pre_med_sub_dir_path)
 
     def _perform_sequence_drop(self):
         sequence_drop_file = self._generate_sequence_drop_file()
