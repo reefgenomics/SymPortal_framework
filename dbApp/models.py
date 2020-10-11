@@ -158,6 +158,7 @@ class Submission(models.Model):
     It will hold information that will allow the chron jobs to process
     data that has been uploaded to the SymPortal.org webpage
     """
+    objects = models.Manager()
     # This name will be used for the DataSet object and the Study object that will be associated to this object
     name = models.CharField(max_length=60, null=False, unique=True)
     # The optional title that will be given to the Study object that is created
