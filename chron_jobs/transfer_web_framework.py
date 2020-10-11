@@ -39,56 +39,97 @@ class TransferWebToFramework:
         # Open sftp client
         self.sftp_client = self.ssh_client.open_sftp()
 
+        # Number of attempts already undertaken to download the data from the webserver and validate md5sum
+        self.attempts = 0
+
+        # Dynamics for convenience that will be updated with each Submission object
+        self.submission_to_transfer = None
+        self.web_source_dir = None
+        self.framework_dest_dir = None
+
+    def transfer(self):
+        """
+        Transfer over the files in the Submissions web_local_dir_path from the web server
+        Validate the md5sum
+        Delete the files from the web server
+        Update the status and time log of each Submission object
+        """
+
         # Transfer each submission
         for sub_to_trans in self.submissions_to_transfer:
-            web_source_dir = sub_to_trans.web_local_dir_path
-            framework_dest_dir = os.path.join(self.symportal_data_dir, os.path.basename(web_source_dir))
+            self.submissions_to_transfer = sub_to_trans
+            self._process_submission()
 
-            # Get every file that is in the web directory
-            for get_file in self.sftp_client.listdir(web_source_dir):
-                if '.' in get_file:
-                    if os.path.exists(os.path.join(framework_dest_dir, get_file)):
-                        print(f'{os.path.join(framework_dest_dir, get_file)} already exists')
-                    else:
-                        print(f'getting: {os.path.join(web_source_dir, get_file)}')
-                        self.sftp_client.get(os.path.join(web_source_dir, get_file), os.path.join(framework_dest_dir, get_file))
+    def _process_submission(self, ):
+        self.web_source_dir = self.submission_to_transfer.web_local_dir_path
+        self.framework_dest_dir = os.path.join(self.symportal_data_dir, os.path.basename(self.web_source_dir))
 
-            # There should be one md5sum in the pulled down files.
-            # Make a new md5sum with the transfered files and verify
-            md5sum_source_path = [fn for fn in os.listdir(framework_dest_dir) if fn.endswith('.md5sum')]
-            assert(len(md5sum_source_path) == 1)
-            md5sum_source_path = md5sum_source_path[0]
-            # Make a dict of the file
-            with open(md5sum_source_path, 'r') as f:
-                md5sum_source_dict = {line.split()[0]: line[1] for line in f}
+        self._get_files_from_web_dir()
 
-            # For each key in the md5sum_source_dict we should have the hash
-            for file_path, web_hash in md5sum_source_dict.items():
-                local_file_path = os.path.join(framework_dest_dir, os.path.basename(file_path))
-                try:
-                    framework_md5sum_hash = subprocess.run(['md5sum', local_file_path],
-                                           capture_output=True).stdout.decode("utf-8").split()[1]
-                except FileNotFoundError:
-                    framework_md5sum_hash = subprocess.run(['md5', '-r', local_file_path],
-                                           capture_output=True).stdout.decode("utf-8").split()[1]
-                if framework_md5sum_hash != web_hash:
-                    # TODO reattmept the transfer
-                    raise RuntimeError('Hashes do not match')
+        md5sum_source_dict = self._make_md5sum_web_server_dict()
 
-            # If we get here then the md5sum has been validated
-            # The transfer is complete
-            # Delete the remote files and the remote directory
-            self.sftp_client.rmdir(web_source_dir)
+        self._validate_md5sum(md5sum_source_dict)
 
-            # Update the time of the Submission object transfer_to_framework_server_date_time
-            sub_to_trans.transfer_to_framework_server_date_time = str(
-                datetime.utcnow()
-            ).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+        # If we get here then the md5sum has been validated and the transfer is complete
 
-            # Update the status of the Submission object
-            sub_to_trans.progress_status = "transfer_to_framework_server_complete"
+        # Delete the remote files and the remote directory
+        self.sftp_client.rmdir(self.web_source_dir)
+
+        # Update the time of the Submission object transfer_to_framework_server_date_time
+        self.submission_to_transfer.transfer_to_framework_server_date_time = str(
+            datetime.utcnow()
+        ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
+
+        # Update the status of the Submission object
+        self.submission_to_transfer.progress_status = "transfer_to_framework_server_complete"
+
+        self.submissions_to_transfer.save()
+
+    def _validate_md5sum(self, md5sum_source_dict):
+        # For each key in the md5sum_source_dict we should have the hash
+        for file_path, web_hash in md5sum_source_dict.items():
+            local_file_path = os.path.join(self.framework_dest_dir, os.path.basename(file_path))
+            try:
+                framework_md5sum_hash = subprocess.run(['md5sum', local_file_path],
+                                                       capture_output=True).stdout.decode("utf-8").split()[1]
+            except FileNotFoundError:
+                framework_md5sum_hash = subprocess.run(['md5', '-r', local_file_path],
+                                                       capture_output=True).stdout.decode("utf-8").split()[1]
+            if framework_md5sum_hash != web_hash:
+                self.attempts += 1
+                if self.attempts < 4:
+                    # Delete all files in the framework dir
+                    for del_filename in os.listdir(self.framework_dest_dir):
+                        os.remove(os.path.join(self.framework_dest_dir, del_filename))
+                    self._get_files_from_web_dir()
+                else:
+                    raise RuntimeError('Max number of download attempts exceeded. Could not verify md5sum')
+
+    def _make_md5sum_web_server_dict(self):
+        # There should be one md5sum in the pulled down files.
+        # Make a new md5sum with the transfered files and verify
+        md5sum_source_path = [fn for fn in os.listdir(self.framework_dest_dir) if fn.endswith('.md5sum')]
+        assert (len(md5sum_source_path) == 1)
+        md5sum_source_path = md5sum_source_path[0]
+        # Make a dict of the file
+        with open(md5sum_source_path, 'r') as f:
+            md5sum_source_dict = {line.split()[0]: line[1] for line in f}
+        return md5sum_source_dict
+
+    def _get_files_from_web_dir(self):
+        # Get every file that is in the web directory
+        for get_file in self.sftp_client.listdir(self.web_source_dir):
+            if '.' in get_file:
+                if os.path.exists(os.path.join(self.framework_dest_dir, get_file)):
+                    print(f'{os.path.join(self.framework_dest_dir, get_file)} already exists')
+                else:
+                    print(f'getting: {os.path.join(self.web_source_dir, get_file)}')
+                    self.sftp_client.get(os.path.join(self.web_source_dir, get_file),
+                                         os.path.join(self.framework_dest_dir, get_file))
 
 
+twtf = TransferWebToFramework()
+twtf.transfer()
 
 
 
