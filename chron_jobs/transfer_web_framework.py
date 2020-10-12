@@ -13,7 +13,10 @@ A seperate chron job will handle loading the transferred submissions
 
 import subprocess
 import sys
+import platform
 import os
+import sys
+sys.path.append("..")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
@@ -25,12 +28,29 @@ from datetime import datetime
 class TransferWebToFramework:
     def __init__(self):
         # The very first thing to do is to perform a pgrep to see if another instance of this script is being run
-        captured_output = subprocess.run(['pgrep', '-f', 'transfer_web_framework.py'], capture_output=True)
-        if captured_output:
-            # Then the script is already running (i.e. there is a transfer in progress)
-            sys.exit()
-        # Get a list of the Submissions that need to be transfered
-        self.submissions_to_transfer = Submission.objects.filter(progress_status="submitted", error_has_occured=False)
+        # However, the pgrep runs differently on mac vs linux.
+        # On mac, the self process is not included so it will return nothing if only the one process is running
+        # On linux, the self process is included so it will return one PID for the current process
+        # When debugging in an IDE, on mac, nothing; on linux, it will return multiple processes (probably 2)
+        if sys.argv[1] == 'debug': # For development only
+            pass
+        else:
+            captured_output = subprocess.run(['pgrep', '-f', 'transfer_web_framework.py'], capture_output=True)
+            if captured_output.returncode == 0: # PIDs were returned
+                procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
+                if platform.system() == 'Linux':
+                    # Then we expect there to be one PID for the current process
+                    if len(procs) > 1:
+                        sys.exit()
+                else:
+                    # Then we are likely on mac and we expect no PIDs
+                    sys.exit()
+            else:
+                # No PIDs returned
+                pass
+
+        # Get a list of the Submissions that need to be transferred
+        self.submissions_to_transfer = list(Submission.objects.filter(progress_status="submitted", error_has_occured=False))
         self.symportal_data_dir = sp_config.symportal_data_dir
 
         # User paramiko to set up an sftp that we can use to transfer
@@ -59,10 +79,11 @@ class TransferWebToFramework:
 
         # Transfer each submission
         for sub_to_trans in self.submissions_to_transfer:
-            self.submissions_to_transfer = sub_to_trans
+            self.submission_to_transfer = sub_to_trans
             self._process_submission()
 
     def _process_submission(self, ):
+        #TODO we are here. Debugging through.
         self.web_source_dir = self.submission_to_transfer.web_local_dir_path
         self.framework_dest_dir = os.path.join(self.symportal_data_dir, os.path.basename(self.web_source_dir))
 
