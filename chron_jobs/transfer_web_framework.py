@@ -15,6 +15,8 @@ import subprocess
 import sys
 import os
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
+from django.core.wsgi import get_wsgi_application
+application = get_wsgi_application()
 from dbApp.models import Submission
 import sp_config
 import paramiko
@@ -23,7 +25,7 @@ from datetime import datetime
 class TransferWebToFramework:
     def __init__(self):
         # The very first thing to do is to perform a pgrep to see if another instance of this script is being run
-        captured_output = subprocess.run(['pgrep', 'transfer_web_framework.py'], check=True, capture_output=True)
+        captured_output = subprocess.run(['pgrep', '-f', 'transfer_web_framework.py'], capture_output=True)
         if captured_output:
             # Then the script is already running (i.e. there is a transfer in progress)
             sys.exit()
