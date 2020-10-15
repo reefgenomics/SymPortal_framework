@@ -197,6 +197,12 @@ class Submission(models.Model):
     # conservatively set as False
     for_analysis = models.BooleanField(default=False, null=False)
 
+    # The path to the directory in which the result files are output for:
+    # Framework server
+    framework_results_dir_path = models.CharField(max_length=300, null=True)
+    # Web server
+    web_results_dir_path = models.CharField(max_length=300, null=True)
+
 
 class Citation(models.Model):
     """
