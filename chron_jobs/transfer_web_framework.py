@@ -12,7 +12,6 @@ A seperate chron job will handle loading the transferred submissions
 """
 
 import subprocess
-import sys
 import platform
 import os
 import sys
@@ -32,25 +31,12 @@ class TransferWebToFramework:
         # On mac, the self process is not included so it will return nothing if only the one process is running
         # On linux, the self process is included so it will return one PID for the current process
         # When debugging in an IDE, on mac, nothing; on linux, it will return multiple processes (probably 2)
-        if sys.argv[1] == 'debug': # For development only
-            pass
-        else:
-            captured_output = subprocess.run(['pgrep', '-f', 'transfer_web_framework.py'], capture_output=True)
-            if captured_output.returncode == 0: # PIDs were returned
-                procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
-                if platform.system() == 'Linux':
-                    # Then we expect there to be one PID for the current process
-                    if len(procs) > 1:
-                        sys.exit()
-                else:
-                    # Then we are likely on mac and we expect no PIDs
-                    sys.exit()
-            else:
-                # No PIDs returned
-                pass
+        self._check_no_other_instance_running()
 
         # Get a list of the Submissions that need to be transferred
-        self.submissions_to_transfer = list(Submission.objects.filter(progress_status="submitted", error_has_occured=False))
+        self.submissions_to_transfer = list(
+            Submission.objects.filter(progress_status="submitted", error_has_occured=False)
+        )
         self.symportal_data_dir = sp_config.symportal_data_dir
 
         # User paramiko to set up an sftp that we can use to transfer
@@ -68,6 +54,24 @@ class TransferWebToFramework:
         self.submission_to_transfer = None
         self.web_source_dir = None
         self.framework_dest_dir = None
+
+    def _check_no_other_instance_running(self):
+        if sys.argv[1] == 'debug':  # For development only
+            pass
+        else:
+            captured_output = subprocess.run(['pgrep', '-f', 'transfer_web_framework.py'], capture_output=True)
+            if captured_output.returncode == 0:  # PIDs were returned
+                procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
+                if platform.system() == 'Linux':
+                    # Then we expect there to be one PID for the current process
+                    if len(procs) > 1:
+                        sys.exit()
+                else:
+                    # Then we are likely on mac and we expect no PIDs
+                    sys.exit()
+            else:
+                # No PIDs returned
+                pass
 
     def transfer(self):
         """
@@ -134,7 +138,10 @@ class TransferWebToFramework:
     def _make_md5sum_web_server_dict(self):
         # There should be one md5sum in the pulled down files.
         # Make a new md5sum with the transfered files and verify
-        md5sum_source_path = [os.path.join(self.framework_dest_dir, fn) for fn in os.listdir(self.framework_dest_dir) if fn.endswith('.md5sum')]
+        md5sum_source_path = [
+            os.path.join(self.framework_dest_dir, fn) for
+            fn in os.listdir(self.framework_dest_dir) if fn.endswith('.md5sum')
+        ]
         assert (len(md5sum_source_path) == 1)
         md5sum_source_path = md5sum_source_path[0]
         # Make a dict of the file
