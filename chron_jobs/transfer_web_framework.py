@@ -83,9 +83,10 @@ class TransferWebToFramework:
             self._process_submission()
 
     def _process_submission(self, ):
-        #TODO we are here. Debugging through.
         self.web_source_dir = self.submission_to_transfer.web_local_dir_path
         self.framework_dest_dir = os.path.join(self.symportal_data_dir, os.path.basename(self.web_source_dir))
+        if not os.path.exists(self.framework_dest_dir):
+            os.makedirs(self.framework_dest_dir)
 
         self._get_files_from_web_dir()
 
@@ -96,6 +97,8 @@ class TransferWebToFramework:
         # If we get here then the md5sum has been validated and the transfer is complete
 
         # Delete the remote files and the remote directory
+        for get_file in self.sftp_client.listdir(self.web_source_dir):
+            self.sftp_client.remove(os.path.join(self.web_source_dir, get_file))
         self.sftp_client.rmdir(self.web_source_dir)
 
         # Update the time of the Submission object transfer_to_framework_server_date_time
@@ -106,18 +109,18 @@ class TransferWebToFramework:
         # Update the status of the Submission object
         self.submission_to_transfer.progress_status = "transfer_to_framework_server_complete"
 
-        self.submissions_to_transfer.save()
+        self.submission_to_transfer.save()
 
     def _validate_md5sum(self, md5sum_source_dict):
         # For each key in the md5sum_source_dict we should have the hash
-        for file_path, web_hash in md5sum_source_dict.items():
+        for web_hash, file_path in md5sum_source_dict.items():
             local_file_path = os.path.join(self.framework_dest_dir, os.path.basename(file_path))
             try:
                 framework_md5sum_hash = subprocess.run(['md5sum', local_file_path],
-                                                       capture_output=True).stdout.decode("utf-8").split()[1]
+                                                       capture_output=True).stdout.decode("utf-8").split()[0]
             except FileNotFoundError:
                 framework_md5sum_hash = subprocess.run(['md5', '-r', local_file_path],
-                                                       capture_output=True).stdout.decode("utf-8").split()[1]
+                                                       capture_output=True).stdout.decode("utf-8").split()[0]
             if framework_md5sum_hash != web_hash:
                 self.attempts += 1
                 if self.attempts < 4:
@@ -131,12 +134,12 @@ class TransferWebToFramework:
     def _make_md5sum_web_server_dict(self):
         # There should be one md5sum in the pulled down files.
         # Make a new md5sum with the transfered files and verify
-        md5sum_source_path = [fn for fn in os.listdir(self.framework_dest_dir) if fn.endswith('.md5sum')]
+        md5sum_source_path = [os.path.join(self.framework_dest_dir, fn) for fn in os.listdir(self.framework_dest_dir) if fn.endswith('.md5sum')]
         assert (len(md5sum_source_path) == 1)
         md5sum_source_path = md5sum_source_path[0]
         # Make a dict of the file
         with open(md5sum_source_path, 'r') as f:
-            md5sum_source_dict = {line.split()[0]: line[1] for line in f}
+            md5sum_source_dict = {line.split()[0]: line.split()[1] for line in f}
         return md5sum_source_dict
 
     def _get_files_from_web_dir(self):
