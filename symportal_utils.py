@@ -177,7 +177,8 @@ class MothurAnalysis:
         self.remove_primer_mismatch_annotations_from_fasta(fwd_output_good_fasta_path)
 
         # In some uncommon cases, all amplicons gave a PCR match and there is no scrapped fastsa to do a rev PCR on
-        # then we should clean up the output_bad_fasta
+        # We therefore check to see if the fwd_output_good_scrapped_fasta_path file exists
+        # If exists, then we should clean up the output_bad_fasta
         # then reverse complement it
         # then do a pcr on it again using the same oligo set as the first run
         # we should then get the output from that pcr and add it to the previous run
@@ -265,7 +266,7 @@ class MothurAnalysis:
         # NB Mothur will not output a scrap fasta file if there are no scrap fasta. Also NB that mothur will output
         # sequence names with no sequence for sequences that have multiple matches for a given primer.
         # we should screen for these and remove them.
-        if fwd_output_scrapped_fasta_path == '':
+        if not os.path.exists(fwd_output_scrapped_fasta_path):
             return False
         else:
             scrapped_fasta_as_list = self.thread_safe_general.read_defined_file_to_list(fwd_output_scrapped_fasta_path)
