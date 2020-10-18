@@ -224,7 +224,7 @@ class DataLoading:
         print(f'DataSet id: {self.dataset_object.id}')
         print(f'DataSet name: {self.dataset_object.name}')
         self.dataset_object.loading_complete_time_stamp = str(
-            datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+            datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.dataset_object.save()
         print(f'Loading completed in {time.time() - self.start_time}s')
         print(f'DataSet loading_complete_time_stamp: {self.dataset_object.loading_complete_time_stamp}\n\n\n')

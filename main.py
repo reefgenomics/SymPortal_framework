@@ -68,7 +68,7 @@ class SymPortalWorkFlowManager:
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackUp')
         os.makedirs(self.dbbackup_dir, exist_ok=True)
-        self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+        self.date_time_str = str(datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.submitting_user = sp_config.user_name
         self.submitting_user_email = sp_config.user_email
         self.number_of_samples = None
@@ -158,17 +158,7 @@ class SymPortalWorkFlowManager:
                  '\n\'all\' - output both unifrac- and braycurtis-derived distance matrices '
                  'mafft and iqtree will be checked for in your PATH. If not found, only braycurtis-derived distances '
                  'will be output', default='both')
-        # when run as remote
-        parser.add_argument(
-            '--submitting_user_name',
-            help='Only for use when running as remote\nallows the association of a different user_name to the '
-                 'data_set than the one listed in sp_config', default='not supplied')
 
-        parser.add_argument(
-            '--submitting_user_email',
-            help='Only for use when running as remote\nallows the association of a '
-                 'different user_email to the data_set '
-                 'than the one listed in sp_config', default='not supplied')
         parser.add_argument('--local',
                             help="When passed, only the DataSetSamples of the current output will be used"
                                  " matrices will be calculated using the DIV abundance info from all"
@@ -187,6 +177,34 @@ class SymPortalWorkFlowManager:
                             help="When passed, cladocopium profiles sequences from the C3, C15 and C1 radiations "
                                  "will not be allowed to occur together in profiles.",
                             action='store_true', default=False)
+
+        # when run as remote
+        if sp_config.system_type == 'remote':
+            parser.add_argument(
+                '--submitting_user_name',
+                help='Only for use when running as remote\nallows the association of a different user_name to the '
+                     'data_set than the one listed in sp_config', default='not supplied')
+
+            parser.add_argument(
+                '--study_user_string',
+                help='Only for use when running as remote\nThe comma separated string of the User '
+                     'names that should be associated to the Study object.')
+
+            parser.add_argument(
+                '--study_name',
+                help='Only for use when running as remote\nThe name that will be given to the'
+                     'Study associated to the given DataSet object')
+
+            parser.add_argument('--is_chron_loading',
+                                help='This is passed only when the loading is being '
+                                     'initiated as part of one of the chron jobs.',
+                                action='store_true', default=False)
+
+            parser.add_argument(
+                '--submitting_user_email',
+                help='Only for use when running as remote\nallows the association of a '
+                     'different user_email to the data_set '
+                     'than the one listed in sp_config', default='not supplied')
 
     @staticmethod
     def _define_mutually_exclusive_args(group):
@@ -484,7 +502,7 @@ class SymPortalWorkFlowManager:
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
                   f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
         self.data_analysis_object.analysis_complete_time_stamp = str(
-            datetime.now()
+            datetime.utcnow()
         ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
         self.data_analysis_object.save()
         print(f'DataSet analysis_complete_time_stamp: '

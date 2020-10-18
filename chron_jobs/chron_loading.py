@@ -21,7 +21,7 @@ sys.path.append("..")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
-from dbApp.models import Submission
+from dbApp.models import Submission, User
 import main
 
 class ChronLoading:
@@ -66,30 +66,50 @@ class ChronLoading:
         else:
             num_proc = 4
         # We will only output results if this loading is not proceeding on to an analysis
-        # TODO work out how to assign a Study object to the Submission without a command line input
+        # We will provide the --study_user_string and --study_name arguments for use in creating the Study object
+        # We will also pass --is_chron_loading to let SP know that this is being initiated by a chron job
+        # Currently we only have a single user associated to each Submission object so we will only be able
+        # to associate a single user to the Study object
+        study_user_string = User.objects.get(id=self.submission_to_load.submitting_user).name
         if self.submission_to_load.for_analysis:
             # No outputs
             custom_args_list = [
                 '--load', self.submission_to_load.framework_local_dir_path,
                 '--data_sheet', datasheet_path, '--num_proc', str(num_proc), '--no_output',
-                '--name', self.submission_to_load.name
+                '--name', self.submission_to_load.name, '--is_chron_loading',
+                '--study_user_string', study_user_string,
+                '--study_name', self.submission_to_load.name
             ]
         else:
             # With output
             custom_args_list = [
                 '--load', self.submission_to_load.framework_local_dir_path,
                 '--data_sheet', datasheet_path, '--num_proc', str(num_proc),
-                '--name', self.submission_to_load.name
+                '--name', self.submission_to_load.name, '--is_chron_loading',
+                '--study_user_string', study_user_string,
+                '--study_name', self.submission_to_load.name
             ]
         try:
             self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
             self.work_flow_manager.start_work_flow()
         except Exception as e:
+            # TODO handle errors for Submission objects and chron jobs
             raise NotImplementedError('An error has occured while trying to load the Submission data.')
 
         # Once here we will have finished the loading.
         # Update the status of the Submission object and assign results path if not for_analysis
+        if not self.submission_to_load.for_analysis:
+            self.submission_to_load.framework_results_dir_path = self.work_flow_manager.data_loading_object.output_directory
+            self.submission_to_load.progress_status = "framework_loading_complete"
+        # Assign the associated DataSet and Study objects
+        self.submission_to_load.associated_dataset = self.work_flow_manager.data_loading_object.dataset_object
+        self.submission_to_load.associated_study = self.work_flow_manager.data_loading_object.study
 
+        # Log the loading complete time
+        self.submission_to_load.loading_complete_date_time = self.work_flow_manager.date_time_str
+
+        # At this point the loading is complete for a single submission object. Now save and do next.
+        self.submission_to_load.save()
 
     def _check_no_other_instance_running(self):
         if sys.argv[1] == 'debug':  # For development only

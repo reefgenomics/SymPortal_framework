@@ -300,7 +300,7 @@ class CreateStudyAndAssociateUsers:
     This Class provides the user input series to allow us to create a new Study object
     and optionally create Users to associate to it.
     """
-    def __init__(self, ds=None, citation=None, date_time_str=None, list_of_dss_objects=None):
+    def __init__(self, ds=None, citation=None, date_time_str=None, list_of_dss_objects=None, is_chron_loading=None, study_name=None, study_user_string=None ):
         # We should be provided either a DataSet or a citation
         # if ds provided then we are doing a loading operation
         # else if citation provided then we are updating citations
@@ -313,21 +313,32 @@ class CreateStudyAndAssociateUsers:
             self.date_time_str = date_time_str
             assert(list_of_dss_objects is not None)
             self.list_of_dss_objects = list_of_dss_objects
+            self.is_chron_loading = is_chron_loading
+            self.study_name = study_name
+            self.study_user_string = study_user_string
         else:
             self.dataset_object = None
             self.citation = citation
-            self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+            self.date_time_str = str(datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
             self.list_of_dss_objects = None
         self.restart = False
         self.study = None
 
     def create_study_and_user_objects(self):
+        """
+        When is_chron_loading is True, this is a loading initiated by one of the chron jobs
+        We will bypass the user input queries and use the provided name a user string when is_chron_loading
+        """
         while True:
             restart = False
             print("\nYou can enter '4' at any of the command prompts to start this process again")
             if self.dataset_object is not None:
-                continue_text = input(f'Associate DataSet {self.dataset_object.name} to a Study [y/n]: ')
-                study_name = self.dataset_object.name
+                if self.is_chron_loading:
+                    study_name = self.study_name
+                    continue_text = 'y'
+                else:
+                    continue_text = input(f'Associate DataSet {self.dataset_object.name} to a Study [y/n]: ')
+                    study_name = self.dataset_object.name
             else:
                 # If we are working with citation then we already know that the user wants to create a new
                 # Study object
@@ -351,10 +362,16 @@ class CreateStudyAndAssociateUsers:
                     continue
 
                 while True:
-                    continue_text = input('Associate one or more users to this Study? [y/n]: ')
+                    if self.is_chron_loading:
+                        continue_text = 'y'
+                    else:
+                        continue_text = input('Associate one or more users to this Study? [y/n]: ')
                     if continue_text == 'y':
-                        continue_text = input("Enter a comma separated string of the usernames for the users you "
-                                              "wish to create. For example: 'jbloggs,vshnazzy': ")
+                        if self.is_chron_loading:
+                            continue_text = self.study_user_string
+                        else:
+                            continue_text = input("Enter a comma separated string of the usernames for the users you "
+                                                  "wish to create. For example: 'jbloggs,vshnazzy': ")
                         user_names_to_associate = continue_text.split(',')
                         if len(user_names_to_associate) == 0:
                             # Then it was left blank
@@ -364,7 +381,10 @@ class CreateStudyAndAssociateUsers:
                         users_that_already_exist, users_that_do_not_exist = self._check_to_see_if_users_exist(
                             user_names_to_associate)
                         self._print_out_users(users_that_already_exist, users_that_do_not_exist)
-                        continue_text = input("\nIs this correct? [y/n]: ")
+                        if self.is_chron_loading:
+                            continue_text = 'y'
+                        else:
+                            continue_text = input("\nIs this correct? [y/n]: ")
                         if continue_text == 'y':
                             self._create_study_users_and_associate(new_study_object, users_that_already_exist,
                                                                    users_that_do_not_exist)
@@ -514,7 +534,10 @@ class CreateStudyAndAssociateUsers:
             else: # create from the citation object
                 new_study_object = self._create_study_object_from_citation(name)
             self._print_non_init_study_summary(new_study_object)
-            continue_text = input('Continue? [y/n]: ')
+            if self.is_chron_loading:
+                continue_text = 'y'
+            else:
+                continue_text = input('Continue? [y/n]: ')
             if continue_text == 'y':
                 break
             elif continue_text == 'n':
