@@ -690,12 +690,36 @@ class SymPortalWorkFlowManager:
             self._output_study_output_info_items()
 
     def _execute_data_loading(self):
-        self.data_loading_object = data_loading.DataLoading(
-            parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
-            screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
-            no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
-            start_time=self.start_time, date_time_str=self.date_time_str)
+        if sp_config.system_type == 'remote':
+            if self.args.is_chron_loading:
+                self.data_loading_object = data_loading.DataLoading(
+                    parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
+                    screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
+                    no_ord=self.args.no_ordinations, no_output=self.args.no_output,
+                    distance_method=self.args.distance_method,
+                    no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
+                    start_time=self.start_time, date_time_str=self.date_time_str,
+                    is_chron_loading=self.args.is_chron_loading,
+                    study_name=self.args.study_name, study_user_string=self.args.study_user_string)
+            else:
+                self.data_loading_object = data_loading.DataLoading(
+                    parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
+                    screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
+                    no_ord=self.args.no_ordinations, no_output=self.args.no_output,
+                    distance_method=self.args.distance_method,
+                    no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
+                    start_time=self.start_time, date_time_str=self.date_time_str,
+                    is_chron_loading=self.args.is_chron_loading)
+        else:
+            self.data_loading_object = data_loading.DataLoading(
+                parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
+                screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
+                no_ord=self.args.no_ordinations, no_output=self.args.no_output,
+                distance_method=self.args.distance_method,
+                no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
+                start_time=self.start_time, date_time_str=self.date_time_str,
+                is_chron_loading=False)
+
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given_load(self):

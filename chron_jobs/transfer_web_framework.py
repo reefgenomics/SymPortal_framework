@@ -10,7 +10,7 @@ After transfer is complete the status of the Submission objects that have been t
 tranfer_to_framework_server_complete. The transfer_to_framework_server_date_time will be logged.
 A seperate chron job will handle loading the transferred submissions
 """
-
+# TODO have a log file where all the chron jobs can log their outputs
 import subprocess
 import platform
 import os
@@ -56,9 +56,12 @@ class TransferWebToFramework:
         self.framework_dest_dir = None
 
     def _check_no_other_instance_running(self):
-        if sys.argv[1] == 'debug':  # For development only
-            pass
-        else:
+        try:
+            if sys.argv[1] == 'debug':  # For development only
+                pass
+            else:
+                raise RuntimeError('Unknown arg at sys.argv[1]')
+        except IndexError:
             captured_output = subprocess.run(['pgrep', '-f', 'transfer_web_framework.py'], capture_output=True)
             if captured_output.returncode == 0:  # PIDs were returned
                 procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
@@ -89,6 +92,8 @@ class TransferWebToFramework:
     def _process_submission(self, ):
         self.web_source_dir = self.submission_to_transfer.web_local_dir_path
         self.framework_dest_dir = os.path.join(self.symportal_data_dir, os.path.basename(self.web_source_dir))
+        self.submission_to_transfer.framework_local_dir_path = self.framework_dest_dir
+        self.submission_to_transfer.save()
         if not os.path.exists(self.framework_dest_dir):
             os.makedirs(self.framework_dest_dir)
 

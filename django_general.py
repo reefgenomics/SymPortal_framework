@@ -300,7 +300,10 @@ class CreateStudyAndAssociateUsers:
     This Class provides the user input series to allow us to create a new Study object
     and optionally create Users to associate to it.
     """
-    def __init__(self, ds=None, citation=None, date_time_str=None, list_of_dss_objects=None, is_chron_loading=None, study_name=None, study_user_string=None ):
+    def __init__(
+            self, ds=None, citation=None, date_time_str=None, list_of_dss_objects=None,
+            is_chron_loading=None, study_name=None, study_user_string=None
+    ):
         # We should be provided either a DataSet or a citation
         # if ds provided then we are doing a loading operation
         # else if citation provided then we are updating citations
