@@ -687,7 +687,7 @@ class SymPortalWorkFlowManager:
         if sp_config.system_type == 'remote' and self.data_loading_object.study and not self.args.no_output:
             self.output_dir = self.data_loading_object.output_directory
             self.study = self.data_loading_object.study
-            self._output_study_output_info_items()
+            self._update_study_analysis_field()
 
     def _execute_data_loading(self):
         if sp_config.system_type == 'remote':
@@ -903,49 +903,21 @@ class SymPortalWorkFlowManager:
 
         if sp_config.system_type == 'remote' and self.args.output_study_from_analysis:
             try:
-                self._output_study_output_info_items()
+                self._update_study_analysis_field()
             except NotImplementedError as e:
                 print(e)
         self._print_all_outputs_complete()
 
-    def _output_study_output_info_items(self):
+    def _update_study_analysis_field(self):
         """
-        Produce the study_output_info.json file in the output directory
-        and produce a .bak in the dbBackup directory
+        Set the study.analysis field
         """
-        bak_path = os.path.join(self.dbbackup_dir, f'symportal_database_backup_{self.date_time_str}.bak')
-        study_output_info_path = os.path.join(self.output_dir, 'study_output_info.json')
-        # Now output the .json file
-        temp_dict = {}
-        temp_dict['bak_path'] = bak_path
-        temp_dict["time_stamp_str"] = self.date_time_str
-        temp_dict["study"] = self.study.name
-
         if self.args.output_study_from_analysis:
             self.study.analysis = True
         elif self.args.load:
             # This is already set as False as default but let's be explicit
             self.study.analysis = False
         self.study.save()
-
-        print(f"pg_dumping {bak_path}. This may take some time...")
-        try:
-            subprocess.run(
-                ['pg_dump', '-U', f'{sp_config.pg_user}', '-Fc', '-f', bak_path, '-w', 'symportal_database'], check=True)
-        except AttributeError:
-            # It may be that pg_user is not set in sp_config.py
-            # Try to do the dump with username
-            subprocess.run(
-                ['pg_dump', '-U', f'{sp_config.user_name}', '-Fc', '-f', bak_path, '-w', 'symportal_database'],
-                check=True)
-
-        print("pg_dump complete")
-        with open(study_output_info_path, 'w') as f:
-            json.dump(obj=temp_dict, fp=f)
-
-        print(f'study_output_info items:\n'
-              f'\t{study_output_info_path}\n'
-              f'\t{bak_path}')
 
     def _stand_alone_seq_output_from_type_output_data_set(self):
         self.output_seq_count_table_obj = output.SequenceCountTableCreator(
