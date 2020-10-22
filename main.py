@@ -921,10 +921,6 @@ class SymPortalWorkFlowManager:
         temp_dict["time_stamp_str"] = self.date_time_str
         temp_dict["study"] = self.study.name
 
-        # Set the display_online and the data_explorer attribute of the study to True
-        # Also set analysis to True
-        self.study.display_online = True
-        self.study.data_explorer = True
         if self.args.output_study_from_analysis:
             self.study.analysis = True
         elif self.args.load:
