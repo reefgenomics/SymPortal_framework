@@ -38,9 +38,9 @@ class ChronAnalysis:
                     error_has_occured=False,
                     for_analysis=True
                 ).all()
-        self.study_objects = [
-            s.associated_study for s in self.submission_objects]
-        self.study_string = ','.join([str(s.id) for s in self.study_objects])
+        self.dataset_objects = [
+            s.associated_dataset for s in self.submission_objects]
+        self.dataset_string = ','.join([str(d.id) for d in self.dataset_objects])
         self.dt_str = self._get_date_time()
         self.analysis_name = f'{self.dt_str}_DBV'
         # number of proc will be 30
@@ -56,6 +56,13 @@ class ChronAnalysis:
         """
         For each of the submission objects, output the results from the analysis that was just completed
         """
+        # Refresh the submission objects so that the output will still be completed even if there was not
+        # an analysis to run. E.g. the script could have died after the analysis was completed.
+        self.submission_objects = Submission.objects.filter(
+            progress_status="framework_analysis_complete",
+            error_has_occured=False,
+            for_analysis=True
+        ).all()
         for sub_obj in self.submission_objects:
             study_id_str = str(sub_obj.associated_study.id)
             custom_args_list = [
@@ -88,7 +95,7 @@ class ChronAnalysis:
         """
 
         custom_args_list = [
-            '--analyse_next', self.study_string, '--num_proc', str(self.num_proc), '--no_output',
+            '--analyse_next', self.dataset_string, '--num_proc', str(self.num_proc), '--no_output',
             '--name', self.analysis_name
         ]
 
@@ -141,3 +148,8 @@ class ChronAnalysis:
         return str(
             datetime.utcnow()
         ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
+
+ca = ChronAnalysis()
+if ca.submission_objects:
+    ca.analyse()
+ca.output()
