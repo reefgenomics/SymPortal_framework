@@ -27,7 +27,7 @@ sys.path.append("..")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
-from dbApp.models import Submission
+from dbApp.models import Submission, DataAnalysis
 
 
 class ChronAnalysis:
@@ -63,11 +63,16 @@ class ChronAnalysis:
             error_has_occured=False,
             for_analysis=True
         ).all()
+
+
         for sub_obj in self.submission_objects:
+            # Because we don't want to rely on the fact that an anaysis was conduced above, we will grab the latest
+            # DataAnalysis that contains the Study/DataSet objects associated with it.
+            latest_dataanalysis = list(DataAnalysis.objects.filter(list_of_data_set_uids__contains=str(sub_obj.associated_dataset.id)).order_by('-id'))[0]
             study_id_str = str(sub_obj.associated_study.id)
             custom_args_list = [
                 '--output_study_from_analysis', study_id_str, '--num_proc', str(self.num_proc),
-                '--data_analysis_id', str(self.work_flow_manager.data_analysis_object.id),
+                '--data_analysis_id', str(latest_dataanalysis.id),
             ]
             try:
                 self.work_flow_manager = main.SymPortalWorkFlowManager(custom_args_list)
