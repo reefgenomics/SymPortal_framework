@@ -62,7 +62,7 @@ class TransferWebToFramework:
             else:
                 raise RuntimeError('Unknown arg at sys.argv[1]')
         except IndexError:
-            captured_output = subprocess.run(['pgrep', '-f', 'transfer_web_framework.py'], capture_output=True)
+            captured_output = subprocess.run(['pgrep', '-f', 'chron_transfer_web_to_framework.py'], capture_output=True)
             if captured_output.returncode == 0:  # PIDs were returned
                 procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
                 if platform.system() == 'Linux':
