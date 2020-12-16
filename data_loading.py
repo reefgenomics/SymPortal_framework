@@ -1988,7 +1988,8 @@ class InitialMothurHandler:
     def _worker_initial_mothur(in_q_paths, out_list_error_samples, out_q_attr_data, temp_working_directory, debug):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
-        This QC includes making contigs, screening for ambigous calls (0 allowed),
+        This QC includes making contigs, screening for ambigous calls (0 allowed), screening for a min 30bp overlap,
+        0 mismatches in the overlap region,
         Discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
         This is all done through the use of an InitialMothurWorker class which in turn makes use of the MothurAnalysis
         class that does the heavy lifting of running the mothur commands in sequence.
@@ -2032,12 +2033,16 @@ class InitialMothurWorker:
 
         self._do_make_contigs()
 
+        # This first screen is for min overlap of 30bp and mismatch=0
+        self._do_screen_seqs()
+
         self._do_unique_seqs()
 
         self._do_fwd_and_rev_pcr()
 
         self._do_unique_seqs()
 
+        # This second screen is for ambigous sequences (0 allowed)
         self._do_screen_seqs()
 
         self._do_split_abund()
@@ -2101,10 +2106,27 @@ class InitialMothurWorker:
             self.check_for_error_and_raise_runtime_error(stage_of_qc='unique seqs')
 
     def _do_screen_seqs(self):
+        """
+        We do two rounds of screen seq. We do the first round of screen seq as a protection again libraries that
+        have been made with seq chemistry that is too short to create overlap between the fwd and rev reads.
+        Mothur actually reports on overlap but this value is very unreliable when there is no overlap. Its a complete
+        artefact essentialy. But we can screen for mismatches (which should be 0) and we can include an arbitrary
+        requirement of a 30bp overlap. This will catch those very few sequences <1% that have no mismatch and no
+        ambigous nucleotides.
+        The second round of screening removes sequences with ambiguous nucleotides. This will also get rid of most
+        of the sequnces that have made it through that didn't have a genuine overlap but also works as a general
+        quality control. We do this after PCR to prevent removal of sequenecs that only have ambigous calls outside
+        of the primers. Whether this is even possible is probably variable depending of the sequencing technology
+        but we keep the check in place as standard.
+        """
         try:
             self.mothur_analysis_object.execute_screen_seqs()
-        except RuntimeError:
-            self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs')
+            self.mothur_analysis_object.screening_for = 'ambig'
+        except RuntimeError as e:
+            if self.mothur_analysis_object.screening_for == 'overlap':
+                self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs overlap', error_summary=str(e))
+            elif self.mothur_analysis_object.screening_for == 'ambig':
+                self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs ambig', error_summary=str(e))
 
     def _set_unique_and_abs_num_seqs_after_initial_qc(self):
         name_file = self.thread_safe_general.read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
@@ -2124,7 +2146,13 @@ class InitialMothurWorker:
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {abs_count}\n')
 
-    def check_for_error_and_raise_runtime_error(self, stage_of_qc):
+    def check_for_error_and_raise_runtime_error(self, stage_of_qc, error_summary=None):
+        if error_summary:
+            if error_summary == "no seqs left after overlap/mismatch seq screening":
+                self.log_qc_error_and_continue(
+                errorreason=f'No seqs remaining after screen.seqs for overlap and mismatch'
+                )
+                raise RuntimeError({'sample_name': self.sample_name})
         for stdout_line in self.thread_safe_general.decode_utf8_binary_to_list(
                 self.mothur_analysis_object.latest_completed_process_command.stdout
         ):
