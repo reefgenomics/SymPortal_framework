@@ -89,7 +89,7 @@ class ChronAnalysis:
             # Here the output is complete
             # Log the complete time and the output directory on the framework server
             sub_obj.study_output_complete_date_time = self._get_date_time()
-            sub_obj.framework_local_dir_path = self.work_flow_manager.output_dir
+            sub_obj.framework_results_dir_path = self.work_flow_manager.output_dir
             sub_obj.progress_status = "framework_output_complete"
             sub_obj.save()
 
