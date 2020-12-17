@@ -535,3 +535,16 @@ def chunks(l, n=500):
         in_list = list(l)
         for i in range(0, len(in_list), n):
             yield in_list[i:i + n]
+
+# https://stackoverflow.com/a/3431835/5516420
+def hash_bytestr_iter(bytesiter, hasher, ashexstr=False):
+    for block in bytesiter:
+        hasher.update(block)
+    return hasher.hexdigest() if ashexstr else hasher.digest()
+
+def file_as_blockiter(afile, blocksize=65536):
+    with afile:
+        block = afile.read(blocksize)
+        while len(block) > 0:
+            yield block
+            block = afile.read(blocksize)

@@ -12,7 +12,7 @@ from django import db
 from multiprocessing import Queue as mp_Queue, Manager, Process, Lock as mp_Lock
 from threading import Lock as mt_Lock, Thread, get_ident
 from queue import Queue as mt_Queue
-from general import ThreadSafeGeneral
+from general import ThreadSafeGeneral, file_as_blockiter, hash_bytestr_iter
 from datetime import datetime
 import distance
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
@@ -29,6 +29,7 @@ from shutil import which
 import sp_config
 from django_general import CreateStudyAndAssociateUsers
 import logging
+import hashlib
 
 
 class DataLoading:
@@ -915,6 +916,7 @@ class DataLoading:
                 )
             )
             sample_fastq_pairs.append('\t'.join(temp_list))
+
         self.thread_safe_general.write_list_to_destination(
             os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
@@ -962,11 +964,14 @@ class DataLoading:
                     collection_latitude = float(999)
                     print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
                     collection_longitude = float(999)
-
             except:
                 print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
                 collection_latitude = float(999)
                 collection_longitude = float(999)
+
+            # get the sha256 hash of the fastq.gz files
+            fwd_hash = hash_bytestr_iter(file_as_blockiter(open(self.sample_meta_info_df.loc[sampleName, 'fastq_fwd_file_name'], 'rb')), hashlib.sha256(), True)
+            rev_hash = hash_bytestr_iter(file_as_blockiter(open(self.sample_meta_info_df.loc[sampleName, 'fastq_rev_file_name'], 'rb')), hashlib.sha256(), True)
 
             dss = DataSetSample(name=sampleName, data_submission_from=self.dataset_object,
                                 cladal_seq_totals=empty_cladal_seq_totals,
@@ -980,7 +985,11 @@ class DataLoading:
                                 collection_latitude=collection_latitude,
                                 collection_longitude=collection_longitude,
                                 collection_date=collection_date,
-                                collection_depth=collection_depth
+                                collection_depth=collection_depth,
+                                fastq_fwd_file_name=ntpath.basename(self.sample_meta_info_df.loc[sampleName, 'fastq_fwd_file_name']),
+                                fastq_rev_file_name=ntpath.basename(self.sample_meta_info_df.loc[sampleName, 'fastq_rev_file_name']),
+                                fastq_fwd_file_hash=fwd_hash,
+                                fastq_rev_file_hash=rev_hash
                                 )
             list_of_data_set_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
@@ -1017,21 +1026,7 @@ class DataLoading:
         # 4 - check that each of the other values can be converted to str
 
         # Datasheet to pandas df
-        if self.datasheet_path.endswith('.xlsx'):
-            self.sample_meta_info_df = pd.read_excel(
-                io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
-        elif self.datasheet_path.endswith('.csv'):
-            with open(self.datasheet_path, 'r') as f:
-                data_sheet_as_file = [line.rstrip() for line in f]
-            if data_sheet_as_file[0].split(',')[0] == 'sample_name':
-                self.sample_meta_info_df = pd.read_csv(
-                    filepath_or_buffer=self.datasheet_path)
-            else:
-                self.sample_meta_info_df = pd.read_csv(
-                    filepath_or_buffer=self.datasheet_path, skiprows=[0])
-        else:
-            sys.exit('Data sheet: {} is in an unrecognised format. '
-                     'Please ensure that it is either in .xlsx or .csv format.')
+        self._read_in_datasheet()
 
         # drop any cells in which the sample name is null
         self.sample_meta_info_df = self.sample_meta_info_df[~pd.isnull(self.sample_meta_info_df['sample_name'])]
@@ -1055,6 +1050,23 @@ class DataLoading:
         self._check_lat_long()
 
         self._check_vars_can_be_string()
+
+    def _read_in_datasheet(self):
+        if self.datasheet_path.endswith('.xlsx'):
+            self.sample_meta_info_df = pd.read_excel(
+                io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
+        elif self.datasheet_path.endswith('.csv'):
+            with open(self.datasheet_path, 'r') as f:
+                data_sheet_as_file = [line.rstrip() for line in f]
+            if data_sheet_as_file[0].split(',')[0] == 'sample_name':
+                self.sample_meta_info_df = pd.read_csv(
+                    filepath_or_buffer=self.datasheet_path)
+            else:
+                self.sample_meta_info_df = pd.read_csv(
+                    filepath_or_buffer=self.datasheet_path, skiprows=[0])
+        else:
+            sys.exit('Data sheet: {} is in an unrecognised format. '
+                     'Please ensure that it is either in .xlsx or .csv format.')
 
     def _replace_null_vals_in_meta_info_df(self):
         self.sample_meta_info_df = self.sample_meta_info_df.replace('N/A', NaN).replace('NA', NaN).replace('na',

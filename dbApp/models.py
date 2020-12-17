@@ -28,8 +28,13 @@ class DataSetSample(models.Model):
     objects = models.Manager()
     data_submission_from = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
     name = models.CharField(max_length=200, default='None')
+
     # This is the absolute number of sequences after make.contigs
     num_contigs = models.IntegerField(default=0)
+    fastq_fwd_file_name = models.CharField(max_length=100, null=True)
+    fastq_fwd_file_hash = models.CharField(max_length=100, null=True)
+    fastq_rev_file_name = models.CharField(max_length=100, null=True)
+    fastq_rev_file_hash = models.CharField(max_length=100, null=True)
 
     # store the aboslute number of sequences after inital mothur QC i.e. before tax and size screening
     post_qc_absolute_num_seqs = models.IntegerField(default=0)
