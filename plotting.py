@@ -477,9 +477,10 @@ class SeqStackedBarPlotter():
     """Class for plotting the sequence count table output"""
     def __init__(
             self, seq_relative_abund_count_table_path_post_med, seq_relative_abund_df_pre_med, output_directory,
-            no_pre_med_seqs, date_time_str=None, ordered_sample_uid_list=None):
+            no_pre_med_seqs, ordered_seq_list, date_time_str=None, ordered_sample_uid_list=None):
         self.seq_relative_abund_count_table_path_post_med = seq_relative_abund_count_table_path_post_med
         self.seq_relative_abund_df_pre_med = seq_relative_abund_df_pre_med
+        self.ordered_seq_list = ordered_seq_list
         self.root_output_directory = output_directory
         self.post_med_output_directory = os.path.join(self.root_output_directory, 'post_med_seqs')
         self.pre_med_output_directory = os.path.join(self.root_output_directory, 'pre_med_seqs')
@@ -489,7 +490,11 @@ class SeqStackedBarPlotter():
             self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.fig_output_base = os.path.join(self.post_med_output_directory, f'{self.date_time_str}')
         self.smp_uid_to_smp_name_dict = None
-        self.output_count_table_as_df = self._create_output_df_and_populate_smpl_id_to_smp_name_dict()
+        self.output_count_table_as_df = pd.read_csv(
+            self.seq_relative_abund_count_table_path_post_med,
+            sep='\t', lineterminator='\n', header=0, index_col=0
+        )
+        self._format_output_df_and_populate_smpl_id_to_smp_name_dict()
         self.ordered_list_of_seqs_names = self._set_ordered_list_of_seqs_names()
         # legend parameters and vars
         self.max_n_cols = 8
@@ -647,71 +652,50 @@ class SeqStackedBarPlotter():
         # get the names of the sequences sorted according to their totalled abundance
         return [x[0] for x in sorted(abundance_dict.items(), key=lambda x: x[1], reverse=True)]
 
-    def _create_output_df_and_populate_smpl_id_to_smp_name_dict(self):
+    def _format_output_df_and_populate_smpl_id_to_smp_name_dict(self):
         """Drop the QC columns from the SP output df and also drop the clade summation columns
         we will be left with just columns for each one of the sequences found in the samples
         we need to drop the rows first before we can make the smp_id_to_smp_name_dict else
         we will have the final row names in the index which are not convertable to int
         need to make the smp_id_to_smp_name_dict before dropping the sample_name col"""
 
-        sp_output_df = pd.read_csv(
-            self.seq_relative_abund_count_table_path_post_med, sep='\t', lineterminator='\n', header=0, index_col=0)
+        self._drop_meta_info_rows()
 
-        meta_index_to_cut_from = self._get_df_index_to_drop_from(sp_output_df)
+        # sample names to string
+        self.output_count_table_as_df['sample_name'] = self.output_count_table_as_df['sample_name'].astype(str)
 
-        self._drop_meta_info_rows_from_df(meta_index_to_cut_from, sp_output_df)
+        self._populate_smpl_id_to_smp_name_dict()
 
-        self._sample_names_to_string(sp_output_df)
+        self._drop_non_seq_abund_cols_and_set_df_types()
 
-        self._populate_smpl_id_to_smp_name_dict(sp_output_df)
+    def _drop_non_seq_abund_cols_and_set_df_types(self):
+        self.output_count_table_as_df.drop(
+            columns=[col for col in list(self.output_count_table_as_df) if col not in self.ordered_seq_list]
+            , inplace=True
+        )
+        self.output_count_table_as_df = self.output_count_table_as_df.astype('float')
+        self.output_count_table_as_df.index = self.output_count_table_as_df.index.astype('int')
 
-        sp_output_df = self._drop_non_seq_abund_cols_and_set_df_types(sp_output_df)
-
-        return sp_output_df
-
-    def _sample_names_to_string(self, sp_output_df):
-        sp_output_df['sample_name'] = sp_output_df['sample_name'].astype(str)
-
-    @staticmethod
-    def _drop_non_seq_abund_cols_and_set_df_types(sp_output_df):
-        sp_output_df.drop(
-            columns=['sample_name', 'noName Clade A', 'noName Clade B', 'noName Clade C', 'noName Clade D',
-                     'noName Clade E', 'noName Clade F', 'noName Clade G', 'noName Clade H',
-                     'noName Clade I', 'raw_contigs', 'post_qc_absolute_seqs', 'post_qc_unique_seqs',
-                     'post_taxa_id_absolute_symbiodiniaceae_seqs', 'post_taxa_id_unique_symbiodiniaceae_seqs',
-                     'post_taxa_id_absolute_non_symbiodiniaceae_seqs',
-                     'post_taxa_id_unique_non_symbiodiniaceae_seqs',
-                     'size_screening_violation_absolute', 'size_screening_violation_unique',
-                     'post_med_absolute', 'post_med_unique', 'sample_type', 'host_phylum', 'host_class', 'host_order',
-                     'host_family', 'host_genus', 'host_species',
-                     'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth'
-                     ], inplace=True)
-        sp_output_df = sp_output_df.astype('float')
-        sp_output_df.index = sp_output_df.index.astype('int')
-        return sp_output_df
-
-    def _populate_smpl_id_to_smp_name_dict(self, sp_output_df):
+    def _populate_smpl_id_to_smp_name_dict(self):
         self.smp_uid_to_smp_name_dict = {
             int(uid): smp_name for uid, smp_name in
-            zip(sp_output_df.index.values.tolist(), sp_output_df['sample_name'].values.tolist())}
+            zip(self.output_count_table_as_df.index.values.tolist(), self.output_count_table_as_df['sample_name'].values.tolist())}
 
-    @staticmethod
-    def _drop_meta_info_rows_from_df(meta_index_to_cut_from, sp_output_df):
-        sp_output_df.drop(index=sp_output_df.index[range(meta_index_to_cut_from, 0, 1)], inplace=True)
+    def _drop_meta_info_rows_from_df(self, meta_index_to_cut_from):
+        self.output_count_table_as_df.drop(index=self.output_count_table_as_df.index[range(meta_index_to_cut_from, 0, 1)], inplace=True)
 
-    @staticmethod
-    def _get_df_index_to_drop_from(sp_output_df):
+    def _drop_meta_info_rows(self):
         # In order to be able to drop the DIV row at the end and the meta information rows, we should
         # drop all rows that are after the DIV column. We will pass in an index value to the .drop
         # that is called here. To do this we need to work out which index we are working with
         meta_index_to_cut_from = None
-        index_values_as_list = sp_output_df.index.values.tolist()
+        index_values_as_list = self.output_count_table_as_df.index.values.tolist()
         for i in range(-1, -(len(index_values_as_list)), -1):
             if index_values_as_list[i].startswith('seq'):
                 # then this is the index (in negative notation) that we need to cut from
                 meta_index_to_cut_from = i
                 break
-        return meta_index_to_cut_from
+        self.output_count_table_as_df.drop(index=self.output_count_table_as_df.index[range(meta_index_to_cut_from, 0, 1)], inplace=True)
 
     @staticmethod
     def _get_colour_list():

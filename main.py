@@ -412,7 +412,9 @@ class SymPortalWorkFlowManager:
         self.seq_stacked_bar_plotter = plotting.SeqStackedBarPlotter(
             output_directory=self.output_seq_count_table_obj.output_dir,
             seq_relative_abund_count_table_path_post_med=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, date_time_str=self.output_seq_count_table_obj.date_time_str,
+            no_pre_med_seqs=self.args.no_pre_med_seqs,
+            ordered_seq_list=self.output_seq_count_table_obj.clade_abundance_ordered_ref_seq_list,
+            date_time_str=self.output_seq_count_table_obj.date_time_str,
             seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 
@@ -533,7 +535,9 @@ class SymPortalWorkFlowManager:
             output_directory=self.output_seq_count_table_obj.output_dir,
             seq_relative_abund_count_table_path_post_med=self.output_seq_count_table_obj.path_to_seq_output_abund_and_meta_df_absolute,
             ordered_sample_uid_list=self.output_type_count_table_obj.sorted_list_of_vdss_uids_to_output,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, date_time_str=self.output_seq_count_table_obj.date_time_str,
+            no_pre_med_seqs=self.args.no_pre_med_seqs,
+            ordered_seq_list=self.output_seq_count_table_obj.clade_abundance_ordered_ref_seq_list,
+            date_time_str=self.output_seq_count_table_obj.date_time_str,
             seq_relative_abund_df_pre_med=self.output_seq_count_table_obj.output_df_relative_pre_med)
         self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
 

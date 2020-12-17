@@ -1154,8 +1154,8 @@ class SequenceCountTableCreator:
     def _write_out_meta_only_dfs_seqs(self):
         # now do the meta output table
         # we need to drop the accession row and then we need to drop the seq abund columns
-        df_abs_meta_only = self.output_df_absolute_post_med.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
-        df_rel_meta_only = self.output_df_relative_post_med.drop(index='seq_accession').iloc[:, :self.number_of_meta_cols_added]
+        df_abs_meta_only = self.output_df_absolute_post_med.drop(index='seq_accession', columns=self.clade_abundance_ordered_ref_seq_list)
+        df_rel_meta_only = self.output_df_relative_post_med.drop(index='seq_accession', columns=self.clade_abundance_ordered_ref_seq_list)
         df_abs_meta_only.to_csv(self.path_to_seq_output_meta_only_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_meta_only_df_absolute)
         df_rel_meta_only.to_csv(self.path_to_seq_output_meta_only_df_relative, sep="\t", index_label='sample_uid')
@@ -1169,10 +1169,9 @@ class SequenceCountTableCreator:
     def _write_out_abund_only_dfs_seqs(self):
         # get rid of the meta info rows and columns
         # we will delete the number of meta row added plus one for the accession row
-        df_abs_abund_only = self.output_df_absolute_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1),
-                            self.number_of_meta_cols_added:]
-        df_rel_abund_only = self.output_df_relative_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1),
-                            self.number_of_meta_cols_added:]
+        cols_to_drop = [col for col in list(self.output_df_absolute_post_med) if col not in self.clade_abundance_ordered_ref_seq_list]
+        df_abs_abund_only = self.output_df_absolute_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1)].drop(columns=cols_to_drop)
+        df_rel_abund_only = self.output_df_relative_post_med.iloc[:-1 * (self.number_of_meta_rows_added + 1)].drop(columns=cols_to_drop)
         df_abs_abund_only.to_csv(self.path_to_seq_output_abund_only_df_absolute, sep="\t", index_label='sample_uid')
         self.output_paths_list.append(self.path_to_seq_output_abund_only_df_absolute)
         df_rel_abund_only.to_csv(self.path_to_seq_output_abund_only_df_relative, sep="\t", index_label='sample_uid')
@@ -1574,17 +1573,7 @@ class SequenceCountTableCreator:
             axis=1)
         output_df_relative = output_df_relative.T
         # now remove the rest of the non abundance columns
-        non_seq_columns = [
-            'sample_name', 'raw_contigs', 'post_taxa_id_absolute_non_symbiodiniaceae_seqs', 'post_qc_absolute_seqs',
-            'post_qc_unique_seqs', 'post_taxa_id_unique_non_symbiodiniaceae_seqs',
-            'post_taxa_id_absolute_symbiodiniaceae_seqs',
-            'post_taxa_id_unique_symbiodiniaceae_seqs', 'post_med_absolute', 'post_med_unique',
-            'size_screening_violation_absolute', 'size_screening_violation_unique']
-        no_name_seq_columns = ['noName Clade {}'.format(clade) for clade in list('ABCDEFGHI')]
-        user_supplied_stats = [
-            'sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus', 'host_species',
-            'collection_latitude', 'collection_longitude', 'collection_date', 'collection_depth']
-        cols_to_drop = non_seq_columns + no_name_seq_columns + user_supplied_stats
+        cols_to_drop = [col for col in list(output_df_relative) if col not in self.clade_abundance_ordered_ref_seq_list]
         output_df_relative.drop(columns=cols_to_drop, inplace=True)
         return output_df_relative
 
@@ -2249,14 +2238,17 @@ class SeqOutputSeriesGeneratorHandler:
         # we add the plus one to take account of the 'sample_name' header
         self.seq_count_table_creator.number_of_meta_cols_added = \
             len(qc_stats) + len(no_name_summary_strings) + len(user_supplied_stats) + 1
-        return ['sample_name'] + qc_stats + no_name_summary_strings + user_supplied_stats + header_pre
+        return ['sample_name', 'fastq_fwd_file_name', 'fastq_fwd_sha256_file_hash', 'fastq_rev_file_name',
+                'fastq_rev_sha256_file_hash'] + qc_stats + no_name_summary_strings + user_supplied_stats + header_pre
 
 
 class SeqOutputSeriesGeneratorWorker:
     def __init__(
             self, dss, list_of_abs_and_rel_abund_clade_summaries_of_noname_seqs,
             list_of_abs_and_rel_abund_of_contained_dsss_dicts,
-            dss_id_to_pandas_series_results_list_mp_dict, clade_abundance_ordered_ref_seq_list, output_df_header, lock):
+            dss_id_to_pandas_series_results_list_mp_dict,
+            clade_abundance_ordered_ref_seq_list, output_df_header, lock
+    ):
 
         self.dss = dss
         # dss.id : [{dsss:absolute abundance in dss}, {dsss:relative abundance in dss}]
@@ -2275,9 +2267,19 @@ class SeqOutputSeriesGeneratorWorker:
 
     def make_series(self):
         sys.stdout.write(f'\r{self.dss.name}: Creating data ouput row')
+        self.sample_row_data_absolute.append(self.dss.name)
+        self.sample_row_data_absolute.append(self.dss.fastq_fwd_file_name)
+        self.sample_row_data_absolute.append(self.dss.fastq_fwd_file_hash)
+        self.sample_row_data_absolute.append(self.dss.fastq_rev_file_name)
+        self.sample_row_data_absolute.append(self.dss.fastq_rev_file_hash)
+
+        self.sample_row_data_relative.append(self.dss.name)
+        self.sample_row_data_relative.append(self.dss.fastq_fwd_file_name)
+        self.sample_row_data_relative.append(self.dss.fastq_fwd_file_hash)
+        self.sample_row_data_relative.append(self.dss.fastq_rev_file_name)
+        self.sample_row_data_relative.append(self.dss.fastq_rev_file_hash)
+
         if self._dss_had_problem_in_processing():
-            self.sample_row_data_absolute.append(self.dss.name)
-            self.sample_row_data_relative.append(self.dss.name)
 
             self._populate_quality_control_data_of_failed_sample()
 
@@ -2328,8 +2330,7 @@ class SeqOutputSeriesGeneratorWorker:
         # For the absolute counts we will report the absolute seq number
         # For the relative counts we will report these as proportions of the sampleSeqTot.
         # I.e. we will have numbers larger than 1 for many of the values and the symbiodiniaceae seqs should be 1
-        self.sample_row_data_absolute.append(self.dss.name)
-        self.sample_row_data_relative.append(self.dss.name)
+
         # CONTIGS
         # This is the absolute number of sequences after make.contigs
         contig_num = self.dss.num_contigs
@@ -2388,8 +2389,6 @@ class SeqOutputSeriesGeneratorWorker:
     def _populate_quality_control_data_of_failed_sample(self):
         # Add in the qc totals if possible
         # For the proportions we will have to add zeros as we cannot do proportions
-        # CONTIGS
-        # This is the absolute number of sequences after make.contigs
 
         self._populate_qc_meta_failed_sample()
 

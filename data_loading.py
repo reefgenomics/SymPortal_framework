@@ -336,8 +336,11 @@ class DataLoading:
                 self.seq_stacked_bar_plotter = SeqStackedBarPlotter(
                     output_directory=self.output_directory,
                     seq_relative_abund_count_table_path_post_med=self.seq_abundance_relative_output_path_post_med,
-                    no_pre_med_seqs=self.no_pre_med_seqs, date_time_str=self.date_time_str,
-                    seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med)
+                    no_pre_med_seqs=self.no_pre_med_seqs,
+                    ordered_seq_list=self.sequence_count_table_creator.clade_abundance_ordered_ref_seq_list,
+                    date_time_str=self.date_time_str,
+                    seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med
+                    )
                 self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
 
