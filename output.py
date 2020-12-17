@@ -16,22 +16,7 @@ from general import ThreadSafeGeneral
 from exceptions import NoDataSetSampleSequencePMObjects
 
 
-class OutputTypeCountTable:
-    """May need to have access to a list of all of the samples
-    Let's see specifically which attributes of the samples we need
-
-    Sample attributes we'll need (could have virtual sample):
-    data set id
-    sample id
-
-    Things we need to calculate:
-
-
-    Method:
-    get a sorted list of the analysistypes for the output (either dataset or datasetsample defined)
-    For each type calculate average relabund of each DIV, and SD
-    Do class on a vat by vat basis
-    """
+class OutputProfileCountTable:
     def __init__(
             self, num_proc, within_clade_cutoff, call_type, output_dir, html_dir, js_output_path_dict, date_time_str,
             force_basal_lineage_separation,

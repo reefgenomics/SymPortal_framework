@@ -461,6 +461,7 @@ class SymPortalWorkFlowManager:
         self._start_data_analysis()
 
         if not self.args.no_output:
+            os.makedirs(self.html_dir, exist_ok=True)
             self._do_data_analysis_output()
             if not self.args.no_ordinations:
                 self._do_data_analysis_ordinations()
@@ -648,7 +649,7 @@ class SymPortalWorkFlowManager:
 
     def _make_data_analysis_output_type_tables(self):
         # Write out the AnalysisType count table
-        self.output_type_count_table_obj = output.OutputTypeCountTable(
+        self.output_type_count_table_obj = output.OutputProfileCountTable(
             call_type='analysis', num_proc=self.args.num_proc,
             within_clade_cutoff=self.within_clade_cutoff,
             data_set_uids_to_output=self.sp_data_analysis.list_of_data_set_uids,
@@ -699,6 +700,7 @@ class SymPortalWorkFlowManager:
         self.output_dir = os.path.abspath(
             os.path.join(self.symportal_root_directory, 'outputs', 'non_analysis', self.date_time_str))
         self._set_html_dir_and_js_out_path_from_output_dir()
+        os.makedirs(self.html_dir, exist_ok=True)
         if self.args.print_output_seqs_sample_set:
             self._stand_alone_sequence_output_data_set_sample()
         else:
@@ -797,7 +799,6 @@ class SymPortalWorkFlowManager:
         self.html_dir = os.path.join(self.output_dir, 'html')
         self.js_file_path = os.path.join(self.html_dir, 'study_data.js')
         os.makedirs(self.output_dir, exist_ok=True)
-        os.makedirs(self.html_dir, exist_ok=True)
         self._set_logging_path()
 
     def _stand_alone_sequence_output_data_set(self):
@@ -847,6 +848,7 @@ class SymPortalWorkFlowManager:
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'analyses', str(self.data_analysis_object.id), self.date_time_str)
         self._set_html_dir_and_js_out_path_from_output_dir()
+        os.makedirs(self.html_dir, exist_ok=True)
         if self.args.print_output_types_sample_set:
             self._stand_alone_type_output_data_set_sample()
             self._stand_alone_seq_output_from_type_output_data_set_sample()
@@ -944,7 +946,7 @@ class SymPortalWorkFlowManager:
     def _stand_alone_type_output_data_set(self):
         ds_uid_list = [int(ds_uid_str) for ds_uid_str in self.args.print_output_types.split(',')]
         self._check_ds_were_part_of_analysis(ds_uid_list)
-        self.output_type_count_table_obj = output.OutputTypeCountTable(
+        self.output_type_count_table_obj = output.OutputProfileCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', date_time_str=self.date_time_str,
             data_set_uids_to_output=set(ds_uid_list), data_analysis_obj=self.data_analysis_object,
@@ -961,7 +963,7 @@ class SymPortalWorkFlowManager:
     def _stand_alone_type_output_data_set_sample(self):
         dss_uid_list = [int(dss_uid_str) for dss_uid_str in self.args.print_output_types_sample_set.split(',')]
         self._check_dss_were_part_of_analysis(dss_uid_list)
-        self.output_type_count_table_obj = output.OutputTypeCountTable(
+        self.output_type_count_table_obj = output.OutputProfileCountTable(
             num_proc=self.args.num_proc, within_clade_cutoff=self.within_clade_cutoff,
             call_type='stand_alone', output_dir=self.output_dir, html_dir=self.html_dir,
             js_output_path_dict=self.js_output_path_dict, date_time_str=self.date_time_str,
@@ -1014,7 +1016,7 @@ class SymPortalWorkFlowManager:
         self.output_dir = os.path.join(
                     self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
         self._set_html_dir_and_js_out_path_from_output_dir()
-
+        os.makedirs(self.html_dir, exist_ok=True)
         if self.args.distance_method == 'both':
             if self._check_if_required_packages_found_in_path():
                 # then do both distance outputs
@@ -1129,6 +1131,7 @@ class SymPortalWorkFlowManager:
         self.output_dir = os.path.join(
             self.symportal_root_directory, 'outputs', 'ordination', self.date_time_str)
         self._set_html_dir_and_js_out_path_from_output_dir()
+        os.makedirs(self.html_dir, exist_ok=True)
         self._run_sample_distances_dependent_on_methods()
         if self.args.distance_method == 'both':
             self._plot_sample_distances_from_distance_object(self.braycurtis_distance_object)

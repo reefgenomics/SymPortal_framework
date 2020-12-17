@@ -371,9 +371,9 @@ class DataLoading:
         subprocess.run(f'find {self.symportal_root_directory} -name "*.logfile" -delete', shell=True, check=True)
         # Delete the pre_med_seq directories holding the .fasta and .names pairs
         # as this information is now stored in the database and output in a count table.
-        for pre_med_sub_dir_path in [x[0] for x in os.walk(self.pre_med_sequence_output_directory_path) if not x[1] and not x[0].endswith('pre_med_seqs')]:
-            if 'pre_med_seqs' in pre_med_sub_dir_path:
-                shutil.rmtree(pre_med_sub_dir_path)
+        # This directory will be remade if outputs are being made
+        if os.path.exists(self.pre_med_sequence_output_directory_path):
+            shutil.rmtree(self.pre_med_sequence_output_directory_path)
 
     def _perform_sequence_drop(self):
         sequence_drop_file = self._generate_sequence_drop_file()
