@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """This script will be run as a chron job
-It will look for submissions that have a status of framework_loading_complete, have no error status, are have
+It will look for submissions that have a status of framework_loading_complete, have no error status, and have
 a for_analysis of True.
 The DataSet objects associated with each of these submission will be collected and added to a
 data base version analyis (DBV) using the SymPortal framework --analyse_next flag.
@@ -68,7 +68,8 @@ class ChronAnalysis:
         for sub_obj in self.submission_objects:
             # Because we don't want to rely on the fact that an anaysis was conduced above, we will grab the latest
             # DataAnalysis that contains the Study/DataSet objects associated with it.
-            latest_dataanalysis = list(DataAnalysis.objects.filter(list_of_data_set_uids__contains=str(sub_obj.associated_dataset.id)).order_by('-id'))[0]
+            latest_dataanalysis = list(DataAnalysis.objects.filter(
+                list_of_data_set_uids__contains=str(sub_obj.associated_dataset.id)).order_by('-id'))[0]
             study_id_str = str(sub_obj.associated_study.id)
             custom_args_list = [
                 '--output_study_from_analysis', study_id_str, '--num_proc', str(self.num_proc),

@@ -2,7 +2,7 @@
 """
 This script will be managed by chron jobs and will be run once every hour
 It will be responsible for transfering successfuly submitted user files from the web sever to the framework server
-It will check for Submission objects that have a status of progress_status of submitted
+It will check for Submission objects that have a progress_status of submitted
 At the start of the script it will do a pgrep to check that the script is not currently running to prevent
 stacking up of the same script.
 The script will use the md5sum that is generated at the time of user upload to verify the integrity of the transfer.
