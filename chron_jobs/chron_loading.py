@@ -113,7 +113,12 @@ class ChronLoading:
         self.submission_to_load.loading_complete_date_time = str(
                 datetime.utcnow()
             ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
-        self.submission_to_load.progress_status = "framework_loading_complete"
+        if self.submission_to_load.for_analysis:
+            self.submission_to_load.progress_status = "framework_loading_complete"
+        else:
+            # Then there will not be an analysis for this submission
+            # We have already complted the output
+            self.submission_to_load.progress_status = "framework_output_complete"
 
         # At this point the loading is complete for a single submission object. Now save and do next.
         self.submission_to_load.save()
