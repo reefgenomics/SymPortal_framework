@@ -504,8 +504,11 @@ class CreateStudyAndAssociateUsers:
             # to the Study. This will mean changing the title etc. to match the citation title
             print(f"Study with name '{study_name}' already exists.")
             if self.dataset_object is not None:
-                continue_text = input('Do you want to update/overwrite the current data_set_samples '
-                                      'associated with this study to the current DataSetSamples? [y/n]: ')
+                if self.is_chron_loading:
+                    continue_text = 'y'
+                else:
+                    continue_text = input('Do you want to update/overwrite the current data_set_samples '
+                                          'associated with this study to the current DataSetSamples? [y/n]: ')
             else:  # Working with citations
                 continue_text = input('Do you want to associate the current citation to this Study?\n'
                                       'This will overwrite the attributes such as title '
