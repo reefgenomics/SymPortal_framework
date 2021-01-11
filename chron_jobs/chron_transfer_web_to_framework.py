@@ -42,8 +42,16 @@ class TransferWebToFramework:
         # User paramiko to set up an sftp that we can use to transfer
         self.ssh_client = paramiko.SSHClient()
         self.ssh_client.load_system_host_keys()
-        self.ssh_client.connect(hostname=sp_config.web_ip, username=sp_config.web_user,
-                                password=sp_config.web_pass)
+        if sp_config.authentication_type == 'pass':
+            self.ssh_client.connect(hostname=sp_config.web_ip, username=sp_config.web_user,
+                                    password=sp_config.web_pass)
+        elif sp_config.authentication_type == 'key':
+            self.ssh_client.connect(
+                hostname=sp_config.web_ip, username=sp_config.web_user, key_filename=sp_config.key_file
+                )
+        else:
+            raise RuntimeError('Unknown authentication_type from sp_config.')
+
         # Open sftp client
         self.sftp_client = self.ssh_client.open_sftp()
 
@@ -68,10 +76,10 @@ class TransferWebToFramework:
                 if platform.system() == 'Linux':
                     # Then we expect there to be one PID for the current process
                     if len(procs) > 1:
-                        sys.exit()
+                        raise RuntimeError('More than one instance of chron_transfer_web_to_framework detected. Killing process.')
                 else:
                     # Then we are likely on mac and we expect no PIDs
-                    sys.exit()
+                    raise RuntimeError('More than one instance of chron_transfer_web_to_framework detected. Killing process.')
             else:
                 # No PIDs returned
                 pass
