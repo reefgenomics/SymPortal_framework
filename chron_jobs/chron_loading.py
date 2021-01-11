@@ -30,7 +30,7 @@ class ChronLoading:
     def __init__(self):
         self._check_no_other_instance_running()
 
-        self.submissions_to_transfer = list(
+        self.submissions_to_load = list(
             Submission.objects.filter(progress_status="transfer_to_framework_server_complete", error_has_occured=False)
         )
 
@@ -44,7 +44,7 @@ class ChronLoading:
         Await a successful exit code before starting the next loading.
         """
         # Load each submission
-        for sub_to_load in self.submissions_to_transfer:
+        for sub_to_load in self.submissions_to_load:
             self.submission_to_load = sub_to_load
             self._load_submission()
 
