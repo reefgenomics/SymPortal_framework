@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 # from dbApp.models import ReferenceSequence
-import compress_pickle
 import sys
 import json
 
