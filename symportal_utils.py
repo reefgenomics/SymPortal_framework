@@ -353,7 +353,7 @@ class MothurAnalysis:
         mothur_batch_file = [
             f'set.dir(input={self.input_dir})',
             f'set.dir(output={self.output_dir})',
-            f'make.contigs(file={self.dot_file_file_path}, processors=1)'
+            f'make.contigs(file={self.dot_file_file_path}, mismatch=-4, gapopen=-4, processors=1)'
         ]
         self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
@@ -502,7 +502,7 @@ class MothurAnalysis:
             f'set.dir(input={self.input_dir})',
             f'set.dir(output={self.output_dir})',
             f'screen.seqs(fasta={self.fasta_path}, '
-            f'contigsreport={self.report_path}, minoverlap=30, mismatches=0, processors=1)'
+            f'contigsreport={self.report_path}, minoverlap=30, processors=1)'
         ]
 
     def _pcr_make_mothur_batch_file(self):
