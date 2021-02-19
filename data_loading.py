@@ -2004,8 +2004,7 @@ class InitialMothurHandler:
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
         This QC includes making contigs, screening for ambigous calls (0 allowed), screening for a min 30bp overlap,
-        0 mismatches in the overlap region,
-        Discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
+        discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
         This is all done through the use of an InitialMothurWorker class which in turn makes use of the MothurAnalysis
         class that does the heavy lifting of running the mothur commands in sequence.
         """
@@ -2048,7 +2047,7 @@ class InitialMothurWorker:
 
         self._do_make_contigs()
 
-        # This first screen is for min overlap of 30bp and mismatch=0
+        # This first screen is for min overlap of 30bp
         self._do_screen_seqs()
 
         self._do_unique_seqs()
@@ -2124,13 +2123,12 @@ class InitialMothurWorker:
         """
         We do two rounds of screen seq. We do the first round of screen seq as a protection again libraries that
         have been made with seq chemistry that is too short to create overlap between the fwd and rev reads.
-        Mothur actually reports on overlap but this value is very unreliable when there is no overlap. Its a complete
-        artefact essentialy. But we can screen for mismatches (which should be 0) and we can include an arbitrary
-        requirement of a 30bp overlap. This will catch those very few sequences <1% that have no mismatch and no
-        ambigous nucleotides.
-        The second round of screening removes sequences with ambiguous nucleotides. This will also get rid of most
-        of the sequnces that have made it through that didn't have a genuine overlap but also works as a general
-        quality control. We do this after PCR to prevent removal of sequenecs that only have ambigous calls outside
+        We have implemented a penalised mismatch and gapopen score in the make.contigs (both -4). This forces
+        mothur to do a better job of identifying overlapping regions. We then screen by minoverlap=30. We do not
+        screen by mismatches.
+        The second round of screening removes sequences with ambiguous nucleotides.
+        This works as a general quality control.
+        We do this after PCR to prevent removal of sequenecs that only have ambigous calls outside
         of the primers. Whether this is even possible is probably variable depending of the sequencing technology
         but we keep the check in place as standard.
         """
@@ -2163,9 +2161,9 @@ class InitialMothurWorker:
 
     def check_for_error_and_raise_runtime_error(self, stage_of_qc, error_summary=None):
         if error_summary:
-            if error_summary == "no seqs left after overlap/mismatch seq screening":
+            if error_summary == "no seqs left after overlap seq screening":
                 self.log_qc_error_and_continue(
-                errorreason=f'No seqs remaining after screen.seqs for overlap and mismatch'
+                errorreason=f'No seqs remaining after screen.seqs for minoverlap'
                 )
                 raise RuntimeError({'sample_name': self.sample_name})
         for stdout_line in self.thread_safe_general.decode_utf8_binary_to_list(
