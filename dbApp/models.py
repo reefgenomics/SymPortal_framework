@@ -163,7 +163,7 @@ class User(models.Model):
 class DataAnalysis(models.Model):
     # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
     objects = models.Manager()
-    list_of_data_set_uids = models.CharField(max_length=500, null=True)
+    list_of_data_set_uids = models.CharField(max_length=5000, null=True)
     within_clade_cutoff = models.FloatField(default=0.04)
     name = models.CharField(max_length=100, null=True)
     description = models.CharField(max_length=5000, null=True)
