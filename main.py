@@ -1270,8 +1270,9 @@ class CitationUpdate:
         # Try to get the citing pubs live from Google Scholar
         # If this fails fall back to loadinging in the .csv files that have been downloaded manually
         try:
-            # self.citing_pubs = compress_pickle.load('citing_pubs.p.bz')
-            self.citing_pubs = self._get_citing_pubs()
+            import compress_pickle
+            self.citing_pubs = compress_pickle.load('citing_pubs.p.bz')
+            # self.citing_pubs = self._get_citing_pubs()
             # temporarily lets pickle this out so that we can debug without having to do the requrests
             # compress_pickle.dump(self.citing_pubs, 'citing_pubs.p.bz')
         except Exception as e:
