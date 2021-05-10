@@ -72,6 +72,14 @@ class MothurAnalysis:
         self.fastq_gz_fwd_path = fastq_gz_fwd_path
         self.fastq_gz_rev_path = fastq_gz_rev_path
         self.fasta_path = None
+        # The path to the .report file output from make.contigs
+        # This is required when screening for overlap
+        self.report_path = None
+        # There are two screening stages, first for sequence overlap and mismatch
+        # then for ambiguous sequences. We use the same methods to run the screening and pass in the self.screening_for
+        # to modify the parameter that we are screening for. Once overlap screening is complete, self.screening_for
+        # will be updated to 'ambig'
+        self.screening_for = 'overlap'
         self.input_dir = input_dir
         self.output_dir = output_dir
         self.name_file_path = None
@@ -121,6 +129,7 @@ class MothurAnalysis:
         self._run_mothur_batch_file_command_make_contigs()
 
         self.fasta_path = self.dot_file_file_path.replace('.file', '.trim.contigs.fasta')
+        self.report_path = self.dot_file_file_path.replace('.file', '.contigs.report')
 
         try:
             num_contigs = int(len(self.thread_safe_general.read_defined_file_to_list(self.fasta_path))/2)
@@ -144,12 +153,17 @@ class MothurAnalysis:
         # check the name path that would have been made to see if it exists and only update if it does
         # We will do the same for the fasta path.
         new_fasta_path = self.fasta_path.replace('.fasta', '.good.fasta')
-        new_name_file_path = self.name_file_path.replace('.names', '.good.names')
+        if self.screening_for == 'ambig':
+            new_name_file_path = self.name_file_path.replace('.names', '.good.names')
+            if os.path.exists(new_name_file_path):
+                self.name_file_path = new_name_file_path
 
         if os.path.exists(new_fasta_path):
             self.fasta_path = new_fasta_path
-        if os.path.exists(new_name_file_path):
-            self.name_file_path = new_name_file_path
+            remaining_seqs = int(len(self.thread_safe_general.read_defined_file_to_list(self.fasta_path))/2)
+            if remaining_seqs == 0 and self.screening_for == 'overlap':
+                raise RuntimeError("no seqs left after overlap/mismatch seq screening")
+
 
         self.__execute_summary()
 
@@ -177,7 +191,8 @@ class MothurAnalysis:
         self.remove_primer_mismatch_annotations_from_fasta(fwd_output_good_fasta_path)
 
         # In some uncommon cases, all amplicons gave a PCR match and there is no scrapped fastsa to do a rev PCR on
-        # then we should clean up the output_bad_fasta
+        # We therefore check to see if the fwd_output_good_scrapped_fasta_path file exists
+        # If exists, then we should clean up the output_bad_fasta
         # then reverse complement it
         # then do a pcr on it again using the same oligo set as the first run
         # we should then get the output from that pcr and add it to the previous run
@@ -265,7 +280,7 @@ class MothurAnalysis:
         # NB Mothur will not output a scrap fasta file if there are no scrap fasta. Also NB that mothur will output
         # sequence names with no sequence for sequences that have multiple matches for a given primer.
         # we should screen for these and remove them.
-        if fwd_output_scrapped_fasta_path == '':
+        if not os.path.exists(fwd_output_scrapped_fasta_path):
             return False
         else:
             scrapped_fasta_as_list = self.thread_safe_general.read_defined_file_to_list(fwd_output_scrapped_fasta_path)
@@ -338,7 +353,7 @@ class MothurAnalysis:
         mothur_batch_file = [
             f'set.dir(input={self.input_dir})',
             f'set.dir(output={self.output_dir})',
-            f'make.contigs(file={self.dot_file_file_path}, processors=1)'
+            f'make.contigs(file={self.dot_file_file_path}, mismatch=-4, gapopen=-4, processors=1)'
         ]
         self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, mothur_batch_file)
 
@@ -466,15 +481,28 @@ class MothurAnalysis:
         self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
     def _screen_seqs_make_and_write_mothur_batch_file(self):
-        self._screen_seqs_make_mothur_batch_file()
+        if self.screening_for == 'overlap':
+            self._screen_seqs_make_mothur_batch_file_overlap()
+        elif self.screening_for == 'ambig':
+            self._screen_seqs_make_mothur_batch_file_ambig()
+        else:
+            raise RuntimeError("Unrecognized 'screening for' value")
         self.thread_safe_general.write_list_to_destination(self.mothur_batch_file_path, self.mothur_batch_file)
 
 
-    def _screen_seqs_make_mothur_batch_file(self):
+    def _screen_seqs_make_mothur_batch_file_ambig(self):
         self.mothur_batch_file = [
             f'set.dir(input={self.input_dir})',
             f'set.dir(output={self.output_dir})',
             f'screen.seqs(fasta={self.fasta_path}, name={self.name_file_path}, maxambig=0, processors=1)'
+        ]
+
+    def _screen_seqs_make_mothur_batch_file_overlap(self):
+        self.mothur_batch_file = [
+            f'set.dir(input={self.input_dir})',
+            f'set.dir(output={self.output_dir})',
+            f'screen.seqs(fasta={self.fasta_path}, '
+            f'contigsreport={self.report_path}, minoverlap=30, processors=1)'
         ]
 
     def _pcr_make_mothur_batch_file(self):

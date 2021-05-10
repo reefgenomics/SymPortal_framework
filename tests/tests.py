@@ -149,17 +149,6 @@ class SymPortalTester:
             print(f'Deleting {directory_to_delete}')
             shutil.rmtree(directory_to_delete)
 
-# To get md5sum
-import hashlib
-from functools import partial
-
-def md5sum(filename):
-    with open(filename, mode='rb') as f:
-        d = hashlib.md5()
-        for buf in iter(partial(f.read, 128), b''):
-            d.update(buf)
-    return d.hexdigest()
-
 if __name__ == "__main__":
     symportal_tester = SymPortalTester()
     symportal_tester.execute_integrated_tests()

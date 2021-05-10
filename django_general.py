@@ -319,6 +319,7 @@ class CreateStudyAndAssociateUsers:
             self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
             self.list_of_dss_objects = None
         self.restart = False
+        self.study = None
 
     def create_study_and_user_objects(self):
         while True:
@@ -372,7 +373,7 @@ class CreateStudyAndAssociateUsers:
                             # Then something went wrong and we should start again
                             continue
                     elif continue_text == 'n':
-                        self._create_study_associate_dss_objects(new_study_object=new_study_object)
+                        self.study = self._create_study_associate_dss_objects(new_study_object=new_study_object)
                         print(f'Created {new_study_object} with no users associated.')
                         break
                     elif continue_text == '4':
@@ -401,7 +402,7 @@ class CreateStudyAndAssociateUsers:
 
     def _create_study_users_and_associate(self, new_study_object, users_that_already_exist, users_that_do_not_exist):
         # Now we can create the Study
-        self._create_study_associate_dss_objects(new_study_object)
+        self.study = self._create_study_associate_dss_objects(new_study_object)
 
         self._create_and_associate_users(new_study_object, users_that_already_exist, users_that_do_not_exist)
 
@@ -448,7 +449,7 @@ class CreateStudyAndAssociateUsers:
                     break
                 elif associate_data_set == 'n':
                     break
-
+        return new_study_object
     def _print_out_users(self, users_that_already_exist, users_that_do_not_exist):
         if users_that_already_exist:
             print('The following users already exist and the Study will be associated to them:')
@@ -561,14 +562,16 @@ class CreateStudyAndAssociateUsers:
         return new_study_object
 
     def _create_study_object_from_dataset_object(self, name):
+        # We will set analysis to False and then set True when we are
+        # doing the output as part of an analysis.
         if name is None:
             new_study_object = Study(
                 name=self.dataset_object.name,
-                creation_time_stamp=self.date_time_str, title=self.dataset_object.name)
+                creation_time_stamp=self.date_time_str, title=self.dataset_object.name, analysis=False)
         else:
             new_study_object = Study(
                 name=name,
-                creation_time_stamp=self.date_time_str, title=name)
+                creation_time_stamp=self.date_time_str, title=name, analysis=False)
         return new_study_object
 
     def _study_of_name_exists(self, study_name=None):

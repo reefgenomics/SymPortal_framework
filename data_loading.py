@@ -12,7 +12,7 @@ from django import db
 from multiprocessing import Queue as mp_Queue, Manager, Process, Lock as mp_Lock
 from threading import Lock as mt_Lock, Thread, get_ident
 from queue import Queue as mt_Queue
-from general import ThreadSafeGeneral
+from general import ThreadSafeGeneral, file_as_blockiter, hash_bytestr_iter
 from datetime import datetime
 import distance
 from plotting import DistScatterPlotterSamples, SeqStackedBarPlotter
@@ -29,6 +29,7 @@ from shutil import which
 import sp_config
 from django_general import CreateStudyAndAssociateUsers
 import logging
+import hashlib
 
 
 class DataLoading:
@@ -85,6 +86,7 @@ class DataLoading:
             csaau = CreateStudyAndAssociateUsers(
                 date_time_str=self.date_time_str, ds=self.dataset_object, list_of_dss_objects=self.list_of_dss_objects)
             csaau.create_study_and_user_objects()
+            self.study = csaau.study
         self.output_path_list = []
         self.no_fig = no_fig
         self.no_ord = no_ord
@@ -195,7 +197,7 @@ class DataLoading:
 
         self._perform_sequence_drop()
 
-        self._delete_temp_working_directory_and_log_files()
+        self._delete_temp_dir__log_files_and_pre_med_dir()
 
         self._write_data_set_info_to_stdout()
 
@@ -334,8 +336,11 @@ class DataLoading:
                 self.seq_stacked_bar_plotter = SeqStackedBarPlotter(
                     output_directory=self.output_directory,
                     seq_relative_abund_count_table_path_post_med=self.seq_abundance_relative_output_path_post_med,
-                    no_pre_med_seqs=self.no_pre_med_seqs, date_time_str=self.date_time_str,
-                    seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med)
+                    no_pre_med_seqs=self.no_pre_med_seqs,
+                    ordered_seq_list=self.sequence_count_table_creator.clade_abundance_ordered_ref_seq_list,
+                    date_time_str=self.date_time_str,
+                    seq_relative_abund_df_pre_med=self.seq_abund_relative_df_pre_med
+                    )
                 self.seq_stacked_bar_plotter.plot_stacked_bar_seqs()
                 self.output_path_list.extend(self.seq_stacked_bar_plotter.output_path_list)
 
@@ -359,11 +364,16 @@ class DataLoading:
             if 'relative.abund_and_meta' in path:
                 self.seq_abundance_relative_output_path_post_med = path
 
-    def _delete_temp_working_directory_and_log_files(self):
+    def _delete_temp_dir__log_files_and_pre_med_dir(self):
         if os.path.exists(self.temp_working_directory):
             shutil.rmtree(self.temp_working_directory)
         # Delete any log files that are found anywhere in the SymPortal directory
         subprocess.run(f'find {self.symportal_root_directory} -name "*.logfile" -delete', shell=True, check=True)
+        # Delete the pre_med_seq directories holding the .fasta and .names pairs
+        # as this information is now stored in the database and output in a count table.
+        # This directory will be remade if outputs are being made
+        if os.path.exists(self.pre_med_sequence_output_directory_path):
+            shutil.rmtree(self.pre_med_sequence_output_directory_path)
 
     def _perform_sequence_drop(self):
         sequence_drop_file = self._generate_sequence_drop_file()
@@ -909,6 +919,7 @@ class DataLoading:
                 )
             )
             sample_fastq_pairs.append('\t'.join(temp_list))
+
         self.thread_safe_general.write_list_to_destination(
             os.path.join(self.temp_working_directory, 'stability.files'), sample_fastq_pairs)
         self.sample_fastq_pairs = sample_fastq_pairs
@@ -956,11 +967,14 @@ class DataLoading:
                     collection_latitude = float(999)
                     print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
                     collection_longitude = float(999)
-
             except:
                 print('conversion problem with collection_latitude or collection_longitude, converting both to 999')
                 collection_latitude = float(999)
                 collection_longitude = float(999)
+
+            # get the sha256 hash of the fastq.gz files
+            fwd_hash = hash_bytestr_iter(file_as_blockiter(open(self.sample_meta_info_df.loc[sampleName, 'fastq_fwd_file_name'], 'rb')), hashlib.sha256(), True)
+            rev_hash = hash_bytestr_iter(file_as_blockiter(open(self.sample_meta_info_df.loc[sampleName, 'fastq_rev_file_name'], 'rb')), hashlib.sha256(), True)
 
             dss = DataSetSample(name=sampleName, data_submission_from=self.dataset_object,
                                 cladal_seq_totals=empty_cladal_seq_totals,
@@ -974,7 +988,11 @@ class DataLoading:
                                 collection_latitude=collection_latitude,
                                 collection_longitude=collection_longitude,
                                 collection_date=collection_date,
-                                collection_depth=collection_depth
+                                collection_depth=collection_depth,
+                                fastq_fwd_file_name=ntpath.basename(self.sample_meta_info_df.loc[sampleName, 'fastq_fwd_file_name']),
+                                fastq_rev_file_name=ntpath.basename(self.sample_meta_info_df.loc[sampleName, 'fastq_rev_file_name']),
+                                fastq_fwd_file_hash=fwd_hash,
+                                fastq_rev_file_hash=rev_hash
                                 )
             list_of_data_set_sample_objects.append(dss)
         # http://stackoverflow.com/questions/18383471/django-bulk-create-function-example
@@ -1011,21 +1029,7 @@ class DataLoading:
         # 4 - check that each of the other values can be converted to str
 
         # Datasheet to pandas df
-        if self.datasheet_path.endswith('.xlsx'):
-            self.sample_meta_info_df = pd.read_excel(
-                io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
-        elif self.datasheet_path.endswith('.csv'):
-            with open(self.datasheet_path, 'r') as f:
-                data_sheet_as_file = [line.rstrip() for line in f]
-            if data_sheet_as_file[0].split(',')[0] == 'sample_name':
-                self.sample_meta_info_df = pd.read_csv(
-                    filepath_or_buffer=self.datasheet_path)
-            else:
-                self.sample_meta_info_df = pd.read_csv(
-                    filepath_or_buffer=self.datasheet_path, skiprows=[0])
-        else:
-            sys.exit('Data sheet: {} is in an unrecognised format. '
-                     'Please ensure that it is either in .xlsx or .csv format.')
+        self._read_in_datasheet()
 
         # drop any cells in which the sample name is null
         self.sample_meta_info_df = self.sample_meta_info_df[~pd.isnull(self.sample_meta_info_df['sample_name'])]
@@ -1049,6 +1053,23 @@ class DataLoading:
         self._check_lat_long()
 
         self._check_vars_can_be_string()
+
+    def _read_in_datasheet(self):
+        if self.datasheet_path.endswith('.xlsx'):
+            self.sample_meta_info_df = pd.read_excel(
+                io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
+        elif self.datasheet_path.endswith('.csv'):
+            with open(self.datasheet_path, 'r') as f:
+                data_sheet_as_file = [line.rstrip() for line in f]
+            if data_sheet_as_file[0].split(',')[0] == 'sample_name':
+                self.sample_meta_info_df = pd.read_csv(
+                    filepath_or_buffer=self.datasheet_path)
+            else:
+                self.sample_meta_info_df = pd.read_csv(
+                    filepath_or_buffer=self.datasheet_path, skiprows=[0])
+        else:
+            sys.exit('Data sheet: {} is in an unrecognised format. '
+                     'Please ensure that it is either in .xlsx or .csv format.')
 
     def _replace_null_vals_in_meta_info_df(self):
         self.sample_meta_info_df = self.sample_meta_info_df.replace('N/A', NaN).replace('NA', NaN).replace('na',
@@ -1982,8 +2003,8 @@ class InitialMothurHandler:
     def _worker_initial_mothur(in_q_paths, out_list_error_samples, out_q_attr_data, temp_working_directory, debug):
         """
         This worker performs the pre-MED processing that is primarily mothur-based.
-        This QC includes making contigs, screening for ambigous calls (0 allowed),
-        Discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
+        This QC includes making contigs, screening for ambigous calls (0 allowed), screening for a min 30bp overlap,
+        discarding singletons and doublets, in silico PCR. It also checks whether sequences are rev compliment.
         This is all done through the use of an InitialMothurWorker class which in turn makes use of the MothurAnalysis
         class that does the heavy lifting of running the mothur commands in sequence.
         """
@@ -2026,12 +2047,16 @@ class InitialMothurWorker:
 
         self._do_make_contigs()
 
+        # This first screen is for min overlap of 30bp
+        self._do_screen_seqs()
+
         self._do_unique_seqs()
 
         self._do_fwd_and_rev_pcr()
 
         self._do_unique_seqs()
 
+        # This second screen is for ambigous sequences (0 allowed)
         self._do_screen_seqs()
 
         self._do_split_abund()
@@ -2095,10 +2120,26 @@ class InitialMothurWorker:
             self.check_for_error_and_raise_runtime_error(stage_of_qc='unique seqs')
 
     def _do_screen_seqs(self):
+        """
+        We do two rounds of screen seq. We do the first round of screen seq as a protection again libraries that
+        have been made with seq chemistry that is too short to create overlap between the fwd and rev reads.
+        We have implemented a penalised mismatch and gapopen score in the make.contigs (both -4). This forces
+        mothur to do a better job of identifying overlapping regions. We then screen by minoverlap=30. We do not
+        screen by mismatches.
+        The second round of screening removes sequences with ambiguous nucleotides.
+        This works as a general quality control.
+        We do this after PCR to prevent removal of sequenecs that only have ambigous calls outside
+        of the primers. Whether this is even possible is probably variable depending of the sequencing technology
+        but we keep the check in place as standard.
+        """
         try:
             self.mothur_analysis_object.execute_screen_seqs()
-        except RuntimeError:
-            self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs')
+            self.mothur_analysis_object.screening_for = 'ambig'
+        except RuntimeError as e:
+            if self.mothur_analysis_object.screening_for == 'overlap':
+                self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs overlap', error_summary=str(e))
+            elif self.mothur_analysis_object.screening_for == 'ambig':
+                self.check_for_error_and_raise_runtime_error(stage_of_qc='screen seqs ambig', error_summary=str(e))
 
     def _set_unique_and_abs_num_seqs_after_initial_qc(self):
         name_file = self.thread_safe_general.read_defined_file_to_list(self.mothur_analysis_object.name_file_path)
@@ -2118,7 +2159,13 @@ class InitialMothurWorker:
         sys.stdout.write(
             f'{self.sample_name}: data_set_sample_instance_in_q.post_qc_absolute_num_seqs = {abs_count}\n')
 
-    def check_for_error_and_raise_runtime_error(self, stage_of_qc):
+    def check_for_error_and_raise_runtime_error(self, stage_of_qc, error_summary=None):
+        if error_summary:
+            if error_summary == "no seqs left after overlap seq screening":
+                self.log_qc_error_and_continue(
+                errorreason=f'No seqs remaining after screen.seqs for minoverlap'
+                )
+                raise RuntimeError({'sample_name': self.sample_name})
         for stdout_line in self.thread_safe_general.decode_utf8_binary_to_list(
                 self.mothur_analysis_object.latest_completed_process_command.stdout
         ):
