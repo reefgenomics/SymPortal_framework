@@ -560,8 +560,11 @@ def check_lat_lon(lat, lon):
     """
     if lat == 'nan' or lon == 'nan':
         raise RuntimeError
-    if np.isnan(lat) or np.isnan(lat):
-        raise RuntimeError
+    try:
+        if np.isnan(lat) or np.isnan(lon):
+            raise RuntimeError
+    except TypeError:
+        pass
     try:
         lat_float = float(lat)
         lon_float = float(lon)
