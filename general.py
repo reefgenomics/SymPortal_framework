@@ -7,6 +7,7 @@ from plumbum import local
 import json
 import numpy as np
 import random
+import re
 
 class ThreadSafeGeneral:
     def __init__(self):
@@ -548,3 +549,127 @@ def file_as_blockiter(afile, blocksize=65536):
         while len(block) > 0:
             yield block
             block = afile.read(blocksize)
+
+def check_lat_lon(lat, lon):
+    """
+    Takes a dirty lat and lon value and either converts to decimial degrees or raises a run time error.
+    Should be able to handle:
+        decimal degrees that have a N S W or E character added to it
+        degrees decimal minute (with N S W or E)
+        degrees minutes seconds (with N S W or E)
+    """
+    if lat == 'nan' or lon == 'nan':
+        raise RuntimeError
+    if np.isnan(lat) or np.isnan(lat):
+        raise RuntimeError
+    try:
+        lat_float = float(lat)
+        lon_float = float(lon)
+    except ValueError as e:
+        # Three options.
+        # 1 - we have been given decimal degrees with a hemisphere sign
+        # 2 - we have been given degree decimal minutes I.e. 27°38.611'N or N27°38.611'
+        # 3 - we have been given degree minutes seconds
+        try:
+            if chr(176) in lat and chr(176) in lon:
+                # Then we are working with either 2 or 3
+                if "\"" in lat and "\"" in lon:
+                    # Then we are working with degree minutes seconds (DMS)
+                    # and we should convert using self.dms2dec
+                    lat_float = dms2dec(lat)
+                    lon_float = dms2dec(lon)
+                elif "\"" not in lat and "\"" not in lon:
+                    # Then we are working with degree degree minutes (DDM)
+                    # To convert to DD we simply need to remove the NWES characters,
+                    # divide the decimal part by 60 and add it to the degrees part
+                    if "N" in lat:
+                        lat = lat.replace("N", "").replace("'", "")
+                        (lat_deg, lat_degmin) = lat.split(chr(176))
+                        lat_float = int(lat_deg) + (float(lat_degmin) / 60)
+                        if lat_float < 0:
+                            lat_float = lat_float * -1
+                    elif "S" in lat:
+                        lat = lat.replace("S", "").replace("'", "")
+                        (lat_deg, lat_degmin) = lat.split(chr(176))
+                        lat_float = int(lat_deg) + (float(lat_degmin) / 60)
+                        if lat_float > 0:
+                            lat_float = lat_float * -1
+                    else:
+                        raise RuntimeError
+                    if "E" in lon:
+                        lon = lon.replace("E", "").replace("'", "")
+                        (lon_deg, lon_degmin) = lon.split(chr(176))
+                        lon_float = int(lon_deg) + (float(lon_degmin) / 60)
+                        if lon_float < 0:
+                            lon_float = lon_float * -1
+                    elif "W" in lon:
+                        lon = lon.replace("W", "").replace("'", "")
+                        (lon_deg, lon_degmin) = lon.split(chr(176))
+                        lon_float = int(lon_deg) + (float(lon_degmin) / 60)
+                        if lon_float > 0:
+                            lon_float = lon_float * -1
+                    else:
+                        raise RuntimeError
+                else:
+                    # Then the lat and lon are in different formats
+                    raise RuntimeError
+
+            elif chr(176) not in lat and chr(176) not in lon:
+                # Then we are working with 1
+                if "N" in lat:
+                    lat_float = float(lat.replace("N", ""))
+                    if lat_float < 0:
+                        lat_float = lat_float * -1
+                elif "S" in lat:
+                    lat_float = float(lat.replace("S", ""))
+                    if lat_float > 0:
+                        lat_float = lat_float * -1
+                else:
+                    raise RuntimeError
+                if "E" in lon:
+                    lon_float = float(lon.replace("E", ""))
+                    if lon_float < 0:
+                        lon_float = lon_float * -1
+                elif "W" in lon:
+                    lon_float = float(lon.replace("W", ""))
+                    if lon_float > 0:
+                        lon_float = lon_float * -1
+                else:
+                    raise RuntimeError
+            elif chr(176) in lat or chr(176) in lon:
+                # THen there is a degree sign in only one of them and we should raise an error
+                raise RuntimeError
+        except Exception:
+            raise RuntimeError
+    return lat_float, lon_float
+
+def dms2dec(dms_str):
+    """Return decimal representation of DMS
+
+        dms2dec(utf8(48°53'10.18"N))
+        48.8866111111F
+
+        dms2dec(utf8(2°20'35.09"E))
+        2.34330555556F
+
+        dms2dec(utf8(48°53'10.18"S))
+        -48.8866111111F
+
+        dms2dec(utf8(2°20'35.09"W))
+        -2.34330555556F
+
+        """
+
+    dms_str = re.sub(r'\s', '', dms_str)
+
+    sign = -1 if re.search('[swSW]', dms_str) else 1
+
+    numbers = [*filter(len, re.split('\D+', dms_str, maxsplit=4))]
+
+    degree = numbers[0]
+    minute = numbers[1] if len(numbers) >= 2 else '0'
+    second = numbers[2] if len(numbers) >= 3 else '0'
+    frac_seconds = numbers[3] if len(numbers) >= 4 else '0'
+
+    second += "." + frac_seconds
+    return sign * (int(degree) + float(minute) / 60 + float(second) / 3600)
