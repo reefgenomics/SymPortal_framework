@@ -1110,7 +1110,7 @@ class SequenceCountTableCreator:
 
         self._add_uids_for_seqs_to_dfs()
 
-        self._append_meta_info_to_df()
+        self._append_meta_info_to_additional_info_file()
 
         self._write_out_dfs_and_fasta()
 
@@ -1412,7 +1412,7 @@ class SequenceCountTableCreator:
                 sample_clade_proportion_dict[genera_annotation_dict[clade_key]][k] = {'absolute':value, 'relative':value/tot_seqs}
 
 
-    def _append_meta_info_to_df(self):
+    def _append_meta_info_to_additional_info_file(self):
         # Now append the meta infromation for each of the data_sets that make up the output contents
         # this is information like the submitting user, what the uids of the datasets are etc.
         # There are several ways that this can be called.
@@ -1677,6 +1677,7 @@ class SequenceCountTableCreator:
          in the previous method as well as the other two dictionaries made.
          One df for absolute abundances and one for relative abundances. These series will be put together
          and ordered to construct the output data frames that will be written out for the user.
+         These dataframes contain the sequence abundances and all of the sample meta information.
         """
         seq_count_table_output_series_generator_handler = SeqOutputSeriesGeneratorHandler(parent=self)
         seq_count_table_output_series_generator_handler.execute_sequence_count_table_dataframe_contructor_handler()
@@ -2224,7 +2225,7 @@ class SeqOutputSeriesGeneratorHandler:
         self.seq_count_table_creator.number_of_meta_cols_added = \
             len(qc_stats) + len(no_name_summary_strings) + len(user_supplied_stats) + 1
         return ['sample_name', 'fastq_fwd_file_name', 'fastq_fwd_sha256_file_hash', 'fastq_rev_file_name',
-                'fastq_rev_sha256_file_hash'] + qc_stats + no_name_summary_strings + user_supplied_stats + header_pre
+                'fastq_rev_sha256_file_hash', 'data_set_uid', 'data_set_name'] + qc_stats + no_name_summary_strings + user_supplied_stats + header_pre
 
 
 class SeqOutputSeriesGeneratorWorker:
@@ -2252,17 +2253,22 @@ class SeqOutputSeriesGeneratorWorker:
 
     def make_series(self):
         sys.stdout.write(f'\r{self.dss.name}: Creating data ouput row')
+        ds = self.dss.data_submission_from
         self.sample_row_data_absolute.append(self.dss.name)
         self.sample_row_data_absolute.append(self.dss.fastq_fwd_file_name)
         self.sample_row_data_absolute.append(self.dss.fastq_fwd_file_hash)
         self.sample_row_data_absolute.append(self.dss.fastq_rev_file_name)
         self.sample_row_data_absolute.append(self.dss.fastq_rev_file_hash)
+        self.sample_row_data_absolute.append(ds.id)
+        self.sample_row_data_absolute.append(ds.name)
 
         self.sample_row_data_relative.append(self.dss.name)
         self.sample_row_data_relative.append(self.dss.fastq_fwd_file_name)
         self.sample_row_data_relative.append(self.dss.fastq_fwd_file_hash)
         self.sample_row_data_relative.append(self.dss.fastq_rev_file_name)
         self.sample_row_data_relative.append(self.dss.fastq_rev_file_hash)
+        self.sample_row_data_relative.append(ds.id)
+        self.sample_row_data_relative.append(ds.name)
 
         if self._dss_had_problem_in_processing():
 
