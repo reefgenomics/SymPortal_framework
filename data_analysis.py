@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+from typing import FrozenSet
 from dbApp.models import AnalysisType, ReferenceSequence, CladeCollectionType, CladeCollection
 import itertools
 from collections import defaultdict
@@ -378,7 +379,17 @@ class SPDataAnalysis:
 
             self._find_vats_in_vcc(list_of_vats_to_search)
 
+            # # TODO here we want to make sure that the most abundant sequence of the
+            # # VCC is represented by one of the profiles in the self.vat_match_objects_list
+            # # If it is not, then we should create a new 1 DIV VAT that is 
+            # # the most abundant sequence and assign this to the sample.
+            # if not self._maj_seq_is_represented_in_matched_vats():
+            #     self._create_vat_of_maj_seq()
+            #     self._add_maj_seq_vat_to_matched_list()
+
             self._associate_vcc_to_vats()
+
+
 
         def _associate_vcc_to_vats(self):
             for vat_match in self.vat_match_object_list:
@@ -477,6 +488,8 @@ class SPDataAnalysis:
     def _profile_assignment(self):
         print('\n\nBeginning profile assignment')
         for virtual_clade_collection in self.virtual_object_manager.vcc_manager.vcc_dict.values():
+            if virtual_clade_collection.id == 111118:
+                foo = "bar"
             profile_assigner = self.ProfileAssigner(virtual_clade_collection = virtual_clade_collection,
                 parent_sp_data_analysis = self)
             profile_assigner.assign_profiles()
@@ -1553,6 +1566,9 @@ class SupportedFootPrintIdentifier:
             else:
                 raise RuntimeError(f'{len(set_of_ccs_of_clade.difference(set_of_ccs_found_in_init_types))} '
                                    f'CladeCollections were not associated to an InitialType')
+        else:
+            raise RuntimeError(f'{len(set_of_ccs_of_clade.difference(set_of_ccs_found_in_init_types))} '
+                                   f'CladeCollections were not associated to an InitialType')
 
     def identify_supported_footprints(self):
         # for each length starting at max and dropping by 1 with each increment
@@ -1592,8 +1608,54 @@ class SupportedFootPrintIdentifier:
             else:
                 uffc = UnsupportedFootprintFinalCollapser(parent_supported_footprint_identifier=self)
                 uffc.collapse_unsup_footprints_to_maj_refs()
+        
+        self._make_maj_seq_initial_types()
+
         self._verify_that_all_cc_associated_to_an_initial_type()
         return self.initial_types_list
+
+    def _make_maj_seq_initial_types(self):
+        # At this point we also want to make initial types that
+        # are the majority sequence of each of the vccs.
+        # We do this because we were ending up with the case where a sample
+        # was not being assciated to a profile, because the only single DIV
+        # profile that matched did not represent > 5% of the rel seq abund.
+        # It makes sense that the Maj seq of a vcc should always be a profile itself
+        # if it is not already included in another profile.
+        
+        # maj_seq_ids_of_ccs = set([int(cc.footprint.split(",")[0]) for cc in self.sp_data_analysis.ccs_of_analysis if cc.clade == self.sp_data_analysis.current_clade])
+        # maj_seq_of_vccs = set([vcc.ordered_dsss_objs[0].reference_sequence_of for vcc in self.sp_data_analysis.virtual_object_manager.vcc_manager.vcc_dict.values() if vcc.clade == self.sp_data_analysis.current_clade])
+        # maj_ref_seq_id_to_rs_obj_dict = 
+        # maj_ref_seq_id_to_rs_obj_dict = {rs.id: rs for rs in  ReferenceSequence.objects.filter(id__in=maj_seq_ids_of_ccs)}
+        
+        # Because we can't modify the initial_types_list at the same time as parsing through it
+        # we will use a default dict to store the references sequence to the list of clade collections that should be associated to it
+        rs_to_vcc_maj_seq_dict = defaultdict(list)
+        for vcc in [_ for _ in self.sp_data_analysis.virtual_object_manager.vcc_manager.vcc_dict.values() if _.clade == self.sp_data_analysis.current_clade]:
+            vcc_maj_rs = vcc.ordered_dsss_objs[0].reference_sequence_of
+            rs_to_vcc_maj_seq_dict[vcc_maj_rs].append(vcc)
+        
+        # Now parse through the rs_to_vcc_maj_seq_dict and check if the single seq inital type already existis
+        # If it does, then check whether the ccs already support, if not add support, if so, move on
+        # if it doesn't, create it and add all of the support
+        profile_to_initial_type_dict = {_.profile: _ for _ in self.initial_types_list}
+        for rs, vcc_list in rs_to_vcc_maj_seq_dict.items():
+            try:
+                initial_type = profile_to_initial_type_dict[frozenset([rs])]
+                # Create a new initial type to replace the current initial type
+                # Make sure to add any vccs that are in the current intial type to the new initial type
+                # if not already in the vcc_list
+                # So that we maintain that all vcc are associated with an initial type
+                vcc_list_to_add = list(set(vcc_list + initial_type.clade_collection_list))
+                # Remove the old one from the self.initial_types_list
+                # and add the new one
+                new_initial_type = InitialType(reference_sequence_set=frozenset([rs]), clade_collection_list=vcc_list_to_add, force_basal_lineage_separation=self.sp_data_analysis.force_basal_lineage_separation)
+                self.initial_types_list.remove(initial_type)
+                self.initial_types_list.append(new_initial_type)
+            except KeyError:
+                # Create a new intial type and add it to the self.list_of_initial_types
+                new_initial_type = InitialType(reference_sequence_set=frozenset([rs]), clade_collection_list=vcc_list, force_basal_lineage_separation=self.sp_data_analysis.force_basal_lineage_separation)
+                self.initial_types_list.append(new_initial_type)
 
     def _del_type_to_collapse(self, k, synth_fp):
         # then the big init_type no longer contains any
