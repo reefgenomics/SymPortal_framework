@@ -36,9 +36,6 @@ class SeqMatcher:
         if nuc_seq in self.rs_set:
             self.match_dict[nuc_seq] = nuc_seq
             return True
-        elif 'A' + nuc_seq in self.rs_set:
-            self.match_dict[nuc_seq] = 'A' + nuc_seq
-            return True
         else:
             # Finally try to find a super or sub match
             for rs_seq in self.rs_list:

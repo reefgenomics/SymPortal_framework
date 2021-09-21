@@ -1437,7 +1437,6 @@ class FastDataSetSampleSequencePMCreator:
             self.temp_working_directory = temp_working_directory
 
         def match_and_make_ref_seqs(self):
-            # self._assign_sequence_to_match_or_non_match_dicts()
             self._assign_sequence_to_match_or_non_match_dicts_mp()
             # Assess whether this has helped us out of the bottle neck or not
             if self.non_match_dict:
@@ -1479,7 +1478,7 @@ class FastDataSetSampleSequencePMCreator:
             print(f'Writing out {rs_set_path}')
             with open(rs_set_path, 'w') as f:
                 json.dump(rs_set_to_dump, f)
-            # compress_pickle.dump(rs_set_to_dump, rs_set_path)
+            
             print('Done')
             for pre_med_seq_chunk in pre_med_seq_chunks:
                 # Dump out the dictionaries that will be read in by the executable
@@ -1491,7 +1490,7 @@ class FastDataSetSampleSequencePMCreator:
                 print(f'Writing out {pre_med_seq_chunk_path}')
                 with open(pre_med_seq_chunk_path, 'w') as f:
                     json.dump(pre_med_seq_chunk, f)
-                # compress_pickle.dump(pre_med_seq_chunk, pre_med_seq_chunk_path)
+                
                 print('Done')
 
 
@@ -1551,68 +1550,6 @@ class FastDataSetSampleSequencePMCreator:
             for output_dict_path in output_dict_paths:
                 os.remove(output_dict_path)
                 os.remove(output_dict_path.replace('match_dict', 'non_match_list'))
-
-        def _assign_sequence_to_match_or_non_match_dicts(self):
-            """Here we go through each of the sequences for the given clade and attempt to match them
-            to a ReferenceSequence object either through an exact match of the sequences, the sequence + A or
-            as a sub or super set match. If we find a match then we use the matching ReferenceSequence object
-            as key and the original value dictionary containing the information about DataSetSample and abundance
-            as the value. If we are unable to find a match then we add the information to the non_match dictionary
-            that we will consolidate the subset and superset matches in the next step of processing.
-
-            We should be able to multiprocess this if we are careful. (We can split up the list of nuc_seqs
-            and give copies of the ReferenceSequences to each process. We can then carefully merge the resulting
-            match dictionaries taking into account the need to check when merging the same ReferenceSequence
-            representatives that they may contain the same DataSetSample objects and the abundances will need to
-            be summed for these.)
-            However, I don't think we need to implement this as it is already quite fast.
-
-            # I think the time consuming part is likely the for loop looking for nested sequences
-            # The django testing framework does not play well wih multiprocessing so we should
-            # implement this using multithreading. Because all of the processing will be done in python
-            # we will write a module that can be exectured
-            # We will have to multiprocess rather than multithread as this will be python based computing
-            # The multiprocessing will likely cause the django test framework to break again so we will
-            # need to incorporate a switch, for the testing.
-            """
-            matching_start_time = time.time()
-            print('Attempting to match sequences to ReferenceSequence objects')
-            count = 0
-            tot = len(self.seq_dict.keys())
-            match_count = 0
-            non_match_count = 0
-            for nuc_seq in self.seq_dict.keys():
-                count += 1
-                sys.stdout.write(f'\rsequence {count} out of {tot}: match {match_count}; no-match {non_match_count}')
-                matching_ref_seq_obj = None
-                try:
-                    # Try to match the exact sequence
-                    matching_ref_seq_obj = self.rs_dict[nuc_seq]
-                    self._log_match(nuc_seq, matching_ref_seq_obj)
-                except KeyError:
-                    try:
-                        # If no exact match found look for a match plus the adenine
-                        matching_ref_seq_obj = self.rs_dict['A' + nuc_seq]
-                        self._log_match(nuc_seq, matching_ref_seq_obj)
-                    except KeyError:
-                        # Finally try to find a super or sub match
-                        for rs_seq, rs_obj in self.rs_dict.items():
-                            if nuc_seq in rs_seq or rs_seq in nuc_seq:
-                                # Then this is a match
-                                matching_ref_seq_obj = rs_obj
-                                self._log_match(nuc_seq, matching_ref_seq_obj)
-                                break
-                finally:
-                    # If no match found add to non_matching dict
-                    if matching_ref_seq_obj is None:
-                        self.non_match_dict[nuc_seq] = self.seq_dict[nuc_seq]
-                        non_match_count += 1
-                    else:
-                        match_count += 1
-            sys.stdout.write(f'\rsequence {count} out of {tot}: match {match_count}; no-match {non_match_count}')
-            matching_finish_time = time.time() - matching_start_time
-            logging.info(f'pre-MED to ReferenceSequence matching took {matching_finish_time}s to complete '
-                         f'without multithreading')
 
         def _log_match(self, nuc_seq, rs_obj):
             # Check to see if the rs_obj is already representing in the match
