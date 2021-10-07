@@ -141,6 +141,11 @@ class SPDataAnalysis:
 
     def _associate_species_designations(self):
         for vat in self.virtual_object_manager.vat_manager.vat_dict.values():
+            # For the time being I am disabling the species association
+            # We may reimplement this if we can get a separate species description
+            # platform up and running
+            # I am disabling it in the _associate_species_info_to_vat method of 
+            # the SpeciesAssociation class.
             species_association = self.SpeciesAssociation(vat=vat)
             species_association.assign_species()
 
@@ -179,10 +184,12 @@ class SPDataAnalysis:
                 pass
 
         def _associate_species_info_to_vat(self):
-            if not self.assigned_species:  # If no suggested species have been associated
-                self.vat.species = 'None'
-            else:
-                self.vat.species = ','.join(self.assigned_species)
+            # Disable species association
+            self.vat.species = 'None'
+            # if not self.assigned_species:  # If no suggested species have been associated
+            #     self.vat.species = 'None'
+            # else:
+            #     self.vat.species = ','.join(self.assigned_species)
 
         def _clade_f_associations(self):
             if 'F1' in self.maj_seq_names:
