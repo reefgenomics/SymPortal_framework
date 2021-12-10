@@ -31,6 +31,7 @@ import logging
 import hashlib
 from general import check_lat_lon
 import re
+from calendar import month_abbr, month_name
 
 
 class DataLoading:
@@ -1065,16 +1066,60 @@ class DataLoading:
         other format given (i.e. one that is not just '.' and integers)
         """
         bad_formats = []
+        lower_month_abbr = [_.lower() for _ in month_abbr][1:]
+        lower_month_name = [_.lower() for _ in month_name][1:]
         for row_name in self.sample_meta_info_df.index:
             current_date_value = self.sample_meta_info_df.at[row_name, 'collection_date']
             if current_date_value == "NoData":
                 continue
             if not pd.isnull(current_date_value):
-                if re.findall("[A-Z]+", current_date_value):
+                if re.findall("[A-Za-z]+", current_date_value):
                     # Then this date is in a bad format
-                    # Add to the bad_formats list so that we can print out and
-                    # exit at the end of this
-                    bad_formats.append((row_name, current_date_value))
+                    # We will try to extract a year and a month from it
+                    # We will assume that the year is in YYYY format
+                    # and that the month is in either in the common abbreviation form
+                    # or written out in form.
+                    putative_months = re.findall("[A-Za-z]+", current_date_value)
+                    if len(putative_months) == 1:
+                        putative_month = putative_months[0].lower()
+                        if putative_month in lower_month_abbr:
+                            month_ind = lower_month_abbr.index(putative_month) + 1
+                        elif putative_month in lower_month_name:
+                            month_ind = lower_month_name.index(putative_month) + 1
+                        else:
+                            # not recognised so log as error
+                            bad_formats.append((row_name, current_date_value))
+                            continue
+                        # If we got here then we have month_id
+                        if month_ind < 10:
+                            month_ind = f"0{month_ind}"
+                        else:
+                            month_ind = str(month_ind)
+
+                        # Then we need to pull out the year
+                        if len(re.findall("[0-9]{4}", current_date_value)) == 1:
+                            year = re.findall("[0-9]{4}", current_date_value)[0]
+                        else:
+                            bad_formats.append((row_name, current_date_value))
+                            continue
+
+                        # Finally check that there is nothing less after we remove the month and the year
+                        remaining = current_date_value.lower().replace(putative_month, "").replace(year, "").rstrip()
+                        if remaining == "":
+                            # Then we can convert
+                            new_date_value = f"{year}{month_ind}"
+                            print(f'changing {current_date_value} to {new_date_value} for {row_name}')
+                            self.sample_meta_info_df.at[row_name, 'collection_date'] = new_date_value
+                            continue
+                        else:
+                            # There is something left and we call it bad
+                            bad_formats.append((row_name, current_date_value))
+                            continue
+                    else:
+                        # Add to the bad_formats list so that we can print out and
+                        # exit at the end of this
+                        bad_formats.append((row_name, current_date_value))
+                        continue
                 elif "." in current_date_value:
                     if current_date_value.count(".") == 2:
                         # Then this is DD.MM.YYYY or DD.MM.YY
