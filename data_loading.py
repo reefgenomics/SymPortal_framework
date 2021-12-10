@@ -30,6 +30,7 @@ from django_general import CreateStudyAndAssociateUsers
 import logging
 import hashlib
 from general import check_lat_lon
+import re
 
 
 class DataLoading:
@@ -1054,6 +1055,74 @@ class DataLoading:
 
         self._check_vars_can_be_string()
 
+        self._check_date_format()
+
+    def _check_date_format(self):
+        """
+        Try to coerce some of the common date format errors into YYYYMMDD format
+        Common inputs will be DD.MM.YYYY, DD.MM.YY, MM.YYYY or MM.YY
+        We shold throw an error if there is some
+        other format given (i.e. one that is not just '.' and integers)
+        """
+        bad_formats = []
+        for row_name in self.sample_meta_info_df.index:
+            current_date_value = self.sample_meta_info_df.at[row_name, 'collection_date']
+            if current_date_value == "NoData":
+                continue
+            if not pd.isnull(current_date_value):
+                if re.findall("[A-Z]+", current_date_value):
+                    # Then this date is in a bad format
+                    # Add to the bad_formats list so that we can print out and
+                    # exit at the end of this
+                    bad_formats.append((row_name, current_date_value))
+                elif "." in current_date_value:
+                    if current_date_value.count(".") == 2:
+                        # Then this is DD.MM.YYYY or DD.MM.YY
+                        new_date_value = current_date_value.replace(".", "")
+                        if len(new_date_value) == 6:
+                            new_date_value = ''.join(["20", new_date_value[4:], new_date_value[2:4], new_date_value[:2]])
+                            print(f'changing {current_date_value} to {new_date_value} for {row_name}')
+                            self.sample_meta_info_df.at[row_name, 'collection_date'] = new_date_value
+                        elif len(new_date_value) == 8:
+                            new_date_value = ''.join([new_date_value[4:], new_date_value[2:4], new_date_value[:2]])
+                            print(f'changing {current_date_value} to {new_date_value} for {row_name}')
+                            self.sample_meta_info_df.at[row_name, 'collection_date'] = new_date_value
+                        else:
+                            bad_formats.append((row_name, current_date_value))
+                    elif current_date_value.count(".") == 1:
+                        # Then this is MM.YY or MM.YYYY
+                        new_date_value = current_date_value.replace(".", "")
+                        if len(new_date_value) == 4:
+                            new_date_value = ''.join(["20", new_date_value[2:], new_date_value[:2]])
+                            print(f'changing {current_date_value} to {new_date_value} for {row_name}')
+                            self.sample_meta_info_df.at[row_name, 'collection_date'] = new_date_value
+                        elif len(new_date_value) == 6:
+                            new_date_value = ''.join([new_date_value[2:], new_date_value[:2]])
+                            print(f'changing {current_date_value} to {new_date_value} for {row_name}')
+                            self.sample_meta_info_df.at[row_name, 'collection_date'] = new_date_value
+                        else:
+                            bad_formats.append((row_name, current_date_value))
+                    else:
+                        bad_formats.append((row_name, current_date_value))
+
+                elif len(re.findall("[0-9]{8}", current_date_value)) == 1:
+                    # Then this is good: YYYYMMDD
+                    continue
+                elif len(re.findall("[0-9]{6}", current_date_value)) == 1:
+                    # Then this is good: YYYYMM
+                    continue
+                else:
+                    # Else, something else is going on
+                    bad_formats.append((row_name, current_date_value))
+            else:
+                continue
+        if bad_formats:
+            print("There are errors in the date_collection formats")
+            print("Date format should be YYYMMDD or YYYMM")
+            for bad_sample, bad_val in bad_formats:
+                print(f"{bad_sample}: {bad_val}")
+            sys.exit()
+
     def _read_in_datasheet(self):
         if self.datasheet_path.endswith('.xlsx'):
             self.sample_meta_info_df = pd.read_excel(
@@ -1096,7 +1165,7 @@ class DataLoading:
 
     def _check_vars_can_be_string(self):
         """First convert each of the columns to type string.
-        Then make sure that all of the vals are genuine vals of NoData
+        Then make sure that all of the vals are genuine vals or NoData
         """
         for col in ['sample_type', 'host_phylum', 'host_class', 'host_order', 'host_family', 'host_genus',
                     'host_species', 'collection_depth', 'collection_date']:
