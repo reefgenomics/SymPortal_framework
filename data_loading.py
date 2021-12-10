@@ -1078,14 +1078,21 @@ class DataLoading:
 
     def _check_for_binomial(self):
         """People were putting the full binomial in the speices colums. This crops this back to just the
-        species component of binomial"""
+        species component of binomial.
+        
+        It will only adjust this value if there are two components to the value and if the first component
+        matches the genus. I.e. only if the user has put in a genuine binomial. To preven people entering
+        things like 'sp. 1' and it being corrected to '1'.
+        """
         for row_name in self.sample_meta_info_df.index.values.tolist():
             current_species_val = self.sample_meta_info_df.at[row_name, 'host_species']
             if not pd.isnull(current_species_val):
-                if ' ' in current_species_val:
-                    new_species_val = current_species_val.split(' ')[-1]
-                    print(f'changing {current_species_val} to {new_species_val} for {row_name}')
-                    self.sample_meta_info_df.at[row_name, 'host_species'] = new_species_val
+                components = current_species_val.split(' ')
+                if len(components) == 2:
+                    if components[0] == self.sample_meta_info_df.at[row_name, 'host_genus']:
+                        new_species_val = current_species_val.split(' ')[1]
+                        print(f'changing {current_species_val} to {new_species_val} for {row_name}')
+                        self.sample_meta_info_df.at[row_name, 'host_species'] = new_species_val
 
     def _check_vars_can_be_string(self):
         """First convert each of the columns to type string.
