@@ -1163,7 +1163,7 @@ class DataLoading:
                 continue
         if bad_formats:
             print("There are errors in the date_collection formats")
-            print("Date format should be YYYMMDD or YYYMM")
+            print("Date format should be YYYYMMDD or YYYYMM")
             for bad_sample, bad_val in bad_formats:
                 print(f"{bad_sample}: {bad_val}")
             sys.exit()
@@ -1171,16 +1171,16 @@ class DataLoading:
     def _read_in_datasheet(self):
         if self.datasheet_path.endswith('.xlsx'):
             self.sample_meta_info_df = pd.read_excel(
-                io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0])
+                io=self.datasheet_path, header=0, usecols='A:N', skiprows=[0], dtype=str)
         elif self.datasheet_path.endswith('.csv'):
             with open(self.datasheet_path, 'r') as f:
                 data_sheet_as_file = [line.rstrip() for line in f]
             if data_sheet_as_file[0].split(',')[0] == 'sample_name':
                 self.sample_meta_info_df = pd.read_csv(
-                    filepath_or_buffer=self.datasheet_path)
+                    filepath_or_buffer=self.datasheet_path, dtype=str)
             else:
                 self.sample_meta_info_df = pd.read_csv(
-                    filepath_or_buffer=self.datasheet_path, skiprows=[0])
+                    filepath_or_buffer=self.datasheet_path, skiprows=[0], dtype=str)
         else:
             sys.exit('Data sheet: {} is in an unrecognised format. '
                      'Please ensure that it is either in .xlsx or .csv format.')
