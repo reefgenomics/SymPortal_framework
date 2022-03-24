@@ -1156,6 +1156,9 @@ class DataLoading:
                 elif len(re.findall("[0-9]{6}", current_date_value)) == 1:
                     # Then this is good: YYYYMM
                     continue
+                elif len(re.findall("^[0-9]{4}$", current_date_value)) == 1:
+                    # Then this is good: YYYY
+                    continue
                 else:
                     # Else, something else is going on
                     bad_formats.append((row_name, current_date_value))
