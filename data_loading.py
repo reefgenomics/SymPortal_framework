@@ -1298,6 +1298,10 @@ class DataLoading:
                 if os.path.exists(fwd_file_path + '.gz'):
                     self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name'] = fwd_file_path + '.gz'
                     fwd_file_path = self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name']
+                # Also take into account that user may have supplied no extension
+                elif os.path.exists(fwd_file_path + '.fastq.gz'):
+                    self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name'] = fwd_file_path + '.fastq.gz'
+                    fwd_file_path = self.sample_meta_info_df.at[df_ind, 'fastq_fwd_file_name']
                 else:
                     file_not_found_list.append(fwd_file_path)
             # Check for rev read
@@ -1306,6 +1310,10 @@ class DataLoading:
                 # used a .fastq extension. If this is the case. Correct in the df.
                 if os.path.exists(rev_file_path + '.gz'):
                     self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name'] = rev_file_path + '.gz'
+                    rev_file_path = self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name']
+                # Also take into account that user may have supplied no extension
+                elif os.path.exists(rev_file_path + '.fastq.gz'):
+                    self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name'] = rev_file_path + '.fastq.gz'
                     rev_file_path = self.sample_meta_info_df.at[df_ind, 'fastq_rev_file_name']
                 else:
                     file_not_found_list.append(rev_file_path)
