@@ -143,16 +143,7 @@ class User(models.Model):
     objects = models.Manager()
     name = models.CharField(max_length=100, null=False, unique=True)
     studies = models.ManyToManyField(Study)
-    # This is set to False when User is created. Upon upload to symportal.org
-    # a user that matches this name will be searched for in the app.db database.
-    # If no matching user if found, an error will be thrown. If a user is found,
-    # This value will be set to true, and the ID of the User in the app.db database
-    # will be stored in app_db_key below.
-    # The id of this object will also be stored in the app.db User object that matches
-    # UPDATE we will phase the use of these out and work directly with the name
-    # that should be unique.
-    app_db_key_is_set = models.BooleanField(default=False)
-    app_db_key_id = models.IntegerField(null=True)
+    password_hash = models.CharField(max_length=100, null=True)
 
     def __str__(self):
         return f'< User: id {self.id}, name {self.name} >'
