@@ -144,6 +144,7 @@ class User(models.Model):
     name = models.CharField(max_length=100, null=False, unique=True)
     studies = models.ManyToManyField(Study)
     password_hash = models.CharField(max_length=100, null=True)
+    is_admin = models.BooleanField(default=False)
 
     def __str__(self):
         return f'< User: id {self.id}, name {self.name} >'
