@@ -18,3 +18,4 @@ dependencies:
   - mafft
   - mothur==1.43.0
   - psycopg2
+  - werkzeug

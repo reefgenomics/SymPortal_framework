@@ -2,6 +2,9 @@ from django.db import models
 import json
 import general
 from datetime import datetime
+import sp_config
+if sp_config.system_type == 'remote':
+    from werkzeug.security import generate_password_hash, check_password_hash
 
 # python3 manage.py graph_models -a -g -o my_project.svg
 # You can visualise these models using the following commands in the terminal
@@ -143,7 +146,7 @@ class User(models.Model):
     objects = models.Manager()
     name = models.CharField(max_length=100, null=False, unique=True)
     studies = models.ManyToManyField(Study)
-    password_hash = models.CharField(max_length=100, null=True)
+    password_hash = models.CharField(max_length=200, null=True)
     is_admin = models.BooleanField(default=False)
 
     def __str__(self):
@@ -151,6 +154,12 @@ class User(models.Model):
 
     def __repr__(self):
         return f'< User: id {self.id}, name {self.name} >'
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
 
 class DataAnalysis(models.Model):
     # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
