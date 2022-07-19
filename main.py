@@ -123,7 +123,7 @@ class SymPortalWorkFlowManager:
     def _define_args(self, custom_args_list=None):
         parser = argparse.ArgumentParser(
             description='Intragenomic analysis of the ITS2 region of the nrDNA',
-            epilog='For support email: benjamin.hume@kaust.edu.sa')
+            epilog='For support email: benjamin.hume@uni-konstanz.de')
         group = parser.add_mutually_exclusive_group(required=True)
         self._define_mutually_exclusive_args(group)
         self._define_additional_args(parser)
@@ -827,6 +827,11 @@ class SymPortalWorkFlowManager:
 
         self.study = self._try_to_get_study_object()
         
+        # set the data_analysis attribute of the Study
+        self._set_data_analysis_obj_from_arg_analysis_uid()
+        self.study.data_analysis = self.data_analysis_object
+        self.study.save()
+
         self.args.print_output_types_sample_set = ','.join([str(dss.id) for dss in self.study.data_set_samples.all()])
 
         # Now rejoin the logic flow for performing a type output as though it were a normal type output

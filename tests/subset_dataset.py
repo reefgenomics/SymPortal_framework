@@ -9,7 +9,7 @@ class DataSetSubSampler:
         self.seqtk = local["seqtk"]
         self.parser = argparse.ArgumentParser(
             description='Intragenomic analysis of the ITS2 region of the nrDNA',
-            epilog='For support email: benjamin.hume@kaust.edu.sa')
+            epilog='For support email: benjamin.hume@uni-konstanz.de')
         self.parser.add_argument(
             '--input_dir', type=str, required=True,
             help='The full path to the directory containing the fastq or fastq.gz files to be subsampled')
