@@ -182,7 +182,56 @@ class User(models.Model):
         return check_password_hash(self.password_hash, password)
 
 
+class Submission(models.Model):
+    """
+    A class for representing a user dataset submission.
+    It will hold information that will allow the chron jobs to process
+    data that has been uploaded to the SymPortal.org webpage
+    """
+    objects = models.Manager()
+    # This name will be used for the DataSet object and the Study object that will be associated to this object
+    name = models.CharField(max_length=60, null=False, unique=True)
+    # The optional title that will be given to the Study object that is created
+    title = models.CharField(max_length=250, null=True)
+    # The optional location to be transferred to the associated Study object
+    location = models.CharField(max_length=50, null=True)
+    # The location of the directory holding the seq files and datasheet on the web hosting server, i.e. linode
+    web_local_dir_path = models.CharField(max_length=300, null=False, unique=True)
+    # The location of the directory holding the seq files and datasheet on the symportal framework server, i.e. zygote
+    framework_local_dir_path = models.CharField(max_length=300, null=False, unique=True)
+    # The progress of the submission
+    progress_status = models.CharField(max_length=50, null=False, default='pending_submission')
+    # If an Error has occured
+    error_has_occured = models.BooleanField(default=False)
+    # associated DataSet
+    associated_dataset = models.ForeignKey(DataSet, on_delete=models.CASCADE, null=True)
+    # associated Study
+    associated_study = models.ForeignKey(Study, on_delete=models.CASCADE, null=True)
+    # submitting User
+    submitting_user = models.ForeignKey(User, on_delete=models.CASCADE, null=False)
+    # number of samples
+    number_samples = models.IntegerField(null=False, default=0)
+    # These fields will hold the times that various checkpoints are reached
+    # submission time
+    submission_date_time = models.CharField(max_length=25, null=False, default=get_creation_time_stamp_string)
+    transfer_to_framework_server_date_time = models.CharField(max_length=25, null=True)
+    loading_started_date_time = models.CharField(max_length=25, null=True)
+    loading_complete_date_time = models.CharField(max_length=25, null=True)
+    analysis_started_date_time = models.CharField(max_length=25, null=True)
+    analysis_complete_date_time = models.CharField(max_length=25, null=True)
+    study_output_started_date_time = models.CharField(max_length=25, null=True)
+    study_output_complete_date_time = models.CharField(max_length=25, null=True)
+    transfer_to_web_server_date_time = models.CharField(max_length=25, null=True)
+    # Whether this submission should be going into an analysis or not
+    # I.e. if it contains seawater samples or something similar then it should not be going into analysis
+    # conservatively set as False
+    for_analysis = models.BooleanField(default=False, null=False)
 
+    # The path to the directory in which the result files are output for:
+    # Framework server
+    framework_results_dir_path = models.CharField(max_length=300, null=True)
+    # Web server
+    web_results_dir_path = models.CharField(max_length=300, null=True)
 
 class CladeCollection(models.Model):
     objects = models.Manager()
