@@ -89,6 +89,25 @@ class DataSetSample(models.Model):
 def get_creation_time_stamp_string():
     return str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
 
+class DataAnalysis(models.Model):
+    # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
+    objects = models.Manager()
+    list_of_data_set_uids = models.CharField(max_length=5000, null=True)
+    within_clade_cutoff = models.FloatField(default=0.04)
+    name = models.CharField(max_length=100, null=True)
+    description = models.CharField(max_length=5000, null=True)
+    time_stamp = models.CharField(max_length=100, default='None')
+    submitting_user = models.CharField(max_length=100, default='no_user_defined')
+    submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
+    analysis_complete_time_stamp = models.CharField(max_length=100, default='None')
+
+    def get_clade_collections(self):
+        list_of_uids = [int(x) for x in self.list_of_data_set_uids.split(',')]
+        clade_collections = []
+        for uid_list in general.chunks(list_of_uids):
+            clade_collections.extend(list(CladeCollection.objects.filter(data_set_sample_from__data_submission_from__in=uid_list)))
+        return clade_collections
+
 class Study(models.Model):
     objects = models.Manager()
     data_set_samples = models.ManyToManyField(DataSetSample)
@@ -102,6 +121,7 @@ class Study(models.Model):
     data_explorer = models.BooleanField(default=False)
     display_online = models.BooleanField(default=False)
     analysis = models.BooleanField(default=True)
+    data_analysis = models.ForeignKey(DataAnalysis, on_delete=models.SET_NULL, null=True)
     author_list_string = models.CharField(max_length=500, null=True)
     additional_markers = models.CharField(max_length=200, null=True)
     creation_time_stamp = models.CharField(
@@ -161,24 +181,7 @@ class User(models.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
-class DataAnalysis(models.Model):
-    # This will be a jsoned list of uids of the dataSubmissions that are included in this analysis
-    objects = models.Manager()
-    list_of_data_set_uids = models.CharField(max_length=5000, null=True)
-    within_clade_cutoff = models.FloatField(default=0.04)
-    name = models.CharField(max_length=100, null=True)
-    description = models.CharField(max_length=5000, null=True)
-    time_stamp = models.CharField(max_length=100, default='None')
-    submitting_user = models.CharField(max_length=100, default='no_user_defined')
-    submitting_user_email = models.CharField(max_length=100, default='no_email_defined')
-    analysis_complete_time_stamp = models.CharField(max_length=100, default='None')
 
-    def get_clade_collections(self):
-        list_of_uids = [int(x) for x in self.list_of_data_set_uids.split(',')]
-        clade_collections = []
-        for uid_list in general.chunks(list_of_uids):
-            clade_collections.extend(list(CladeCollection.objects.filter(data_set_sample_from__data_submission_from__in=uid_list)))
-        return clade_collections
 
 
 class CladeCollection(models.Model):
