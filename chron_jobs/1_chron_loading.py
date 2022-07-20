@@ -53,14 +53,10 @@ class ChronLoading:
         Do a loading by creating a custom args list that can be processed by a SymPortalWorkFlowManager
         """
         # Get the name of the datasheet
-        datasheet_path = [obj for obj in os.listdir(self.submission_to_load.framework_local_dir_path) if obj.endswith('.xlsx')]
+        datasheet_path = os.path.join(self.submission_to_load.framework_local_dir_path, f"{self.submission_to_load.name}_datasheet.xlsx")
+        if not os.path.exists(datasheet_path):
+            raise FileNotFoundError(f"Couldn't find {datasheet_path}")
         # TODO implement error logic
-        try:
-            assert(len(datasheet_path) == 1)
-        except AssertionError as e:
-            # TODO make the name of the datasheet standardised
-            raise NotImplementedError('More than one .xlsx found in the dataset')
-        datasheet_path = os.path.join(self.submission_to_load.framework_local_dir_path, datasheet_path[0])
         # number of proc will be the minimum between 30 and the number of samples in the submission
         # However when running this on the mac for debug we will pull this down to 4
         if platform.system() == 'Linux':
@@ -98,6 +94,8 @@ class ChronLoading:
             self.work_flow_manager.start_work_flow()
         except Exception as e:
             # TODO handle errors for Submission objects and chron jobs
+            self.submission_to_load.error_has_occured = True
+            self.submission_to_load.save()
             raise NotImplementedError('An error has occured while trying to load the Submission data.')
 
         # Once here we will have finished the loading.
