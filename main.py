@@ -68,7 +68,7 @@ class SymPortalWorkFlowManager:
         self.symportal_root_directory = os.path.abspath(os.path.dirname(__file__))
         self.dbbackup_dir = os.path.join(self.symportal_root_directory, 'dbBackUp')
         os.makedirs(self.dbbackup_dir, exist_ok=True)
-        self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+        self.date_time_str = str(datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.submitting_user = sp_config.user_name
         self.submitting_user_email = sp_config.user_email
         self.number_of_samples = None
@@ -158,17 +158,6 @@ class SymPortalWorkFlowManager:
                  '\n\'all\' - output both unifrac- and braycurtis-derived distance matrices '
                  'mafft and iqtree will be checked for in your PATH. If not found, only braycurtis-derived distances '
                  'will be output', default='both')
-        # when run as remote
-        parser.add_argument(
-            '--submitting_user_name',
-            help='Only for use when running as remote\nallows the association of a different user_name to the '
-                 'data_set than the one listed in sp_config', default='not supplied')
-
-        parser.add_argument(
-            '--submitting_user_email',
-            help='Only for use when running as remote\nallows the association of a '
-                 'different user_email to the data_set '
-                 'than the one listed in sp_config', default='not supplied')
         parser.add_argument('--local',
                             help="When passed, only the DataSetSamples of the current output will be used"
                                  " matrices will be calculated using the DIV abundance info from all"
@@ -187,7 +176,33 @@ class SymPortalWorkFlowManager:
                             help="When passed, cladocopium profiles sequences from the C3, C15 and C1 radiations "
                                  "will not be allowed to occur together in profiles.",
                             action='store_true', default=False)
+        # when run as remote
+        if sp_config.system_type == 'remote':
+            parser.add_argument(
+                '--submitting_user_name',
+                help='Only for use when running as remote\nallows the association of a different user_name to the '
+                     'data_set than the one listed in sp_config', default='not supplied')
 
+            parser.add_argument(
+                '--study_user_string',
+                help='Only for use when running as remote\nThe comma separated string of the User '
+                     'names that should be associated to the Study object.')
+
+            parser.add_argument(
+                '--study_name',
+                help='Only for use when running as remote\nThe name that will be given to the'
+                     'Study associated to the given DataSet object')
+
+            parser.add_argument('--is_chron_loading',
+                                help='This is passed only when the loading is being '
+                                     'initiated as part of one of the chron jobs.',
+                                action='store_true', default=False)
+
+            parser.add_argument(
+                '--submitting_user_email',
+                help='Only for use when running as remote\nallows the association of a '
+                     'different user_email to the data_set '
+                     'than the one listed in sp_config', default='not supplied')
     @staticmethod
     def _define_mutually_exclusive_args(group):
         group.add_argument(
@@ -487,7 +502,7 @@ class SymPortalWorkFlowManager:
             print(f'\n ANALYSIS COMPLETE: DataAnalysis:\n\tname: '
                   f'{self.data_analysis_object.name}\n\tUID: {self.data_analysis_object.id}\n')
         self.data_analysis_object.analysis_complete_time_stamp = str(
-            datetime.now()
+            datetime.utcnow()
         ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
         self.data_analysis_object.save()
         print(f'DataSet analysis_complete_time_stamp: '
@@ -677,12 +692,26 @@ class SymPortalWorkFlowManager:
             self._output_study_output_info_items()
 
     def _execute_data_loading(self):
-        self.data_loading_object = data_loading.DataLoading(
-            parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
-            screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
-            no_ord=self.args.no_ordinations, no_output=self.args.no_output, distance_method=self.args.distance_method,
-            no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
-            start_time=self.start_time, date_time_str=self.date_time_str)
+        if sp_config.system_type == 'remote' and self.args.is_chron_loading:
+            self.data_loading_object = data_loading.DataLoading(
+                    parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
+                    screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
+                    no_ord=self.args.no_ordinations, no_output=self.args.no_output,
+                    distance_method=self.args.distance_method,
+                    no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
+                    start_time=self.start_time, date_time_str=self.date_time_str,
+                    is_chron_loading=True,
+                    study_name=self.args.study_name, study_user_string=self.args.study_user_string)
+        else:
+            self.data_loading_object = data_loading.DataLoading(
+                parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
+                screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
+                no_ord=self.args.no_ordinations, no_output=self.args.no_output,
+                distance_method=self.args.distance_method,
+                no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
+                start_time=self.start_time, date_time_str=self.date_time_str,
+                is_chron_loading=False)
+        
         self.data_loading_object.load_data()
 
     def _verify_name_arg_given_load(self):

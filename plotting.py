@@ -353,7 +353,7 @@ class TypeStackedBarPlotter:
         if date_time_str:
             self.date_time_str = date_time_str
         else:
-            self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+            self.date_time_str = str(datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.fig_output_base = os.path.join(self.output_directory, 'its2_type_profiles', f'{self.date_time_str}')
         self.max_n_cols = 5
         self.max_n_rows = 10
@@ -487,7 +487,7 @@ class SeqStackedBarPlotter():
         if date_time_str:
             self.date_time_str = date_time_str
         else:
-            self.date_time_str = str(datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+            self.date_time_str = str(datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.fig_output_base = os.path.join(self.post_med_output_directory, f'{self.date_time_str}')
         self.smp_uid_to_smp_name_dict = None
         self.output_count_table_as_df = pd.read_csv(

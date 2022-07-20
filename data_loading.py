@@ -42,8 +42,11 @@ class DataLoading:
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path,
             screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, no_pre_med_seqs, multiprocess, start_time, date_time_str, debug=False):
+            distance_method, no_pre_med_seqs, multiprocess, start_time, date_time_str, is_chron_loading,
+            study_name=None, study_user_string=None,
+            debug=False):
         self.parent = parent_work_flow_obj
+        self.is_chron_loading = is_chron_loading
         self.thread_safe_general = ThreadSafeGeneral()
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
@@ -86,7 +89,10 @@ class DataLoading:
         self.list_of_dss_objects = DataSetSample.objects.filter(data_submission_from=self.dataset_object)
         if sp_config.system_type == 'remote':
             csaau = CreateStudyAndAssociateUsers(
-                date_time_str=self.date_time_str, ds=self.dataset_object, list_of_dss_objects=self.list_of_dss_objects)
+                date_time_str=self.date_time_str, ds=self.dataset_object,
+                list_of_dss_objects=self.list_of_dss_objects, is_chron_loading=self.is_chron_loading,
+                study_name=study_name, study_user_string=study_user_string
+            )
             csaau.create_study_and_user_objects()
             self.study = csaau.study
         self.output_path_list = []
@@ -227,7 +233,7 @@ class DataLoading:
         print(f'DataSet id: {self.dataset_object.id}')
         print(f'DataSet name: {self.dataset_object.name}')
         self.dataset_object.loading_complete_time_stamp = str(
-            datetime.now()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
+            datetime.utcnow()).split('.')[0].replace('-','').replace(' ','T').replace(':','')
         self.dataset_object.save()
         print(f'Loading completed in {time.time() - self.start_time}s')
         print(f'DataSet loading_complete_time_stamp: {self.dataset_object.loading_complete_time_stamp}\n\n\n')
