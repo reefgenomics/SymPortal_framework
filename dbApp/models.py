@@ -168,6 +168,7 @@ class User(models.Model):
     studies = models.ManyToManyField(Study)
     password_hash = models.CharField(max_length=200, null=True)
     is_admin = models.BooleanField(default=False)
+    has_upload_permission = models.BooleanField(default=False)
 
     def __str__(self):
         return f'< User: id {self.id}, name {self.name} >'
