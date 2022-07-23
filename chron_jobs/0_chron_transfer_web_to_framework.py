@@ -23,6 +23,7 @@ from dbApp.models import Submission
 import sp_config
 import paramiko
 from datetime import datetime
+from pathlib import Path
 
 class TransferWebToFramework:
     def __init__(self):
@@ -117,6 +118,7 @@ class TransferWebToFramework:
         for get_file in self.sftp_client.listdir(self.web_source_dir):
             self.sftp_client.remove(os.path.join(self.web_source_dir, get_file))
         self.sftp_client.rmdir(self.web_source_dir)
+        self.sftp_client.rmdir(Path(self.web_source_dir).parent.absolute())
 
         # Update the time of the Submission object transfer_to_framework_server_date_time
         self.submission_to_transfer.transfer_to_framework_server_date_time = str(
