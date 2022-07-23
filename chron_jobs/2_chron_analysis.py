@@ -21,13 +21,13 @@ import sys
 import subprocess
 import platform
 import os
-import main
 from datetime import datetime
 sys.path.append("..")
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 from dbApp.models import Submission, DataAnalysis
+import main
 
 
 class ChronAnalysis:
