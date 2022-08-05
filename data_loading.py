@@ -1081,7 +1081,7 @@ class DataLoading:
             if not pd.isnull(current_date_value):
                 # sometime a weird float string was coming in e.g. 20220601.0
                 try:
-                    current_date_value = str(float(current_date_value))
+                    current_date_value = str(int(current_date_value))
                 except ValueError:
                     pass
                 if re.findall("[A-Za-z]+", current_date_value):
