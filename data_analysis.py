@@ -14,6 +14,7 @@ import string
 import re
 import sp_config
 import json
+from django import db
 
 class SPDataAnalysis:
     def __init__(self, workflow_manager_parent, data_analysis_obj, force_basal_lineage_separation):
@@ -282,6 +283,17 @@ class SPDataAnalysis:
             self.unamed_div_uid_to_div_obj = {}
 
         def _set_exist_seq_names(self):
+            # This is giving us the strange SSL EOF error: django.db.utils.OperationalError: SSL SYSCALL error: EOF detected
+            # I have managed to duplicate this error by filling up the linode server's RAM using python:
+            # https://stackoverflow.com/questions/6317818/eat-memory-using-python
+            # (I did this from within the test.py script; it didn't work doing manage.py shell)
+            # And then run this same query and we get the SSL EOF error. So at least we know what the problem is.
+            # The strange thing is, the query itself doesn't seem to use up too much memory so it must
+            # be other parts of the script that are using up memory on the linode machine.
+            # In support of this when i run a smaller analysis I also don't get the error being raised
+            # despite this query being run.
+            # So one thing I will try is to reset all of the db connections and see if this helps this command pass.
+            db.connections.close_all()
             list_of_sequence_names_that_already_exist = [ref_seq.name for ref_seq in
                                                          ReferenceSequence.objects.filter(has_name=True)]
             list_of_sequence_names_that_already_exist.append('D1a')
