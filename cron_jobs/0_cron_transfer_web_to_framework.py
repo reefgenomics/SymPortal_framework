@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-This script will be managed by chron jobs and will be run once every hour
+This script will be managed by cron jobs and will be run once every hour
 It will be responsible for transfering successfuly submitted user files from the web sever to the framework server
 It will check for Submission objects that have a progress_status of submitted
 At the start of the script it will do a pgrep to check that the script is not currently running to prevent
@@ -8,14 +8,17 @@ stacking up of the same script.
 The script will use the md5sum that is generated at the time of user upload to verify the integrity of the transfer.
 After transfer is complete the status of the Submission objects that have been transfered will be updated to
 tranfer_to_framework_server_complete. The transfer_to_framework_server_date_time will be logged.
-A seperate chron job will handle loading the transferred submissions
+A seperate cron job will handle loading the transferred submissions
 """
-# TODO have a log file where all the chron jobs can log their outputs
+# TODO have a log file where all the cron jobs can log their outputs
 import subprocess
 import platform
 import os
 import sys
-sys.path.append("..")
+from pathlib import Path
+# We have to add the Symportal_framework path so that the settings.py module
+# can be found.
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
@@ -71,16 +74,21 @@ class TransferWebToFramework:
             else:
                 raise RuntimeError('Unknown arg at sys.argv[1]')
         except IndexError:
-            captured_output = subprocess.run(['pgrep', '-f', 'chron_transfer_web_to_framework.py'], capture_output=True)
+            captured_output = subprocess.run(['pgrep', '-fa', 'cron_transfer_web_to_framework.py'], capture_output=True)
             if captured_output.returncode == 0:  # PIDs were returned
                 procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
                 if platform.system() == 'Linux':
+                    print("Linux system detected")
                     # Then we expect there to be one PID for the current process
-                    if len(procs) > 1:
-                        raise RuntimeError('More than one instance of chron_transfer_web_to_framework detected. Killing process.')
+                    # And one for the cron job
+                    if len(procs) > 2:
+                        print("The following procs were returned:")
+                        for p in procs:
+                            print(p)
+                        raise RuntimeError('\nMore than one instance of cron_transfer_web_to_framework detected. Killing process.')
                 else:
                     # Then we are likely on mac and we expect no PIDs
-                    raise RuntimeError('More than one instance of chron_transfer_web_to_framework detected. Killing process.')
+                    raise RuntimeError('More than one instance of cron_transfer_web_to_framework detected. Killing process.')
             else:
                 # No PIDs returned
                 pass

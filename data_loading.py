@@ -42,11 +42,11 @@ class DataLoading:
     def __init__(
             self, parent_work_flow_obj, user_input_path, datasheet_path,
             screen_sub_evalue, num_proc,no_fig, no_ord, no_output,
-            distance_method, no_pre_med_seqs, multiprocess, start_time, date_time_str, is_chron_loading,
+            distance_method, no_pre_med_seqs, multiprocess, start_time, date_time_str, is_cron_loading,
             study_name=None, study_user_string=None,
             debug=False):
         self.parent = parent_work_flow_obj
-        self.is_chron_loading = is_chron_loading
+        self.is_cron_loading = is_cron_loading
         self.thread_safe_general = ThreadSafeGeneral()
         # check and generate the sample_meta_info_df first before creating the DataSet object
         self.sample_meta_info_df = None
@@ -90,7 +90,7 @@ class DataLoading:
         if sp_config.system_type == 'remote':
             csaau = CreateStudyAndAssociateUsers(
                 date_time_str=self.date_time_str, ds=self.dataset_object,
-                list_of_dss_objects=self.list_of_dss_objects, is_chron_loading=self.is_chron_loading,
+                list_of_dss_objects=self.list_of_dss_objects, is_cron_loading=self.is_cron_loading,
                 study_name=study_name, study_user_string=study_user_string
             )
             csaau.create_study_and_user_objects()

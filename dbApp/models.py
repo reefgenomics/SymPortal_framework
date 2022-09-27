@@ -186,7 +186,7 @@ class User(models.Model):
 class Submission(models.Model):
     """
     A class for representing a user dataset submission.
-    It will hold information that will allow the chron jobs to process
+    It will hold information that will allow the cron jobs to process
     data that has been uploaded to the SymPortal.org webpage
     """
     objects = models.Manager()

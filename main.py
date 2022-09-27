@@ -193,9 +193,9 @@ class SymPortalWorkFlowManager:
                 help='Only for use when running as remote\nThe name that will be given to the'
                      'Study associated to the given DataSet object')
 
-            parser.add_argument('--is_chron_loading',
+            parser.add_argument('--is_cron_loading',
                                 help='This is passed only when the loading is being '
-                                     'initiated as part of one of the chron jobs.',
+                                     'initiated as part of one of the cron jobs.',
                                 action='store_true', default=False)
 
             parser.add_argument(
@@ -692,7 +692,7 @@ class SymPortalWorkFlowManager:
             self._output_study_output_info_items()
 
     def _execute_data_loading(self):
-        if sp_config.system_type == 'remote' and self.args.is_chron_loading:
+        if sp_config.system_type == 'remote' and self.args.is_cron_loading:
             self.data_loading_object = data_loading.DataLoading(
                     parent_work_flow_obj=self, datasheet_path=self.args.data_sheet, user_input_path=self.args.load,
                     screen_sub_evalue=self.screen_sub_eval_bool, num_proc=self.args.num_proc, no_fig=self.args.no_figures,
@@ -700,7 +700,7 @@ class SymPortalWorkFlowManager:
                     distance_method=self.args.distance_method,
                     no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
                     start_time=self.start_time, date_time_str=self.date_time_str,
-                    is_chron_loading=True,
+                    is_cron_loading=True,
                     study_name=self.args.study_name, study_user_string=self.args.study_user_string)
         else:
             self.data_loading_object = data_loading.DataLoading(
@@ -710,7 +710,7 @@ class SymPortalWorkFlowManager:
                 distance_method=self.args.distance_method,
                 no_pre_med_seqs=self.args.no_pre_med_seqs, debug=self.args.debug, multiprocess=self.args.multiprocess,
                 start_time=self.start_time, date_time_str=self.date_time_str,
-                is_chron_loading=False)
+                is_cron_loading=False)
         
         self.data_loading_object.load_data()
 

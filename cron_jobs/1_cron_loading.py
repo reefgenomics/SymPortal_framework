@@ -1,23 +1,26 @@
 #!/usr/bin/env python3
-"""This script will be run as a chron job
+"""This script will be run as a cron job
 It will look for submissions that have a status of transfer_to_framework_server_complete.
 The files and datasheets associated with the submission will be run loaded into the SymPortal database.
 As part of this process, a dataset and study object will be associated to the Submission object.
 Once the loading is complete the Submission will have a status of database_loading_complete.
-If the Submission object has for_analysis as True it will be picked up by a chron job and submitted as part
-of an analysis. Else the results will be picked up by a different chron job and transferred back over to the web
+If the Submission object has for_analysis as True it will be picked up by a cron job and submitted as part
+of an analysis. Else the results will be picked up by a different cron job and transferred back over to the web
 server. Whether or not result file will be output as part of the loadings will depend on the for_analysis of the
 Submission object. If results are being output as part of the loading, the output directory will be stored in the
 framework_results_dir_path attribute of the Submission object.
 
-As with the other chron jobs we will ensure that only one instance of the script is running at any given time.
+As with the other cron jobs we will ensure that only one instance of the script is running at any given time.
 """
 
 import subprocess
 import platform
 import os
 import sys
-sys.path.append("..")
+from pathlib import Path
+# We have to add the Symportal_framework path so that the settings.py module
+# can be found.
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
@@ -26,7 +29,7 @@ import main
 from datetime import datetime
 
 
-class ChronLoading:
+class CronLoading:
     def __init__(self):
         self._check_no_other_instance_running()
 
@@ -65,7 +68,7 @@ class ChronLoading:
             num_proc = 4
         # We will only output results if this loading is not proceeding on to an analysis
         # We will provide the --study_user_string and --study_name arguments for use in creating the Study object
-        # We will also pass --is_chron_loading to let SP know that this is being initiated by a chron job
+        # We will also pass --is_cron_loading to let SP know that this is being initiated by a cron job
         # Currently we only have a single user associated to each Submission object so we will only be able
         # to associate a single user to the Study object
         study_user_string = self.submission_to_load.submitting_user.name
@@ -74,7 +77,7 @@ class ChronLoading:
             custom_args_list = [
                 '--load', self.submission_to_load.framework_local_dir_path,
                 '--data_sheet', datasheet_path, '--num_proc', str(num_proc), '--no_output',
-                '--name', self.submission_to_load.name, '--is_chron_loading',
+                '--name', self.submission_to_load.name, '--is_cron_loading',
                 '--study_user_string', study_user_string,
                 '--study_name', self.submission_to_load.name
             ]
@@ -83,7 +86,7 @@ class ChronLoading:
             custom_args_list = [
                 '--load', self.submission_to_load.framework_local_dir_path,
                 '--data_sheet', datasheet_path, '--num_proc', str(num_proc),
-                '--name', self.submission_to_load.name, '--is_chron_loading',
+                '--name', self.submission_to_load.name, '--is_cron_loading',
                 '--study_user_string', study_user_string,
                 '--study_name', self.submission_to_load.name
             ]
@@ -93,7 +96,7 @@ class ChronLoading:
             self.submission_to_load.save()
             self.work_flow_manager.start_work_flow()
         except Exception as e:
-            # TODO handle errors for Submission objects and chron jobs
+            # TODO handle errors for Submission objects and cron jobs
             self.submission_to_load.error_has_occured = True
             self.submission_to_load.save()
             raise NotImplementedError('An error has occured while trying to load the Submission data.')
@@ -128,13 +131,18 @@ class ChronLoading:
             else:
                 raise RuntimeError('Unknown arg at sys.argv[1]')
         except IndexError:
-            captured_output = subprocess.run(['pgrep', '-f', 'chron_loading.py'], capture_output=True)
+            captured_output = subprocess.run(['pgrep', '-fa', 'cron_loading.py'], capture_output=True)
             if captured_output.returncode == 0:  # PIDs were returned
                 procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
                 if platform.system() == 'Linux':
+                    print("Linux system detected")
                     # Then we expect there to be one PID for the current process
-                    if len(procs) > 1:
-                        sys.exit()
+                    # And one for the cron job
+                    if len(procs) > 2:
+                        print("The following procs were returned:")
+                        for p in procs:
+                            print(p)
+                        raise RuntimeError('\nMore than one instance of cron_loading detected. Killing process.')
                 else:
                     # Then we are likely on mac and we expect no PIDs
                     sys.exit()
@@ -142,5 +150,5 @@ class ChronLoading:
                 # No PIDs returned
                 pass
 
-chron_loading = ChronLoading()
-chron_loading.load()
+cron_loading = CronLoading()
+cron_loading.load()

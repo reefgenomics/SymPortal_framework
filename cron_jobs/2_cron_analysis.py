@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""This script will be run as a chron job
+"""This script will be run as a cron job
 It will look for submissions that have a status of framework_loading_complete, have no error status, and have
 a for_analysis of True.
 The DataSet objects associated with each of these submission will be collected and added to a
@@ -14,7 +14,7 @@ using the framework --output_study_from_analysis flag.
 
 One the output is complete the status of the Submission object will be set to framework_output_complete.
 The framework_results_dir_path attribute of the submission object will be set. This, combined with a True for_analysis
-will be the keys for the next chron job to transfer these files over to the symportal.org server.
+will be the keys for the next cron job to transfer these files over to the symportal.org server.
 """
 
 import sys
@@ -22,7 +22,10 @@ import subprocess
 import platform
 import os
 from datetime import datetime
-sys.path.append("..")
+from pathlib import Path
+# We have to add the Symportal_framework path so that the settings.py module
+# can be found.
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
@@ -30,7 +33,7 @@ from dbApp.models import Submission, DataAnalysis
 import main
 
 
-class ChronAnalysis:
+class CronAnalysis:
     def __init__(self):
         self._check_no_other_instance_running()
         self.submission_objects = Submission.objects.filter(
@@ -81,7 +84,7 @@ class ChronAnalysis:
                 sub_obj.save()
                 self.work_flow_manager.start_work_flow()
             except Exception as e:
-                # TODO handle errors for Submission objects and chron jobs
+                # TODO handle errors for Submission objects and cron jobs
                 print(e)
                 raise NotImplementedError(
                     f'An error has occured while trying to output results for {sub_obj.name}.'
@@ -114,7 +117,7 @@ class ChronAnalysis:
                 sub_obj.save()
             self.work_flow_manager.start_work_flow()
         except Exception as e:
-            # TODO handle errors for Submission objects and chron jobs
+            # TODO handle errors for Submission objects and cron jobs
             print(e)
             raise NotImplementedError(
                 'An error has occured while trying to analyse the current batch of Study objects.'
@@ -135,13 +138,18 @@ class ChronAnalysis:
             else:
                 raise RuntimeError('Unknown arg at sys.argv[1]')
         except IndexError:
-            captured_output = subprocess.run(['pgrep', '-f', 'chron_loading.py'], capture_output=True)
+            captured_output = subprocess.run(['pgrep', '-f', 'cron_loading.py'], capture_output=True)
             if captured_output.returncode == 0:  # PIDs were returned
                 procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
                 if platform.system() == 'Linux':
+                    print("Linux system detected")
                     # Then we expect there to be one PID for the current process
-                    if len(procs) > 1:
-                        sys.exit()
+                    # And one for the cron job
+                    if len(procs) > 2:
+                        print("The following procs were returned:")
+                        for p in procs:
+                            print(p)
+                        raise RuntimeError('\nMore than one instance of cron_analysis detected. Killing process.')
                 else:
                     # Then we are likely on mac and we expect no PIDs
                     sys.exit()
@@ -155,7 +163,7 @@ class ChronAnalysis:
             datetime.utcnow()
         ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
 
-ca = ChronAnalysis()
+ca = CronAnalysis()
 if ca.submission_objects:
     ca.analyse()
 ca.output()

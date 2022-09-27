@@ -255,7 +255,7 @@ class CreateStudyAndAssociateUsers:
     """
     def __init__(
             self, ds=None, citation=None, date_time_str=None, list_of_dss_objects=None,
-            is_chron_loading=None, study_name=None, study_user_string=None
+            is_cron_loading=None, study_name=None, study_user_string=None
     ):
         # We should be provided either a DataSet or a citation
         # if ds provided then we are doing a loading operation
@@ -269,7 +269,7 @@ class CreateStudyAndAssociateUsers:
             self.date_time_str = date_time_str
             assert(list_of_dss_objects is not None)
             self.list_of_dss_objects = list_of_dss_objects
-            self.is_chron_loading = is_chron_loading
+            self.is_cron_loading = is_cron_loading
             self.study_name = study_name
             self.study_user_string = study_user_string
         else:
@@ -282,14 +282,14 @@ class CreateStudyAndAssociateUsers:
 
     def create_study_and_user_objects(self):
         """
-        When is_chron_loading is True, this is a loading initiated by one of the chron jobs
-        We will bypass the user input queries and use the provided name a user string when is_chron_loading
+        When is_cron_loading is True, this is a loading initiated by one of the cron jobs
+        We will bypass the user input queries and use the provided name a user string when is_cron_loading
         """
         while True:
             restart = False
             print("\nYou can enter '4' at any of the command prompts to start this process again")
             if self.dataset_object is not None:
-                if self.is_chron_loading:
+                if self.is_cron_loading:
                     study_name = self.study_name
                     continue_text = 'y'
                 else:
@@ -318,12 +318,12 @@ class CreateStudyAndAssociateUsers:
                     continue
 
                 while True:
-                    if self.is_chron_loading:
+                    if self.is_cron_loading:
                         continue_text = 'y'
                     else:
                         continue_text = input('Associate one or more users to this Study? [y/n]: ')
                     if continue_text == 'y':
-                        if self.is_chron_loading:
+                        if self.is_cron_loading:
                             continue_text = self.study_user_string
                         else:
                             continue_text = input("Enter a comma separated string of the usernames for the users you "
@@ -337,7 +337,7 @@ class CreateStudyAndAssociateUsers:
                         users_that_already_exist, users_that_do_not_exist = self._check_to_see_if_users_exist(
                             user_names_to_associate)
                         self._print_out_users(users_that_already_exist, users_that_do_not_exist)
-                        if self.is_chron_loading:
+                        if self.is_cron_loading:
                             continue_text = 'y'
                         else:
                             continue_text = input("\nIs this correct? [y/n]: ")
@@ -457,7 +457,7 @@ class CreateStudyAndAssociateUsers:
             # to the Study. This will mean changing the title etc. to match the citation title
             print(f"Study with name '{study_name}' already exists.")
             if self.dataset_object is not None:
-                if self.is_chron_loading:
+                if self.is_cron_loading:
                     continue_text = 'y'
                 else:
                     continue_text = input('Do you want to update/overwrite the current data_set_samples '
@@ -493,7 +493,7 @@ class CreateStudyAndAssociateUsers:
             else: # create from the citation object
                 new_study_object = self._create_study_object_from_citation(name)
             self._print_non_init_study_summary(new_study_object)
-            if self.is_chron_loading:
+            if self.is_cron_loading:
                 continue_text = 'y'
             else:
                 continue_text = input('Continue? [y/n]: ')
