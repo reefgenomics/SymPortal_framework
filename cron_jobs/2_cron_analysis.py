@@ -25,6 +25,7 @@ from datetime import datetime
 from pathlib import Path
 # We have to add the Symportal_framework path so that the settings.py module
 # can be found.
+os.chdir(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
