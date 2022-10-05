@@ -105,12 +105,19 @@ class SymPortalWorkFlowManager:
         self.braycurtis_distance_object = None
 
     def _redefine_arg_analyse(self):
-        """When the user passes the argument --analyse_next then we will find the UIDs
+        """
+        When the user passes the argument --analyse_next then we will find the UIDs
         that were used for the previous analysis and append the passed UIDs to them
-        to create a new string. We will then change self.args.analyse to this value
-        and work with that."""
+        to create a new string. 
+        In doing this we will check that all of the dataset IDs exist as it may be that some
+        datasets have been deleted since the last analysis
+        We will then change self.args.analyse to this value
+        and work with that.
+        """
         last_analysis = sorted(DataAnalysis.objects.all(), key=lambda x: x.id, reverse=True)[0]
         last_uids = [int(_) for _ in last_analysis.list_of_data_set_uids.split(',')]
+        # Then we want to filter these ids for only those that exist
+        last_uids = [ds.id for ds in DataSet.objects.filter(id__in=last_uids)]
         new_uids = [int(_) for _ in self.args.analyse_next.split(',')]
         if len(set(last_uids).intersection(set(new_uids))) != 0:
             raise RuntimeError("There appears to be overlap in the uids being provided to the --analyse_next argument "
