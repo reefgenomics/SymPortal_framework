@@ -10,8 +10,8 @@ dependencies:
   - matplotlib
   - pandas
   - plumbum
-  - scipy
-  - scikit-bio
+  - scipy==1.5.3
+  - scikit-bio==0.5.6
   - xlrd
   - blast
   - iqtree
