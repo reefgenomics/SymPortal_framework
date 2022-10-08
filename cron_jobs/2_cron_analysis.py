@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""This script will be run as a cron job
+"""
+This script will be run as a cron job
 It will look for submissions that have a status of framework_loading_complete, have no error status, and have
 a for_analysis of True.
 The DataSet objects associated with each of these submission will be collected and added to a
