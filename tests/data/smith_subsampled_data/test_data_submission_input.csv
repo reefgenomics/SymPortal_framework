@@ -1,17 +1,17 @@
 ,,,,host_info if applicable,,,,,,sampling info if applicable,,,
 sample_name,fastq_fwd_file_name,fastq_rev_file_name,sample_type,host_phylum,host_class,host_order,host_family,host_genus,host_species,collection_latitude,collection_longitude,collection_date,collection_depth
-A01,A01.1_subsampled.fastq,A01.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-A01_no_overlap,A01.1_no_overlap_subsampled.fastq,A01.2_no_overlap_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-1234,1234.1_subsampled.fastq,1234.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-A02,A02.1_subsampled.fastq,A02.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-A03,A03.1_subsampled.fastq,A03.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-A04,A04.1_subsampled.fastq,A04.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-A05,A05.1_subsampled.fastq,A05.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,06.2021,0-12
-A06,A06.1_subsampled.fastq,A06.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,06.2021,0-12
-A07,A07.1_subsampled.fastq,A07.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,12.2021,0-12
-A08,A08.1_subsampled.fastq,A08.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-A09,A09.1_subsampled.fastq,A09.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,06.21,0-12
-A10,A10.1_subsampled.fastq,A10.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.2021,0-12
+A01,A01.1_subsampled.fastq,A01.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A01_no_overlap,A01.1_no_overlap_subsampled.fastq,A01.2_no_overlap_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+1234,1234.1_subsampled.fastq,1234.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A02,A02.1_subsampled.fastq,A02.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A03,A03.1_subsampled.fastq,A03.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A04,A04.1_subsampled.fastq,A04.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A05,A05.1_subsampled.fastq,A05.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A06,A06.1_subsampled.fastq,A06.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A07,A07.1_subsampled.fastq,A07.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A08,A08.1_subsampled.fastq,A08.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A09,A09.1_subsampled.fastq,A09.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+A10,A10.1_subsampled.fastq,A10.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
 A11,A11.1_subsampled.fastq,A11.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20210618,0-12
 A12,A12.1_subsampled.fastq,A12.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20210618,0-12
 A13,A13.1_subsampled.fastq,A13.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20210618,0-12
@@ -44,5 +44,5 @@ Y11,Y11.1_subsampled.fastq,Y11.2_subsampled.fastq,coral,cnidaria,anthozoa,sclera
 Y12,Y12.1_subsampled.fastq,Y12.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20210618,0-12
 Y13,Y13.1_subsampled.fastq,Y13.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20210618,0-12
 Y15,Y15.1_subsampled.fastq,Y15.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20210618,0-12
-no_sym_0,no_sym_0.1_subsampled.fastq,no_sym_0.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
-no_sym_1,no_sym_1.1_subsampled.fastq,no_sym_1.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,18.06.21,0-12
+no_sym_0,no_sym_0.1_subsampled.fastq,no_sym_0.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
+no_sym_1,no_sym_1.1_subsampled.fastq,no_sym_1.2_subsampled.fastq,coral,cnidaria,anthozoa,scleractinia,poritidae,porites,lobata,24.339216,53.059163,20221008,0-12
