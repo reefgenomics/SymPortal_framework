@@ -59,7 +59,9 @@ class CronLoading:
         # Get the name of the datasheet
         datasheet_path = os.path.join(self.submission_to_load.framework_local_dir_path, f"{self.submission_to_load.name}_datasheet.xlsx")
         if not os.path.exists(datasheet_path):
-            raise FileNotFoundError(f"Couldn't find {datasheet_path}")
+            datasheet_path = os.path.join(self.submission_to_load.framework_local_dir_path, f"{self.submission_to_load.name}_datasheet.csv")
+            if not os.path.exists(datasheet_path):
+                raise FileNotFoundError(f"Couldn't find {datasheet_path}")
         # TODO implement error logic
         # number of proc will be the minimum between 30 and the number of samples in the submission
         # However when running this on the mac for debug we will pull this down to 4
