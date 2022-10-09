@@ -2,6 +2,7 @@ name: symportal_env
 channels:
   - conda-forge
   - bioconda
+  - anaconda
 dependencies:
   - python=3
   - numpy
@@ -12,6 +13,7 @@ dependencies:
   - plumbum
   - scipy==1.5.3
   - scikit-bio==0.5.6
+  - openpyxl
   - xlrd
   - blast
   - iqtree
