@@ -1083,9 +1083,13 @@ class SequenceCountTableCreator:
             "post_med_absolute_meta_only_count"] = self.path_to_seq_output_meta_only_df_absolute
 
     def _make_output_tables_pre_med(self):
+        # 20221013 we are getting futher SSL connection time out errors on a big dataset
+        # I'm going to see if resetting the db connection here will help.
+        db.connections.close_all()
         pre_med_output = self.PreMedSeqOutput(parent=self)
         pre_med_output.make_pre_med_count_tables()
         self.output_df_relative_pre_med = pre_med_output.rel_count_df
+        db.connections.close_all()
         
 
     def make_seq_output_tables(self):
