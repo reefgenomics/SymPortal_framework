@@ -32,6 +32,7 @@ import hashlib
 from general import check_lat_lon
 import re
 from calendar import month_abbr, month_name
+from psycopg2 import InterfaceError
 
 
 class DataLoading:
@@ -1974,14 +1975,23 @@ class InitialMothurHandler:
 
     def _update_dss_obj_attributes(self):
         done_count = 0
-        dss_obj_uid_to_obj_dict = {dss_obj.id: dss_obj for dss_obj in
-                                   DataSetSample.objects.filter(data_submission_from=self.parent.dataset_object)}
         while done_count < self.parent.num_proc:
             dss_proxy = self.output_queue_for_attribute_data.get()
             if dss_proxy == 'DONE':
                 done_count += 1
             else:
-                dss_obj = dss_obj_uid_to_obj_dict[dss_proxy.uid]
+                # Very large samples are causing an error here when we come to call the .save() method
+                # Exception has occurred: InterfaceError
+                # connection already closed
+                try:
+                    dss_obj = DataSetSample.objects.get(id=dss_proxy.uid)
+                except InterfaceError:
+                    db.connections.close_all()
+                    dss_obj = DataSetSample.objects.get(id=dss_proxy.uid)
+                except:
+                    db.connections.close_all()
+                    dss_obj = DataSetSample.objects.get(id=dss_proxy.uid)
+                # dss_obj = dss_obj_uid_to_obj_dict[dss_proxy.uid] # TODO delete.
                 if dss_proxy.error_in_processing:
                     dss_obj.error_in_processing = dss_proxy.error_in_processing
                     dss_obj.error_reason = dss_proxy.error_reason
