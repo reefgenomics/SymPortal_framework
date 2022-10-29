@@ -22,10 +22,13 @@ from pathlib import Path
 # can be found.
 os.chdir(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent))
+
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 from dbApp.models import Submission
+from django.db.models import Q
 import main
 from datetime import datetime
 
@@ -35,8 +38,24 @@ class CronLoading:
         self._check_no_other_instance_running()
 
         self.submissions_to_load = list(
-            Submission.objects.filter(progress_status="transfer_to_framework_server_complete", error_has_occured=False)
+            Submission.objects.filter(progress_status="transfer_to_framework_server_complete", error_has_occured=False, loading_started_date_time=None)
         )
+
+        # Also check for the presence of a submission that has started loading but has not completed
+        submissions_in_progress = Submission.objects.filter(progress_status="transfer_to_framework_server_complete").filter(~Q(loading_started_date_time=None))
+        if submissions_in_progress:
+            print("Incomplete loading detected:")
+            for sub in submissions_in_progress:
+                print(f"\t{sub.id}: {sub.name}")
+            sys.exit("Incomplete loading detected:")
+
+        time_now = str(datetime.utcnow()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
+        if self.submissions_to_load:
+            print(f"{time_now}: The following submission have been found to load.")
+            for sub in self.submissions_to_load:
+                print(sub.name)
+        else:
+            print(f"{time_now}: No submission found for loading.")
 
         # Dynamics
         self.submission_to_load = None
@@ -145,7 +164,8 @@ class CronLoading:
                         print("The following procs were returned:")
                         for p in procs:
                             print(p)
-                        raise RuntimeError('\nMore than one instance of cron_loading detected. Killing process.')
+                        time_now = str(datetime.utcnow()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
+                        raise RuntimeError(f"\n{time_now}:More than one instance of cron_loading detected. Killing process.")
                 else:
                     # Then we are likely on mac and we expect no PIDs
                     sys.exit()
