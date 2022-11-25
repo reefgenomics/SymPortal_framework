@@ -1,0 +1,41 @@
+# This files simply documents what we have in the crontabs file
+# so that if we lose it again, like we did when Zygote was compromised
+# we still have the correct command to get conda etc. working
+
+
+# On the computational server
+SHELL=/bin/bash
+BASH_ENV=~/.bashrc_conda
+0 */2 * * * conda activate symportal_env; python /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/0_cron_transfer_web_to_framework.py >> /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/cron_logs/0.log 2>&1 ; conda deactivate;
+0 8 * * * conda activate symportal_env; python /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/1_cron_loading.py >> /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/cron_logs/1.log 2>&1 ; conda deactivate;
+0 12 * * * conda activate symportal_env; python /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/2_cron_analysis.py >> /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/cron_logs/2.log 2>&1 ; conda deactivate;
+
+@monthly rm /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/cron_logs/0.log
+@monthly rm /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/cron_logs/1.log
+@monthly rm /home/humebc/phylogeneticSoftware/SymPortal_framework/cron_jobs/cron_logs/2.log
+
+# On the webserver
+SHELL=/bin/bash
+BASH_ENV=~/.bashrc_conda
+46 * * * * conda activate symportal_org; python /home/humebc/symportal.org/cron_transfer_framework_to_web.py >> /home/humebc/symportal.org/cron.log 2>&1 ; conda deactivate;
+@monthly rm /home/humebc/symportal.org/cron.log
+
+# and this is the content of the ~/.bashrc_conda:
+
+# made by Ben 27.09.22 to run the cron jobs
+# see https://unix.stackexchange.com/questions/454957/cron-job-to-run-under-conda-virtual-environment
+# for more details on how to setup the cron jobs to run using an activated conda env
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/home/humebc/local_software/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/home/humebc/local_software/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/home/humebc/local_software/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/home/humebc/local_software/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+# <<< conda initialize <<<
