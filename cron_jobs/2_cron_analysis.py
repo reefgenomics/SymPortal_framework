@@ -44,6 +44,34 @@ class CronAnalysis:
                     error_has_occured=False,
                     for_analysis=True
                 ).all()
+        # Check to see if there are still any submission objects to be transfered from
+        # linode or if there are still loadings in progress or to do.
+        # If so, then postpone the analysis (i.e. quit this instance of the cron job).
+        # This is so that datasets that are uploaded at roughly the same time, but happen to fall either
+        # side of the analysis cron job running, don't get output from different analyses.
+        
+        # Check for transfers still to be made
+        self.submissions_to_transfer = list(
+            Submission.objects.filter(progress_status="submitted", error_has_occured=False)
+        )
+        if self.submissions_to_transfer:
+            print("The following submissions still need to be transfered from the web server:")
+            for sub in self.submissions_to_transfer:
+                print(f"\t{sub.name} {sub.id}")
+            
+        self.submissions_to_load = list(
+            Submission.objects.filter(progress_status="transfer_to_framework_server_complete", error_has_occured=False, loading_started_date_time=None)
+        )
+
+        if self.submissions_to_load:
+            print("The following submissions still need to be loaded:")
+            for sub in self.submissions_to_load:
+                print(f"\t{sub.name} {sub.id}")
+
+        if self.submissions_to_transfer or self.submissions_to_load:
+            print("As there are still submissions to be transfered or submissions to be loaded we will not run an analysis now.")
+            sys.exit("Postponing analysis. Quiting.")
+
         self.dataset_objects = [
             s.associated_dataset for s in self.submission_objects]
         self.dataset_string = ','.join([str(d.id) for d in self.dataset_objects])
