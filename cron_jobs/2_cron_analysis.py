@@ -135,6 +135,7 @@ class CronAnalysis:
 
     @staticmethod
     def _check_no_other_instance_running():
+        date_time_string = str(datetime.utcnow()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
         try:
             if sys.argv[1] == 'debug':  # For development only
                 pass
@@ -149,10 +150,11 @@ class CronAnalysis:
                     # Then we expect there to be one PID for the current process
                     # And one for the cron job
                     if len(procs) > 2:
-                        print("The following procs were returned:")
+                        print(f"{date_time_string}: The following procs were returned:")
                         for p in procs:
                             print(p)
-                        raise RuntimeError('\nMore than one instance of cron_analysis detected. Killing process.')
+                        
+                        raise RuntimeError(f'\n{date_time_string}: More than one instance of cron_analysis detected. Killing process.')
                 else:
                     # Then we are likely on mac and we expect no PIDs
                     sys.exit()
