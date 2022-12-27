@@ -14,12 +14,15 @@ A seperate cron job will handle loading the transferred submissions
 import subprocess
 import platform
 import os
+import shutil
 import sys
 from pathlib import Path
 # We have to add the Symportal_framework path so that the settings.py module
 # can be found.
-os.chdir(str(Path(__file__).resolve().parent.parent))
+# os.chdir(str(Path(__file__).resolve().parent.parent))
 sys.path.append(str(Path(__file__).resolve().parent.parent))
+sys.path.append(str(Path(__file__).resolve().parent))
+print(sys.path)
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "settings")
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
@@ -114,30 +117,46 @@ class TransferWebToFramework:
         self.submission_to_transfer.save()
         if not os.path.exists(self.framework_dest_dir):
             os.makedirs(self.framework_dest_dir)
+        try:
+            self._get_files_from_web_dir()
+            md5sum_source_dict = self._make_md5sum_web_server_dict()
 
-        self._get_files_from_web_dir()
+            self._validate_md5sum(md5sum_source_dict)
 
-        md5sum_source_dict = self._make_md5sum_web_server_dict()
+            # If we get here then the md5sum has been validated and the transfer is complete
 
-        self._validate_md5sum(md5sum_source_dict)
+            # Delete the remote files and the remote directory
+            for get_file in self.sftp_client.listdir(self.web_source_dir):
+                self.sftp_client.remove(os.path.join(self.web_source_dir, get_file))
+            self.sftp_client.rmdir(self.web_source_dir)
+            
+            # we want to delete the parent directory if it is empty
+            if len(list(self.sftp_client.listdir(str(Path(self.web_source_dir).parent.absolute())))) == 0:
+                self.sftp_client.rmdir(str(Path(self.web_source_dir).parent.absolute()))
 
-        # If we get here then the md5sum has been validated and the transfer is complete
+            # Update the time of the Submission object transfer_to_framework_server_date_time
+            self.submission_to_transfer.transfer_to_framework_server_date_time = str(
+                datetime.utcnow()
+            ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
 
-        # Delete the remote files and the remote directory
-        for get_file in self.sftp_client.listdir(self.web_source_dir):
-            self.sftp_client.remove(os.path.join(self.web_source_dir, get_file))
-        self.sftp_client.rmdir(self.web_source_dir)
-        self.sftp_client.rmdir(str(Path(self.web_source_dir).parent.absolute()))
+            # Update the status of the Submission object
+            self.submission_to_transfer.progress_status = "transfer_to_framework_server_complete"
 
-        # Update the time of the Submission object transfer_to_framework_server_date_time
-        self.submission_to_transfer.transfer_to_framework_server_date_time = str(
-            datetime.utcnow()
-        ).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
+            self.submission_to_transfer.save()
+        except FileNotFoundError as e:
+            # It happens that for some reason a submission has been created
+            # But the files ae not available on the linode server
+            # In this case, we will delte the framework_dest_dir we just created
+            # and delete the submission object from the database
+            # and then move on to processing the next submission.
+            print(f"A FileNotFoundError was caught for submission:")
+            print(f"\tSubmission name: {self.submission_to_transfer.name}")
+            print(f"\tSubmission name: {self.submission_to_transfer.id}")
+            print(f"This submission will now be deleted from the database and we will move on to the next submission.")
+            shutil.rmtree(self.framework_dest_dir)
+            self.submission_to_transfer.delete()
 
-        # Update the status of the Submission object
-        self.submission_to_transfer.progress_status = "transfer_to_framework_server_complete"
-
-        self.submission_to_transfer.save()
+        
 
     def _validate_md5sum(self, md5sum_source_dict):
         # For each key in the md5sum_source_dict we should have the hash
