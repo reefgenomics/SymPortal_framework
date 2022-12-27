@@ -918,6 +918,7 @@ class SymPortalWorkFlowManager:
         Produce the study_output_info.json file in the output directory
         and produce a .bak in the dbBackup directory
         """
+        
         bak_path = os.path.join(self.dbbackup_dir, f'symportal_database_backup_{self.date_time_str}.bak')
         study_output_info_path = os.path.join(self.output_dir, 'study_output_info.json')
         # Now output the .json file
@@ -937,18 +938,6 @@ class SymPortalWorkFlowManager:
             self.study.analysis = False
         self.study.save()
 
-        print(f"pg_dumping {bak_path}. This may take some time...")
-        try:
-            subprocess.run(
-                ['pg_dump', '-U', f'{sp_config.pg_user}', '-Fc', '-f', bak_path, '-w', 'symportal_database'], check=True)
-        except AttributeError:
-            # It may be that pg_user is not set in sp_config.py
-            # Try to do the dump with username
-            subprocess.run(
-                ['pg_dump', '-U', f'{sp_config.user_name}', '-Fc', '-f', bak_path, '-w', 'symportal_database'],
-                check=True)
-
-        print("pg_dump complete")
         with open(study_output_info_path, 'w') as f:
             json.dump(obj=temp_dict, fp=f)
 
