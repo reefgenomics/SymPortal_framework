@@ -54,8 +54,9 @@ class CronAnalysis:
         self.submissions_to_transfer = list(
             Submission.objects.filter(progress_status="submitted", error_has_occured=False)
         )
+        date = self._get_date_time()
         if self.submissions_to_transfer:
-            print("The following submissions still need to be transfered from the web server:")
+            print(f"{date}: The following submissions still need to be transfered from the web server:")
             for sub in self.submissions_to_transfer:
                 print(f"\t{sub.name} {sub.id}")
             
@@ -64,7 +65,7 @@ class CronAnalysis:
         )
 
         if self.submissions_to_load:
-            print("The following submissions still need to be loaded:")
+            print(f"{date}: The following submissions still need to be loaded:")
             for sub in self.submissions_to_load:
                 print(f"\t{sub.name} {sub.id}")
 
@@ -151,7 +152,7 @@ class CronAnalysis:
             # TODO handle errors for Submission objects and cron jobs
             print(e)
             raise NotImplementedError(
-                'An error has occured while trying to analyse the current batch of Study objects.'
+                '{self.dt_str} An error has occured while trying to analyse the current batch of Study objects.'
             )
 
         # At this point the analysis is complete
