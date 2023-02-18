@@ -42,14 +42,15 @@ class CronLoading:
         )
 
         # Also check for the presence of a submission that has started loading but has not completed
+        time_now = str(datetime.utcnow()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
         submissions_in_progress = Submission.objects.filter(progress_status="transfer_to_framework_server_complete").filter(~Q(loading_started_date_time=None))
         if submissions_in_progress:
-            print("Incomplete loading detected:")
+            print(f"{time_now}: Incomplete loading detected:")
             for sub in submissions_in_progress:
                 print(f"\t{sub.id}: {sub.name}")
             sys.exit("Incomplete loading detected:")
 
-        time_now = str(datetime.utcnow()).split('.')[0].replace('-', '').replace(' ', 'T').replace(':', '')
+        
         if self.submissions_to_load:
             print(f"{time_now}: The following submission have been found to load.")
             for sub in self.submissions_to_load:
