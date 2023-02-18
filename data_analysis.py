@@ -26,7 +26,7 @@ class SPDataAnalysis:
         # The abundance that a given DIV must be found at when it has been considered 'unlocked'
         # https://github.com/didillysquat/SymPortal_framework/wiki/The-SymPortal-logic#type-profile-assignment---logic
         self.unlocked_abundance = 0.0001
-        self.clade_list = list('ABCDEFGH')
+        self.clade_list = list('ABCDEFGHI')
         self.ccs_of_analysis = self.data_analysis_obj.get_clade_collections()
         # List that will hold a dictionary for each clade
         # Each dictionary will hold key = footprint (set of sequences)
