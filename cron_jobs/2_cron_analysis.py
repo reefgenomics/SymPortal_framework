@@ -119,7 +119,7 @@ class CronAnalysis:
                 # TODO handle errors for Submission objects and cron jobs
                 print(e)
                 raise NotImplementedError(
-                    f'An error has occured while trying to output results for {sub_obj.name}.'
+                    f'{self.dt_str}: An error has occured while trying to output results for {sub_obj.name}.'
                 )
 
             # Here the output is complete
