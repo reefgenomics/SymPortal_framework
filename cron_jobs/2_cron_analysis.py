@@ -70,7 +70,7 @@ class CronAnalysis:
                 print(f"\t{sub.name} {sub.id}")
 
         if self.submissions_to_transfer or self.submissions_to_load:
-            print("As there are still submissions to be transfered or submissions to be loaded we will not run an analysis now.")
+            print("{date} As there are still submissions to be transfered or submissions to be loaded we will not run an analysis now.")
             sys.exit("Postponing analysis. Quiting.")
 
         self.dataset_objects = [
