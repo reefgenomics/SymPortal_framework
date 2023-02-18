@@ -29,3 +29,16 @@ symbiodiniaceaeDB/named_seqs_in_SP_remote_db.fa
 symbiodiniaceaeDB/symClade_backup/
 symbiodiniaceaeDB/unnamedRefSeqs.fasta
 fixing_clades
+user.csv
+cron_jobs/cron_logs/0.log
+cron_jobs/cron_logs/1.log
+cron_jobs/cron_logs/2.log
+app.db
+data_available_gold_dataset_11_islands_POC.tsv
+eric_quentin_found_poc_C_new.csv
+eric_quentin_found_poc_C_old.csv
+eric_quentin_found_poc_d.csv
+symbiodiniaceaeDB/named_seqs_in_SP_remote_db.fa.ndb
+symbiodiniaceaeDB/named_seqs_in_SP_remote_db.fa.not
+symbiodiniaceaeDB/named_seqs_in_SP_remote_db.fa.ntf
+symbiodiniaceaeDB/named_seqs_in_SP_remote_db.fa.nto
