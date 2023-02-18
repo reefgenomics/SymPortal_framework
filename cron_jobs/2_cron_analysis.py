@@ -70,7 +70,7 @@ class CronAnalysis:
                 print(f"\t{sub.name} {sub.id}")
 
         if self.submissions_to_transfer or self.submissions_to_load:
-            print("{date} As there are still submissions to be transfered or submissions to be loaded we will not run an analysis now.")
+            print(f"{date} As there are still submissions to be transfered or submissions to be loaded we will not run an analysis now.")
             sys.exit("Postponing analysis. Quiting.")
 
         self.dataset_objects = [
@@ -152,7 +152,7 @@ class CronAnalysis:
             # TODO handle errors for Submission objects and cron jobs
             print(e)
             raise NotImplementedError(
-                '{self.dt_str} An error has occured while trying to analyse the current batch of Study objects.'
+                f'{self.dt_str} An error has occured while trying to analyse the current batch of Study objects.'
             )
 
         # At this point the analysis is complete
@@ -175,7 +175,7 @@ class CronAnalysis:
             if captured_output.returncode == 0:  # PIDs were returned
                 procs = captured_output.stdout.decode('UTF-8').rstrip().split('\n')
                 if platform.system() == 'Linux':
-                    print("Linux system detected")
+                    print(f"{date_time_string} Linux system detected")
                     # Then we expect there to be one PID for the current process
                     # And one for the cron job
                     if len(procs) > 2:
