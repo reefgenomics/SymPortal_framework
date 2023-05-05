@@ -21,8 +21,8 @@ jobs:
 
     - name: Set up settings.py
       run: |
-        secret_key=$(base64 /dev/urandom | head -c50)
-        sed -i "s/^SECRET_KEY = .*/SECRET_KEY = '$secret_key'/" settings.py
+        mv settings_blank.py settings.py
+        sed -i "s/^SECRET_KEY = ''$/SECRET_KEY = '$(base64 /dev/urandom | head -c50)'/" settings.py
 
     - name: Configure sp_config.py
       run: |
