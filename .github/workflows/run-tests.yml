@@ -13,9 +13,10 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Miniconda
+    - name: Set up conda environment
       uses: conda-incubator/setup-miniconda@v2
       with:
+        auto-update-conda: true
         activate-environment: symportal
         environment-file: environment.yml
 
@@ -27,13 +28,6 @@ jobs:
     - name: Configure sp_config.py
       run: |
         mv sp_config_blank.py sp_config.py
-
-    - name: Set up conda environment
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        auto-update-conda: true
-        activate-environment: symportal
-        environment-file: environment.yml
 
     - name: Create SQLite database
       run: |
