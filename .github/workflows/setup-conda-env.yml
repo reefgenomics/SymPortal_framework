@@ -3,6 +3,7 @@ name: Create and Cache Conda Environment
 on:
   push:
     paths:
+      - environment.yml
       - '**/setup-conda-env.yml'
 
 jobs:
