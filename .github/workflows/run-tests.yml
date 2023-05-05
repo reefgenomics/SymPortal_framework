@@ -10,14 +10,18 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
+        # to not activate conda environment in each task
         shell: bash -l {0}
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Check Conda environment name 1
-      run: conda info --envs
+    - name: Cache conda environment
+      uses: actions/cache@v2
+      with:
+        path: ~/miniconda
+        key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
 
     - name: Set up conda environment
       uses: conda-incubator/setup-miniconda@v2
