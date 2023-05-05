@@ -34,6 +34,7 @@ jobs:
     - name: Debug
       run: |
         blastn -h
+        conda env list
 
     - name: Restore Conda packages cache
       uses: actions/cache@v2
