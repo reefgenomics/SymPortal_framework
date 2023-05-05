@@ -30,6 +30,11 @@ jobs:
         key: conda-env-${{ hashFiles('**/environment.yml') }}
         restore-keys: conda-env-
 
+    # DELETE ME
+    - name: Debug
+      run: |
+        blastn -h
+
     - name: Restore Conda packages cache
       uses: actions/cache@v2
       with:
