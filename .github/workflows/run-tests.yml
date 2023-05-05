@@ -10,6 +10,8 @@ on:
 jobs:
   run-tests:
     runs-on: ubuntu-latest
+    env:
+      CONDA_CACHE_DIR: ${{ runner.workspace }}/.conda_cache
     defaults:
       run:
         # to not activate conda environment in each task
@@ -19,11 +21,12 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Cache conda environment
+    - name: Restore Conda environment cache
       uses: actions/cache@v2
+      id: restore-conda-env
       with:
-        path: ~/miniconda
-        key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
+        path: ${{ env.CONDA_CACHE_DIR }}
+        key: conda-env-${{ hashFiles('**/environment.yml') }}
 
     - name: Set up conda environment
       uses: conda-incubator/setup-miniconda@v2
