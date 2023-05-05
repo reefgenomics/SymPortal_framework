@@ -13,11 +13,17 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Check Conda environment name 1
+      run: conda info --envs
+
     - name: Set up conda environment
       uses: conda-incubator/setup-miniconda@v2
       with:
         activate-environment: symportal
         environment-file: environment.yml
+
+    - name: Check Conda environment name 2
+      run: conda info --envs
 
     - name: Set up settings.py
       run: |
