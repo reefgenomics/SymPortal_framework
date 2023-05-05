@@ -23,7 +23,9 @@ jobs:
         environment-file: environment.yml
 
     - name: Check Conda environment name 2
-      run: conda info --envs
+      run: |
+        conda info --envs
+        blastn -h
 
     - name: Set up settings.py
       run: |
