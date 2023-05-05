@@ -11,7 +11,11 @@ jobs:
     env:
       CONDA_CACHE_DIR: ${{ github.workspace }}/.conda_cache
       CONDA_PKGS_DIRS: ${{ github.workspace }}/.conda_pkgs
+
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
       - name: Cache Conda packages
         uses: actions/cache@v2
         id: cache-conda-pkgs
@@ -33,7 +37,7 @@ jobs:
           CONDA_PKGS_DIRS: ${{ env.CONDA_PKGS_DIRS }}
         run: |
           conda config --add pkgs_dirs $CONDA_PKGS_DIRS
-          conda env create -f environment.yml -n myenv
+          conda env create -f environment.yml
 
       - name: Save Conda environment cache
         uses: actions/cache@v2
