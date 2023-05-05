@@ -30,18 +30,20 @@ jobs:
         key: conda-env-${{ hashFiles('environment.yml') }}
         restore-keys: conda-env-
 
-    # DELETE ME
-    - name: Debug
-      run: |
-        blastn -h
-        conda env list
-
     - name: Restore Conda packages cache
       uses: actions/cache@v2
       with:
         path: ${{ env.CONDA_PKGS_DIRS }}
         key: conda-pkgs-${{ hashFiles('environment.yml') }}
         restore-keys: conda-pkgs-
+
+    - name: Set up conda environment
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: symportal
+        auto-activate-base: false
+        environment-file: environment.yml
+        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
 
     # DELETE ME
     - name: Debug 2
