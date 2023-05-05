@@ -27,7 +27,7 @@ jobs:
       id: restore-conda-env
       with:
         path: ${{ env.CONDA_CACHE_DIR }}
-        key: conda-env-${{ hashFiles('**/environment.yml') }}
+        key: conda-env-${{ hashFiles('environment.yml') }}
         restore-keys: conda-env-
 
     # DELETE ME
