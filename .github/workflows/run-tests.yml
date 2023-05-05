@@ -11,7 +11,7 @@ jobs:
   run-tests:
     runs-on: ubuntu-latest
     env:
-      CONDA_CACHE_DIR: ${{ runner.workspace }}/.conda_cache
+      CONDA_CACHE_DIR: ${{ github.workspace }}/.conda_cache
     defaults:
       run:
         # to not activate conda environment in each task
