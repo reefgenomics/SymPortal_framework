@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CONDA_CACHE_DIR: ${{ github.workspace }}/.conda_cache
+      CONDA_PKGS_DIRS: ${{ github.workspace }}/.conda_pkgs
     defaults:
       run:
         # to not activate conda environment in each task
@@ -27,6 +28,14 @@ jobs:
       with:
         path: ${{ env.CONDA_CACHE_DIR }}
         key: conda-env-${{ hashFiles('**/environment.yml') }}
+        restore-keys: conda-env-
+
+    - name: Restore Conda packages cache
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.CONDA_PKGS_DIRS }}
+        key: conda-pkgs-${{ hashFiles('environment.yml') }}
+        restore-keys: conda-pkgs-
 
     - name: Set up settings.py
       run: |
