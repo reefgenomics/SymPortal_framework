@@ -28,13 +28,6 @@ jobs:
         path: ${{ env.CONDA_CACHE_DIR }}
         key: conda-env-${{ hashFiles('**/environment.yml') }}
 
-    - name: Set up conda environment
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: symportal
-        auto-activate-base: false
-        environment-file: environment.yml
-
     - name: Set up settings.py
       run: |
         mv settings_blank.py settings.py
