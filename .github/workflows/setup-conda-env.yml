@@ -7,7 +7,7 @@ on:
       - '**/setup-conda-env.yml'
 
 jobs:
-  create-conda-env:
+  setup-conda-env:
     runs-on: ubuntu-latest
     env:
       CONDA_CACHE_DIR: ${{ github.workspace }}/.conda_cache
