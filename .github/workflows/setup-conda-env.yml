@@ -1,3 +1,10 @@
+name: Create and Cache Conda Environment
+
+on:
+  push:
+    paths:
+      - '**/setup-conda-env.yml'
+
 jobs:
   create-conda-env:
     runs-on: ubuntu-latest
