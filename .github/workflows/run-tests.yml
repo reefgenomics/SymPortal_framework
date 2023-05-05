@@ -43,6 +43,12 @@ jobs:
         key: conda-pkgs-${{ hashFiles('environment.yml') }}
         restore-keys: conda-pkgs-
 
+    # DELETE ME
+    - name: Debug 2
+      run: |
+        blastn -h
+        conda env list
+
     - name: Set up settings.py
       run: |
         mv settings_blank.py settings.py
