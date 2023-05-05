@@ -1,24 +1,16 @@
-name: Create and Cache Conda Environment
-
-on:
-  push:
-    paths:
-      - '**/setup-conda-env.yml'
-
 jobs:
   create-conda-env:
     runs-on: ubuntu-latest
     env:
-      CONDA_CACHE_DIR: ${{ runner.workspace }}/.conda_cache
-      CONDA_PKGS_DIRS: ${{ runner.workspace }}/.conda_pkgs
-
+      CONDA_CACHE_DIR: ${{ github.workspace }}/.conda_cache
+      CONDA_PKGS_DIRS: ${{ github.workspace }}/.conda_pkgs
     steps:
       - name: Cache Conda packages
         uses: actions/cache@v2
         id: cache-conda-pkgs
         with:
           path: ${{ env.CONDA_PKGS_DIRS }}
-          key: conda-pkgs-${{ hashFiles('**/environment.yml') }}
+          key: conda-pkgs-${{ hashFiles('environment.yml') }}
           restore-keys: conda-pkgs-
 
       - name: Cache Conda environment
@@ -26,7 +18,7 @@ jobs:
         id: cache-conda-env
         with:
           path: ${{ env.CONDA_CACHE_DIR }}
-          key: conda-env-${{ hashFiles('**/environment.yml') }}
+          key: conda-env-${{ hashFiles('environment.yml') }}
           restore-keys: conda-env-
 
       - name: Set up Conda environment
@@ -34,10 +26,10 @@ jobs:
           CONDA_PKGS_DIRS: ${{ env.CONDA_PKGS_DIRS }}
         run: |
           conda config --add pkgs_dirs $CONDA_PKGS_DIRS
-          conda env create -f environment.yml
+          conda env create -f environment.yml -n myenv
 
       - name: Save Conda environment cache
         uses: actions/cache@v2
         with:
           path: ${{ env.CONDA_CACHE_DIR }}
-          key: conda-env-${{ hashFiles('**/environment.yml') }}
+          key: conda-env-${{ hashFiles('environment.yml') }}

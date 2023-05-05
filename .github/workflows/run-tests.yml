@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - set-up-github-actions
+    paths:
+      - '**/run-tests.yml'
 
 jobs:
   run-tests:
@@ -29,11 +31,6 @@ jobs:
         activate-environment: symportal
         auto-activate-base: false
         environment-file: environment.yml
-
-    - name: Check Conda environment name 2
-      run: |
-        conda info --envs
-        blastn -h
 
     - name: Set up settings.py
       run: |
