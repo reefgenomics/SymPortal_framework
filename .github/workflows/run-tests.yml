@@ -18,6 +18,25 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
+    - name: Verify cache content
+      run: |
+        ls -la /home/runner/hostedtoolcache/conda/
+
+    - name: Restore Conda environment from cache
+      uses: actions/cache@v2
+      with:
+        path: /home/runner/miniconda/envs/test-env
+        key: conda-env-${{ hashFiles('environment.yml') }}
+        restore-keys: conda-env-
+
+    - name: Verify cache content
+      run: |
+        ls -la /home/runner/hostedtoolcache/conda/
+
+    - name: Verify Conda environment
+      run: |
+        conda env list
+
     - name: Restore Conda environment from cache
       uses: actions/cache@v2
       with:
