@@ -18,10 +18,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Verify cache content
-      run: |
-        ls -la /home/runner/hostedtoolcache/conda/
-
     - name: Restore Conda environment from cache
       uses: actions/cache@v2
       with:
