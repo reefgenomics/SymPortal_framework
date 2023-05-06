@@ -4,6 +4,7 @@ on:
   push:
     paths:
       - environment.yml
+      - '**/run-tests.yml'
 
 jobs:
   run-tests:
