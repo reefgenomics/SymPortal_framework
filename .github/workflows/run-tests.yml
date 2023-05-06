@@ -29,6 +29,9 @@ jobs:
       run: |
         conda env list
 
+    - name: Debug
+      run: |
+        ls -la /home/runner/work/SymPortal/SymPortal
 
     # Run tools from the cached environment
     - name: Run tool from cached Conda environment
