@@ -31,7 +31,7 @@ jobs:
 
     - name: Debug
       run: |
-        ls -la /home/runner/work/SymPortal/SymPortal
+        ls -la /home/runner/miniconda/envs/symportal
 
     # Run tools from the cached environment
     - name: Run tool from cached Conda environment
