@@ -2,11 +2,8 @@ name: SymPortal Testing
 
 on:
   push:
-    branches:
-      - set-up-github-actions
     paths:
       - environment.yml
-      - .github/workflows/run-tests.yml
 
 jobs:
   run-tests:
@@ -20,30 +17,36 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Set up Conda
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        environment-file: environment.yml
-
-    - name: Cache Conda environment
+    - name: Restore Conda environment from cache
       uses: actions/cache@v2
       with:
-        path: ${{ env.CONDA_PREFIX }}
-        key: conda-${{ hashFiles('environment.yml') }}
-        restore-keys: conda-
+        path: /home/runner/miniconda/envs/symportal
+        key: conda-env-${{ hashFiles('environment.yml') }}
+        restore-keys: conda-env-
 
-#    - name: Restore Conda environment from cache
+    # Run tools from the cached environment
+    - name: Run tool from cached Conda environment
+      run: |
+        conda env list
+        samtools --help
+#
+#    - name: Cache conda environment
 #      uses: actions/cache@v2
 #      with:
-#        path: ${{ env.CONDA_PREFIX }}
-#        key: conda-${{ hashFiles('environment.yml') }}
-#        restore-keys: conda-
+#        path: ~/miniconda
+#        key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
 #
-#    # DELETE ME
-#    - name: Debug 1
+#    - name: Set up conda environment
+#      uses: conda-incubator/setup-miniconda@v2
+#      with:
+#        activate-environment: symportal
+#        auto-activate-base: false
+#        environment-file: environment.yml
+#
+#    - name: Check Conda environment name 2
 #      run: |
-#        mafft -h
-#        conda env list
+#        conda info --envs
+#        blastn -h
 #
 #    - name: Set up settings.py
 #      run: |
