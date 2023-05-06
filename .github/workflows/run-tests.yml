@@ -21,24 +21,14 @@ jobs:
     - name: Restore Conda environment from cache
       uses: actions/cache@v2
       with:
-        path: /home/runner/miniconda/envs/test-env
+        path: /home/runner/miniconda/envs/symportal
         key: conda-env-${{ hashFiles('environment.yml') }}
         restore-keys: conda-env-
-
-    - name: Verify cache content
-      run: |
-        ls -la /home/runner/hostedtoolcache/conda/
 
     - name: Verify Conda environment
       run: |
         conda env list
 
-    - name: Restore Conda environment from cache
-      uses: actions/cache@v2
-      with:
-        path: /home/runner/miniconda/envs/symportal
-        key: conda-env-${{ hashFiles('environment.yml') }}
-        restore-keys: conda-env-
 
     # Run tools from the cached environment
     - name: Run tool from cached Conda environment
