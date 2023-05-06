@@ -14,19 +14,6 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Cache conda
-      uses: actions/cache@v2
-      with:
-        path: ~/conda_pkgs_dir
-        key:
-          ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
-
-    - uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: symportal
-        environment-file: environment.yml
-        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
-
     - name: Set up Conda
       uses: conda-incubator/setup-miniconda@v2
       with:
@@ -35,9 +22,7 @@ jobs:
 
     - name: Cache Conda environment
       uses: actions/cache@v2
-      id: cache-conda-env
       with:
-        path: ${{ env.CONDA_CACHE_DIR }}
-        key: conda-env-${{ hashFiles('environment.yml') }}
-        restore-keys: conda-env-
-        max-age: 604800 # 1 week
+        path: ${{ env.CONDA_HOME }}
+        key: conda-${{ hashFiles('environment.yml') }}
+        restore-keys: conda-
