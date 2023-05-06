@@ -23,5 +23,5 @@ jobs:
     - name: Cache Conda environment
       uses: actions/cache@v2
       with:
-        path: /home/runner/miniconda/envs/symportal
+        path:  /usr/share/miniconda/envs/symportal
         key: conda-env-${{ hashFiles('environment.yml') }}
