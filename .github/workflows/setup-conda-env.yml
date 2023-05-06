@@ -25,4 +25,3 @@ jobs:
       with:
         path: /home/runner/miniconda/envs/symportal
         key: conda-env-${{ hashFiles('environment.yml') }}
-        restore-keys: conda-env-
