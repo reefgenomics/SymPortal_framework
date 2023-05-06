@@ -9,7 +9,7 @@ on:
 jobs:
   run-tests:
     runs-on: ubuntu-latest
-    defaults:
+#    defaults:
 #      run:
         # to not activate conda environment in each task
 #        shell: bash -l {0}
