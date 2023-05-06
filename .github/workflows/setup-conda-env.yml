@@ -1,4 +1,4 @@
-name: Create and Cache Conda Environment
+name: Create and Upload Conda Environment
 
 on:
   push:
@@ -7,59 +7,37 @@ on:
       - '**/setup-conda-env.yml'
 
 jobs:
-  setup-conda-env:
+  create-and-upload:
     runs-on: ubuntu-latest
-    env:
-      CONDA_CACHE_DIR: ${{ github.workspace }}/.conda_cache
-      CONDA_PKGS_DIRS: ${{ github.workspace }}/.conda_pkgs
-      MAX_CACHED_ENVS: 3
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
+    - name: Checkout code
+      uses: actions/checkout@v3
 
-      - name: Cache Conda packages
-        uses: actions/cache@v2
-        id: cache-conda-pkgs
-        with:
-          path: ${{ env.CONDA_PKGS_DIRS }}
-          key: conda-pkgs-${{ hashFiles('environment.yml') }}
-          restore-keys: conda-pkgs-
+    - name: Cache conda
+      uses: actions/cache@v2
+      with:
+        path: ~/conda_pkgs_dir
+        key:
+          ${{ runner.os }}-conda-${{ hashFiles('etc/example-environment.yml') }}
 
-      - name: Cache Conda environment
-        uses: actions/cache@v2
-        id: cache-conda-env
-        with:
-          path: ${{ env.CONDA_CACHE_DIR }}
-          key: conda-env-${{ hashFiles('environment.yml') }}
-          restore-keys: conda-env-
+    - uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: symportal
+        environment-file: example-environment.yml
+        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
 
-      - name: Set up Conda environment
-        env:
-          CONDA_PKGS_DIRS: ${{ env.CONDA_PKGS_DIRS }}
-        run: |
-          conda config --add pkgs_dirs $CONDA_PKGS_DIRS
-          conda env create -f environment.yml
+    - name: Set up Conda
+      uses: conda-incubator/setup-miniconda@v2
+      with:
+        activate-environment: symportal
+        environment-file: environment.yml
 
-      - name: Save Conda environment cache
-        uses: actions/cache@v2
-        with:
-          path: ${{ env.CONDA_CACHE_DIR }}
-          key: conda-env-${{ hashFiles('environment.yml') }}
-
-      - name: Delete old Conda environment caches
-        if: github.event_name == 'push'
-        run: |
-          echo "Looking for cached environments to delete..."
-          cached_envs=$(echo ${{ steps.cache-conda-env.outputs.cache-hit }})
-          cached_envs_arr=($cached_envs)
-          num_cached_envs=${#cached_envs_arr[@]}
-          echo "Number of cached environments: $num_cached_envs"
-          if [ $num_cached_envs -gt $MAX_CACHED_ENVS ]; then
-            env_to_delete=${cached_envs_arr[$MAX_CACHED_ENVS]}
-            echo "Deleting environment cache $env_to_delete..."
-            echo "::warning::Deleting environment cache $env_to_delete..."
-            curl -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" ${{ github.api_url }}/repos/${{ github.repository }}/actions/cache/$env_to_delete
-          else
-            echo "No environment caches to delete."
-          fi
+    - name: Cache Conda environment
+      uses: actions/cache@v2
+      id: cache-conda-env
+      with:
+        path: ${{ env.CONDA_CACHE_DIR }}
+        key: conda-env-${{ hashFiles('environment.yml') }}
+        restore-keys: conda-env-
+        max-age: 604800 # 1 week
