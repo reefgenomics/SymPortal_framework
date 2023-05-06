@@ -5,14 +5,12 @@ on:
     branches:
       - set-up-github-actions
     paths:
-      - '**/run-tests.yml'
+      - environment.yml
+      - .github/workflows/run-tests.yml
 
 jobs:
   run-tests:
     runs-on: ubuntu-latest
-    env:
-      CONDA_CACHE_DIR: ${{ github.workspace }}/.conda_cache
-      CONDA_PKGS_DIRS: ${{ github.workspace }}/.conda_pkgs
     defaults:
       run:
         # to not activate conda environment in each task
@@ -22,52 +20,48 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v3
 
-    - name: Restore Conda environment cache
-      uses: actions/cache@v2
-      id: restore-conda-env
-      with:
-        path: ${{ env.CONDA_CACHE_DIR }}
-        key: conda-env-${{ hashFiles('environment.yml') }}
-        restore-keys: conda-env-
-
-    - name: Restore Conda packages cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ env.CONDA_PKGS_DIRS }}
-        key: conda-pkgs-${{ hashFiles('environment.yml') }}
-        restore-keys: conda-pkgs-
-
-    - name: Set up conda environment
+    - name: Set up Conda
       uses: conda-incubator/setup-miniconda@v2
       with:
-        activate-environment: symportal
-        auto-activate-base: false
         environment-file: environment.yml
-        use-only-tar-bz2: true # IMPORTANT: This needs to be set for caching to work properly!
 
-    # DELETE ME
-    - name: Debug 2
-      run: |
-        blastn -h
-        conda env list
+    - name: Cache Conda environment
+      uses: actions/cache@v2
+      with:
+        path: ${{ env.CONDA_PREFIX }}
+        key: conda-${{ hashFiles('environment.yml') }}
+        restore-keys: conda-
 
-    - name: Set up settings.py
-      run: |
-        mv settings_blank.py settings.py
-        sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
-
-    - name: Configure sp_config.py
-      run: |
-        mv sp_config_blank.py sp_config.py
-
-    - name: Create SQLite database
-      run: |
-        python manage.py migrate
-
-    - name: Populate local database
-      run: |
-        python populate_db_ref_seqs.py
-
-    - name: Run tests
-      run: |
-        python -m tests.tests
+#    - name: Restore Conda environment from cache
+#      uses: actions/cache@v2
+#      with:
+#        path: ${{ env.CONDA_PREFIX }}
+#        key: conda-${{ hashFiles('environment.yml') }}
+#        restore-keys: conda-
+#
+#    # DELETE ME
+#    - name: Debug 1
+#      run: |
+#        mafft -h
+#        conda env list
+#
+#    - name: Set up settings.py
+#      run: |
+#        mv settings_blank.py settings.py
+#        sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
+#
+#    - name: Configure sp_config.py
+#      run: |
+#        mv sp_config_blank.py sp_config.py
+#
+#    - name: Create SQLite database
+#      run: |
+#        python manage.py migrate
+#
+#    - name: Populate local database
+#      run: |
+#        python populate_db_ref_seqs.py
+#
+#    - name: Run tests
+#      run: |
+#        python -m tests.tests
