@@ -16,22 +16,20 @@ env:
 
 jobs:
   setup-conda-env:
-    name: Create and Cache Conda Environment
+    name: Create and Cache Conda Environment Job
     steps:
-      - name: Step 1
-        run: echo "This is step 1"
-      - include: setup-conda-env.yml
+      - name: Create and Cache Conda Environment Steps
+        uses: .github/workflows/setup-conda-env.yml
     if: >
       contains(github.event.head_commit.modified, 'environment.yml')
       || contains(github.event.head_commit.modified, '**/setup-conda-env.yml')
 
   run-tests:
-    name: Run Tests
+    name: Run Tests Job
     defaults:
       run:
         # to not activate conda environment in each task
         shell: bash -l {0}
     steps:
-      - name: Step 1
-        run: echo "This is step 1"
-      - include: run-tests.yml
+      - name: Run Tests Steps
+        uses: .github/workflows/run-tests.yml
