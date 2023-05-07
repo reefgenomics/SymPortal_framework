@@ -32,7 +32,6 @@ jobs:
         with:
           path: ${{ env.CACHE_PATH }}
           key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
-#          restore-keys: conda-env-${{ env.ENV_NAME }}-
 
       - name: Debug
         run: |
