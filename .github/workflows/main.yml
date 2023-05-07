@@ -8,15 +8,14 @@ on:
       - '**/setup-conda-env.yml'
       - '**/run-tests.yml'
 
-runs-on: ubuntu-latest
-
 env:
   ENV_NAME: symportal
   CACHE_PATH: /usr/share/miniconda/envs/symportal
 
 jobs:
   setup-conda-env:
-    name: Create and Cache Conda Environment Job
+    name: Conda Env Job
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -29,6 +28,7 @@ jobs:
 
   run-tests:
     name: Run Tests Job
+    runs-on: ubuntu-latest
     defaults:
       run:
         # to not activate conda environment in each task
