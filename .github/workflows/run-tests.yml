@@ -32,13 +32,12 @@ jobs:
         with:
           path: ${{ env.CACHE_PATH }}
           key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
-          restore-keys: conda-env-${{ env.ENV_NAME }}-
+#          restore-keys: conda-env-${{ env.ENV_NAME }}-
 
       - name: Debug
-        run:
-          samtools -h
+        run: |
 #          mafft --help
-#          conda env list
+          conda env list
 #          blastn --help
 #          conda list
 #          ls -la /usr/share/miniconda/envs/symportal;
