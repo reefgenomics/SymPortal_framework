@@ -1,4 +1,4 @@
-name: Create and Upload Conda Environment
+name: Create and Cache Conda Environment
 
 on:
   push:
@@ -10,6 +10,10 @@ jobs:
   create-and-upload:
     runs-on: ubuntu-latest
 
+    env:
+      ENV_NAME: symportal
+      CACHE_PATH: /usr/share/miniconda/envs/symportal
+
     steps:
     - name: Checkout code
       uses: actions/checkout@v3
@@ -17,11 +21,12 @@ jobs:
     - name: Set up Conda
       uses: conda-incubator/setup-miniconda@v2
       with:
-        activate-environment: symportal
+        activate-environment: ${{ env.ENV_NAME }}
         environment-file: environment.yml
 
     - name: Cache Conda environment
-      uses: actions/cache@v2
+      uses: actions/cache@v3
       with:
-        path:  /usr/share/miniconda/envs/symportal
-        key: conda-env-${{ hashFiles('environment.yml') }}
+        path: ${{ env.CACHE_PATH }}
+        key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
+        overwrite: true
