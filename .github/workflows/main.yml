@@ -27,7 +27,6 @@ jobs:
           key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
     if: >
       contains(github.event.head_commit.modified, 'environment.yml')
-      || contains(github.event.head_commit.modified, '**/setup-conda-env.yml')
 
   run-tests:
     runs-on: ubuntu-latest
