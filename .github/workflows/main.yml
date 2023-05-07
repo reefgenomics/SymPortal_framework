@@ -17,6 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Conda Env Job
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
       - name: Create and Cache Conda Environment Steps
         uses: ./.github/workflows/setup-conda-env.yml
     if: >
@@ -31,6 +33,8 @@ jobs:
         # to not activate conda environment in each task
         shell: bash -l {0}
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
 
       - name: Run Tests Steps
         uses: ./.github/workflows/run-tests.yml
