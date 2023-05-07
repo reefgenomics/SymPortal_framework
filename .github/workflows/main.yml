@@ -14,6 +14,7 @@ env:
 
 jobs:
   setup-conda-env:
+    runs-on: ubuntu-latest
     name: Conda Env Job
     steps:
       - name: Create and Cache Conda Environment Steps
@@ -23,6 +24,7 @@ jobs:
       || contains(github.event.head_commit.modified, '**/setup-conda-env.yml')
 
   run-tests:
+    runs-on: ubuntu-latest
     name: Run Tests Job
     defaults:
       run:
