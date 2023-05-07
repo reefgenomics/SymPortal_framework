@@ -17,10 +17,16 @@ jobs:
     runs-on: ubuntu-latest
     name: Conda Env Job
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v3
-      - name: Create and Cache Conda Environment Steps
-        uses: ./.github/workflows/setup-conda-env.yml
+      - name: Set up Conda
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: ${{ env.ENV_NAME }}
+          environment-file: environment.yml
+      - name: Cache Conda environment
+        uses: actions/cache@v3
+        with:
+          path: ${{ env.CACHE_PATH }}
+          key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
     if: >
       contains(github.event.head_commit.modified, 'environment.yml')
       || contains(github.event.head_commit.modified, '**/setup-conda-env.yml')
@@ -35,6 +41,29 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
-
-      - name: Run Tests Steps
-        uses: ./.github/workflows/run-tests.yml
+      - name: Set up Conda environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          activate-environment: ${{ env.ENV_NAME }}
+      - name: Restore Conda environment from cache
+        uses: actions/cache@v2
+        with:
+          path: ${{ env.CACHE_PATH }}
+          key: conda-env-${{ hashFiles('environment.yml') }}
+          restore-keys: conda-env-
+      - name: Set up settings.py
+        run: |
+          mv settings_blank.py settings.py
+          sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
+      - name: Configure sp_config.py
+        run: |
+          mv sp_config_blank.py sp_config.py
+      - name: Create SQLite database
+        run: |
+          python manage.py migrate
+      - name: Populate local database
+        run: |
+          python populate_db_ref_seqs.py
+      - name: Run tests
+        run: |
+          python -m tests.tests
