@@ -5,8 +5,6 @@ on:
     paths:
       - environment.yml
       - '**/main.yml'
-      - '**/setup-conda-env.yml'
-      - '**/run-tests.yml'
 
 env:
   ENV_NAME: symportal
