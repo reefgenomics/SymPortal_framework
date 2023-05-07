@@ -36,8 +36,8 @@ jobs:
 
       - name: Debug
         run:
-          conda env list
-          blastn --help
+#          conda env list
+#          blastn --help
           conda list
 #          ls -la /usr/share/miniconda/envs/symportal;
 #          ls -la usr/share/miniconda/envs/symportal/lib/*/site-packages;
