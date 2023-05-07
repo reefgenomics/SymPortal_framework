@@ -15,6 +15,8 @@ jobs:
     runs-on: ubuntu-latest
     name: Conda Env Job
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
       - name: Set up Conda
         uses: conda-incubator/setup-miniconda@v2
         with:
@@ -25,6 +27,7 @@ jobs:
         with:
           path: ${{ env.CACHE_PATH }}
           key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
+    if: github.event.head_commit.modified_files == 'environment.yml'
 
   run-tests:
     runs-on: ubuntu-latest
