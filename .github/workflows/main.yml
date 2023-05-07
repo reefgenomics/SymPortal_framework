@@ -25,7 +25,6 @@ jobs:
         with:
           path: ${{ env.CACHE_PATH }}
           key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
-    if: github.event.head_commit.modified_files == 'environment.yml'
 
   run-tests:
     runs-on: ubuntu-latest
