@@ -35,7 +35,6 @@ jobs:
 
       - name: Debug
         run: |
-#          mafft --help
           conda env list
 #          blastn --help
 #          conda list
