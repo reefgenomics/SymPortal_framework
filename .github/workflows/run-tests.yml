@@ -34,23 +34,23 @@ jobs:
           key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
           restore-keys: conda-env-${{ env.ENV_NAME }}-
 
-#      - name: Set up settings.py
-#        run: |
-#          mv settings_blank.py settings.py
-#          sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
-#
-#      - name: Configure sp_config.py
-#        run: |
-#          mv sp_config_blank.py sp_config.py
-#
-#      - name: Create SQLite database
-#        run: |
-#          python manage.py migrate
-#
-#      - name: Populate local database
-#        run: |
-#          python populate_db_ref_seqs.py
-#
-#      - name: Run tests
-#        run: |
-#          python -m tests.tests
+      - name: Set up settings.py
+        run: |
+          mv settings_blank.py settings.py
+          sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
+
+      - name: Configure sp_config.py
+        run: |
+          mv sp_config_blank.py sp_config.py
+
+      - name: Create SQLite database
+        run: |
+          python manage.py migrate
+
+      - name: Populate local database
+        run: |
+          python populate_db_ref_seqs.py
+
+      - name: Run tests
+        run: |
+          python -m tests.tests
