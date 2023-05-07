@@ -34,6 +34,11 @@ jobs:
           key: conda-env-${{ hashFiles('environment.yml') }}
           restore-keys: conda-env-
 
+      - name: Debug
+        run:
+          ls -la usr/share/miniconda/envs/symportal/lib/*/site-packages
+          python -c ''
+
       - name: Set up settings.py
         run: |
           mv settings_blank.py settings.py
