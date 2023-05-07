@@ -7,7 +7,7 @@ on:
       - '**/setup-conda-env.yml'
 
 jobs:
-  create-and-upload:
+  setup-conda-env:
     runs-on: ubuntu-latest
 
     env:
