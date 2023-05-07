@@ -36,7 +36,8 @@ jobs:
 
       - name: Debug
         run:
-          mafft --help
+          samtools -h
+#          mafft --help
 #          conda env list
 #          blastn --help
 #          conda list
