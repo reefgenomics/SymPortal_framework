@@ -31,7 +31,7 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ${{ env.CACHE_PATH }}
-          key: conda-env-${{ hashFiles('environment.yml') }}
+          key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
           restore-keys: conda-env-
 
       - name: Debug
