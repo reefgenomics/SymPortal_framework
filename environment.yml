@@ -8,7 +8,7 @@ dependencies:
   - biopython==1.81
   - django==4.2.1
   - matplotlib==3.6.3
-  - pandas==2.0.1
+  - pandas==1.5.3
   - plumbum==1.8.1
   - scipy==1.5.3
   - scikit-bio==0.5.6
