@@ -36,9 +36,9 @@ jobs:
 
       - name: Debug
         run:
-          conda env list
-#          ls -la /usr/share/miniconda/envs/symportal;
-#          ls -la usr/share/miniconda/envs/symportal/lib/*/site-packages;
+#          conda env list
+          ls -la /usr/share/miniconda/envs/symportal;
+          ls -la usr/share/miniconda/envs/symportal/lib/*/site-packages;
 #          python -c ''
 
       - name: Set up settings.py
