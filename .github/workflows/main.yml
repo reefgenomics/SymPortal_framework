@@ -1,0 +1,25 @@
+name: Symportal CI Workfow
+
+on:
+  push:
+    paths:
+      - environment.yml
+      - '**/main.yml'
+      - '**/setup-conda-env.yml'
+      - '**/run-tests.yml'
+
+env:
+  ENV_NAME: symportal
+  CACHE_PATH: /usr/share/miniconda/envs/symportal
+
+jobs:
+  setup-conda-env:
+    if: >
+      contains(github.event.head_commit.modified, 'environment.yml')
+      || contains(github.event.head_commit.modified, '**/setup-conda-env.yml')
+    extends:
+      - setup-conda-env.yml
+
+  run-tests:
+    extends:
+      - run-tests.yml

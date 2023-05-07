@@ -1,18 +1,12 @@
-name: SymPortal Testing
-
-on:
-  push:
-    paths:
-      - environment.yml
-      - '**/run-tests.yml'
+name: Run Tests
 
 jobs:
   run-tests:
     runs-on: ubuntu-latest
-#    defaults:
-#      run:
+    defaults:
+      run:
         # to not activate conda environment in each task
-#        shell: bash -l {0}
+        shell: bash -l {0}
 
     steps:
     - name: Checkout code
@@ -21,64 +15,32 @@ jobs:
     - name: Set up Conda environment
       uses: conda-incubator/setup-miniconda@v2
       with:
-        activate-environment: symportal
+        activate-environment: ${{ env.ENV_NAME }}
 
     - name: Restore Conda environment from cache
       uses: actions/cache@v2
       with:
-        path: /usr/share/miniconda/envs/symportal
+        path: ${{ env.CACHE_PATH }}
         key: conda-env-${{ hashFiles('environment.yml') }}
         restore-keys: conda-env-
 
-    - name: Verify Conda environment
+    - name: Set up settings.py
       run: |
-        conda env list
+        mv settings_blank.py settings.py
+        sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
 
-    - name: Debug
+    - name: Configure sp_config.py
       run: |
-        ls -la /usr/share/miniconda/envs/symportal
+        mv sp_config_blank.py sp_config.py
 
-    # Run tools from the cached environment
-    - name: Run tool from cached Conda environment
+    - name: Create SQLite database
       run: |
-        conda env list
-        samtools --help
-#
-#    - name: Cache conda environment
-#      uses: actions/cache@v2
-#      with:
-#        path: ~/miniconda
-#        key: ${{ runner.os }}-conda-${{ hashFiles('environment.yml') }}
-#
-#    - name: Set up conda environment
-#      uses: conda-incubator/setup-miniconda@v2
-#      with:
-#        activate-environment: symportal
-#        auto-activate-base: false
-#        environment-file: environment.yml
-#
-#    - name: Check Conda environment name 2
-#      run: |
-#        conda info --envs
-#        blastn -h
-#
-#    - name: Set up settings.py
-#      run: |
-#        mv settings_blank.py settings.py
-#        sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
-#
-#    - name: Configure sp_config.py
-#      run: |
-#        mv sp_config_blank.py sp_config.py
-#
-#    - name: Create SQLite database
-#      run: |
-#        python manage.py migrate
-#
-#    - name: Populate local database
-#      run: |
-#        python populate_db_ref_seqs.py
-#
-#    - name: Run tests
-#      run: |
-#        python -m tests.tests
+        python manage.py migrate
+
+    - name: Populate local database
+      run: |
+        python populate_db_ref_seqs.py
+
+    - name: Run tests
+      run: |
+        python -m tests.tests

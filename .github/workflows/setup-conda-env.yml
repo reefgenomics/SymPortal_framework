@@ -1,18 +1,8 @@
 name: Create and Cache Conda Environment
 
-on:
-  push:
-    paths:
-      - environment.yml
-      - '**/setup-conda-env.yml'
-
 jobs:
   setup-conda-env:
     runs-on: ubuntu-latest
-
-    env:
-      ENV_NAME: symportal
-      CACHE_PATH: /usr/share/miniconda/envs/symportal
 
     steps:
     - name: Checkout code
@@ -29,4 +19,3 @@ jobs:
       with:
         path: ${{ env.CACHE_PATH }}
         key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
-        overwrite: true
