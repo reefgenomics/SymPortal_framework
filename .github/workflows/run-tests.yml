@@ -30,22 +30,16 @@ jobs:
       - name: Restore Conda environment from cache
         uses: actions/cache@v2
         with:
-          path: /usr/share/miniconda/envs/symportal
-          key: conda-env-${{ hashFiles('environment.yml') }}
-          restore-keys: conda-env-
-
-#      - name: Restore Conda environment from cache
-#        uses: actions/cache@v2
-#        with:
-#          path: ${{ env.CACHE_PATH }}
-#          key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
-#          restore-keys: conda-env-${{ env.ENV_NAME }}-
+          path: ${{ env.CACHE_PATH }}
+          key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
+          restore-keys: conda-env-${{ env.ENV_NAME }}-
 
       - name: Debug
         run:
+          mafft --help
 #          conda env list
 #          blastn --help
-          conda list
+#          conda list
 #          ls -la /usr/share/miniconda/envs/symportal;
 #          ls -la usr/share/miniconda/envs/symportal/lib/*/site-packages;
 #          python -c ''
