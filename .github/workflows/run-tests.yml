@@ -1,46 +1,38 @@
-name: Run Tests
+# Run Tests
 
-jobs:
-  run-tests:
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        # to not activate conda environment in each task
-        shell: bash -l {0}
+steps:
+- name: Checkout code
+  uses: actions/checkout@v3
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+- name: Set up Conda environment
+  uses: conda-incubator/setup-miniconda@v2
+  with:
+    activate-environment: ${{ env.ENV_NAME }}
 
-    - name: Set up Conda environment
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: ${{ env.ENV_NAME }}
+- name: Restore Conda environment from cache
+  uses: actions/cache@v2
+  with:
+    path: ${{ env.CACHE_PATH }}
+    key: conda-env-${{ hashFiles('environment.yml') }}
+    restore-keys: conda-env-
 
-    - name: Restore Conda environment from cache
-      uses: actions/cache@v2
-      with:
-        path: ${{ env.CACHE_PATH }}
-        key: conda-env-${{ hashFiles('environment.yml') }}
-        restore-keys: conda-env-
+- name: Set up settings.py
+  run: |
+    mv settings_blank.py settings.py
+    sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
 
-    - name: Set up settings.py
-      run: |
-        mv settings_blank.py settings.py
-        sed -i "s|^SECRET_KEY = ''$|SECRET_KEY = '$(base64 /dev/urandom | head -c50)'|" settings.py
+- name: Configure sp_config.py
+  run: |
+    mv sp_config_blank.py sp_config.py
 
-    - name: Configure sp_config.py
-      run: |
-        mv sp_config_blank.py sp_config.py
+- name: Create SQLite database
+  run: |
+    python manage.py migrate
 
-    - name: Create SQLite database
-      run: |
-        python manage.py migrate
+- name: Populate local database
+  run: |
+    python populate_db_ref_seqs.py
 
-    - name: Populate local database
-      run: |
-        python populate_db_ref_seqs.py
-
-    - name: Run tests
-      run: |
-        python -m tests.tests
+- name: Run tests
+  run: |
+    python -m tests.tests
