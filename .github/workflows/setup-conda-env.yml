@@ -1,21 +1,17 @@
-name: Create and Cache Conda Environment
+# Create and Cache Conda Environment
 
-jobs:
-  setup-conda-env:
-    runs-on: ubuntu-latest
+steps:
+- name: Checkout code
+  uses: actions/checkout@v3
 
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v3
+- name: Set up Conda
+  uses: conda-incubator/setup-miniconda@v2
+  with:
+    activate-environment: ${{ env.ENV_NAME }}
+    environment-file: environment.yml
 
-    - name: Set up Conda
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        activate-environment: ${{ env.ENV_NAME }}
-        environment-file: environment.yml
-
-    - name: Cache Conda environment
-      uses: actions/cache@v3
-      with:
-        path: ${{ env.CACHE_PATH }}
-        key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
+- name: Cache Conda environment
+  uses: actions/cache@v3
+  with:
+    path: ${{ env.CACHE_PATH }}
+    key: conda-env-${{ env.ENV_NAME }}-${{ hashFiles('environment.yml') }}
