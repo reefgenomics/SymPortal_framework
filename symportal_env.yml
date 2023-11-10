@@ -4,22 +4,22 @@ channels:
   - bioconda
   - anaconda
 dependencies:
-  - python=3
-  - numpy
-  - biopython
-  - Django
-  - matplotlib
-  - pandas
-  - plumbum
-  - scipy==1.5.3
-  - scikit-bio==0.5.6
-  - openpyxl
-  - xlrd
-  - blast
-  - iqtree
-  - mafft
-  - mothur==1.43.0
-  - psycopg2
-  - werkzeug
-  - textdistance
-  - beautifulsoup4
+  - python=3.8.15=h257c98d_0_cpython
+  - numpy=1.24.3=py38h59b608b_0
+  - biopython=1.81=py38h1de0b5d_0
+  - django=4.2.1=pyhd8ed1ab_0
+  - matplotlib=3.6.3=py38h578d9bd_0
+  - pandas=1.5.3=py38hdc8b05c_1
+  - plumbum=1.8.1=pyhd8ed1ab_0
+  - scipy=1.5.3=py38hb2138dd_0
+  - scikit-bio=0.5.6=py38h0b5ebd8_4
+  - openpyxl=3.1.2=py38h01eb140_0
+  - xlrd=2.0.1=pyhd8ed1ab_3
+  - blast=2.14.0=hf3cf87c_0
+  - iqtree=2.2.2.3=hb97b32f_0
+  - mafft=7.520=hec16e2b_0
+  - mothur=1.43.0=hd76352b_0
+  - psycopg2=2.9.3=py38h0ca591d_2
+  - werkzeug=2.3.3=pyhd8ed1ab_0
+  - textdistance=4.5.0=pyhd8ed1ab_0
+  - beautifulsoup4=4.12.2=pyha770c72_0
