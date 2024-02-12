@@ -1,6 +1,16 @@
 # README
 Welcome to the SymPortal GitHub repository. SymPortal is an analytical tool used to resolve _Symbiodinium_ spp. taxa using NGS data of the ITS2 marker gene.
 
+***************
+
+Starting from January 1, 2024, please note that we do not any longer provide assistance with local installs. We are focusing on the remote instance hosted at SymPortal.org to provide the best possible user experience. 
+
+All users with a SymPortal account are able to upload their data directly via the submission portal that is accessible from the symportal.org homepage once signed in. If you do not already have an account you can email symportal@gmail.com to get one.
+
+By submitting your data to the central SymPortal.org database you will benefit from the full resolving power of the thousands of samples that have already been analyzed!
+
+***************
+
 Our methodology augments tried-and-tested intragenomic resolution theory with the power of NGS to resolve between symbiont taxa at a level far surpassing alternative methodologies using this marker. 
 We employ novel logic to identify within-sample informative intragenomic sequences, which we have termed defining intragenomic variants (DIVs), and use combinations of these DIVs to identify ITS2 type profiles representative of putative _Symbiodinium_ taxa.
 
@@ -17,11 +27,3 @@ As such, the ability to resolve ITS2 type profiles will be contingent on the ext
 Further documentation may be found at the SymPortal GitHub repository.
 
 Please visit the [SymPortal wiki](https://github.com/SymPortal/SymPortal_framework/wiki) for further details on setting up a local instance of the SymPortal analytical framework.
-
-***************
-
-Starting from January 1, 2024, please note that we do not any longer provide assistance with local installs. We are focusing on the remote instance hosted at SymPortal.org to provide the best possible user experience. 
-
-All users with a SymPortal account are able to upload their data directly via the submission portal that is accessible from the symportal.org homepage once signed in. If you do not already have an account you can email symportal@gmail.com to get one.
-
-By submitting your data to the central SymPortal.org database you will benefit from the full resolving power of the thousands of samples that have already been analyzed!
